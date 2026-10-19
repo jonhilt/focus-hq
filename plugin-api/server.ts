@@ -2,7 +2,7 @@
 // it (`PluginHost`), and the helpers it may share with the core. Anything the office does for a plugin (files,
 // checkouts, GitHub) goes on the host, so the core decides what a plugin can do and a test can lend it a fake.
 export * from './shared';
-export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, LeadToolReply, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
+export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
 export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/util';
@@ -30,6 +30,11 @@ export { goalRecord, hasLeadWork, pickStation } from '../server/agents/lead';
 export { FILES as DEMO_FILES } from '../server/agents/demoRunner';
 /** Reading a Claude Code session's transcript (`host.transcript`), a line at a time. */
 export { type Block, blocks, clip, type Line, messageFrom, resultText, transcriptLines } from '../server/agents/transcript';
+/** Reading the office's journals (`host.journals`): a fact and what a journal adds up to, fact by fact, and a run's fact in words. */
+export type { Stamped } from '../server/journals';
+export { factLine, type JournalEntry, type RunFact } from '../server/agents/runJournal';
+export { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact } from '../server/agents/reviewJournal';
+export { EMPTY_SLICE, evolveSlice, type SliceFact } from '../server/agents/sliceJournal';
 /** QA's catch rate (docs/qa-catch.md): the office's latest run, and its totals. */
 export { latestRun as latestQaCatch } from '../server/agents/qaCatchRuns';
 export { type CatchRun, catchTotals } from '../server/agents/qaCatch';

@@ -1,9 +1,20 @@
-import type { LogKind, LogLine, LogTone } from '../../shared/captainsLog';
-import type { LedgerEvent } from '../../shared/ledger';
-import { ledgerRow } from '../../shared/ledgerReview';
-import { evolveReview, EMPTY_REVIEW, type ReviewEntry } from './reviewJournal';
-import { factLine, type JournalEntry } from './runJournal';
-import { EMPTY_SLICE, evolveSlice, type SliceFact } from './sliceJournal';
+import {
+  type Agent,
+  EMPTY_REVIEW,
+  EMPTY_SLICE,
+  evolveReview,
+  evolveSlice,
+  factLine,
+  type JournalEntry,
+  type LedgerEvent,
+  ledgerRow,
+  type LentJournals,
+  type Project,
+  type ReviewEntry,
+  type SliceFact,
+  type Stamped,
+} from '../../plugin-api/server';
+import type { LogKind, LogLine, LogTone } from './shared';
 
 // The captain's log, pure: every journal (each agent's run, each pull request's review, each goal's slices) and the
 // ledger, on one timeline, oldest first. Each journal is told by its own machine's facts, so a line is only as good as
@@ -24,10 +35,62 @@ export interface Source<E> {
 export interface LogSources {
   runs: Source<JournalEntry>[];
   reviews: Source<ReviewEntry>[];
-  slices: Source<SliceFact & { seq: number; t: number }>[];
+  slices: Source<Stamped<SliceFact>>[];
   ledger: readonly LedgerEvent[];
   /** A crew member's name, by agent id, when they're known. */
   nameOf: (agentId: string) => string | undefined;
+}
+
+/** What the office lends the log: its journals written to in the window, its agents, its projects and the ledger. */
+export interface LogOffice {
+  journals: LentJournals;
+  agents: readonly Agent[];
+  projects: readonly Project[];
+  ledger: readonly LedgerEvent[];
+}
+
+/** Only the fields that are there. */
+const about = (o: { projectId?: string; goal?: string; agentId?: string }) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+
+/**
+ * The office's journals, with who and what each is about: a crew member who's gone home is named from the ledger,
+ * where their sessions and goals were kept.
+ */
+export function logSources({ journals, agents, projects, ledger }: LogOffice): LogSources {
+  const names = new Map<string, string>();
+  const goals = new Map<string, { title: string; projectId: string }>();
+  for (const e of ledger) {
+    if (e.kind === 'session-digest') names.set(e.agentId, e.agent);
+    if (e.kind === 'goal-closed') {
+      names.set(e.goal.id, e.goal.leadName);
+      goals.set(e.goal.id, { title: e.goal.title, projectId: e.projectId });
+    }
+  }
+  const byId = new Map(agents.map((a) => [a.id, a]));
+  for (const a of agents) {
+    names.set(a.id, a.name);
+    if (a.lead) goals.set(a.id, { title: a.lead.title, projectId: a.projectId });
+  }
+  const nameOf = (id: string) => names.get(id);
+  const roomOf = (repo: string) => projects.find((p) => p.repos.includes(repo))?.id;
+  const leadOf = (repo: string, number: number) => agents.find((a) => a.lead?.prs.some((p) => p.repo === repo && p.number === number));
+  return {
+    runs: journals.runs.map(({ key, entries }) => {
+      const a = byId.get(key);
+      const goal = goals.get(a?.reviewFor ?? key);
+      return { key, who: nameOf(key) ?? 'A crew member who’s gone home', ...about({ agentId: key, projectId: a?.projectId ?? goal?.projectId, goal: goal?.title }), entries };
+    }),
+    reviews: journals.reviews.map(({ key, entries }) => {
+      const [repo, number] = [key.slice(0, key.lastIndexOf('#')), Number(key.slice(key.lastIndexOf('#') + 1))];
+      return { key, who: 'QA', ...about({ projectId: roomOf(repo), goal: leadOf(repo, number)?.lead?.title }), entries };
+    }),
+    slices: journals.slices.map(({ key, entries }) => {
+      const goal = goals.get(key);
+      return { key, who: nameOf(key) ?? 'A lead who’s gone home', ...about({ agentId: key, projectId: goal?.projectId, goal: goal?.title }), entries };
+    }),
+    ledger,
+    nameOf,
+  };
 }
 
 type Said = { kind: LogKind; tag: string; tone: LogTone; text: string };
@@ -90,7 +153,7 @@ function reviewLines(src: Source<ReviewEntry>, since: number, nameOf: (id: strin
 }
 
 /** A goal's slice facts as lines: the goal taken up, each ship (or ship that failed), each move to fresh code. */
-function sliceLines(src: Source<SliceFact & { seq: number; t: number }>, since: number): LogLine[] {
+function sliceLines(src: Source<Stamped<SliceFact>>, since: number): LogLine[] {
   let state = EMPTY_SLICE;
   const out: LogLine[] = [];
   for (const e of src.entries) {

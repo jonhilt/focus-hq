@@ -1,6 +1,6 @@
 # The personal log
 
-The captain's own log: thoughts you jot down to come back to, like an idea for a video, a feature, or something to check. The [captain's log](captains-log.md) is what happened aboard. The personal log is what's on your mind.
+The captain's own log: thoughts you jot down to come back to, like an idea for a video, a feature, or something to check. The [captain's log](../plugins/captains-log/README.md) (a plugin) is what happened aboard. The personal log is what's on your mind.
 
 ## Jotting a thought down
 

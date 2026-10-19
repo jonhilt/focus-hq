@@ -32,7 +32,6 @@ export class Hud {
         h('span', null, h('kbd', null, 'Shift'), 'run'),
         h('span', null, h('kbd', null, 'E'), 'interact'),
         h('span', null, h('kbd', null, 'C'), 'comms'),
-        h('span', null, h('kbd', null, 'J'), 'log'),
         h('span', null, h('kbd', null, 'I'), 'jot an idea'),
         h('span', null, h('kbd', null, 'T'), 'teleport'),
         h('span', null, h('kbd', null, 'M'), 'ready room'),

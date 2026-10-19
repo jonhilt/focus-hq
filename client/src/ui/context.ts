@@ -37,8 +37,6 @@ export interface Ui {
   openGoals(projectId: string, station?: number): void;
   /** Comms: whatever waits on the captain across the ship, and every goal under way. */
   openComms(): void;
-  /** The captain's log: every journal and the ledger on one timeline, and what happened while you were away. */
-  openLog(): void;
   /** The engineering station: the chief engineer's panel, with the ledger's report card and the plugins' parts. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

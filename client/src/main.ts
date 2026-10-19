@@ -17,7 +17,6 @@ import { openManagerPanel } from './ui/managerPanel';
 import { stepDemoPace } from './ui/demoPace';
 import { openGoalsPanel } from './ui/goalsPanel';
 import { openCommsPanel } from './ui/commsPanel';
-import { openCaptainsLogPanel } from './ui/captainsLogPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
@@ -197,7 +196,6 @@ async function main() {
         : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
-    openLog: () => openCaptainsLogPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -621,7 +619,6 @@ async function main() {
         dark = wantNight();
         hud.toast('info', dark ? 'Night: the ship dims until morning' : 'Lights up until evening');
       },
-      KeyJ: () => ui.openLog(),
       // the goals of the holodeck you're in; anywhere else, every goal's in Comms
       KeyL: () => {
         const projectId = world.locationOf(camera.position).projectId;

@@ -10,6 +10,10 @@ import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHo
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
+import type { ReviewEntry } from '../agents/reviewJournal';
+import type { JournalEntry } from '../agents/runJournal';
+import type { SliceFact } from '../agents/sliceJournal';
+import type { Stamped } from '../journals';
 
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
@@ -201,6 +205,11 @@ export interface PluginHost {
    */
   machines(): { graphs: readonly Readonly<MachineGraph>[]; runs: readonly Readonly<MachineRun>[] };
   /**
+   * The office's journals written to since `since` (by their files' times), each with every fact it holds, oldest
+   * first: each agent's run journal, each pull request's review journal and each goal's slice journal.
+   */
+  journals(since: number): LentJournals;
+  /**
    * Writes a line in the ship's log for `projectId` (at `at`, or now), and sends the new report card. Every plugin
    * hears it on `ledgerRecorded`, the one writing it too.
    */
@@ -306,6 +315,22 @@ export interface PluginGoals {
    * key, picking a long conversation back up can cost: then it comes back `costly`, for the captain to say `how`.
    */
   message(agentId: string, text: string, opts?: { from?: string; how?: ResumeHow }): MessageReply;
+}
+
+/** A journal the office keeps, as a plugin has it: what it's about and its facts, oldest first. */
+export interface LentJournal<E> {
+  key: string;
+  entries: readonly Readonly<E>[];
+}
+
+/** The office's journals (`host.journals`): how each run, review and goal went, fact by fact. */
+export interface LentJournals {
+  /** Each agent's run journal, by agent id. */
+  runs: LentJournal<JournalEntry>[];
+  /** Each pull request's review journal, by its key (`owner/repo#12`). */
+  reviews: LentJournal<ReviewEntry>[];
+  /** Each goal's slice journal, by its lead's id. */
+  slices: LentJournal<Stamped<SliceFact>>[];
 }
 
 export interface PluginState<S> {

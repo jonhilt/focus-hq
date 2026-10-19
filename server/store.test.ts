@@ -73,11 +73,11 @@ describe('Store on disk', () => {
     store.journal('a1', { kind: 'waiting' });
     store.reviewJournal('acme/shop-app#12', { kind: 'requested', projectId: 'p1', repo: 'acme/shop-app', number: 12, title: 'PR' });
     store.sliceJournal('lead1', { kind: 'started', slice: 1, branch: 'b' });
-    const sources = store.logSources(Date.now() - 60_000);
-    expect(sources.runs.map((s) => s.key)).toContain('a1');
-    expect(sources.reviews.map((s) => s.key)).toContain('acme/shop-app#12');
-    expect(sources.slices.find((s) => s.key === 'lead1')?.entries).toHaveLength(1);
-    expect(store.logSources(Date.now() + 60_000).runs).toEqual([]);
+    const journals = store.journalsSince(Date.now() - 60_000);
+    expect(journals.runs.map((s) => s.key)).toContain('a1');
+    expect(journals.reviews.map((s) => s.key)).toContain('acme/shop-app#12');
+    expect(journals.slices.find((s) => s.key === 'lead1')?.entries).toHaveLength(1);
+    expect(store.journalsSince(Date.now() + 60_000).runs).toEqual([]);
     expect(prKeyOf(fileKey('my-org/some-repo-2#7'))).toBe('my-org/some-repo-2#7');
   });
 

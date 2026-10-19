@@ -19,6 +19,6 @@
   "server/previews.ts": 0,
   "server/speech.ts": 0,
   "server/speechWorker.ts": 0,
-  "server/store.ts": 44,
+  "server/store.ts": 48,
   "server/voice.ts": 4
 }

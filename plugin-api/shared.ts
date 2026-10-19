@@ -21,7 +21,8 @@ export { columns } from '../shared/board';
 export { type Attention, inFlight, needsYou } from '../shared/tricorder';
 export { prKey, qaBadge } from '../shared/qa';
 export { goalTitle } from '../shared/goalTitle';
-export { trace } from '../shared/ledgerReview';
+/** The ledger as the office reads it out: a line of it, and lines grouped by day. */
+export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';
 /** The crew's voices, and what a reply says aloud. */
 export { type CrewVoice, forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine } from '../shared/voice';
 export { leadVoice, quickVoice } from '../shared/crew';

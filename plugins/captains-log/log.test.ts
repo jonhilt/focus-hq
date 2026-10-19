@@ -1,11 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent } from '../../shared/ledger';
-import { captainsLog, type LogSources } from './captainsLog';
-import { demoWorkspace } from './demoRunner';
-import { office, until } from './fakeOffice';
-import type { ReviewEntry } from './reviewJournal';
-import type { JournalEntry, RunFact } from './runJournal';
-import type { SliceFact } from './sliceJournal';
+import type { JournalEntry, LedgerEvent, ReviewEntry, RunFact, SliceFact } from '../../plugin-api/server';
+import { demoWorkspace, office, until } from '../../plugin-api/testing';
+import { captainsLog, type LogSources, logSources } from './log';
+import captainsLogPlugin from './server';
+import type { LogLine } from './shared';
 
 let seq = 0;
 const at = <F>(t: number, fact: F) => ({ v: 1 as const, seq: ++seq, t, ...fact });
@@ -70,15 +68,34 @@ describe('the captain’s log', () => {
   });
 });
 
+describe('who and what each journal is about', () => {
+  it('names a crew member who’s gone home from the ledger, and a review’s room and goal from its pull request', () => {
+    const ledger = [
+      { kind: 'session-digest', agentId: 'dev1', agent: 'Ens. Park', at: 1, projectId: 'p', seq: 1 },
+      { kind: 'goal-closed', goal: { id: 'lead1', leadName: 'Lt. Oyelaran', title: 'Saved items' }, at: 2, projectId: 'p', seq: 2 },
+    ] as unknown as LedgerEvent[];
+    const agents = [{ id: 'lead2', name: 'Lt. Reyes', projectId: 'p', lead: { title: 'Search', prs: [{ repo: 'o/web', number: 4 }] } }] as never;
+    const projects = [{ id: 'p', repos: ['o/web'] }] as never;
+    const journals = { runs: [{ key: 'dev1', entries: [] }, { key: 'gone', entries: [] }], reviews: [{ key: 'o/web#4', entries: [] }], slices: [{ key: 'lead1', entries: [] }, { key: 'lead3', entries: [] }] };
+    const s = logSources({ journals, agents, projects, ledger });
+    expect(s.runs.map((r) => r.who)).toEqual(['Ens. Park', 'A crew member who’s gone home']);
+    expect(s.reviews[0]).toMatchObject({ who: 'QA', projectId: 'p', goal: 'Search' });
+    expect(s.slices.map((r) => [r.who, r.goal])).toEqual([['Lt. Oyelaran', 'Saved items'], ['A lead who’s gone home', undefined]]);
+    expect(s.nameOf('lead2')).toBe('Lt. Reyes');
+  });
+});
+
 describe('the captain’s log of a real office', () => {
   it('has a goal’s ship, by its lead, and QA picking it up, by the reviewer', async () => {
     // QA's checkout is instant, so QA's testing in good time
     const { store, agents, claude, project } = office({ ...demoWorkspace, checkoutPullRequest: async () => '' });
+    agents.startPlugins([captainsLogPlugin], { demo: false, ownRepo: () => undefined });
+    const route = agents.plugins.routes().find((r) => r.plugin === 'captains-log' && r.route.path === '/log')!.route;
     const { agent } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
     await until(() => claude.turns.length === 1);
     await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
     await until(() => [...store.reviews.values()].some((r) => r.status === 'testing'));
-    const log = captainsLog(store.logSources(0), 0);
+    const log = route.handle({ body: {}, query: {} }) as LogLine[];
     expect(log.find((l) => l.kind === 'shipped')).toMatchObject({ who: agent.name, goal: 'Saved items', projectId: project.id, text: expect.stringMatching(/^Shipped slice 1: Saved items, first slice → /) });
     const testing = log.find((l) => l.kind === 'testing');
     expect(testing?.who).toBe(store.agent([...store.reviews.values()].find((r) => r.status === 'testing')!.agentId!).name);

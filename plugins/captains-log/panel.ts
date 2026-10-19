@@ -1,11 +1,5 @@
-import { awayPhrases, awaySummary, type LogLine, type LogSource } from '../../../shared/captainsLog';
-import { byDay } from '../../../shared/ledgerReview';
-import { keysOf } from '../../../shared/records';
-import { api } from '../net/api';
-import { state } from '../net/state';
-import { LCARS } from '../world/starship';
-import type { Ui } from './context';
-import { fill, h } from './dom';
+import { byDay, callPlugin, fill, h, keysOf, LCARS, office, shownProjects, type Ui } from '../../plugin-api/client';
+import { awayPhrases, awaySummary, CAPTAINS_LOG, type LogLine, type LogSource } from './shared';
 
 /** When the captain last looked at the log, in this browser: "while you were away" counts from there. */
 const SEEN = 'focus.captainsLog.seen';
@@ -53,7 +47,7 @@ export function openCaptainsLogPanel(ui: Ui): void {
   let goal = '';
   let who = '';
 
-  const away = h('div', { class: 'log-away' });
+  const away = h('div', { class: 'captains-log-away' });
   const row = h('div', { class: 'row' });
   const filters = h('div', { class: 'row ledger-filters' });
   const log = h('div', { class: 'ledger-log' });
@@ -61,7 +55,7 @@ export function openCaptainsLogPanel(ui: Ui): void {
 
   const load = () => {
     fill(log, h('p', { class: 'muted' }, 'Reading the journals…'));
-    api.log(since).then(
+    callPlugin<LogLine[]>(CAPTAINS_LOG, '/log', { since }).then(
       (l) => {
         lines = l;
         render();
@@ -80,14 +74,14 @@ export function openCaptainsLogPanel(ui: Ui): void {
   const render = () => {
     // what happened since you last looked, and what's waiting on you now
     const phrases = awayPhrases(awaySummary(lines, seen));
-    const waiting = [...state.agents.values()].filter((a) => a.permission || a.status === 'error');
+    const waiting = office.agents.filter((a) => a.permission || a.status === 'error');
     fill(away,
       h('h3', null, `While you were away (since ${when(seen)})`),
       h('p', null, phrases.length ? phrases.join(' · ') : 'Nothing worth a line.'),
-      waiting.length ? h('p', { class: 'log-waiting' }, `Waiting on you: ${waiting.map((a) => `${a.name} (${a.permission ? 'hand up' : 'hit a problem'})`).join(', ')}`) : null,
+      waiting.length ? h('p', { class: 'captains-log-waiting' }, `Waiting on you: ${waiting.map((a) => `${a.name} (${a.permission ? 'hand up' : 'hit a problem'})`).join(', ')}`) : null,
     );
 
-    const rooms = state.shown.filter((p) => lines.some((l) => l.projectId === p.id));
+    const rooms = shownProjects([...office.projects]).filter((p) => lines.some((l) => l.projectId === p.id));
     const goals = [...new Set(lines.map((l) => l.goal).filter((g): g is string => !!g))];
     const crew = [...new Set(lines.map((l) => l.who))].sort();
     fill(row,
@@ -128,10 +122,10 @@ export function openCaptainsLogPanel(ui: Ui): void {
   };
 
   const logRow = (l: LogLine) =>
-    h('div', { class: `ledger-row log-row tone-${l.tone}${l.t > seen ? ' new' : ''}` },
+    h('div', { class: `ledger-row captains-log-row tone-${l.tone}${l.t > seen ? ' new' : ''}` },
       h('span', { class: 'muted' }, time(l.t)),
       h('span', { class: 'chip', style: `--tone:${SOURCES[l.source].color}` }, l.tag),
-      h('strong', { class: 'log-who' }, l.who),
+      h('strong', { class: 'captains-log-who' }, l.who),
       h('div', { class: 'grow' }, h('div', null, l.text), l.goal ? h('small', { class: 'muted' }, l.goal) : null),
     );
 

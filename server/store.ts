@@ -17,9 +17,9 @@ import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runV
 import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
 import { Journals, type Stamped } from './journals';
 import { EMPTY_PERSONAL_LOG, evolvePersonalLog, type PersonalFact, type PersonalLog } from '../shared/personalLog';
-import type { LogSources } from './agents/captainsLog';
 import { machineRuns } from './agents/machines';
 import type { MachineRun } from '../shared/machines';
+import type { LentJournals } from './plugins/contract';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 import { changeProject } from './projectChange';
@@ -434,47 +434,14 @@ export class Store {
     return this.personal.state(PERSONAL).entries;
   }
 
-  // ---- the captain's log ----
+  // ---- every journal ----
 
-  /**
-   * What the captain's log is made of since `since` (`captainsLog`): every journal written to since, with who and what
-   * it's about (a crew member who's gone home is named from the ledger, where their sessions and goals were kept), and
-   * the ledger.
-   */
-  logSources(since: number): LogSources {
-    const names = new Map<string, string>();
-    const goals = new Map<string, { title: string; projectId: string }>();
-    for (const e of this.ledger) {
-      if (e.kind === 'session-digest') names.set(e.agentId, e.agent);
-      if (e.kind === 'goal-closed') {
-        names.set(e.goal.id, e.goal.leadName);
-        goals.set(e.goal.id, { title: e.goal.title, projectId: e.projectId });
-      }
-    }
-    for (const a of this.agents.values()) {
-      names.set(a.id, a.name);
-      if (a.lead) goals.set(a.id, { title: a.lead.title, projectId: a.projectId });
-    }
-    const nameOf = (id: string) => names.get(id);
-    const roomOf = (repo: string) => this.projects.find((p) => p.repos.includes(repo))?.id;
-    const leadOf = (repo: string, number: number) => [...this.agents.values()].find((a) => a.lead?.prs.some((p) => p.repo === repo && p.number === number));
-    const about = (o: { projectId?: string; goal?: string; agentId?: string }) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
+  /** The journals written to since `since`, each with its facts, oldest first: lent to plugins (`host.journals`). */
+  journalsSince(since: number): LentJournals {
     return {
-      runs: this.runs.written(since).map((id) => {
-        const a = this.agents.get(id);
-        const goal = goals.get(a?.reviewFor ?? id);
-        return { key: id, who: nameOf(id) ?? 'A crew member who’s gone home', ...about({ agentId: id, projectId: a?.projectId ?? goal?.projectId, goal: goal?.title }), entries: this.runs.entries(id) };
-      }),
-      reviews: this.reviewJournals.written(since).map((key) => {
-        const [repo, number] = [key.slice(0, key.lastIndexOf('#')), Number(key.slice(key.lastIndexOf('#') + 1))];
-        return { key, who: 'QA', ...about({ projectId: roomOf(repo), goal: leadOf(repo, number)?.lead?.title }), entries: this.reviewJournals.entries(key) };
-      }),
-      slices: this.slices.written(since).map((id) => {
-        const goal = goals.get(id);
-        return { key: id, who: nameOf(id) ?? 'A lead who’s gone home', ...about({ agentId: id, projectId: goal?.projectId, goal: goal?.title }), entries: this.slices.entries(id) };
-      }),
-      ledger: this.ledger,
-      nameOf,
+      runs: this.runs.written(since).map((key) => ({ key, entries: this.runs.entries(key) })),
+      reviews: this.reviewJournals.written(since).map((key) => ({ key, entries: this.reviewJournals.entries(key) })),
+      slices: this.slices.written(since).map((key) => ({ key, entries: this.slices.entries(key) })),
     };
   }
 

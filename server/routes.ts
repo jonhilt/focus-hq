@@ -4,8 +4,6 @@ import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
-import { logSince } from '../shared/captainsLog';
-import { captainsLog } from './agents/captainsLog';
 import { replay } from './agents/runJournal';
 import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
 import { paths } from './config';
@@ -104,11 +102,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
 
   // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
   r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
-  // the captain's log: every journal and the ledger on one timeline, since `since` (the last day by default, a week at most)
-  r.get('/log', h((req) => {
-    const since = logSince(Date.now(), Number(req.query.since));
-    return captainsLog(store.logSources(since), since);
-  }));
   // the captain's personal log: what they jotted down to come back to (shared/personalLog.ts)
   r.get('/personal-log', h(() => store.personalEntries));
   r.post('/personal-log', h((req) => office.notePersonal(req.body.text, logFrom(req.body.from))));

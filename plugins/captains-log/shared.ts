@@ -1,6 +1,9 @@
 // The captain's log: what happened across the ship, from every journal (each agent's run, each QA review, each goal's
-// slices) and the ledger, on one timeline (built by server/agents/captainsLog.ts). What's here is what the browser
-// needs of it: a line's shape, and what happened while you were away, in a sentence or two.
+// slices) and the ledger, on one timeline (built by log.ts). What's here is what both halves need of it: a line's
+// shape, how far back the log reads, and what happened while you were away, in a sentence or two.
+
+/** The plugin's id: in FOCUS_PLUGINS, and its routes' prefix. */
+export const CAPTAINS_LOG = 'captains-log';
 
 export type LogTone = 'ok' | 'bad' | 'warn' | 'info';
 
