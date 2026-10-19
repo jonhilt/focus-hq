@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { planUsage } from './usage';
+import type { PlanUsage, Usage } from './shared';
+import { planUsage, usageOf, UsageWatch } from './watch';
 
 const at = Date.parse('2026-10-12T22:00:00Z');
 
@@ -40,5 +41,38 @@ describe('planUsage', () => {
 
   it('is null when there’s no plan to read (an API key)', () => {
     expect(planUsage({ subscription_type: null, rate_limits: null }, at)).toBeNull();
+  });
+});
+
+describe('UsageWatch', () => {
+  const signIn = { mode: 'login' as const, onKey: false, keySpentUsd: 0, keyBudgetUsd: 20 };
+  const reading: PlanUsage = { at, plan: 'pro', windows: [{ label: 'session', percent: 40 }] };
+
+  /** A watch whose readings come from `reads` in turn (a string fails with it), into a state of its own. */
+  function watching(reads: (PlanUsage | null | string)[]) {
+    let state = usageOf(null, undefined, signIn);
+    const read = () => {
+      const next = reads.shift();
+      return typeof next === 'string' ? Promise.reject(new Error(next)) : Promise.resolve(next ?? null);
+    };
+    const watch = new UsageWatch({ get: () => state, set: (patch: Partial<Usage>) => void (state = { ...state, ...patch }) }, () => signIn, read);
+    return { watch, state: () => state };
+  }
+
+  it('keeps the last reading when one fails, saying why, and clears the error once one works', async () => {
+    const { watch, state } = watching([reading, 'timed out', reading]);
+    await watch.refresh();
+    expect(state()).toMatchObject({ plan: reading, signIn: 'login' });
+    expect(state().error).toBeUndefined();
+    await watch.refresh();
+    expect(state()).toMatchObject({ plan: reading, error: 'timed out' });
+    await watch.refresh();
+    expect(state().error).toBeUndefined();
+  });
+
+  it('says so when Claude Code reports no plan', async () => {
+    const { watch, state } = watching([null]);
+    await watch.refresh();
+    expect(state()).toMatchObject({ plan: null, error: "Claude Code didn't report your plan's limits" });
   });
 });

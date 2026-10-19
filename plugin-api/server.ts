@@ -9,6 +9,12 @@ export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/
 export { demoPace } from '../server/demoPace';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
 export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
+/**
+ * The environment the office's Claude Code sessions run in, for a plugin that starts one through the Agent SDK itself:
+ * `agentEnv(false)` signs in with your plan whatever the API key's doing, and with no argument as the office's new
+ * sessions do now (`host.signIn`).
+ */
+export { agentEnv } from '../server/agents/claudeRunner';
 /** The ship as the crew's ship_status tool tells it (`host.shipStatus`), and its projects as a crew member's prompt lists them. */
 export { type ChatProject, projectList, type ShipStatus } from '../server/agents/shipStatus';
 /** GitHub, as a brief's Effect reads it (`BriefSpec.brief`), and a merged or closed pull request as it gives it. */

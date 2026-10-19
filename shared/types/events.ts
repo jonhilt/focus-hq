@@ -9,7 +9,6 @@ import type { PluginStates } from './plugins';
 import type { Preview, PreviewLog } from './previews';
 import type { Project, Settings } from './projects';
 import type { QaReview } from './qa';
-import type { Usage } from './usage';
 import type { VoiceStatus } from './voice';
 
 export interface ServerInfo {
@@ -39,8 +38,6 @@ export interface Snapshot {
   voice: VoiceStatus;
   /** The ledger's last 30 days, summed up for the chief engineer's screen. */
   report: ReportCard;
-  /** Your plan's usage and how the office signs in, for main engineering. */
-  usage: Usage;
   /** Each plugin's state, by plugin id (docs/plugins.md). */
   plugins: PluginStates;
   /** The captain's personal log, oldest first: everything in it, done and dropped included. */
@@ -62,7 +59,6 @@ export type ServerEvent =
   | { type: 'review'; review: QaReview }
   | { type: 'review-removed'; repo: string; number: number }
   | { type: 'report'; report: ReportCard }
-  | { type: 'usage'; usage: Usage }
   /** A plugin's state changed. */
   | { type: 'plugin'; id: string; state: unknown }
   | { type: 'voice'; voice: VoiceStatus }

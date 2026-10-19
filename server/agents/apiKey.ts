@@ -1,11 +1,11 @@
 import type { SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk';
-import type { ResumeHow } from '../../shared/types';
+import type { ResumeHow, SignIn } from '../../shared/types';
 
 /**
  * How agents sign in to Claude: with your Claude login ('login'), with your API key ('key'), or with the login until
  * your plan's usage limit is reached and with the key until it resets ('fallback').
  */
-export type KeyMode = 'login' | 'key' | 'fallback';
+export type KeyMode = SignIn['mode'];
 
 export function keyMode(env: Record<string, string | undefined>): KeyMode {
   if (!env.ANTHROPIC_API_KEY) return 'login';
@@ -155,6 +155,11 @@ export class KeyFallback {
 
   spentUsd(): number {
     return this.reached()?.spentUsd ?? 0;
+  }
+
+  /** Where the office stands on your plan and your key now (lent to plugins as `host.signIn`). */
+  signIn(): SignIn {
+    return { mode: this.mode, onKey: this.onKey(), keySpentUsd: this.spentUsd(), keyBudgetUsd: this.budgetUsd };
   }
 
   /** The spell at the plan's limit, while it lasts. */

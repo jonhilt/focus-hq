@@ -18,3 +18,16 @@ export type ResumeHow = 'key' | 'wait';
 
 /** What came of a message to an agent: sent (or waiting for the plan's limit), or a question for the captain first. */
 export type MessageReply = { sent: true } | { costly: ResumeCost };
+
+/**
+ * Where the office stands on your plan and your API key, as its new sessions sign in: 'login', your plan; 'key', your
+ * API key; 'fallback', your plan, then the key while the plan's usage limit is reached.
+ */
+export interface SignIn {
+  mode: 'login' | 'key' | 'fallback';
+  /** New sessions start on the key right now. */
+  onKey: boolean;
+  /** What the key has spent since your plan's limit was reached, and the most it may spend each time. */
+  keySpentUsd: number;
+  keyBudgetUsd: number;
+}

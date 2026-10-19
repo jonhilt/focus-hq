@@ -1,0 +1,10 @@
+/* your plan's usage at the top of the engineering overview (view.ts) */
+.usage { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
+.usage-row { font-size: 14px; --tone: var(--lcars-sky); }
+.usage-row.warn { --tone: var(--lcars-gold); }
+.usage-row.bad { --tone: var(--lcars-red); }
+.usage-bar { height: 10px; border-radius: 5px; background: var(--surface); overflow: hidden; margin-top: 3px; }
+.usage-bar i { display: block; height: 100%; min-width: 10px; border-radius: 5px; background: var(--tone); }
+.usage-agents { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+.usage-agents th { text-align: left; font-weight: 500; color: var(--muted); }
+.usage-agents td, .usage-agents th { padding: 3px 4px; border-bottom: 1px solid var(--line); }

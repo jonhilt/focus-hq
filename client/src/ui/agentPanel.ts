@@ -194,7 +194,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
       contextReadout(a),
       readout('Started', timeAgo(a.startedAt)),
       a.costUsd > 0 ? readout('Usage', `~$${a.costUsd.toFixed(2)}`, { title: 'Estimated usage (on a subscription this is not billed)' }) : null,
-      !a.cloud ? readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { title: 'What this session signs in to Claude with (main engineering shows your plan’s usage)' }) : null,
+      !a.cloud ? readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { title: 'What this session signs in to Claude with' }) : null,
       a.cloud ? readout('Works in', 'Cloud', { title: 'Works in a Claude Code cloud session and pushes their own branch' }) : null,
       h('div', { class: 'links' },
         cloudLink(a),

@@ -18,6 +18,11 @@ export interface ClientPlugin {
   /** What it draws on main engineering's MSD beside the ship, while it's put up there (`ui.showOnMsd({ plugin })`). */
   msd?: (ctx: CanvasRenderingContext2D, box: Box) => void;
   /**
+   * A stat it adds to the HUD's top row, beside the office's own counts, wherever the captain is on the ship; or null
+   * for none just now. Asked again as the plugin's state changes.
+   */
+  hud?: () => HudStat | null;
+  /**
    * Screens it hangs round the wall of a project's holodeck, each a hologram you walk up to (`world/hallScreens.ts`).
    * Asked again whenever the plugin's state changes; a hall has room for `HALL_SCREENS` in all, given out in the order
    * the plugins switched on list them.
@@ -93,6 +98,26 @@ export function screenParts(view: Omit<ScreenView, 'before'>, before?: ReadonlyM
     }
   }
   return parts;
+}
+
+/** A plugin's stat on the HUD: its text, and a tone when it needs the captain's eye (`warn` gold, `bad` red). */
+export interface HudStat {
+  text: string;
+  tone?: 'warn' | 'bad';
+  /** What it is, on hover. */
+  title?: string;
+}
+
+/** The stats the plugins switched on add to the HUD, in the order they're switched on. A plugin whose `hud` throws is left out. */
+export function hudStats(): HudStat[] {
+  return clientPlugins().flatMap((plugin) => {
+    try {
+      return plugin.hud?.() ?? [];
+    } catch (err) {
+      console.error(`The ${plugin.id} plugin's HUD stat failed`, err);
+      return [];
+    }
+  });
 }
 
 /** A plugin's parts that run once it has started. */
@@ -216,6 +241,8 @@ export interface GoalStrip {
  * Every part is optional.
  */
 export interface EngineeringPart {
+  /** A block across the top of the overview, above its main block and in the order the plugins are switched on, or null for none. */
+  top?: (ui: Ui) => HTMLElement | null;
   /** A card on the overview, beside the others (the climber's); `go` opens one of the station's views from it. */
   card?: (ui: Ui, go: EngineeringGo) => HTMLElement | null;
   /** The overview's main block, with every card laid out in it (the scorecard puts them beside what moved). The first plugin's wins. */

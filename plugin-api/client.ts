@@ -8,7 +8,7 @@ import { api } from '../client/src/net/api';
 import { state } from '../client/src/net/state';
 
 export * from './shared';
-export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HallScreen, PluginSpace, ScreenPart, ScreenView, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
+export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HudStat, HallScreen, PluginSpace, ScreenPart, ScreenView, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
 export { pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
@@ -49,6 +49,10 @@ export const office = {
   },
   /** An agent by id, as the browser has them now. */
   agent: (id: string): Readonly<Agent> | undefined => state.agents.get(id),
+  /** Every agent aboard, of every project, as the browser has them now. */
+  get agents(): readonly Readonly<Agent>[] {
+    return [...state.agents.values()];
+  },
   /** The demo office: fake GitHub and scripted agents. */
   get demo(): boolean {
     return state.info?.mode === 'demo';

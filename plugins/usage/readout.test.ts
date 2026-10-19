@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { Usage } from './types';
-import { agentSignIn, signInLine, usageHeadline, usageRows, usageStat, usageTone } from './usage';
+import type { Usage } from './shared';
+import { agentSignIn, signInLine, usageHeadline, usageRows, usageStat, usageTone } from './readout';
 
 const now = new Date(2026, 9, 12, 22, 0).getTime();
 const usage = (change: Partial<Usage> = {}): Usage => ({

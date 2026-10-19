@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { config, paths } from '../../config';
 import { pluginOn } from '../../../shared/projectPlugins';
-import type { Issue, PluginStates, Snapshot } from '../../../shared/types';
+import type { Issue, PluginStates, SignIn, Snapshot } from '../../../shared/types';
+import { keyFallback } from '../apiKey';
 import type { PersonalEntry } from '../../../shared/personalLog';
 import type { ShipStatus } from '../shipStatus';
 import type { BriefWork, PluginHost, PluginState } from '../../plugins/contract';
@@ -32,6 +33,8 @@ export interface Lent {
   shipStatus?: () => Promise<ShipStatus>;
   /** The captain's personal log (`Office.notePersonal`): none in a test that doesn't need it. */
   personalLog?: { entries: () => readonly PersonalEntry[]; note: (text: string, via: string) => PersonalEntry };
+  /** How the office's sessions sign in: the office's own `keyFallback` unless a test lends another. */
+  signIn?: () => SignIn;
 }
 
 /** What a test office (one without it) answers for something the office lends. */
@@ -88,6 +91,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     machines: () => ({ graphs: MACHINES, runs: lend(core.store.machineRuns()) }),
     record: (projectId, entry, at) => core.ledger.record(projectId, entry, at),
     settings: () => lend(core.store.settings),
+    signIn: () => lent.signIn?.() ?? keyFallback.signIn(),
     snapshot: () => lent.snapshot?.().then(lend) ?? missing('snapshot'),
     shipStatus: () => lent.shipStatus?.() ?? missing('ship’s status'),
     personalLog: {

@@ -125,9 +125,11 @@ describe('KeyFallback', () => {
     keys.spent(5);
     expect(keys.onKey()).toBe(false);
     expect(changes).toHaveBeenLastCalledWith(false, { until: NOW + 60_000, spentUsd: 11 });
+    expect(keys.signIn()).toEqual({ mode: 'fallback', onKey: false, keySpentUsd: 11, keyBudgetUsd: 10 });
     now = NOW + 60_000;
     expect(keys.resetsAt()).toBeUndefined();
     expect(keys.spentUsd()).toBe(0);
+    expect(keys.signIn()).toEqual({ mode: 'fallback', onKey: false, keySpentUsd: 0, keyBudgetUsd: 10 });
   });
 
   it('never uses the key on your login alone', () => {

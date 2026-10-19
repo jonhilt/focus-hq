@@ -7,15 +7,14 @@ import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { busy, fill, h } from './dom';
 import { type NavItem, readout, shownView, SideNav } from './panels';
-import { usageView } from './usageView';
 import { frictionBars } from './frictionBars';
 
 /** A view of the station: the overview and the ledger are the core's, and plugins add their own (the scorecard's). */
 type View = string;
 
 /**
- * The engineering station, a view at a time: your plan's usage and the plugins' parts at a glance (the scorecard's
- * overview, the plugins' cards), each plugin's views (the scorecard's code and office numbers), and the ledger as it
+ * The engineering station, a view at a time: the plugins' parts at a glance (what they put across the top, the
+ * scorecard's overview, the plugins' cards), each plugin's views (the scorecard's code and office numbers), and the ledger as it
  * stands, with the agents' older sessions to digest.
  */
 export function openEngineeringPanel(ui: Ui): void {
@@ -66,7 +65,7 @@ export function openEngineeringPanel(ui: Ui): void {
       // every plugin's card, laid out by the first plugin with an overview of its own (the scorecard's), or on their own
       const cards = h('div', { class: 'eng-cards' }, ...parts.map((part) => part.card?.(ui, go) ?? null));
       const laidOut = parts.find((part) => part.overview)?.overview?.(ui, cards, go);
-      return [usageView(ui), laidOut ?? cards];
+      return [...parts.map((part) => part.top?.(ui) ?? null), laidOut ?? cards];
     };
     const plugged = pluginViews.find((v) => v.key === view);
     const shown = view === 'overview' ? overview()
@@ -77,7 +76,6 @@ export function openEngineeringPanel(ui: Ui): void {
 
   ui.panels.open({ title: `${eng.name} · Chief engineer`, body, nav, accent: LCARS.gold, wide: true });
   ui.panels.own(state.on('report', render));
-  ui.panels.own(state.on('usage', render));
   ui.panels.own(state.on('plugin', render));
   // what agents on a plugin's brief are doing, as they work (the climber's card)
   ui.panels.own(state.on('agent', (a) => {

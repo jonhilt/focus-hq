@@ -44,8 +44,8 @@ export interface Ui {
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */
   /** The ledger review, tracing `subject` when given (a friction from the engineering panel, say). */
   openLedger(subject?: TraceSubject): void;
-  /** Puts a trace, a plugin's board (the scorecard's) or your plan's usage up on main engineering's MSD, or with null, the ledger's report card back. */
-  showOnMsd(what: Trace | { plugin: string } | 'usage' | null): void;
+  /** Puts a trace or a plugin's board (the scorecard's) up on main engineering's MSD, or with null, the ledger's report card back. */
+  showOnMsd(what: Trace | { plugin: string } | null): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
   /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */

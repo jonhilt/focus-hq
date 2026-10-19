@@ -85,7 +85,7 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
   box-sizing: border-box; height: var(--hud-pill); line-height: 1; display: flex; align-items: center;
 }
 .stat.alert { background: var(--lcars-gold); color: var(--ink); border-color: var(--lcars-peach); animation: blink 1s steps(1) infinite; }
-.stat.plan.warn { color: var(--lcars-gold); }
+.stat.warn { color: var(--lcars-gold); }
 .stat.bad { background: var(--lcars-red); color: var(--ink); border-color: var(--lcars-orange); }
 @keyframes blink { 50% { background: var(--lcars-peach); border-color: var(--lcars-gold); } }
 /* Comms on the HUD: an LCARS pill that lights up and counts whatever waits on the captain */
@@ -842,16 +842,6 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 
 /* recording (H, or ?record=1): only the office, and errors */
 body.recording .hud, body.recording .toast:not(.error) { display: none; }
-/* your plan's usage at the top of the engineering overview (ui/usageView.ts) */
-.usage { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
-.usage-row { font-size: 14px; --tone: var(--lcars-sky); }
-.usage-row.warn { --tone: var(--lcars-gold); }
-.usage-row.bad { --tone: var(--lcars-red); }
-.usage-bar { height: 10px; border-radius: 5px; background: var(--surface); overflow: hidden; margin-top: 3px; }
-.usage-bar i { display: block; height: 100%; min-width: 10px; border-radius: 5px; background: var(--tone); }
-.usage-agents { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
-.usage-agents th { text-align: left; font-weight: 500; color: var(--muted); }
-.usage-agents td, .usage-agents th { padding: 3px 4px; border-bottom: 1px solid var(--line); }
 /* the engineering station's own parts (ui/engineeringPanel.ts), which plugins' views use too: the overview's cards, a section, and the open frictions as bars */
 .eng-cards { display: flex; flex-direction: column; gap: 14px; }
 .eng-cards > .card { margin-bottom: 0; }

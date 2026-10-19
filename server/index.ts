@@ -34,7 +34,6 @@ import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage, run, seedOffice } from './util';
-import { demoPlanUsage, readPlanUsage, UsageWatch } from './usage';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -47,10 +46,9 @@ async function main() {
   store.load();
 
   const hub = new Hub();
-  // main engineering's readout of your plan's usage (the demo's is made up)
-  const usage = new UsageWatch(hub, keyFallback, config.demo ? demoPlanUsage : () => readPlanUsage(config.dataDir));
   keyFallback.onChange = (onKey, spell) => {
-    usage.changed();
+    // the office is up by the time a session runs into the plan's limit
+    office.agents.plugins.signInChanged(keyFallback.signIn());
     if (onKey) hub.toast('info', `🔑 Your plan's usage limit is reached until ${clock(spell.until)}: agents carry on with your API key (up to $${keyFallback.budgetUsd})`);
     else if (spell.until > Date.now()) hub.toast('error', `🔑 Your API key has spent its $${keyFallback.budgetUsd}: agents wait for your plan's usage limit to reset at ${clock(spell.until)}`);
     else hub.toast('success', `🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $${spell.spentUsd.toFixed(2)})`);
@@ -71,7 +69,7 @@ async function main() {
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
-  const office = new Office(store, hub, github, previews, planner, usage, new Voice(hub, config.demo), await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, new Voice(hub, config.demo), await currentVersion());
   office.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
@@ -194,7 +192,6 @@ async function main() {
   });
 
   await office.start();
-  usage.start();
   if (!config.demo) {
     const sweep = () =>
       git

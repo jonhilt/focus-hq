@@ -1,7 +1,7 @@
 // How main engineering reads out your plan's usage: the same words on the MSD and in the engineering panel.
 
-import { clock } from './clock';
-import type { Agent, Usage } from './types';
+import { type Agent, clock } from '../../plugin-api/shared';
+import type { Usage } from './shared';
 
 /** How close a limit is: 'ok', getting there ('warn', from 75%), or nearly out ('bad', from 90%). */
 export type UsageTone = 'ok' | 'warn' | 'bad';

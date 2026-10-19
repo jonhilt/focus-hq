@@ -1,4 +1,9 @@
-// How much of your Claude plan the office has used, and what each agent signs in with, for main engineering.
+// How much of your Claude plan the office has used, and what each agent signs in with, for main engineering: the
+// plugin's state (its server part's), as the browser reads it.
+import type { SignIn } from '../../plugin-api/shared';
+
+/** The plugin's id: in FOCUS_PLUGINS, and its state's key. */
+export const USAGE = 'usage';
 
 /** One of your plan's usage limits: how much of it is used, and when it starts again. */
 export interface UsageWindow {
@@ -37,7 +42,7 @@ export interface Usage {
   /** Why there's no reading, when there isn't one. */
   error?: string;
   /** 'login': agents use your plan; 'key': your API key; 'fallback': your plan, then the key while it's limited. */
-  signIn: 'login' | 'key' | 'fallback';
+  signIn: SignIn['mode'];
   /** New sessions start on the key right now. */
   onKey: boolean;
   /** What the key has spent since your plan's limit was reached, and the most it may. */

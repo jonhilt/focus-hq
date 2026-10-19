@@ -1,9 +1,7 @@
+// Reading your plan's usage from Claude Code's structured /usage every few minutes, with how the office signs in.
 import { query, type SDKControlGetUsageResponse, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { PlanUsage, Usage, UsageWindow } from '../shared/types';
-import { agentEnv } from './agents/claudeRunner';
-import type { KeyFallback } from './agents/apiKey';
-import type { Hub } from './hub';
-import { errorMessage } from './util';
+import { agentEnv, errorMessage, type PluginState, type SignIn } from '../../plugin-api/server';
+import type { PlanUsage, Usage, UsageWindow } from './shared';
 
 /** How often the office reads your plan's usage: each reading starts a Claude Code process, but sends it nothing. */
 export const READ_EVERY_MS = 3 * 60_000;
@@ -79,25 +77,22 @@ export async function readPlanUsage(cwd: string): Promise<PlanUsage | null> {
   }
 }
 
-/** The demo's plan: a session filling up as the minutes go by, and a week that's a quarter gone. */
-export async function demoPlanUsage(): Promise<PlanUsage> {
-  const now = Date.now();
-  const hour = 60 * 60_000;
-  const intoSession = now % (5 * hour);
-  return {
-    at: now,
-    plan: 'max',
-    windows: [
-      { label: 'session', percent: Math.round((intoSession / (5 * hour)) * 90), resetsAt: now - intoSession + 5 * hour },
-      { label: 'week', percent: 27, resetsAt: now + 4.5 * 24 * hour },
-    ],
-    extra: { enabled: false, used: 0, limit: 50, currency: 'GBP', percent: 0 },
-  };
-}
+/**
+ * The readout: a plan's reading (or why there's none) with how the office signs in. `error` is always there, undefined
+ * once a reading works, so setting the plugin's state with it clears an error from before.
+ */
+export const usageOf = (plan: PlanUsage | null, error: string | undefined, signIn: SignIn): Usage => ({
+  plan,
+  error,
+  signIn: signIn.mode,
+  onKey: signIn.onKey,
+  keySpentUsd: signIn.keySpentUsd,
+  keyBudgetUsd: signIn.keyBudgetUsd,
+});
 
 /**
  * Main engineering's usage readout: your plan's limits, read every few minutes, and how the office's sessions sign in
- * (`keyFallback`), sent to the browsers whenever either changes. On the API key alone there's no plan to read.
+ * (`host.signIn`), in the plugin's state whenever either changes. On the API key alone there's no plan to read.
  */
 export class UsageWatch {
   private plan: PlanUsage | null = null;
@@ -105,24 +100,19 @@ export class UsageWatch {
   private timer?: NodeJS.Timeout;
 
   constructor(
-    private readonly hub: Hub,
-    private readonly keys: KeyFallback,
+    private readonly state: PluginState<Usage>,
+    private readonly signIn: () => SignIn,
     private readonly read: () => Promise<PlanUsage | null>,
   ) {}
 
   current(): Usage {
-    return {
-      plan: this.plan,
-      ...(this.error && { error: this.error }),
-      signIn: this.keys.mode,
-      onKey: this.keys.onKey(),
-      keySpentUsd: this.keys.spentUsd(),
-      keyBudgetUsd: this.keys.budgetUsd,
-    };
+    return usageOf(this.plan, this.error, this.signIn());
   }
 
+  /** Says how the office signs in straight away, and reads the plan every few minutes, unless there's none to read. */
   start(): void {
-    if (this.keys.mode === 'key') return this.changed();
+    this.changed();
+    if (this.signIn().mode === 'key') return;
     void this.refresh();
     this.timer = setInterval(() => void this.refresh(), READ_EVERY_MS);
     this.timer.unref();
@@ -145,6 +135,6 @@ export class UsageWatch {
 
   /** Something about how the office signs in changed. */
   changed(): void {
-    this.hub.send({ type: 'usage', usage: this.current() });
+    this.state.set(this.current());
   }
 }

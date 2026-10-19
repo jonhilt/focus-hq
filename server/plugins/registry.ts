@@ -1,6 +1,6 @@
 import { lend } from './lend';
 import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent, Brief, PluginStates } from '../../shared/types';
+import type { Agent, Brief, PluginStates, SignIn } from '../../shared/types';
 import { errorMessage } from '../util';
 import type { BriefSpec, FocusPlugin, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
 
@@ -116,6 +116,11 @@ export class Plugins {
 
   ledgerRecorded(event: LedgerEvent): void {
     this.each('ledgerRecorded', (parts) => parts.ledgerRecorded?.(lend(event)));
+  }
+
+  /** The office's new sessions moved onto your API key, or back onto your plan: each plugin hears of its own copy. */
+  signInChanged(signIn: SignIn): void {
+    this.each('signInChanged', (parts) => parts.signInChanged?.({ ...signIn }));
   }
 
   /** Whether any plugin says only the captain merges this pull request. */

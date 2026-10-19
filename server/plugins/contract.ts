@@ -6,7 +6,7 @@ import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun } from '../../shared/machines';
-import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, Snapshot, SystemModel, TermLine } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -66,6 +66,11 @@ export interface PluginParts {
   machineStepped?(machine: string, key: string): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
+  /**
+   * The office's new sessions moved onto your API key (your plan's usage limit was reached), or back onto your plan:
+   * where it stands now, as `host.signIn()` reads it.
+   */
+  signInChanged?(signIn: SignIn): void;
   /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
@@ -202,6 +207,12 @@ export interface PluginHost {
   record(projectId: string, entry: LedgerEntry, at?: number): void;
   /** The captain's settings (the model read-only sessions run on, say), as they are now. */
   settings(): Readonly<Settings>;
+  /**
+   * How the office's sessions sign in to Claude now: your plan, your API key, or your plan with the key behind it, and
+   * whether new sessions are on the key and what it's spent while your plan's limit is reached. `signInChanged` says
+   * when they move between the two.
+   */
+  signIn(): SignIn;
   /**
    * The whole office as a browser gets it when it connects: projects, every agent with their recent terminal lines,
    * boards, QA's reviews, the Ops stations' drafts and every plugin's state. It's a lot: ask when it's needed (an

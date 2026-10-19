@@ -12,5 +12,4 @@ export * from './plugins';
 export * from './previews';
 export * from './projects';
 export * from './qa';
-export * from './usage';
 export * from './voice';

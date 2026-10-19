@@ -10,7 +10,6 @@ import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/
 import type { AgentManager } from './agents/manager';
 import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
-import type { UsageWatch } from './usage';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
 import { demoPace } from './demoPace';
@@ -52,7 +51,6 @@ export class Office {
     private readonly github: GitHubProvider,
     readonly previews: Previews,
     readonly planner: IssuePlanner,
-    readonly usage: UsageWatch,
     readonly voice: Voice,
     version: string,
   ) {
@@ -104,7 +102,6 @@ export class Office {
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
       report: this.agents.report(),
-      usage: this.usage.current(),
       plugins: this.agents.plugins.states(),
       personalLog: this.store.personalEntries,
     };

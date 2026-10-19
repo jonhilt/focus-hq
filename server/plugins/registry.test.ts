@@ -105,6 +105,17 @@ describe('Plugins', () => {
     expect(shown.model.question).toBe('Q?');
   });
 
+  it('tells every plugin the office’s sessions moved onto the key or back, each with a copy of its own', () => {
+    const heard: string[] = [];
+    const signIn = { mode: 'fallback' as const, onKey: true, keySpentUsd: 0, keyBudgetUsd: 20 };
+    const plugins = started({},
+      plugin('spoiler', { signInChanged: (s) => void (s.onKey = false) }),
+      plugin('watcher', { signInChanged: (s) => void heard.push(`${s.mode} ${s.onKey}`) }));
+    plugins.signInChanged(signIn);
+    expect(heard).toEqual(['fallback true']);
+    expect(signIn.onKey).toBe(true);
+  });
+
   it('has the captain merge a pull request when any plugin says so', () => {
     const plugins = started({}, plugin('a', { captainMerges: () => false }), plugin('b', { captainMerges: (pr) => pr.branch.startsWith('focus/climb-') }), plugin('c', {}));
     expect(plugins.captainMerges({ branch: 'focus/climb-ab12' })).toBe(true);

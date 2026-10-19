@@ -192,11 +192,9 @@ async function main() {
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
-      what === 'usage'
-        ? { kind: 'usage', usage: state.usage }
-        : what && 'plugin' in what
-          ? pluginBoard(what.plugin) ?? { kind: 'report', card: state.report }
-          : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
+      what && 'plugin' in what
+        ? pluginBoard(what.plugin) ?? { kind: 'report', card: state.report }
+        : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
     openLog: () => openCaptainsLogPanel(ui),
@@ -427,7 +425,6 @@ async function main() {
     if (clientPlugin(id)?.goal) for (const room of world.rooms.values()) room.syncStations();
     world.syncHallScreens();
   });
-  state.on('usage', () => world.showOnMsd({ kind: 'usage', usage: state.usage }));
   state.on('toast', (e) => {
     if (!toastShows(e, state.projects, (id) => state.agents.get(id)?.projectId)) return;
     const agentId = e.agentId;

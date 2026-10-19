@@ -5,8 +5,10 @@ import type { Agent as OfficeAgent, LeadAgent as OfficeLeadAgent, Project as Off
 import type { LedgerEvent as OfficeLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, Snapshot, SystemModel, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, SystemModel, Waypoint,
 } from '../shared/types';
+/** A time of day, with the day when it isn't today (`14:05`, `Tue 09:30`). */
+export { clock } from '../shared/clock';
 /** An agent, a project and a line of the ledger as a plugin has them: its own copies (`PluginHost`), read-only. */
 export type Agent = Readonly<OfficeAgent>;
 export type LeadAgent = Readonly<OfficeLeadAgent>;

@@ -49,13 +49,6 @@
       "from": "server/office.ts",
       "to": "client/src/net/state.ts",
       "count": 1
-    },
-    {
-      "via": "ws",
-      "name": "usage",
-      "from": "server/usage.ts",
-      "to": "client/src/net/state.ts",
-      "count": 1
     }
   ],
   "commit": "6ad970406ae799205d759a9bdd44cde42e0f78ac"

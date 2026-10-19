@@ -2,7 +2,7 @@ import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import type { PersonalEntry } from '../../../shared/personalLog';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, BrowserFrame, IssueDraft, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, TermLine, Usage, VoiceStatus } from '../../../shared/types';
+import type { Agent, Board, BrowserFrame, IssueDraft, PluginStates, Preview, Project, QaReview, ServerEvent, ServerInfo, TermLine, VoiceStatus } from '../../../shared/types';
 
 type Events = {
   snapshot: void;
@@ -21,8 +21,6 @@ type Events = {
   draft: string;
   /** The ledger's report card changed. */
   report: void;
-  /** Your plan's usage was read again, or how the office signs in changed. */
-  usage: void;
   /** A plugin's state changed (its id). */
   plugin: string;
   /** A QA review changed or went away (its project id). */
@@ -50,7 +48,6 @@ export class OfficeState {
   /** The planner's issue draft per project id, while one is being written or waits to be filed. */
   drafts = new Map<string, IssueDraft>();
   report: ReportCard | null = null;
-  usage: Usage | null = null;
   /** Each plugin's state, by plugin id: only the plugins switched on (`info.plugins`). */
   plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey). */
@@ -117,13 +114,11 @@ export class OfficeState {
         this.drafts = new Map((s.drafts ?? []).map((d) => [d.projectId, d]));
         this.reviews = new Map((s.reviews ?? []).map((r) => [prKey(r.repo, r.number), r]));
         this.report = s.report;
-        this.usage = s.usage;
         this.plugins = s.plugins ?? {};
         this.personalLog = s.personalLog ?? [];
         this.voice = s.voice;
         this.emit('snapshot', undefined);
         this.emit('report', undefined);
-        this.emit('usage', undefined);
         for (const id of Object.keys(this.plugins)) this.emit('plugin', id);
         this.emit('voice', undefined);
         break;
@@ -203,10 +198,6 @@ export class OfficeState {
       case 'report':
         this.report = event.report;
         this.emit('report', undefined);
-        break;
-      case 'usage':
-        this.usage = event.usage;
-        this.emit('usage', undefined);
         break;
       case 'plugin':
         this.plugins = { ...this.plugins, [event.id]: event.state };

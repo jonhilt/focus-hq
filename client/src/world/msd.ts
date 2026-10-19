@@ -1,18 +1,15 @@
 import { frictionName, type ReportCard, reportLines } from '../../../shared/ledger';
 import type { Trace } from '../../../shared/ledgerReview';
-import type { Usage } from '../../../shared/types';
-import { signInLine, usageHeadline, usageRows } from '../../../shared/usage';
 import { fitText } from './canvas';
 import { LCARS, LCARS_FONT, lcarsFrame } from './starship';
 
 /**
- * What the MSD shows beside the ship: the ledger's report card, your plan's usage, the trace picked at the master
- * systems table, or what a plugin draws there (the scorecard).
+ * What the MSD shows beside the ship: the ledger's report card, the trace picked at the master systems table, or what
+ * a plugin draws there (the scorecard).
  */
 export type MsdBoard =
   | { kind: 'report'; card: ReportCard | null }
   | { kind: 'plugin'; id: string; draw: (ctx: CanvasRenderingContext2D, box: Box) => void }
-  | { kind: 'usage'; usage: Usage | null }
   | { kind: 'trace'; trace: Trace };
 
 /** A deck on the MSD: where it is on the cutaway (fractions of the drawing's width and height), and its colour. */
@@ -192,33 +189,6 @@ function drawBoard(ctx: CanvasRenderingContext2D, b: Box, board: MsdBoard): void
     board.draw(ctx, b);
     return;
   }
-  if (board.kind === 'usage') {
-    title(`Plan usage · ${usageHeadline(board.usage)}`, LCARS.gold);
-    // a gauge per limit: its name and when it resets over a bar that fills as it's used
-    usageRows(board.usage).slice(0, 4).forEach((r, i) => {
-      const y = b.y + b.h * (0.14 + i * 0.19);
-      ctx.font = `500 ${px(0.06)}px ${LCARS_FONT}`;
-      ctx.fillStyle = LCARS.peach;
-      ctx.textAlign = 'left';
-      ctx.fillText(fitText(ctx, r.label.toUpperCase(), b.w * 0.5), b.x, y);
-      ctx.textAlign = 'right';
-      ctx.fillText(fitText(ctx, `${r.percent}%${r.note ? ` · ${r.note.toUpperCase()}` : ''}`, b.w * 0.5), b.x + b.w, y);
-      ctx.textAlign = 'left';
-      const bar = { y: y + px(0.08), h: px(0.06) };
-      ctx.fillStyle = '#1b1630';
-      ctx.beginPath();
-      ctx.roundRect(b.x, bar.y, b.w, bar.h, bar.h / 2);
-      ctx.fill();
-      ctx.fillStyle = USAGE_TONE[r.tone];
-      ctx.beginPath();
-      ctx.roundRect(b.x, bar.y, Math.max(bar.h, (b.w * Math.min(100, r.percent)) / 100), bar.h, bar.h / 2);
-      ctx.fill();
-    });
-    ctx.fillStyle = LCARS.lilac;
-    ctx.font = `500 ${px(0.05)}px ${LCARS_FONT}`;
-    ctx.fillText(fitText(ctx, signInLine(board.usage), b.w), b.x, b.y + b.h * 0.92);
-    return;
-  }
   const { subject, totals: t, steps, goal } = board.trace;
   const friction = subject.kind === 'friction' ? frictionName(subject.key) : undefined;
   title(subject.kind === 'pr' ? `Trace · ${subject.repo.split('/').pop()} #${subject.pr}` : subject.kind === 'goal' ? 'Trace · goal' : `Trace · ${friction?.kind || 'friction'}`, LCARS.gold);
@@ -243,8 +213,6 @@ function drawBoard(ctx: CanvasRenderingContext2D, b: Box, board: MsdBoard): void
   const last = steps.slice(-6);
   lines(0.42, last.map((s) => ({ tag: s.tag, text: friction && s.quotes?.length ? `${s.quotes[0]} · ${s.title}` : s.title, color: STEP[s.tone] })));
 }
-
-const USAGE_TONE: Record<string, string> = { ok: LCARS.sky, warn: LCARS.gold, bad: LCARS.red };
 
 
 const STEP: Record<string, string> = { ok: LCARS.sky, bad: LCARS.red, warn: LCARS.gold, info: LCARS.lilac };
