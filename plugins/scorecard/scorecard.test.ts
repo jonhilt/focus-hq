@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, noiseOf, tileFace, verdictPhrases, wobble } from './scorecard';
-import type { Metric, Scorecard } from './types';
+import { changeMark, changeWords, compared, deltaText, direction, duration, glance, measuredAt, noiseOf, scorecardHeadOf, tileFace, verdictPhrases, wobble } from './scorecard';
+import type { Metric, Scorecard, Scorecards } from './types';
 
 const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count', key = 'k'): Metric => ({ section: 'fence', key, label: key, value, better, format });
 
@@ -91,6 +91,36 @@ describe('measuredAt', () => {
   it('names the branch and short commit, and says when uncommitted changes went in', () => {
     expect(measuredAt(card('f6f4c667abcdef', {}))).toBe('main @ f6f4c667');
     expect(measuredAt({ ...card('f6f4c667abcdef', {}), dirty: true })).toBe('main @ f6f4c667 (uncommitted changes)');
+  });
+});
+
+describe('scorecardHeadOf', () => {
+  const ago = (at: number) => `${at}m ago`;
+  const desk = (patch: Partial<Scorecards>): Scorecards => ({ status: 'idle', history: [], ...patch });
+
+  it('says nothing has been measured yet, with nothing to show on the MSD', () => {
+    for (const d of [null, desk({})]) {
+      const head = scorecardHeadOf(d, ago);
+      expect(head).toMatchObject({ measuring: false, latest: null, canShowOnMsd: false, status: { tone: 'muted' } });
+      expect(head.status?.text).toMatch(/^Not measured yet/);
+    }
+  });
+
+  it('names the latest card’s commit and when it was measured', () => {
+    expect(scorecardHeadOf(desk({ history: [card('aaaa', {}), { ...card('f6f4c667abcdef', {}), at: 3 }] }), ago)).toEqual({
+      measuring: false, latest: 'main @ f6f4c667 · measured 3m ago', canShowOnMsd: true, status: null,
+    });
+  });
+
+  it('says what a measurement under way is measuring, and since when', () => {
+    expect(scorecardHeadOf(desk({ status: 'measuring', trigger: 'new-commit', startedAt: 2 }), ago)).toMatchObject({
+      measuring: true, status: { tone: 'muted', text: 'Measuring the new commit the office started on, started 2m ago: about a minute and a half' },
+    });
+    expect(scorecardHeadOf(desk({ status: 'measuring', trigger: 'captain' }), ago).status?.text).toBe('Running the gate on the office’s own checkout: about a minute and a half');
+  });
+
+  it('says why the last measurement failed', () => {
+    expect(scorecardHeadOf(desk({ status: 'failed', error: 'pnpm not found', history: [card('aaaa', {})] }), ago).status).toEqual({ tone: 'bad', text: 'pnpm not found' });
   });
 });
 

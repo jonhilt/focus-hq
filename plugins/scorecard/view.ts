@@ -1,4 +1,4 @@
-import { changeMark, type ComparedRow, compared, duration, formatValue, glance, measuredAt, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
+import { changeMark, type ComparedRow, compared, duration, formatValue, glance, type ScorecardHead, scorecardHeadOf, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
 import { aboutMetric, SECTION_ABOUT } from './about';
 import { busy, callPlugin, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
 import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
@@ -57,30 +57,26 @@ function trendPill(row: ComparedRow, tone: Trend | 'bad' = row.trend): HTMLEleme
 
 /** The scorecard's head: which commit it measured and when, Measure now, the MSD, and how a measurement is going. */
 export function scorecardHead(ui: Ui): HTMLElement {
-  const desk = scorecards();
-  const history = desk?.history ?? [];
-  const latest = history.at(-1);
-  const measuring = desk?.status === 'measuring';
-
-  const measure = h('button', { class: 'btn primary small' }, measuring ? 'Measuring…' : 'Measure now');
-  measure.disabled = measuring;
+  const head = scorecardHeadOf(scorecards(), timeAgo);
+  const measure = h('button', { class: 'btn primary small' }, head.measuring ? 'Measuring…' : 'Measure now');
+  measure.disabled = head.measuring;
   measure.onclick = () => void busy(measure, () => callPlugin<Scorecards>(SCORECARD, '/measure').then(() => undefined), ui.error);
   const onMsd = h('button', { class: 'btn small' }, 'Show on the MSD');
-  onMsd.disabled = !latest;
+  onMsd.disabled = !head.canShowOnMsd;
   onMsd.onclick = () => ui.showOnMsd({ plugin: SCORECARD });
-
-  const status = measuring
-    ? h('small', { class: 'muted' }, `${desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout'}${desk?.startedAt ? `, started ${timeAgo(desk.startedAt)}` : ''}: about a minute and a half`)
-    : desk?.status === 'failed'
-      ? h('small', null, h('span', { class: 'chip bad' }, 'failed'), ' ', desk.error ?? '')
-      : latest ? null : h('small', { class: 'muted' }, 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on the office’s own checkout.');
   return h('div', { class: 'sc-head' },
     h('div', { class: 'row' },
       h('h3', null, 'Scorecard'),
-      latest ? h('span', { class: 'muted grow' }, `${measuredAt(latest)} · measured ${timeAgo(latest.at)}`) : h('span', { class: 'grow' }),
+      head.latest ? h('span', { class: 'muted grow' }, head.latest) : h('span', { class: 'grow' }),
       measure, onMsd),
-    status,
+    measureNote(head.status),
   );
+}
+
+/** How a measurement is going, or why the last one failed. */
+function measureNote(status: ScorecardHead['status']): HTMLElement | null {
+  if (!status) return null;
+  return status.tone === 'bad' ? h('small', null, h('span', { class: 'chip bad' }, 'failed'), ' ', status.text) : h('small', { class: 'muted' }, status.text);
 }
 
 /** The overview's opening sentence: is the gate green, and how many numbers climbed or slipped. */

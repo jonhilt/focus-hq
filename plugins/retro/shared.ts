@@ -76,3 +76,41 @@ export function stationLine(retro: Retro | undefined): { status: AgentStatus; li
   const line = drafts ? `Retro: ${drafts} draft${drafts === 1 ? '' : 's'} waiting` : retro.drafts.length ? 'Retro: all drafts decided' : 'Retro: nothing keeps coming back';
   return { status: 'done', line };
 }
+
+/** What the retro's card beside the overview says (view.ts): whether one's under way or waiting on the captain, and its button. */
+export function retroCardLine(retro: Retro | undefined): { line: string; open: string } {
+  const drafts = waiting(retro);
+  const open = drafts ? 'Review drafts →' : 'Open →';
+  if (retro && running(retro)) return { line: retro.activity, open };
+  if (drafts) return { line: `${drafts} ${drafts === 1 ? 'draft waits' : 'drafts wait'} for you to accept or reject`, open };
+  if (retro?.status === 'failed') return { line: `The last retro failed: ${retro.error ?? retro.activity}`, open };
+  return { line: 'Drafts an issue for each friction that keeps coming back', open };
+}
+
+/** What the retro's own view shows (view.ts): Start or Stop, what it's cost, how the latest stands and what a finished one found. */
+export interface RetroPage {
+  startLabel: string;
+  running: boolean;
+  cost: string | null;
+  /** The latest retro, once one has started. */
+  standing: Retro | null;
+  /** The latest retro, once it's finished. */
+  found: Retro | null;
+}
+
+export function retroPage(retro: Retro | undefined): RetroPage {
+  return {
+    startLabel: retro?.status === 'done' ? 'Start a new retro' : 'Start a retro',
+    running: running(retro),
+    cost: retro?.costUsd ? `$${retro.costUsd.toFixed(2)}` : null,
+    standing: retro && retro.status !== 'idle' ? retro : null,
+    found: retro?.status === 'done' ? retro : null,
+  };
+}
+
+/** What starting a retro over the last `days` reads first, for the captain to confirm: the sessions no one's read yet, and roughly what that costs. */
+export function startReading(engineer: string, days: number, unread: number, costUsd: number): string {
+  return unread
+    ? `${engineer} first reads the ${unread} sessions of the last ${days} days no one has read yet, for their frictions: roughly $${costUsd.toFixed(2)} of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.`
+    : `Every session of the last ${days} days has been read already, so this only drafts.`;
+}

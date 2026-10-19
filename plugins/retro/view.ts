@@ -3,7 +3,7 @@
 import {
   busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, office, pluginState, timeAgo, type Ui,
 } from '../../plugin-api/client';
-import { type FixKind, RETRO, type Retro, type RetroDraft, running, waiting } from './shared';
+import { type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, startReading } from './shared';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
@@ -26,15 +26,10 @@ function days(): HTMLInputElement {
 
 /** The retro beside the overview: whether one's under way or waiting on you, and the frictions it would look at. */
 export function retroCard(ui: Ui, go: EngineeringGo): HTMLElement {
-  const retro = latest();
-  const drafts = waiting(retro);
-  const line = running(retro) && retro
-    ? retro.activity
-    : drafts ? `${drafts} ${drafts === 1 ? 'draft waits' : 'drafts wait'} for you to accept or reject`
-      : retro?.status === 'failed' ? `The last retro failed: ${retro.error ?? retro.activity}` : 'Drafts an issue for each friction that keeps coming back';
+  const { line, open } = retroCardLine(latest());
   const bars = frictionBars(ui, 3);
   return h('div', { class: 'card retro-card' },
-    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Retro'), h('button', { class: 'btn small', onclick: () => go(RETRO) }, drafts ? 'Review drafts →' : 'Open →')),
+    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Retro'), h('button', { class: 'btn small', onclick: () => go(RETRO) }, open)),
     h('small', { class: 'muted' }, line),
     bars ? h('small', { class: 'lbl' }, 'Most widespread open frictions') : null,
     bars,
@@ -44,34 +39,39 @@ export function retroCard(ui: Ui, go: EngineeringGo): HTMLElement {
 /** The retro's own view: start or stop one, how it stands, its drafts to decide on, and how the accepted fixes did. */
 export function retroView(ui: Ui): HTMLElement {
   const eng = chiefEngineer();
-  const retro = latest();
-  const start = h('button', { class: 'btn primary' }, retro?.status === 'done' ? 'Start a new retro' : 'Start a retro');
-  start.disabled = running(retro);
+  const page = retroPage(latest());
+  return h('div', null,
+    h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`),
+    frictionSection(frictionBars(ui, 5)),
+    controls(ui, eng.name, page),
+    page.standing ? status(page.standing) : null,
+    page.found ? findings(ui, page.found) : null,
+    fixes(office.report?.fixes),
+  );
+}
+
+function frictionSection(bars: HTMLElement | null): HTMLElement | null {
+  return bars ? h('section', { class: 'card eng-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null;
+}
+
+/** The window to look back over, Start (once the captain confirms what it reads) or Stop, and what it's cost. */
+function controls(ui: Ui, engineer: string, page: RetroPage): HTMLElement {
+  const start = h('button', { class: 'btn primary' }, page.startLabel);
+  start.disabled = page.running;
   start.onclick = () =>
     void busy(start, async () => {
       const window = Number(days().value);
       const { unread, costUsd } = await call<{ unread: number; costUsd: number }>('/preview', { days: window });
-      const reading = unread
-        ? `${eng.name} first reads the ${unread} sessions of the last ${window} days no one has read yet, for their frictions: roughly $${costUsd.toFixed(2)} of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.`
-        : `Every session of the last ${window} days has been read already, so this only drafts.`;
-      if (!confirm(`Start a retro?\n\n${reading}`)) return;
+      if (!confirm(`Start a retro?\n\n${startReading(engineer, window, unread, costUsd)}`)) return;
       await call<Retro>('/start', { days: window });
     }, ui.error);
   const stop = h('button', { class: 'btn' }, 'Stop');
   stop.onclick = () => void busy(stop, () => call<Retro>('/stop').then(() => undefined), ui.error);
-  const bars = frictionBars(ui, 5);
-  return h('div', null,
-    h('div', { class: 'briefing-note' }, `${eng.name} looks over the frictions found in the agents’ sessions in the window, and drafts an issue for each that came up in three or more, with the moments quoted. Accept one and it’s filed; reject it and it isn’t raised again. Nothing changes unless you say so.`),
-    bars ? h('section', { class: 'card eng-section', style: '--c:var(--lcars-orange);margin:14px 0 0' }, h('h4', null, 'Most widespread open frictions', h('span', null, 'Sessions they came up in, over 14 days, with no retro decision yet')), bars) : null,
-    h('div', { class: 'row', style: 'margin:14px 0' },
-      h('span', { class: 'muted' }, 'Look back over the last'), days(), h('span', { class: 'muted' }, 'days'),
-      running(retro) ? stop : start,
-      h('span', { class: 'grow' }),
-      retro?.costUsd ? h('small', { class: 'muted' }, `$${retro.costUsd.toFixed(2)}`) : null,
-    ),
-    retro && retro.status !== 'idle' ? status(retro) : null,
-    retro?.status === 'done' ? findings(ui, retro) : null,
-    office.report?.fixes.length ? fixes(office.report.fixes) : null,
+  return h('div', { class: 'row', style: 'margin:14px 0' },
+    h('span', { class: 'muted' }, 'Look back over the last'), days(), h('span', { class: 'muted' }, 'days'),
+    page.running ? stop : start,
+    h('span', { class: 'grow' }),
+    page.cost ? h('small', { class: 'muted' }, page.cost) : null,
   );
 }
 
@@ -142,7 +142,8 @@ const FIX: Record<FixStatus, { tone: string; label: string }> = {
 const share = (c: { hits: number; sessions: number }) => `${c.hits} of ${c.sessions} sessions`;
 
 /** Each retro fix the captain accepted (the report card's): did its frictions stop coming up once it landed? */
-function fixes(list: FixEffect[]): HTMLElement {
+function fixes(list: FixEffect[] | undefined): HTMLElement | null {
+  if (!list?.length) return null;
   return h('div', { class: 'cards', style: 'margin-top:12px' },
     h('h3', null, 'Retro fixes'),
     ...list.map((f) => {

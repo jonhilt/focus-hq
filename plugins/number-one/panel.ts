@@ -1,6 +1,7 @@
 // Number One's chat in the browser (README.md): the panel in the ready room, with voice mode and the call strip.
 import { callView } from './callView';
-import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneState, type WorkSuggestion } from './shared';
+import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneMessage, type NumberOneState, type WorkSuggestion } from './shared';
+import { chatPanel, type ChatPanel } from './view';
 import { busy, callPlugin, confirmDialog, fill, h, handOffControl, LCARS, linesToSpeak, type MicMode, office, onPluginState, plannerFor, pluginState, type Ui, voicePrefs, VoiceSession, voiceToggle, withMic } from '../../plugin-api/client';
 
 /** The chat as it stands this moment: none until the plugin's state arrives. */
@@ -56,37 +57,20 @@ export function openNumberOnePanel(ui: Ui): void {
   const render = () => {
     const chat = currentChat();
     if (chat) speak(chat);
-    const messages = chat?.messages ?? [];
-    const thinking = chat?.status === 'thinking';
-    send.disabled = thinking;
-    input.placeholder = voice
-      ? 'Press Mic or Ctrl+M and talk, then press again (or hold it and let go): it goes as soon as it’s transcribed. Or type it.'
-      : `Ask ${one.name} anything… (Enter to send, Shift+Enter for a new line)`;
-
-    const log = h('div', { class: 'briefing-log' },
-      messages.length || thinking
-        ? null
-        : h('div', { class: 'briefing-note' }, 'Ask how something works in any project, what’s going on aboard, or think an idea through. Nothing you say here turns into work unless you send it on.'),
-      ...messages.map((m) =>
-        h('div', { class: `briefing-msg ${m.from}` },
-          h('strong', null, m.from === 'manager' ? 'You' : one.name),
-          ...m.text.split(/\n{2,}/).map((p) => h('p', null, p)),
-          m.from === 'number-one' && m.suggest ? suggestion(ui, m.suggest) : null,
-          m.from === 'number-one' && m.logged ? h('div', { class: 'row logged' }, h('small', { class: 'muted' }, `Jotted in your personal log: “${m.logged}”`)) : null,
-        ),
-      ),
-      thinking ? h('div', { class: 'briefing-msg number-one typing' }, h('strong', null, one.name), h('p', null, chat.activity)) : null,
-      chat?.status === 'failed' ? h('div', { class: 'briefing-note error' }, `${chat.error ?? 'Something went wrong'}. Say something to carry on.`) : null,
-    );
+    const wording = chatPanel(chat, !!voice);
+    const { messages } = wording;
+    send.disabled = wording.thinking;
+    input.placeholder = wording.placeholder;
+    const log = chatLog(ui, wording);
 
     const fresh = h('button', { class: 'btn small', title: `${one.name} forgets this conversation and starts afresh, even mid-thought` }, 'New conversation');
-    fresh.disabled = !messages.length && !thinking;
+    fresh.disabled = !wording.canStartAfresh;
     fresh.onclick = () =>
       void busy(fresh, async () => {
         voice?.speaker.hush();
         await callPlugin(NUMBER_ONE, '/new');
       }, ui.error);
-    const cost = h('small', { class: 'muted' }, chat?.costUsd ? `$${chat.costUsd.toFixed(2)} so far` : '');
+    const cost = h('small', { class: 'muted' }, wording.cost);
 
     fill(body,
       callView(ui.error, render),
@@ -117,6 +101,35 @@ export function openNumberOnePanel(ui: Ui): void {
   ui.panels.own(onPluginState(NUMBER_ONE, render));
   ui.panels.own(office.onProjects(render));
   render();
+}
+
+/** The chat's messages, with what the chat is for before anything's been said, Number One typing, or a failed turn. */
+function chatLog(ui: Ui, wording: ChatPanel): HTMLElement {
+  const name = numberOne().name;
+  return h('div', { class: 'briefing-log' },
+    wording.intro ? h('div', { class: 'briefing-note' }, wording.intro) : null,
+    ...wording.messages.map((m) => message(ui, m, name)),
+    wording.typing === null ? null : h('div', { class: 'briefing-msg number-one typing' }, h('strong', null, name), h('p', null, wording.typing)),
+    wording.failed ? h('div', { class: 'briefing-note error' }, wording.failed) : null,
+  );
+}
+
+/** One message: who said it, its paragraphs, and on Number One's, what it suggests doing and what it jotted in your log. */
+function message(ui: Ui, m: NumberOneMessage, name: string): HTMLElement {
+  const theirs = m.from === 'number-one';
+  return h('div', { class: `briefing-msg ${m.from}` },
+    h('strong', null, theirs ? name : 'You'),
+    ...m.text.split(/\n{2,}/).map((p) => h('p', null, p)),
+    ...(theirs ? replyExtras(ui, m) : []),
+  );
+}
+
+/** Under Number One's reply: what it suggests doing, and what it jotted in your personal log. */
+function replyExtras(ui: Ui, m: NumberOneMessage): (HTMLElement | null)[] {
+  return [
+    m.suggest ? suggestion(ui, m.suggest) : null,
+    m.logged ? h('div', { class: 'row logged' }, h('small', { class: 'muted' }, `Jotted in your personal log: “${m.logged}”`)) : null,
+  ];
 }
 
 /** What a reply suggests doing: a draft at the project's Ops station, or a goal with a lead of its own. */

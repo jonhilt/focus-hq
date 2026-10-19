@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FrictionGroup } from '../../plugin-api/shared';
 import { parseDrafts, renderFrictions } from './retro';
-import { freshRetro, type RetroDraft, retroAfterRestart, stationLine } from './shared';
+import { freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, startReading, stationLine } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 const group = (key: string, sessions: number): FrictionGroup => {
@@ -72,5 +72,33 @@ describe('stationLine', () => {
     expect(stationLine({ ...freshRetro(), status: 'done', drafts: [draft(false), draft(false), draft(true)] })?.line).toBe('Retro: 2 drafts waiting');
     expect(stationLine({ ...freshRetro(), status: 'done', drafts: [draft(true)] })?.line).toBe('Retro: all drafts decided');
     expect(stationLine({ ...freshRetro(), status: 'done' })).toEqual({ status: 'done', line: 'Retro: nothing keeps coming back' });
+  });
+});
+
+describe('the retro on the engineering panel', () => {
+  const draft = (decided: boolean): RetroDraft => ({ id: 'd', title: 't', body: 'b', kind: 'check', measure: 'm', signatures: [], sessions: 3, ...(decided && { decision: { accepted: true, at: 1 } }) });
+  const retro = (patch: Partial<Retro>): Retro => ({ ...freshRetro(), ...patch });
+
+  it('says on its card what one under way is doing, what waits on the captain, or why the last one failed', () => {
+    expect(retroCardLine(undefined)).toEqual({ line: 'Drafts an issue for each friction that keeps coming back', open: 'Open →' });
+    expect(retroCardLine(retro({ status: 'gathering', activity: 'Reading 40 sessions' }))).toEqual({ line: 'Reading 40 sessions', open: 'Open →' });
+    expect(retroCardLine(retro({ status: 'done', drafts: [draft(false), draft(true)] }))).toEqual({ line: '1 draft waits for you to accept or reject', open: 'Review drafts →' });
+    expect(retroCardLine(retro({ status: 'done', drafts: [draft(false), draft(false)] })).line).toBe('2 drafts wait for you to accept or reject');
+    expect(retroCardLine(retro({ status: 'failed', activity: 'Interrupted', error: 'Stopped by the captain' })).line).toBe('The last retro failed: Stopped by the captain');
+    expect(retroCardLine(retro({ status: 'failed', activity: 'Interrupted' })).line).toBe('The last retro failed: Interrupted');
+  });
+
+  it('offers Stop while one runs, a new one once it’s done, and shows what it found', () => {
+    expect(retroPage(undefined)).toEqual({ startLabel: 'Start a retro', running: false, cost: null, standing: null, found: null });
+    expect(retroPage(retro({}))).toMatchObject({ standing: null, found: null });
+    const thinking = retro({ status: 'thinking', costUsd: 1.234 });
+    expect(retroPage(thinking)).toEqual({ startLabel: 'Start a retro', running: true, cost: '$1.23', standing: thinking, found: null });
+    const done = retro({ status: 'done' });
+    expect(retroPage(done)).toEqual({ startLabel: 'Start a new retro', running: false, cost: null, standing: done, found: done });
+  });
+
+  it('says what starting one reads first, and what that costs', () => {
+    expect(startReading('Lt. Cmdr. Okafor', 14, 40, 3.5)).toBe('Lt. Cmdr. Okafor first reads the 40 sessions of the last 14 days no one has read yet, for their frictions: roughly $3.50 of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.');
+    expect(startReading('Lt. Cmdr. Okafor', 7, 0, 0)).toBe('Every session of the last 7 days has been read already, so this only drafts.');
   });
 });

@@ -1,6 +1,6 @@
 // How a scorecard reads, wherever it's shown: the terminal (`pnpm run scorecard`), the engineering panel and the MSD.
 import { aboutMetric } from './about';
-import type { Metric, MetricFormat, Scorecard, ScorecardNoise, ScorecardSection } from './types';
+import type { Metric, MetricFormat, Scorecard, Scorecards, ScorecardNoise, ScorecardSection } from './types';
 
 export const SECTIONS: Record<ScorecardSection, string> = {
   gate: 'Gate',
@@ -89,6 +89,31 @@ export function compared(history: Scorecard[], noise?: ScorecardNoise): { sectio
 
 /** Which commit a card measured, to say under it: `main @ f6f4c667`, marked when uncommitted changes went in too. */
 export const measuredAt = (card: Scorecard) => `${card.branch} @ ${card.commit.slice(0, 8)}${card.dirty ? ' (uncommitted changes)' : ''}`;
+
+/** What the scorecard's head says (view.ts): which card it shows, whether one is being measured, and how that's going. */
+export interface ScorecardHead {
+  measuring: boolean;
+  /** Which commit the latest card measured, and when. */
+  latest: string | null;
+  canShowOnMsd: boolean;
+  status: { tone: 'muted' | 'bad'; text: string } | null;
+}
+
+/** The scorecard's head, from the desk (none until the plugin's state arrives) and how long ago a time was. */
+export function scorecardHeadOf(desk: Scorecards | null, ago: (at: number) => string): ScorecardHead {
+  const latest = desk?.history.at(-1);
+  const measuring = desk?.status === 'measuring';
+  return { measuring, latest: latest ? `${measuredAt(latest)} · measured ${ago(latest.at)}` : null, canShowOnMsd: !!latest, status: measureStatus(desk, measuring, !!latest, ago) };
+}
+
+function measureStatus(desk: Scorecards | null, measuring: boolean, measured: boolean, ago: (at: number) => string): ScorecardHead['status'] {
+  if (measuring) {
+    const what = desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout';
+    return { tone: 'muted', text: `${what}${desk?.startedAt ? `, started ${ago(desk.startedAt)}` : ''}: about a minute and a half` };
+  }
+  if (desk?.status === 'failed') return { tone: 'bad', text: desk.error ?? '' };
+  return measured ? null : { tone: 'muted', text: 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on the office’s own checkout.' };
+}
 
 export type Trend = 'better' | 'worse' | 'same';
 

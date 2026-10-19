@@ -39,5 +39,5 @@ The ready room keeps the captain's desk, console and mission control, but no one
 - `call/`: calls ([Calls to Number One](calls.md)).
 - `shared.ts`: who Number One is (`numberOne()`, from `fixedCrew`, and their voice), the chat and call types, and the plugin's state: the saved `chat`, and beside it, unsaved, `activity` and `call` (`chatNow` puts them together).
 - `client.ts`: the browser's part: the <kbd>1</kbd> key and its legend, the toasts and the call's mic (`start`), and the figure (`ship`).
-- `figure.ts`, `view.ts`: Number One in the ready room's visitor chair (the deck's `ready-room-guest` seat), with a PADD, and their bubble.
+- `figure.ts`, `view.ts`: Number One in the ready room's visitor chair (the deck's `ready-room-guest` seat), with a PADD, and their bubble. `view.ts` also decides what the chat panel and the call strip say (`chatPanel`, `callStrip`, pure).
 - `panel.ts`, `callView.ts`, `number-one.css`: the chat panel, with voice mode (the core's `VoiceSession`, `withMic`) and the call strip.

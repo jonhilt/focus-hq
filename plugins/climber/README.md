@@ -86,4 +86,4 @@ The climber is a [plugin](../../docs/plugins.md), and it requires the [scorecard
   - switching itself off.
 - **When it looks.** It looks at the climb on every board refresh, and whenever you flip the switch.
 - **Saved state.** The climb is kept in the plugin's slot in `state.json` (`plugins.climber`, a `Climb` from `shared.ts`). A `climb` saved before the climber was a plugin moves there by itself.
-- **On the engineering panel.** `client.ts` draws the **Climber** card.
+- **On the engineering panel.** `client.ts` draws the **Climber** card; what it says is `climbCard` in `card.ts` (pure).

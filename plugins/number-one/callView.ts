@@ -1,4 +1,5 @@
-import { type CallLine, type CallState, type CallStatus, type CallStep, NUMBER_ONE, type NumberOneState } from './shared';
+import { type CallLine, type CallStatus, NUMBER_ONE, type NumberOneState } from './shared';
+import { callStrip, type CallStrip } from './view';
 import { busy, callPlugin, h, office, onPluginState, pluginState } from '../../plugin-api/client';
 
 // Calls to Number One (calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
@@ -63,57 +64,46 @@ export function followCalls(): void {
   });
 }
 
-const STEP: Record<CallStep, string> = {
-  listening: 'Listening',
-  routing: 'Working it out…',
-  confirming: 'Waiting for your yes',
-  dictating: 'Waiting for your words',
-  acting: 'Doing it…',
-  ended: 'Call ended',
-};
-
-/** What the strip says the call is doing. */
-export function stepLabel(call: Pick<CallState, 'step' | 'pending'>): string {
-  return call.step === 'routing' && call.pending ? 'Checking your answer…' : STEP[call.step];
-}
-
 const WHO: Record<CallLine['who'], string> = { captain: 'You', ship: 'Number One', office: 'Office' };
 
 /**
- * Number One's call controls: Call (greyed, with why, when the office can't take one), and while a call is on, how it's
- * going, what waits on your yes, the captions, and Hang up. `error` shows what went wrong placing it.
+ * Number One's call controls (`callStrip`): Call (greyed, with why, when the office can't take one), and while a call is
+ * on, how it's going, what waits on your yes, the captions, and Hang up. `error` shows what went wrong placing it.
  */
 export function callView(error: (message: string) => void, changed: () => void): HTMLElement {
-  const status = callStatus();
-  const call = status?.call ?? null;
-  // a call placed on another screen (the phone, say) shows here too, and can be hung up from here
-  const live = call && call.step !== 'ended' ? call : null;
-  if (!live) {
-    const dial = h('button', { class: 'btn', title: status?.missing ?? 'Talk to Number One hands-free: ask how things stand, start the next queued goal, or talk a goal or a project through and make it a goal' }, '📞 Call');
-    dial.disabled = !status || !!status.missing;
-    dial.onclick = () =>
-      void busy(dial, async () => {
-        current = await PhoneCall.dial();
-        changed();
-      }, error);
-    const ended = call?.step === 'ended' && call.lines.length ? call : null;
-    return h('div', { class: 'number-one-call' },
-      h('div', { class: 'row' }, dial, ended ? h('small', { class: ended.error ? 'error' : 'muted' }, ended.error ?? 'The last call:') : null),
-      ended ? captions(ended.lines) : null,
-    );
-  }
+  const strip = callStrip(callStatus());
+  return strip.kind === 'live' ? liveCall(strip, error, changed) : idleCall(strip, error, changed);
+}
+
+function idleCall({ canDial, dialTitle, ended }: Extract<CallStrip, { kind: 'idle' }>, error: (message: string) => void, changed: () => void): HTMLElement {
+  const dial = h('button', { class: 'btn', title: dialTitle }, '📞 Call');
+  dial.disabled = !canDial;
+  dial.onclick = () =>
+    void busy(dial, async () => {
+      current = await PhoneCall.dial();
+      changed();
+    }, error);
+  return h('div', { class: 'number-one-call' },
+    h('div', { class: 'row' }, dial, ended ? h('small', { class: ended.error ? 'error' : 'muted' }, ended.note) : null),
+    ended ? captions(ended.lines) : null,
+  );
+}
+
+function liveCall(live: Extract<CallStrip, { kind: 'live' }>, error: (message: string) => void, changed: () => void): HTMLElement {
   const hang = h('button', { class: 'btn danger' }, 'Hang up');
   hang.onclick = () =>
     void busy(hang, async () => {
+      // a call placed on another screen (the phone, say) shows here too, and can be hung up from here
       const mine = current?.id === live.id ? current : null;
       if (mine) current = null;
       await (mine ? mine.hangUp() : hangUp(live.id));
       changed();
     }, error);
+  const note = (text: string | null) => (text ? h('div', { class: 'number-one-call-pending' }, text) : null);
   return h('div', { class: `number-one-call on ${live.step}` },
-    h('div', { class: 'row' }, h('span', { class: 'number-one-call-step' }, `📞 ${stepLabel(live)}`), live.topic ? h('span', { class: 'number-one-call-topic' }, `Talking through: ${live.topic}`) : null, h('span', { class: 'grow' }), hang),
-    live.pending ? h('div', { class: 'number-one-call-pending' }, `${live.pending} Say yes, or make it so.`) : null,
-    live.capture ? h('div', { class: 'number-one-call-pending' }, live.capture) : null,
+    h('div', { class: 'row' }, h('span', { class: 'number-one-call-step' }, live.label), live.topic ? h('span', { class: 'number-one-call-topic' }, live.topic) : null, h('span', { class: 'grow' }), hang),
+    note(live.pending),
+    note(live.capture),
     captions(live.lines),
   );
 }

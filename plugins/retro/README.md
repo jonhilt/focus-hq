@@ -24,5 +24,5 @@ The engineering station keeps its overview and its **Ledger** view (the report c
 - `retro.ts`: pure: what the engineer reads (the frictions, the ledger, goals), the prompt, the schema, and the check that every draft rests on real groups, with the evidence added by code.
 - `frictions.ts`: what the reader reads of each session's span, the batches, prompt and schema, and the check that every quote is in the span.
 - `claudeEngineer.ts`, `demoEngineer.ts`: the live engineer (read-only Claude Code sessions, on the captain's model through `host.settings`) and the demo's scripted one.
-- `shared.ts`: the retro's state (`Retro`, `RetroDraft`), how it picks up after a restart, and what Brennan says at the station.
+- `shared.ts`: the retro's state (`Retro`, `RetroDraft`), how it picks up after a restart, what Brennan says at the station, and what the card and the Retro view say (`retroCardLine`, `retroPage`, `startReading`).
 - `client.ts`, `view.ts`: the card, the Retro view, and the station's line (`EngineeringPart.station`).
