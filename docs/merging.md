@@ -12,6 +12,8 @@ Every merge goes through `Office.mergePullRequest` (`server/office.ts`), which h
 - **Merge when QA passes** ([QA](qa.md)), once QA passes the PR (`requestedMerges`).
 - **Auto-merge** ([QA](qa.md)), when `mergeStep` says merge (`followMergeStep`).
 
+The last two run on each board refresh. `server/office.test.ts` holds a real `Office` on the demo GitHub to what they promise here and in [QA](qa.md), such as a refused merge blocking its head and a dropped request being forgotten. The decisions themselves are tested in `shared/mergeGate.test.ts`.
+
 PRs merged on GitHub itself don't go through the office, so the check never sees them.
 
 ## How the merge is built and checked
