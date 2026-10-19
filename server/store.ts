@@ -5,7 +5,7 @@ import { qaOfficerFor, randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { prKey } from '../shared/qa';
-import type { Agent, Board, BrowserFrame, ClosedPr, PluginStates, Project, QaReview, Settings, StudioSession, TermLine } from '../shared/types';
+import type { Agent, Board, BrowserFrame, ClosedPr, PluginStates, Project, QaReview, Settings, TermLine } from '../shared/types';
 import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { isOneOf } from '../shared/records';
 import { config, paths } from './config';
@@ -21,15 +21,6 @@ import type { LogSources } from './agents/captainsLog';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { newId } from './util';
 import { changeProject } from './projectChange';
-
-export type StoredStudio = StudioSession & { sessionId?: string };
-export const freshStudio = (): StoredStudio => ({ status: 'waiting', activity: '', messages: [], takes: [], updatedAt: Date.now(), costUsd: 0 });
-
-/** The studio's saved conversation as it picks up after a restart: a turn in flight when Focus shut down ends. */
-export function studioAfterRestart(saved: StoredStudio): StoredStudio {
-  if (saved.status !== 'thinking') return saved;
-  return { ...saved, status: 'failed', activity: 'Interrupted', error: 'Interrupted when Focus shut down. Say it again.' };
-}
 
 /**
  * An agent as they pick up after a restart (`projectName` is their room's, for a lead saved before team stations): whoever was at
@@ -58,7 +49,6 @@ interface PersistedState {
   settings: Settings;
   projects: Project[];
   agents: Agent[];
-  studio?: StoredStudio;
   /** Each plugin's state, by plugin id: kept while a plugin's switched off, for when it's back. */
   plugins?: PluginStates;
   reviews?: QaReview[];
@@ -95,7 +85,6 @@ export class Store {
   boards = new Map<string, Board>();
   private lines = new Map<string, TermLine[]>();
   browser = new Map<string, BrowserFrame>();
-  studio: StoredStudio = freshStudio();
   /** Each plugin's own state, by plugin id (`PluginHost.state`, docs/plugins.md). */
   plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey), as the board shows it: what each review journal adds up to (`reviewJournal`). */
@@ -154,7 +143,6 @@ export class Store {
     fromBeforePlugins(raw);
     this.settings = { ...DEFAULT_SETTINGS, ...raw.settings };
     this.projects = raw.projects ?? [];
-    if (raw.studio) this.studio = studioAfterRestart(raw.studio);
     this.plugins = raw.plugins ?? {};
     // the board's reviews are what their journals add up to; one the board kept before reviews had journals is taken in, once
     for (const key of this.reviewJournals.written(0)) this.showReview(key);
@@ -193,7 +181,6 @@ export class Store {
       settings: this.settings,
       projects: this.projects,
       agents: [...this.agents.values()],
-      studio: this.studio,
       plugins: this.plugins,
       closedPrs: [...this.closedPrs.values()],
     };

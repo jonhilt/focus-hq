@@ -2,11 +2,11 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { sourceReader } from './studioSource';
+import { sourceReader } from './sourceReader';
 
 describe('sourceReader', () => {
   it('reads files inside its roots, and nothing outside them, however the path is written', () => {
-    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'studio-source-'));
+    const base = fs.mkdtempSync(path.join(os.tmpdir(), 'source-reader-'));
     const root = path.join(base, 'planning');
     fs.mkdirSync(path.join(root, 'p1'), { recursive: true });
     fs.writeFileSync(path.join(root, 'p1', 'a.ts'), 'one\ntwo');

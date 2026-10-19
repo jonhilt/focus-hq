@@ -21,9 +21,6 @@ import { openCaptainsLogPanel } from './ui/captainsLogPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
-import { openModelPanel } from './ui/modelPanel';
-import { openStudioChat } from './ui/studioChat';
-import { StudioVoice } from './ui/studioVoice';
 import { Panels } from './ui/panels';
 import { openPreviewPanel } from './ui/previewPanel';
 import { openQaPanel } from './ui/qaPanel';
@@ -42,7 +39,6 @@ import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
 import { type Ship, World } from './world/office';
-import { SCRUB_STEP } from './world/studio';
 import { SceneRenderer } from './world/sceneRenderer';
 import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
@@ -193,11 +189,6 @@ async function main() {
     openPreview: (projectId) => openPreviewPanel(ui, projectId),
     openNewIssue: (projectId) => openNewIssuePanel(ui, projectId),
     openQa: (projectId) => openQaPanel(ui, projectId),
-    openStudio: () => openStudioChat(ui),
-    openModel: () => {
-      const model = world.studioScene()?.model;
-      if (model) openModelPanel(ui, model);
-    },
     openEngineering: () => openEngineeringPanel(ui),
     openLedger: (subject) => openLedgerPanel(ui, subject),
     showOnMsd: (what) => world.putOnMsd(
@@ -373,7 +364,6 @@ async function main() {
     world.markPanels();
   };
   state.on('agent', agentChanged);
-  state.on('studio', () => world.syncStudio());
   // news for the captain: a toast (anything in it that needs them stays in Comms' Needs you)
   const notify = (level: 'info' | 'success' | 'error', text: string, link?: NewsLink) => {
     hud.toast(level, text, link && linkAction(ui, link));
@@ -458,7 +448,7 @@ async function main() {
 
   // ---------------------------------------------------------------- interaction
   const raycaster = new THREE.Raycaster();
-  // as far as anything reaches: most things only from REACH (`interactive`), a big screen or the studio's beats from across the room
+  // as far as anything reaches: most things only from REACH (`interactive`), or a big screen from across the room
   raycaster.far = 18;
   // holograms are drawn in the overlay (frame.ts), and can be used
   raycaster.layers.enable(OVERLAY_LAYER);
@@ -490,7 +480,7 @@ async function main() {
     target = null;
     let aiming: THREE.Object3D | null = null;
     for (const hit of hits) {
-      // the raycaster doesn't care what's hidden, like the props that made way for the studio, or its training hall's shell
+      // the raycaster doesn't care what's hidden, like a training hall's shell
       if (!shown(hit.object)) continue;
       // a board with rows of its own to use, like a briefing room's goal board's roster, or its big screen's panes
       const at = hit.object.userData.interactionAt as ((uv: THREE.Vector2) => typeof target) | undefined;
@@ -591,12 +581,6 @@ async function main() {
       case 'vacant':
         ui.openManager('new-project');
         break;
-      case 'studio':
-        ui.openStudio();
-        break;
-      case 'studio-model':
-        ui.openModel();
-        break;
       case 'energise':
         sound.press();
         if (i.projectId !== undefined && i.station !== undefined) ui.beamBack(i.projectId, i.station);
@@ -610,88 +594,16 @@ async function main() {
     }
   };
 
-  // in the studio, the scene in the middle of the hall is yours to play: hold Q or R to spin it, P pauses, [ and ]
-  // scrub, - and = change its speed (the chat can be docked open meanwhile, but not typed in)
-  const studioPlayback = () => (world.locationOf(camera.position).label === 'Studio' ? world.studioPlayback() : null);
-  const sceneKey = (code: string, repeat: boolean): boolean => {
-    const playback = studioPlayback();
-    const seconds = world.studioScene()?.seconds;
-    if (!playback || seconds === undefined) return false;
-    if (code === 'KeyQ' || code === 'KeyR') playback.turning = code === 'KeyQ' ? 1 : -1;
-    else if (code === 'KeyP' && !repeat) playback.paused = !playback.paused;
-    else if (code === 'BracketLeft' || code === 'BracketRight') playback.scrub(code === 'BracketLeft' ? -SCRUB_STEP : SCRUB_STEP, seconds);
-    else if ((code === 'Minus' || code === 'Equal') && !repeat) playback.stepSpeed(code === 'Minus' ? -1 : 1);
-    else return false;
-    return true;
-  };
-  // the studio's shelf: Tab hangs every kept scene round you, the arrows or the wheel swipe, E or Enter calls the one in
-  // front back to the middle of the hall, Tab or Esc puts it away
-  const studioSet = () => (world.locationOf(camera.position).label === 'Studio' ? world.studioSet() : null);
-  const recall = (shelf: NonNullable<ReturnType<typeof studioSet>>['shelf']) => {
-    const picked = shelf.picked;
-    shelf.close();
-    if (picked && picked.id !== world.studioScene()?.id) {
-      sound.press();
-      void api.studioRecall(picked.id).catch((e: Error) => ui.error(e.message));
-    }
-  };
-  const shelfKey = (code: string): boolean => {
-    const set = studioSet();
-    if (!set) return false;
-    if (code === 'Tab') return set.toggleShelf(camera.position, camera.getWorldDirection(new THREE.Vector3()));
-    if (!set.shelf.isOpen) return false;
-    if (code === 'ArrowLeft' || code === 'ArrowRight') set.shelf.move(code === 'ArrowLeft' ? -1 : 1);
-    else if (code === 'KeyE' || code === 'Enter') recall(set.shelf);
-    else if (code === 'Escape') set.shelf.close();
-    else return false;
-    return true;
-  };
-  let lastSwipe = 0;
-  window.addEventListener('wheel', (e) => {
-    const shelf = studioSet()?.shelf;
-    if (!shelf?.isOpen || panels.isOpen || Math.abs(e.deltaY) < 4 || performance.now() - lastSwipe < 160) return;
-    lastSwipe = performance.now();
-    shelf.move(Math.sign(e.deltaY));
-  });
-  // hold V in the studio to talk to its computer: what you say is sent as you let go
-  const voice = new StudioVoice(ui);
-  window.addEventListener('keyup', (e) => {
-    if (e.code === 'KeyV') void voice.up();
-  });
-  window.addEventListener('keyup', (e) => {
-    const playback = world.studioPlayback();
-    if (playback && (e.code === 'KeyQ' || e.code === 'KeyR')) playback.turning = 0;
-  });
-  window.addEventListener('blur', () => {
-    voice.cancel();
-    const playback = world.studioPlayback();
-    if (playback) playback.turning = 0;
-  });
-
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-    if (panels.isOpen && !panels.docked) return;
+    if (panels.isOpen) return;
     for (const parts of pluginParts.values()) {
       if (parts.keydown?.(e)) {
         e.preventDefault();
         return;
       }
     }
-    if (e.code === 'KeyV' && studioSet()) {
-      e.preventDefault();
-      if (!e.repeat) voice.down();
-      return;
-    }
-    if (!e.repeat && !panels.isOpen && shelfKey(e.code)) {
-      e.preventDefault();
-      return;
-    }
-    if (sceneKey(e.code, e.repeat)) {
-      e.preventDefault();
-      return;
-    }
-    if (panels.isOpen) return;
-    // in a demo office, - and = slow its agents down and speed them up (the studio's scene takes them first, above)
+    // in a demo office, - and = slow its agents down and speed them up
     if ((e.code === 'Minus' || e.code === 'Equal') && state.info?.mode === 'demo') {
       if (!e.repeat) stepDemoPace(e.code === 'Minus' ? -1 : 1, ui);
       return;
@@ -703,10 +615,6 @@ async function main() {
       // jot a thought down in the personal log, wherever you are
       KeyI: () => ui.openManager('personal-log'),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
-      // in the studio, Enter talks to its computer
-      Enter: () => {
-        if (world.locationOf(camera.position).label === 'Studio') ui.openStudio();
-      },
       KeyC: () => ui.openComms(),
       KeyH: () => record(!document.body.classList.contains('recording')),
       KeyB: () => {

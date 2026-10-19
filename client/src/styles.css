@@ -192,17 +192,6 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .panel.wide { width: min(1280px, 100%); height: calc(100vh - 32px); }
 .overlay:has(> .panel.full) { padding: 8px; }
 .panel.full { width: 100%; height: calc(100vh - 16px); max-height: none; }
-/* docked down the right, the world still in view to its left (the studio's chat) */
-.overlay.docked { background: transparent; place-items: stretch end; }
-.panel.docked { width: min(440px, 100%); height: calc(100vh - 32px); }
-.studio-chat .briefing-msg.computer { --tone: var(--lcars-gold); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
-.studio-chat .briefing-msg.captain { --tone: var(--lcars-sky); align-self: flex-end; border-right: 6px solid var(--tone); border-top-right-radius: 0; border-bottom-right-radius: 0; }
-.studio-chat { height: 100%; }
-.studio-chat .studio-takes { font-size: 13px; color: var(--muted, #9fb0d0); }
-.studio-chat .studio-head { margin-bottom: 0; gap: 6px 14px; flex-wrap: nowrap; }
-.studio-chat .studio-head select.effort { font-size: 14px; }
-.studio-chat .studio-head .readout > b { font-size: 16px; }
-.studio-chat .studio-tabs { gap: 6px; }
 .panel.has-nav { --side: 150px; }
 .panel-elbow { grid-area: elbow; position: relative; z-index: 1; background: var(--accent-c); border-top-left-radius: min(var(--side), var(--bar) + 10px); }
 /* the elbow's inside curve, where the header bar meets the sidebar */
@@ -660,7 +649,7 @@ textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); fo
 .chip.qa.testing, .chip.qa.queued { --tone: var(--lcars-periwinkle); }
 .chip.qa.stale, .chip.qa.error { --tone: var(--lcars-gold); }
 
-/* A crew member's chat: its log, messages and box (the studio's computer, the engineering station, plugins' crew) */
+/* A crew member's chat: its log, messages and box (the engineering station, plugins' crew) */
 .briefing-chat { display: flex; flex-direction: column; gap: 10px; min-height: 0; }
 .briefing-log { flex: 1; min-height: 0; overflow: auto; display: flex; flex-direction: column; gap: 10px; padding: 4px 4px 4px 0; }
 .briefing-msg { max-width: 85%; border-radius: 14px; padding: 8px 12px; background: color-mix(in srgb, var(--tone) 14%, var(--surface-2)); }
@@ -853,15 +842,6 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 
 /* recording (H, or ?record=1): only the office, and errors */
 body.recording .hud, body.recording .toast:not(.error) { display: none; }
-/* the studio holodeck's voice pill (ui/studioVoice.ts): listening, transcribing, and what it sent */
-.studio-voice {
-  position: fixed; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 5; padding: 8px 20px; border-radius: 999px;
-  background: #000c; border-left: 14px solid var(--lcars-sky); color: var(--text); font-family: var(--ui); font-size: 18px;
-  max-width: 70vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none;
-}
-.studio-voice.up { display: block; }
-.studio-voice b { color: var(--lcars-sky); font-weight: 600; margin-right: 10px; }
-
 /* your plan's usage at the top of the engineering overview (ui/usageView.ts) */
 .usage { background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px; }
 .usage-row { font-size: 14px; --tone: var(--lcars-sky); }
@@ -902,24 +882,6 @@ body.recording .hud, body.recording .toast:not(.error) { display: none; }
 .script-back summary { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .script-back summary b { color: var(--c); font-weight: 600; }
 .script-back .script-result { margin-top: 6px; }
-
-/* a system model up close (ui/modelPanel.ts) */
-.model-panel { display: flex; flex-direction: column; gap: 10px; height: 100%; min-height: 0; }
-.model-bar { gap: 8px; align-items: center; }
-.model-step { color: var(--lcars-gold); font-size: 18px; }
-.model-main { flex: 1; min-height: 0; display: grid; grid-template-columns: 1fr 360px; gap: 12px; }
-.model-views { overflow: auto; display: flex; flex-direction: column; gap: 10px; }
-.model-views svg { width: 100%; height: auto; display: block; border-radius: 12px; }
-.model-row { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 10px; align-items: start; }
-.model-view { overflow-x: auto; border-radius: 12px; }
-.model-part { overflow: auto; background: var(--surface-2); border-radius: 12px; padding: 10px 14px; font-size: 15px; }
-.model-part h3 { margin: 4px 0; color: var(--lcars-gold); }
-.model-part h4 { margin: 12px 0 4px; color: var(--lcars-peach); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
-.model-part p { margin: 3px 0; }
-.model-bad { color: #ff7a7a; }
-.model-code { font-family: 'JetBrains Mono', monospace; font-size: 12px; background: #050b18; border-radius: 8px; padding: 8px; overflow-x: auto; white-space: pre; }
-.model-code span { color: var(--muted, #8fa3b8); margin-right: 6px; }
-.model-code .hit { background: #3a3010; color: var(--lcars-gold); }
 
 /* An agent's run replayed from its journal (ui/runReplay.ts) */
 .run-replay { display: flex; flex-direction: column; gap: 10px; overflow: auto; }

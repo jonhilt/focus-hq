@@ -6,7 +6,6 @@
 | `FOCUS_ALLOWED_HOSTS` | | more names a browser may reach the office by, comma-separated (`.example.com` for any name under it); see [who the office answers](#who-the-office-answers) |
 | `FOCUS_DATA_DIR` | `~/.focus` | state, agent logs, repo clones, worktrees and preview checkouts |
 | `FOCUS_MODE=demo` | | same as `--demo` |
-| `FOCUS_STUDIO=live` | | in the demo office, the studio's holodeck computer is a real Claude session, not scripted (`docs/studio.md`) |
 | `FOCUS_BOARD_REFRESH_MS` | `60000` | how often boards re-read issues and PRs |
 | `FOCUS_BROWSER_PATH` | | Chromium/Chrome binary for agent browser testing |
 | `FOCUS_USE_API_KEY=1` | | let agents use `ANTHROPIC_API_KEY` instead of your Claude login |
@@ -30,7 +29,7 @@ workflow's agents work as a real subagent does, for tens of seconds to a couple 
 38 agents, eight at a time, take several minutes, and mapping the repos a minute or two. The office starts at
 `FOCUS_DEMO_SPEED`; in a demo office, the ready room's **Settings** has a **Demo pace** control (**Slower**, the pace
 now, **Faster**), stepping through 0.1×, 0.25×, 0.5×, 0.75×, 1×, 1.5×, 2× and 3× (`shared/demoPace.ts`), and **-** and
-**=** do the same while you walk the ship (in the studio holodeck they change its scene's speed instead). It changes
+**=** do the same while you walk the ship. It changes
 for every pretend agent at once, from its next wait (a workflow agent at work speeds up or slows down there and then),
 and every tab shows the new pace (the snapshot's `info.demoPace`). Scripts set it with `POST /api/demo/speed` and
 `{ "speed": 2 }`, kept to the ladder's range.

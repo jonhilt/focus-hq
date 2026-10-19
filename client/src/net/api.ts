@@ -1,7 +1,7 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { LogLine } from '../../../shared/captainsLog';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, StudioSession, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -61,13 +61,6 @@ export const api = {
   reopenGoal: (projectId: string, goalId: string) => call<Agent>('POST', `/projects/${projectId}/goals/${goalId}/reopen`, {}),
   /** Closes a goal, unless something would be lost or left behind: then it says what, and `force` closes it anyway. */
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
-  studioSay: (text: string) => call<StudioSession>('POST', '/studio/say', { text }),
-  studioNew: () => call<StudioSession>('POST', '/studio/new'),
-  studioTune: (model: string, effort?: Effort) => call<StudioSession>('POST', '/studio/tune', { model, effort }),
-  /** How a take's version ran in the room: `error` if it threw. */
-  studioSource: (file: string, line: number) => call<{ file: string; line: number; from: number; lines: string[] }>('GET', `/studio/source?file=${encodeURIComponent(file)}&line=${line}`),
-  studioRecall: (id: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/recall`),
-  studioReport: (id: string, version: number, error?: string, sheet?: string) => call<StudioSession>('POST', `/studio/takes/${encodeURIComponent(id)}/report`, { version, error, sheet }),
   /** A plugin's own route (docs/plugins.md), under `/api/plugins/<id>`. */
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */

@@ -1,8 +1,8 @@
-// A system model drawn flat, the one fixed way (docs/studio.md), as three coordinated views of the same model: its
-// structure (the parts and their connections), the scenario as a sequence diagram, and the data that moves at each step.
-// A drawing is a list of shapes, not pixels, so the same drawing goes to SVG (the live panel up close) and to a canvas
-// (the holodeck's boards, and their contact sheet), and can be tested here. Each view shows the step under way and the
-// part picked, so picking a part or a step in one lights it up in the others.
+// A system model drawn flat, the one fixed way (a lead's `model` tool, docs/goals.md), as three coordinated views of the
+// same model: its structure (the parts and their connections), the scenario as a sequence diagram, and the data that
+// moves at each step. A drawing is a list of shapes, not pixels, so it goes to SVG (the page on a lead's station's
+// screen, server/agents/modelPage.ts) and can be tested here. Each view shows the step under way and the part picked,
+// so picking a part or a step in one lights it up in the others.
 
 import { keysOf } from './records';
 import { edgeFor, layoutLayers } from './systemModel';

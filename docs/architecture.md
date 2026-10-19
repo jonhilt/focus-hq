@@ -5,7 +5,7 @@ shared/types/             types shared by server and client, a file per feature 
 shared/crew.ts            how the crew look (uniforms, species), and the permanent crew per room (the ops officer, the QA officer), derived from the project id
 shared/records.ts         records keyed by a union of strings: their keys as that union (`keysOf`), and one built from a list of keys (`recordOf`), so nowhere else casts what `Object.keys`/`fromEntries` return (lint holds it); and whether a value read from JSON, YAML or a model is an object to read fields from (`isRecord`, `fieldsOf`), instead of casting it to `Record<string, unknown>`; and whether one is of a list of a union's members, as that union (`isOneOf`), instead of casting the list to call `includes` and the value after (lint holds it)
 shared/qa.ts              QA decisions shared by server and board (badges, stale verdicts)
-shared/systemModel.ts     the studio's system models: whether one holds together, checking its cites against the code, its timing, and its layered layout
+shared/systemModel.ts     the leads' system models: whether one holds together, checking its cites against the code, and its layered layout
 shared/modelDrawing.ts    a system model's three flat views (structure, sequence, data) as shapes, and as SVG
 shared/flows.ts           a recorded run's flows between the browser and the office (`pnpm run record-flows`): stack frames to repo files, counting, for net/api.ts and server/flows.ts
 shared/board.ts           a project's Kanban columns (to do, in progress, PRs), for the 3D board, its panel and the Tricorder; which PRs the office holds work for have left the board (`prsOffBoard`); each refresh's board from its repos' listings (`freshBoard`) and the closed-PR notes it leaves with nothing to mark (`staleClosedPrs`)
@@ -87,18 +87,14 @@ server/
     planner.ts            the officer at each room's Ops station: issue drafts, their prompt and schema
     lead.ts               each goal's lead: their station, name and branches, their instructions, what shipping a slice does, what they hear back, their helpers
     officeTool.ts         the office's own MCP tools for an agent (the lead's ship)
-    studio.ts             the studio computer's tools, pure: the scenes (takes) it stages in the middle of the hall, and retiming them; its instructions
-    studioSource.ts       which files a model check may read (checkouts, worktrees, the office's code; a lead's own workspace)
+    sourceReader.ts       which files a model check may read (a lead's own workspace)
     modelPage.ts          a lead's system model as a page for its station's screen: the three views, stepping and picking by CSS, the cited code carried in it
-    modelSchema.ts        a system model as the crew's tools take it (zod), shared by the studio's computer and the leads
-    studioComputer.ts     the studio holodeck's computer: one conversation, its turns (ClaudeStudio in claudeCrew.ts, DemoStudio in the demo), and how scenes ran in the room
-    shipStatus.ts         the ship as the crew's ship_status tool tells it, trimmed hard (summariseShip, each closed goal's PRs looked up on GitHub): the studio's computer reads it, and plugins through host.shipStatus
-    claudeCrew.ts         the crew's read-only Claude Code sessions (runReadOnly: Read/Glob/Grep, web search/fetch where given, structured output), and the ship tools (ship_status, open_project) the studio's computer and plugins' crew share
+    modelSchema.ts        a system model as a lead's model tool takes it (zod)
+    shipStatus.ts         the ship as the crew's ship_status tool tells it, trimmed hard (summariseShip, each closed goal's PRs looked up on GitHub): plugins read it through host.shipStatus
+    claudeCrew.ts         the crew's read-only Claude Code sessions (runReadOnly: Read/Glob/Grep, web search/fetch where given, structured output), and the ship tools (ship_status, open_project) plugins' crew share
     fakeOffice.ts         a pretend office for tests (the manager's and plugins'): demo GitHub and checkouts, and a Claude Code stand-in whose turns the test ends
     sessionDigest.ts      a session's span digested from its transcript and the ledger, by code: calls, waste, cost, nudges
-    transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; Claude Code's JSON narrowed, not cast (`isRecord`, `field`, `contentBlocks`), so a line or block that isn't one is skipped; shared by the digests, the studio's timelines and plugins (the retro's friction reader)
-    sessionTimeline.ts    a session told in order for the studio: asks, words, tool runs, and its subagents and workflows (phases, models, most at once, answers), whole or zoomed
-    studioSessions.ts     the Claude Code sessions the studio may read (Claude Code's projects folder only): found by what they're about, loaded with their agents' transcripts
+    transcript.ts         reading a Claude Code transcript: finding the agents' on this machine, its lines and blocks, and who a message is from; Claude Code's JSON narrowed, not cast (`isRecord`, `field`, `contentBlocks`), so a line or block that isn't one is skipped; shared by the digests and plugins (the retro's friction reader)
     qa.ts                 the QA officer: instructions, the report's schema and parsing, the PR comment
     qaProof.ts            QA blocks only with proof: the hunting guidance, the proofs a report names, whether one holds
     demoRunner.ts         scripted pretend agents (and a pretend lead, planner and QA officer) for demo mode, and the made-up files of its repos
@@ -113,9 +109,6 @@ client/src/
     hallScreens.ts        the plugins' screens round a holodeck's wall (plugins.ts `hall`): a hologram each, drawn when its version changes, E opens it up close
     teamStation.ts        a goal's team station: its door in the holodeck and its briefing room out in the world, the lead's screen, seats for their helpers and the goal's reviewer (helperSeats.ts: who sits where)
     probes.ts             the probes by a lead's chair, one per background command or monitor (probeSlots.ts: which show, and their labels); E on one opens ui/backgroundPanel.ts: its output and Stop
-    modelScene.ts         a system model on three hologram boards (structure, sequence, data), the scenario stepping across them
-    drawingCanvas.ts      a model drawing painted onto a canvas
-    studioHall.ts         the studio holodeck's set: the scene the computer built last, on a round stage in the middle of the hall (takes.ts, built with takeKit.ts), the far wall's hologram saying what it is and how to play it (studio.ts: the stage, and ScenePlayback, the captain's spin, pause, scrub and speed), and the shelf of kept scenes to call back (sceneShelf.ts)
     goalScreens.ts        a team station's holographic sign, LCARS goal board (with the plugins' strips along its bottom) and screen over its pod (goalRoom.ts: how its room stands, how the note fills the board, and what the team's up to at a glance; portraits.ts: the crew's portraits)
     hall.ts               the training hall, each project's holodeck, behind its door's portal: a copy of its shell from Blender (blender/training_hall.py), dressed for its project (hallLayout.ts: where its pods stand, and the door on the deck that leads to it)
     portal.ts             doorways that lead into each other wherever they stand: the far side drawn through the open doors, and walking through (doorway.ts: the geometry)
@@ -135,8 +128,6 @@ client/src/
   ui/                     HUD and panels (agent terminal, its run replayed from the journal (runReplay.ts), a helper's transcript, board, ready room console, teleport, QA station, goals, Comms, the engineering station and its scorecard, the ledger review at main engineering's master systems table)
     frameStats.ts         ?stats=1: how the 3D view runs, top left, and sent to the office each second for its log (frameSamples.ts: the arithmetic; world/gpuTimer.ts: GPU time per pass)
     confirmDialog.ts      the in-game confirm dialog, over whatever panel is open (the Tricorder's buttons ask with it too)
-    studioChat.ts         the studio's chat with its computer, docked down the right so the room stays in view
-    modelPanel.ts         a studio model up close: its three views live as SVG, stepping, and a picked part's cited code
     captainsLogPanel.ts   the captain's log (J): every journal and the ledger on one timeline, while you were away, filters
   plugins.ts              the plugins' parts in the browser: each plugins/*/client.ts, shown when the office switched it on (the engineering station's cards, views and what its engineer says, the MSD's boards, their words on each goal: goalTags, goalStrips; what each starts once with its keys and legend, and its part of the ship)
   tricorder/              the phone view at /tricorder (no three.js): home screen, agent drill-down, buttons that survive live re-renders

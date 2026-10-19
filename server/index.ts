@@ -6,18 +6,16 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeStudio, ClaudeTriager, titleGoal } from './agents/claudeCrew';
-import { StudioComputer } from './agents/studioComputer';
+import { ClaudeDrafter, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
-import { DemoDrafter, DemoRunner, DemoStudio, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
+import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { IssuePlanner } from './agents/planner';
 import * as git from './agents/workspace';
-import { sourceReader } from './agents/studioSource';
 import { demoLedger } from './demoLedger';
 import { config, paths } from './config';
 import { demoLayer, demoPush } from './github/demo';
@@ -65,16 +63,14 @@ async function main() {
   const previews = new Previews(hub, github, config.demo);
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
-  // the studio's computer and plugins read the ship through the office, which is up by the time anyone asks
+  // plugins read the ship through the office, which is up by the time anyone asks
   const shipStatus = async (): Promise<ShipStatus> => {
     const snapshot = await office.snapshot();
     // closed goals' PRs, looked up live on every call: one that fails falls back to what was recorded
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
-  // FOCUS_STUDIO=live: the real studio computer even in the demo office, to try it on a model without GitHub
-  const studio = new StudioComputer(store, hub, config.demo && process.env.FOCUS_STUDIO !== 'live' ? new DemoStudio() : new ClaudeStudio(), shipStatus, { readSource: sourceReader([paths.planning, paths.workspaces, config.root]) });
-  const office = new Office(store, hub, github, previews, planner, studio, usage, new Voice(hub, config.demo), await currentVersion());
+  const office = new Office(store, hub, github, previews, planner, usage, new Voice(hub, config.demo), await currentVersion());
   office.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));

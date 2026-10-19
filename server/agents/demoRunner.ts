@@ -1,14 +1,11 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { ModelCite, SystemModel, TermLine } from '../../shared/types';
-import { config } from '../config';
+import type { TermLine } from '../../shared/types';
 import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
 import { randomHex, sleep } from '../util';
 import type { Transcript } from './transcript';
-import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
-import { currentTake } from '../../shared/takeScript';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import { workflowProgress } from './workflows';
@@ -961,64 +958,7 @@ export async function demoTranscripts(): Promise<Transcript[]> {
   return sessions.map(({ lines, ...t }) => ({ ...t, read: () => Promise.resolve(lines.join('\n')) }));
 }
 
-// ---------------------------------------------------------------- the studio
-
-/**
- * Scene fan-out, in the round: a gold core in the middle beams `n` agents in on pads round it, throws each a job, and
- * folds their answers back in, timed by its phases.
- */
-const demoSceneFanOut = (n: number) => `const N = ${n}, R = 4.4;
-const core = kit.ball({ r: 0.7, at: [0, 2.4, 0], colour: 'gold', glow: true });
-const caption = kit.label('Planning the work', { at: [0, 4.2, 0], colour: 'text', size: 0.45 });
-const spots = Array.from({ length: N }, (_, i) => { const a = (i / N) * Math.PI * 2; return [Math.sin(a) * R, Math.cos(a) * R, a]; });
-spots.forEach(([x, z]) => kit.pad({ at: [x, 0, z], colour: 'sky' }));
-const agents = spots.map(([x, z, a], i) => kit.person({ name: 'Agent ' + (i + 1), line: 'Part ' + (i + 1), at: [x, 0, z], face: a + Math.PI }));
-const rays = spots.map(([x, z]) => kit.line([0, 2.4, 0], [x, 1.6, z], { colour: 'lilac', width: 0.05 }));
-const jobs = spots.map(() => kit.ball({ r: 0.16, at: [0, 2.4, 0], colour: 'sky', glow: true }));
-const answers = spots.map(() => kit.ball({ r: 0.2, at: [0, 2.4, 0], colour: 'gold', glow: true }));
-const gap = 2 / N;
-function render(t) {
-  const fan = phase.start('fan'), fold = phase.start('fold');
-  core.scale.setScalar(1 + 0.6 * burst(t, phase.end('fold'), 0.1, 0.8) + 0.05 * Math.sin(t * 3));
-  spots.forEach(([x, z], i) => {
-    kit.beam(agents[i], stagger(t, i, fan, fan + 0.8, gap));
-    const out = stagger(t, i, fan + 0.6, fan + 1.6, gap);
-    const back = stagger(t, i, fold, fold + 1.2, gap);
-    rays[i].visible = out > 0.01 && back < 0.99;
-    rays[i].scale.x = Math.max(0.001, out * (1 - back));
-    jobs[i].visible = out > 0.01 && out < 0.99;
-    jobs[i].position.set(x * out, 2.4 - 0.8 * out, z * out);
-    answers[i].visible = back > 0.01 && back < 0.99;
-    answers[i].position.set(x * (1 - back), 1.6 + 0.8 * back + Math.sin(back * Math.PI) * 1.2, z * (1 - back));
-    agents[i].status = t < fan + 1.6 ? 'waiting' : t < fold ? 'working' : 'done';
-  });
-  caption.text = t < fan ? 'Planning the work' : t < phase.start('work') ? 'Fanning out to ' + N + ' agents' : t < fold ? 'Working side by side' : 'Folding back: only answers';
-}`;
-const DEMO_FAN_PHASES: Record<string, [number, number]> = { plan: [0, 1.5], fan: [1.5, 5], work: [5, 8.5], fold: [8.5, 12] };
-
-/** Scene pipeline, in the round: work items ride a track through three gates, each moving on the moment its gate's done. */
-const DEMO_SCENE_PIPELINE = `const curve = new THREE.CatmullRomCurve3([[-5, 0.8, 2], [-2.5, 2.6, -2.5], [1, 1.2, 2.5], [4.6, 3, -1.5]].map((a) => new THREE.Vector3(...a)));
-kit.add(new THREE.Mesh(new THREE.TubeGeometry(curve, 120, 0.08, 8), new THREE.MeshBasicMaterial({ color: kit.colours.peri })));
-const gates = [0.3, 0.6, 0.85].map((k) => {
-  const g = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.06, 8, 32), new THREE.MeshBasicMaterial({ color: kit.colours.gold }));
-  g.position.copy(curve.getPointAt(k));
-  g.lookAt(curve.getPointAt(k + 0.01));
-  return kit.add(g);
-});
-const N = 30, items = new THREE.InstancedMesh(new THREE.BoxGeometry(0.28, 0.28, 0.28), new THREE.MeshBasicMaterial(), N);
-kit.add(items);
-const m = new THREE.Matrix4(), c = new THREE.Color();
-function render(t) {
-  for (let i = 0; i < N; i++) {
-    const k = clamp((t - phase.start('flow') - i * 0.3) / 6, 0, 1);
-    const at = curve.getPointAt(k);
-    items.setMatrixAt(i, m.makeTranslation(at.x, at.y, at.z));
-    items.setColorAt(i, c.set(k >= 1 ? kit.colours.green : kit.colours.sky));
-  }
-  items.instanceMatrix.needsUpdate = true;
-  items.instanceColor.needsUpdate = true;
-  gates.forEach((g, j) => g.scale.setScalar(1 + 0.15 * Math.sin(t * 4 + j)));
-}`;
+// ---------------------------------------------------------------- workflow scripts
 
 /** The script a demo lead reviews its slice with: a pipeline of scans and checks, a fan-out, and a summary. */
 const DEMO_REVIEW_SCRIPT = `export const meta = {
@@ -1067,101 +1007,3 @@ const maps = await parallel(args.repos.map((repo) => () =>
 log(\`\${maps.filter(Boolean).length} repos mapped\`)
 return maps
 `;
-
-/**
- * Where `needle` first turns up in `file` (relative to the office's own code), as a model cites it, so the demo's model
- * keeps pointing at the right lines as the code moves; line 1 if it's gone (and the check will say so).
- */
-function demoCite(file: string, needle: string): ModelCite {
-  const at = path.join(config.root, file);
-  let line = 1;
-  try {
-    const found = fs.readFileSync(at, 'utf8').split(/\r?\n/).findIndex((l) => l.includes(needle));
-    if (found >= 0) line = found + 1;
-  } catch {
-    // the check against the code reports the missing file
-  }
-  return { file: at, line };
-}
-
-/** The demo's system model: how a lead's ship tool becomes pushed branches, a pull request and a QA review, from the office's own code. */
-export function demoShipModel(): SystemModel {
-  const slices = 'server/agents/manager/slices.ts';
-  return {
-    question: 'How does a lead’s ship become a pull request that QA reviews?',
-    nodes: [
-      { id: 'lead', label: 'Lead’s session', kind: 'external', layer: 'Agents', cite: demoCite('server/agents/manager/sessions.ts', 'ship: (input) =>') },
-      { id: 'ship-tool', label: 'ship tool', kind: 'route', layer: 'Office', symbol: 'ship', cite: demoCite('server/agents/officeTool.ts', "'ship',") },
-      { id: 'ship-lead', label: 'Slices.shipLead', kind: 'handler', layer: 'Office', symbol: 'shipLead', cite: demoCite(slices, 'shipLead(agent: Agent') },
-      { id: 'push', label: 'Workspace.push', kind: 'service', layer: 'Office', symbol: 'push', cite: demoCite('server/agents/services.ts', 'push(dir: string, branch: string)') },
-      { id: 'create-pr', label: 'GitHub.createPullRequest', kind: 'service', layer: 'GitHub', symbol: 'createPullRequest', cite: demoCite('server/github/service.ts', 'createPullRequest(repo: string') },
-      { id: 'gh', label: 'gh pr create', kind: 'external', layer: 'GitHub', symbol: "'pr', 'create'", cite: demoCite('server/github/ghCli.ts', "'pr', 'create'") },
-      { id: 'review', label: 'Reviews.requestReview', kind: 'handler', layer: 'QA', symbol: 'requestReview', cite: demoCite('server/agents/manager/reviews.ts', 'requestReview(projectId: string') },
-    ],
-    edges: [
-      { from: 'lead', to: 'ship-tool', kind: 'calls', label: 'mcp__office__ship', cite: demoCite('server/agents/officeTool.ts', 'tools.ship(') },
-      { from: 'ship-tool', to: 'ship-lead', kind: 'calls', cite: demoCite('server/agents/manager/sessions.ts', 'slices.shipLead(') },
-      { from: 'ship-lead', to: 'push', kind: 'calls', cite: demoCite(slices, 'workspace.push(') },
-      { from: 'ship-lead', to: 'create-pr', kind: 'calls', cite: demoCite(slices, 'github.createPullRequest(') },
-      { from: 'create-pr', to: 'gh', kind: 'calls', cite: demoCite('server/github/ghCli.ts', "'pr', 'create'") },
-      { from: 'ship-lead', to: 'review', kind: 'emits', cite: demoCite(slices, 'reviews.requestReview(') },
-    ],
-    trace: [
-      { from: 'lead', to: 'ship-tool', label: 'The lead calls ship', payload: '{ title, summary }' },
-      { from: 'ship-tool', to: 'ship-lead', label: 'The office takes it over', payload: 'agent, { title, summary }' },
-      { from: 'ship-lead', to: 'push', label: 'Push each repo with new commits', payload: 'dir, branch' },
-      { from: 'ship-lead', to: 'create-pr', label: 'Open the pull request (or update it)', payload: '{ head, base, title, body }' },
-      { from: 'create-pr', to: 'gh', label: 'gh pr create', payload: '--head --base --title --body-file -' },
-      { from: 'gh', to: 'create-pr', label: 'GitHub answers', payload: '{ number, url }' },
-      { from: 'ship-lead', to: 'review', label: 'Ask QA to review it', payload: 'repo, number, title' },
-      { from: 'ship-tool', to: 'lead', label: 'The lead hears what opened', payload: '"Opened owner/repo#N"' },
-    ],
-    simplified: ['Retries, and refusing to ship with uncommitted changes, left out', 'One repo shown; shipLead does this for every repo with new commits'],
-    checks: [
-      { q: 'Who pushes the lead’s branch: the lead, or the office?', a: 'The office, in shipLead, through Workspace.push.', cite: demoCite(slices, 'workspace.push(') },
-      { q: 'What starts QA’s review of the pull request?', a: 'shipLead asks Reviews.requestReview once the PR is open.', cite: demoCite(slices, 'reviews.requestReview(') },
-    ],
-  };
-}
-
-/** The demo's studio computer: scripted turns that stage real scenes in the middle of the hall, so the studio shows in the demo. */
-export class DemoStudio implements StudioOfficer {
-  async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
-    const wait = async (seconds: number) => {
-      await sleep((seconds * 1000) / demoPace());
-      if (req.signal.aborted) throw new Error('Stopped');
-    };
-    const said = req.messages.filter((m) => m.from === 'captain').at(-1)?.text.replace(/\s+/g, ' ').trim() ?? '';
-    const q = said.toLowerCase();
-    const reply = (text: string): StudioReply => ({ text, sessionId: req.resumeSessionId ?? `demo-studio-${randomHex(3)}`, costUsd: 0.05, model: req.model || 'claude-sonnet-5-5' });
-    const tool = async <T>(what: string, run: () => T | Promise<T>) => {
-      activity(what);
-      await wait(0.8);
-      return run();
-    };
-    const looked = (staged: Staged) => (staged.sheet ? 'I walked round its contact sheet first: it reads from every side.' : 'No one’s in the studio to run it yet.');
-    activity('Thinking…');
-    await wait(1);
-
-    if (/how does|how do|architecture|data flow|model|ship/.test(q)) {
-      const staged = await tool('Checking the model against the code', () => req.tools.model({ id: 'ship-flow', label: 'Lead ships a slice', model: demoShipModel() }));
-      const problems = /found (\d+) problem/.exec(staged.text)?.[1];
-      return reply(`**ship-flow** is up: how a lead's ship becomes a pull request QA reviews, recovered from the office's own code. Seven parts, six connections, an eight-step scenario. ${problems ? `${problems} cites didn't check out; they're red.` : 'Every cite checked out against the code.'} ${looked(staged)}`);
-    }
-    const current = currentTake(req.takes);
-    if (current && /slow/.test(q)) {
-      await tool('Retiming the scene', () => req.tools.retime({ id: current.id, speed: 0.5 }));
-      return reply(`**${current.id}** now plays at half speed: every phase takes twice as long, the rest as it was.`);
-    }
-    if (/pipeline|track|conveyor|gate/.test(q)) {
-      const staged = await tool('Building the scene', () => req.tools.take({ id: 'pipeline', label: 'Track and gates', metaphor: 'Work items ride a track through three gates; each moves on the moment its own gate is done, so the track never waits for the slowest', seconds: 14, phases: { flow: [0, 13] }, script: DEMO_SCENE_PIPELINE }));
-      return reply(`**pipeline** is up: work riding a track through three gates, turning green as it comes out the end. ${looked(staged)}`);
-    }
-    const more = current?.id === 'fan-out' && /more|bigger|lots|dozens/.test(q);
-    const n = more ? 16 : 8;
-    const staged = await tool('Building the scene', () => req.tools.take({ id: 'fan-out', label: 'Fan out, fold back', metaphor: `A gold core beams ${n} agents in round it, throws each a job, and pulls back only their answers`, detail: 'Agents as crew on pads: one job each, no queue', seconds: 13, phases: DEMO_FAN_PHASES, script: demoSceneFanOut(n) }));
-    return reply(more
-      ? `**fan-out** now runs ${n} agents round the core. ${looked(staged)}`
-      : `**fan-out** is in the middle of the room: a gold core beams ${n} agents in round it, hands each a job, and folds their answers back in. Walk round it, or hold Q or R to spin it. ${looked(staged)}`);
-  }
-}

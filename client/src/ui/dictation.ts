@@ -203,9 +203,6 @@ export function withMic(ui: Ui, field: Field, mode: () => MicMode = () => DICTAT
   return wrap;
 }
 
-/** Starts recording from the mic, for a caller that transcribes it itself (the studio's hold-to-talk key). */
-export const startRecording = (): Promise<Recording> => record(micPerRecording);
-
 export async function record(mic: Microphone): Promise<Recording> {
   const stream = await mic.open();
   const recorder = new MediaRecorder(stream);

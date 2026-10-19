@@ -1,9 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// What the studio's computer may cite when it sends a system model (docs/studio.md): the office reads a cited file's
-// lines to check the model against the code, but only files inside `roots` (the projects' checkouts, the agents'
-// worktrees and the office's own code), and only plain files of a sensible size.
+// What a goal lead may cite when it sends a system model (its `model` tool, docs/goals.md): the office reads a cited
+// file's lines to check the model against the code, but only files inside `roots` (the lead's workspace, say), and only
+// plain files of a sensible size.
 
 const MAX_BYTES = 2_000_000;
 

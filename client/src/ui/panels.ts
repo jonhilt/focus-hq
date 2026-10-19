@@ -19,8 +19,6 @@ export interface PanelOptions {
   footer?: HTMLElement;
   /** Buttons on the header bar, before the title. */
   headerExtra?: Node[];
-  /** Docked down the right with the world left uncovered (the studio's chat, to watch the takes while you talk). */
-  docked?: boolean;
 }
 
 /**
@@ -57,17 +55,12 @@ export class Panels {
     return this.overlay !== null;
   }
 
-  /** Whether the open panel is docked, leaving the world in view (the studio's chat). */
-  get docked(): boolean {
-    return this.overlay?.classList.contains('docked') ?? false;
-  }
-
   open(opts: PanelOptions): void {
     this.close(false);
     const title = typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title;
     const panel = h(
       'div',
-      { class: `panel${opts.wide ? ' wide' : ''}${opts.full ? ' full' : ''}${opts.docked ? ' docked' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
+      { class: `panel${opts.wide ? ' wide' : ''}${opts.full ? ' full' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
       h('div', { class: 'panel-elbow' }),
       h('div', { class: 'panel-head' },
         ...(opts.headerExtra ?? []),
@@ -81,7 +74,7 @@ export class Panels {
       opts.footer ? h('div', { class: 'panel-foot' }, opts.footer) : null,
       h('div', { class: 'panel-base' }),
     );
-    const overlay = h('div', { class: `overlay${opts.docked ? ' docked' : ''}` }, panel);
+    const overlay = h('div', { class: 'overlay' }, panel);
     overlay.addEventListener('mousedown', (e) => {
       if (e.target === overlay) this.close();
     });

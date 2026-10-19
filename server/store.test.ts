@@ -259,6 +259,7 @@ describe('loading a saved office', () => {
       closedPrs: [{ repo: 'acme/shop', issue: 7, pr: 3, officer: 'Lt. Ops', note: 'Wrong approach', at: 0 }],
       // saved before Number One was a plugin: a chat with something in it moves into the plugin's slot
       numberOne: { status: 'thinking', activity: '', messages: [{ from: 'manager', text: 'Hi', at: 0 }], updatedAt: 0, costUsd: 0 },
+      // saved while the office had a studio holodeck (since gone): left behind
       studio: { status: 'thinking', activity: '', messages: [], takes: [], updatedAt: 0, costUsd: 0 },
       // saved before the retro was a plugin: it moves into the plugin's slot, which ends it as the plugin starts
       retro: { status: 'thinking', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 },
@@ -272,7 +273,7 @@ describe('loading a saved office', () => {
     expect(store.agents.get('agent_ab12')?.desk).toBeLessThan(2);
     expect(store.reviews.get('acme/shop#3')?.status).toBe('testing');
     expect(store.closedPrs.get('acme/shop#7')?.pr).toBe(3);
-    expect(store.studio.status).toBe('failed');
+    expect(store).not.toHaveProperty('studio');
     expect(store.plugins).toEqual({ retro: state.retro, 'number-one': { chat: state.numberOne } });
   });
 });

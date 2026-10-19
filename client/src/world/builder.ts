@@ -47,10 +47,6 @@ export type Interaction =
   /** A feed on a briefing room's wall: beam into the transporter room it shows (`projectId`'s team station `station`'s room `room`). */
   | { kind: 'beam-to'; projectId: string; station: number; room: number }
   | { kind: 'vacant' }
-  /** The studio holodeck's computer: the conversation (ui/studioChat.ts). */
-  | { kind: 'studio' }
-  /** The studio's system model, up close (ui/modelPanel.ts). */
-  | { kind: 'studio-model' }
   /** Something a plugin put in the ship (`ShipHost.interactive`): what pressing E on it does. */
   | { kind: 'plugin'; use: (ui: Ui) => void };
 

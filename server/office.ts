@@ -11,7 +11,6 @@ import type { AgentManager } from './agents/manager';
 import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
 import type { UsageWatch } from './usage';
-import type { StudioComputer } from './agents/studioComputer';
 import type { IssuePlanner } from './agents/planner';
 import { config } from './config';
 import { demoPace } from './demoPace';
@@ -53,7 +52,6 @@ export class Office {
     private readonly github: GitHubProvider,
     readonly previews: Previews,
     readonly planner: IssuePlanner,
-    readonly studio: StudioComputer,
     readonly usage: UsageWatch,
     readonly voice: Voice,
     version: string,
@@ -103,7 +101,6 @@ export class Office {
       browser: Object.fromEntries(this.store.browser),
       previews: this.previews.list(),
       drafts: this.planner.list(),
-      studio: this.studio.current(),
       reviews: [...this.store.reviews.values()],
       voice: this.voice.status(),
       report: this.agents.report(),

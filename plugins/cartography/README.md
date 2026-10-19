@@ -49,7 +49,7 @@ Every map with a git history has a **changes** view too (`history.ts`): the defa
 
 ## Diagrams leads draw, kept
 
-The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with the office's `model` tool (cited, checked, stepped through as a sequence, `docs/studio.md`). The office tells the plugins each time (`modelShown`), and cartography keeps it with the project (`diagrams.ts`, `keeper.ts`), so it's there after the goal closes:
+The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with the office's `model` tool (cited, checked, stepped through as a sequence, [docs/goals.md](../../docs/goals.md)). The office tells the plugins each time (`modelShown`), and cartography keeps it with the project (`diagrams.ts`, `keeper.ts`), so it's there after the goal closes:
 
 - **What's kept**: a model of how the code works. One of what a change does (parts or connections marked added, changed or removed) is about a slice, and goes stale the moment it merges, so it isn't kept. The same lead drawing the same id again replaces theirs; a project keeps its 24 newest (`KEPT_MAX`).
 - **Where**: the page the lead drew and its picture, as files in the plugin's data folder (`diagrams/`), with an index by project beside them (`index.json`), read again as the office starts, unlike the maps.

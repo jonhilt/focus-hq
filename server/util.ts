@@ -45,7 +45,7 @@ export function decodeImage(dataUrl: string): { ext: string; bytes: Buffer } | n
   return ext ? { ext, bytes: Buffer.from(m[2], 'base64') } : null;
 }
 
-/** The studio's seeded dice (`seedIds`), which ids roll in place of crypto's: names hash from ids, so its cast stays the same. */
+/** Seeded dice (`seedIds`), which ids roll in place of crypto's: names hash from ids, so its cast stays the same. */
 let idDice: (() => number) | null = null;
 
 export function seedIds(roll: () => number): void {

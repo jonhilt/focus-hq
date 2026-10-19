@@ -4,17 +4,12 @@ import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, type SDKAssistantMessage, type SDKMessage, type SDKResultMessage, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import type { Effort, Settings } from '../../shared/types';
-import { config, paths } from '../config';
+import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeRunner';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import type { ChatProject, ShipStatus } from './shipStatus';
 import { renderToolUse } from './render';
-import { MODEL_SCHEMA } from './modelSchema';
-import { STUDIO_LIMITS as S, studioPrompt, studioSystemPrompt } from './studio';
-import { clock, day, sessionTimeline } from './sessionTimeline';
-import type { Staged, StudioOfficer, StudioReply, StudioTurn } from './studioComputer';
-import { listSessions, type SessionSummary, loadSession } from './studioSessions';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import { tidyGoalTitle } from '../../shared/goalTitle';
@@ -227,131 +222,6 @@ export class ClaudeTriager implements Triager {
   }
 }
 
-/**
- * The studio holodeck's computer: one session per conversation, in a folder of its own, that builds what the captain
- * describes as scenes in the middle of the hall, reading the web, Claude Code sessions, the ship's state and its
- * projects' code (checked out under planning/) when it needs to.
- */
-export class ClaudeStudio implements StudioOfficer {
-  async turn(req: StudioTurn, activity: (text: string) => void): Promise<StudioReply> {
-    fs.mkdirSync(paths.studio, { recursive: true });
-    const result = await runReadOnly({
-      cwd: paths.studio,
-      readable: [paths.planning, paths.workspaces, config.root],
-      systemAppend: studioSystemPrompt({ projects: req.projects, planning: paths.planning, office: config.root }),
-      prompt: studioPrompt(req.messages, !!req.resumeSessionId, req.takes),
-      settings: req.settings,
-      model: req.model || undefined,
-      effort: req.effort,
-      signal: req.signal,
-      activity,
-      builtins: [...CODE_TOOLS, ...WEB_TOOLS],
-      resume: req.resumeSessionId,
-      tools: {
-        server: studioServer(req, activity),
-        names: ['scene', 'model', 'retime_scene', 'drop_scene', 'sessions', 'session_timeline', 'ship_status', 'open_project'],
-        activity: (name) => ({ sessions: 'Looking through Claude Code sessions', session_timeline: 'Reading a session', scene: 'Building the scene', model: 'Checking the model against the code', retime_scene: 'Retiming the scene', drop_scene: 'Clearing a scene', ship_status: 'Checking the ship’s status', open_project: 'Opening a project' })[name] ?? name,
-      },
-    });
-    return { text: result.text, sessionId: result.sessionId, costUsd: result.costUsd, model: result.model };
-  }
-}
-
-/** The sessions tool's answer: a line or two for each. */
-function sessionList(found: SessionSummary[]): string {
-  if (!found.length) return 'No Claude Code sessions match that.';
-  return found.map((s) => {
-    const when = `${day(s.modifiedAt)} ${clock(s.modifiedAt)}`;
-    return `- ${s.id}: ${s.title ?? '(untitled)'} · ${when} · ${(s.bytes / 1e6).toFixed(1)} MB · ${s.agents} agents · ${s.project}${s.asked ? `\n  first asked: ${s.asked}` : ''}`;
-  }).join('\n');
-}
-
-/** A scene's named phases, as its tools send them. */
-const PHASES = z.record(z.string(), z.tuple([z.number(), z.number()]));
-
-/** The studio computer's own tools: the scenes it builds in the middle of the hall, and reading Claude Code sessions, the ship and its projects' code. */
-function studioServer(req: StudioTurn, activity: (text: string) => void): McpSdkServerConfigWithInstance {
-  const answer = async (run: () => string | Promise<string>) => {
-    try {
-      return { content: [{ type: 'text' as const, text: await run() }] };
-    } catch (err) {
-      return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
-    }
-  };
-  // a scene's answer carries its contact sheet, for the computer to look at
-  const staged = async (run: () => Promise<Staged>) => {
-    try {
-      const { text, sheet } = await run();
-      return { content: [{ type: 'text' as const, text }, ...(sheet ? [{ type: 'image' as const, data: sheet, mimeType: 'image/jpeg' }] : [])] };
-    } catch (err) {
-      return { content: [{ type: 'text' as const, text: errorMessage(err) }], isError: true };
-    }
-  };
-  return createSdkMcpServer({
-    name: 'studio',
-    version: '1.0.0',
-    alwaysLoad: true,
-    tools: [
-      tool(
-        'scene',
-        'Build a scene in the middle of the holodeck (the kit and render(t) are in your instructions): it stands there at once, in place of the last. A new id makes a new scene; an id you\'ve used before swaps that one in, changed. It tells you whether it runs in the room, and hands back a contact sheet of it to look at before you tell the captain it\'s ready.',
-        {
-          id: z.string().describe('A short lowercase name, like fan-out or tides: the captain can call it back by it.'),
-          label: z.string().max(S.takeLabel).describe('A few words naming it.'),
-          metaphor: z.string().max(S.metaphor).describe('Decided before any script: what it shows the idea as, in one sentence, saying what moves and what that movement means.'),
-          detail: z.string().max(S.takeDetail).optional().describe('What it simplifies or leaves out, in a line.'),
-          seconds: z.number().min(S.minSeconds).max(S.maxSeconds).describe('How long it plays before it loops.'),
-          phases: PHASES.optional().describe('Its named phases, like {"dispatch": [0, 2], "work": [2, 6]}: time the script by phase(t, name), so retime_scene can change the timing later.'),
-          script: z.string().max(S.script).describe('Makes the cast with kit, then defines function render(t).'),
-        },
-        (input) => staged(() => req.tools.take(input)),
-      ),
-      tool(
-        'model',
-        'Show how a real system works as a model recovered from its code: its parts, how they connect, and one scenario as steps along the connections, every part and connection cited. The holodeck draws it one fixed way on three boards round the captain (its structure, the scenario as a sequence diagram, and the data at each step), lays it out itself, and steps the scenario across all three; up close the captain can pick any part to see the code it cites. The office checks every cite against the code and tells you what didn\'t check out (drawn flagged in red) so you can fix it. Use it, not scene, for anything about how real code works.',
-        {
-          id: z.string().describe('A short lowercase name for the scene, like save-proposal.'),
-          label: z.string().max(S.takeLabel).describe('A few words naming it.'),
-          model: MODEL_SCHEMA,
-        },
-        (input) => staged(() => req.tools.model(input)),
-      ),
-      tool(
-        'retime_scene',
-        'Change a scene\'s timing without touching its script, and bring it back to the middle of the hall: a speed for the whole scene (0.5 is half speed), or new seconds and phases. The quickest way to do "slower" or "hold the fold longer".',
-        {
-          id: z.string(),
-          speed: z.number().min(0.1).max(10).optional().describe('Plays the whole scene, and every phase, at this speed: 0.5 takes twice as long.'),
-          seconds: z.number().min(S.minSeconds).max(S.maxSeconds).optional().describe('Its new length.'),
-          phases: PHASES.optional().describe('All its phases again, with their new times.'),
-        },
-        (input) => staged(() => req.tools.retime(input)),
-      ),
-      tool('drop_scene', 'Forget a scene you\'ve built.', { id: z.string() }, ({ id }) => answer(() => req.tools.dropTake(id))),
-      tool(
-        'sessions',
-        'The Claude Code sessions on the captain\'s Mac, newest first: each with its id, Claude Code\'s title for it, what was first asked, when, its size and how many agents it ran. Search by words from its title, first ask or project folder.',
-        {
-          query: z.string().optional().describe('Words that must all appear in its title, first ask or folder; leave out for the newest.'),
-          limit: z.number().int().min(1).max(50).optional().describe('How many (20 unless you say).'),
-        },
-        ({ query, limit }) => answer(async () => sessionList(await listSessions(query, limit))),
-      ),
-      tool(
-        'session_timeline',
-        'A Claude Code session as a timeline, from its transcripts: what was asked, what Claude said and ran, and each subagent and workflow it started (when, how many at once, on which models, what came back). The whole session first; then from and to zoom in on a stretch in detail.',
-        {
-          session: z.string().describe('Its id (from the sessions tool) or its transcript\'s path.'),
-          from: z.string().optional().describe('Zoom in from this time, as the timeline shows it with its date ("2026-10-09 15:35").'),
-          to: z.string().optional().describe('Zoom in to this time.'),
-        },
-        ({ session, from, to }) => answer(async () => sessionTimeline(await loadSession(session), { from, to })),
-      ),
-      ...shipTools(req, activity, (dir) => dir),
-    ],
-  });
-}
-
 /** A read-only session with the run of the ship (`PluginHost.shipSession`): what it's given beside a read-only session's. */
 export interface ShipSessionRun extends Omit<ReadOnlyRun, 'cwd' | 'readable' | 'tools' | 'systemAppend'> {
   /** Its system prompt's addition, told where the agents' worktrees are (readable, to see what an agent has done). */
@@ -380,7 +250,7 @@ export function shipSession(name: string, run: ShipSessionRun, ask: Ask = query)
 }
 
 /**
- * The ship's state and a project's code on demand, for a crew session that reads the ship (the studio's computer, and
+ * The ship's state and a project's code on demand, for a crew session that reads the ship (Number One, and
  * plugins' crew): `shown` says where a checkout went, as the session should read it. Neither changes anything aboard.
  */
 export function shipTools(req: { projects: ChatProject[]; shipStatus: () => Promise<ShipStatus> }, activity: (text: string) => void, shown: (dir: string) => string) {

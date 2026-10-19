@@ -186,12 +186,10 @@ export function holodeckMaterial(round = HALL_SKIN_R): THREE.ShaderMaterial {
 }
 
 /**
- * An empty holodeck's walls and ceiling: the skin, drawn opaque with the yellow grid, over the hall's own; or, given
- * `radius` and `height`, a bigger hall's round its entrance (the studio's, which leaves the hall's own shell behind).
+ * An empty holodeck's walls and ceiling: the skin, drawn opaque with the yellow grid, over the hall's own.
  */
-export function holodeckSkin(radius?: number, height?: number): THREE.Mesh {
-  const r = radius === undefined ? HALL_SKIN_R : radius - HALL_SKIN_INSET;
-  const mesh = new THREE.Mesh(skinGeometry(r, height === undefined ? HALL_SKIN_TOP : height - 0.04), holodeckMaterial(r));
+export function holodeckSkin(): THREE.Mesh {
+  const mesh = new THREE.Mesh(skinGeometry(), holodeckMaterial());
   mesh.raycast = noRaycast;
   return mesh;
 }

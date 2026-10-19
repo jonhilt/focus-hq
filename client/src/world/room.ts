@@ -3,7 +3,7 @@ import { goalTitle } from '../../../shared/goalTitle';
 import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Board, Helper, Project, StudioSession, StudioTake } from '../../../shared/types';
+import type { Agent, Board, Helper, Project } from '../../../shared/types';
 import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
@@ -11,9 +11,9 @@ import { KanbanBoard } from './board';
 import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
-import { buildHall, HALL_SHELL, HALL_SIGN } from './hall';
+import { buildHall } from './hall';
 import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallPodSpots, inHall } from './hallLayout';
-import { type Box2, briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
+import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 import { ContactShadows } from './contactShadow';
 import { prGlance } from './goalRoom';
 import { mergeStatic } from './merge';
@@ -27,8 +27,6 @@ import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from 
 import { paneUse } from './screenPanes';
 import { Beam } from './transporter';
 import { HULL, LCARS, lcarsSign, workstation } from './starship';
-import { StudioSet } from './studioHall';
-import { keepsHallCollider, type ScenePlayback, STUDIO_HALL, STUDIO_SPAN, studioWalls } from './studio';
 import { FloorGlow, hover } from './hologram';
 import { HallScreens } from './hallScreens';
 import { hallScreens } from '../plugins';
@@ -664,7 +662,7 @@ export class ProjectRoom {
     }
   }
 
-  /** The team station a goal's lead works at (the studio frames its shots from it). */
+  /** The team station a goal's lead works at. */
   stationOf(leadId: string): TeamStation | undefined {
     return this.stations.find((st) => st.lead.id === leadId);
   }
@@ -739,33 +737,17 @@ export function buildHiddenRoom(slot: RoomSlot, builder: Builder): void {
 
 /**
  * A vacant holodeck, waiting for a project: through its door on the deck, a training hall with nothing running, dark
- * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project. While a goal is
- * making a video, the first one is its studio (studio.ts): the props make way for the video's premise, beats and gaps.
+ * with the yellow grid, a poster on its far wall and a few moving boxes, each of which starts a project.
  */
 export class VacantHall {
   readonly group = new THREE.Group();
-  /** What stands in it: the poster and the moving boxes, which the studio's stage clears away (ui/holoStage.ts). */
-  readonly props: THREE.Object3D[] = [];
   /** The doorway from its door on the deck to the hall's entrance. */
   readonly portal: Portal;
-  /** The sign over its door on the deck, which says it's the studio while it's one. */
-  private readonly sign: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial>;
-  private readonly code: string;
-  /** The studio's set, once it's the studio (`showStudio`). */
-  private studio: StudioSet | null = null;
-  /** Its grid floor and skin, which the studio swaps for its bigger hall's. */
-  private floor: THREE.Mesh;
-  private skin: THREE.Mesh;
-  /** What the player can't walk through that the hall put in the world's colliders: its walls and the moving boxes. */
-  private readonly ownColliders: Box2[];
-  /** Once it's the studio, the colliders it swaps in for those: its bigger hall's walls (the world's `syncStudio` makes the swap). */
-  studioColliders: { drop: Set<Box2>; add: Box2[] } | null = null;
 
   constructor(slot: RoomSlot, builder: Builder, hallKit: THREE.Object3D) {
     this.group.position.copy(hallAt(slot));
     this.group.rotation.y = slot.rotationY;
     builder.halls.add(this.group);
-    const firstCollider = builder.colliders.length;
     const entrance = buildHall(this.group, hallKit, { name: 'Holodeck vacant', color: '#9a94a8', sub: 'Start a project from the ready room' }, builder, true);
     this.portal = new Portal(deckEntrance(slot, entrance), entrance);
     builder.add(this.portal.ends[0].group);
@@ -775,18 +757,16 @@ export class VacantHall {
     deck.position.copy(slot.center);
     deck.rotation.y = slot.rotationY;
     builder.add(deck);
-    this.code = doorCode(slot);
-    const sign = (this.sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: this.code, sub: 'Create a project in the ready room' }))));
+    const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign('Holodeck vacant', { color: '#9a94a8', code: doorCode(slot), sub: 'Create a project in the ready room' })));
     sign.rotation.y = -Math.PI / 2;
     sign.position.set(DOOR_SIGN_X, 2.87, 0);
     deck.add(sign);
 
     // the grid over the hall's walls, ceiling and floor (the grid's drawn in its mesh's own frame, so the floor's laid
     // flat in its geometry, not by turning it)
-    const floor = (this.floor = new THREE.Mesh(new THREE.CircleGeometry(HALL.radius, 96).rotateX(-Math.PI / 2), holodeckMaterial()));
+    const floor = new THREE.Mesh(new THREE.CircleGeometry(HALL.radius, 96).rotateX(-Math.PI / 2), holodeckMaterial());
     floor.position.y = 0.004;
-    this.skin = holodeckSkin();
-    this.group.add(floor, this.skin);
+    this.group.add(floor, holodeckSkin());
     const poster = new THREE.Mesh(
       new THREE.PlaneGeometry(5, 1.4),
       flat(lcarsSign('Holodeck available', { w: 1024, h: 288, color: LCARS.gold, sub: 'Start one in the ready room' })),
@@ -795,7 +775,6 @@ export class VacantHall {
     // flat in front of the round wall's grid: far enough in that its ends, 2.5 m either side, stay in front of it too
     poster.position.set(HALL.radius - 0.5, 1.8, 0);
     this.group.add(poster);
-    this.props.push(poster);
     interactive(poster, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
     // moving boxes
     const boxes = new THREE.Group();
@@ -806,105 +785,12 @@ export class VacantHall {
       boxes.add(b);
     });
     this.group.add(boxes);
-    this.props.push(boxes);
     interactive(boxes, { kind: 'manager', tab: 'new-project' }, () => 'Start a new project');
     builder.collideObject(boxes);
-    this.ownColliders = builder.colliders.slice(firstCollider);
   }
 
   /** Whether a world position is in the hall. */
   holds(p: THREE.Vector3): boolean {
-    if (!this.studio) return inHall(this.group.position, p);
-    return Math.hypot(p.x - this.group.position.x, p.z - this.group.position.z) < STUDIO_HALL.radius + 1;
-  }
-
-  /**
-   * Makes the hall the studio's, bigger on the inside (studio.ts: STUDIO_HALL): the hall's own shell goes, but for the
-   * doorway it keeps (the skin's opening frames it), and a bigger grid floor and skin go up round its entrance, and the
-   * walls the player can't pass with them, in place of the hall's and the moving boxes'.
-   */
-  private enlarge(): void {
-    const shell = this.group.getObjectByName(HALL_SHELL);
-    if (shell) shell.visible = false;
-    const inside = this.group.getObjectByName(HALL_SIGN) as THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> | undefined;
-    if (inside) {
-      inside.material.map?.dispose();
-      inside.material.dispose();
-      inside.material = flat(lcarsSign('Studio', { color: LCARS.gold, sub: 'Describe it, and walk round it' }));
-    }
-    for (const old of [this.floor, this.skin]) {
-      this.group.remove(old);
-      old.geometry.dispose();
-      (old.material as THREE.Material).dispose();
-    }
-    const { radius, height } = STUDIO_HALL;
-    // the floor stops at the entrance wall, so none of it reaches into the doorway's alcove
-    const outline = new THREE.Shape().absarc(0, 0, radius, -STUDIO_SPAN, STUDIO_SPAN, false);
-    outline.closePath();
-    this.floor = new THREE.Mesh(new THREE.ShapeGeometry(outline, 96).rotateX(-Math.PI / 2), holodeckMaterial(radius));
-    this.floor.position.y = 0.004;
-    this.skin = holodeckSkin(radius, height);
-    this.group.add(this.floor, this.skin);
-
-    this.group.updateWorldMatrix(true, false);
-    const local = new THREE.Vector3();
-    const drop = new Set(this.ownColliders.filter((b) => {
-      this.group.worldToLocal(local.set((b.minX + b.maxX) / 2, 0, (b.minZ + b.maxZ) / 2));
-      return !keepsHallCollider(local.x, local.z);
-    }));
-    const world = new THREE.Vector3();
-    const add = studioWalls().map(({ x, z, half }) => {
-      this.group.localToWorld(world.set(x, 0, z));
-      return { minX: world.x - half, maxX: world.x + half, minZ: world.z - half, maxZ: world.z + half };
-    });
-    this.studioColliders = { drop, add };
-  }
-
-  /** Whether it's the studio. */
-  get isStudio(): boolean {
-    return this.studio !== null;
-  }
-
-  /** The captain's controls for the studio's scene (spin, pause, scrub, speed), if it's the studio. */
-  get studioPlayback(): ScenePlayback | null {
-    return this.studio?.playback ?? null;
-  }
-
-  /** The studio's set, if it's the studio. */
-  get studioSet(): StudioSet | null {
-    return this.studio;
-  }
-
-  /** The scene standing in the studio, if it's the studio and there is one. */
-  get studioScene(): StudioTake | null {
-    return this.studio?.scene ?? null;
-  }
-
-  /**
-   * Makes it the studio, where the captain describes something and its computer builds it (studio.ts): the props make
-   * way, the sign on the deck says so, and the set shows `session` as it stands. `report` tells the office how a scene ran.
-   */
-  showStudio(session: StudioSession, report: (take: StudioTake, error?: string, sheet?: string) => void): void {
-    if (!this.studio) {
-      this.studio = new StudioSet(report);
-      this.group.add(this.studio.group);
-      for (const prop of this.props) prop.visible = false;
-      const old = this.sign.material;
-      this.sign.material = flat(lcarsSign('Studio', { color: LCARS.gold, code: this.code, sub: 'Describe it, and walk round it' }));
-      old.map?.dispose();
-      old.dispose();
-      interactive(this.studio.wall, { kind: 'studio' }, () => 'Talk to the holodeck computer');
-      this.enlarge();
-    }
-    this.studio.show(session);
-  }
-
-  /** Moves the studio on to `t`, as seen from `camera` (world). */
-  update(t: number, camera: THREE.Vector3): void {
-    this.studio?.update(t, camera);
-  }
-
-  dispose(): void {
-    this.studio?.dispose();
+    return inHall(this.group.position, p);
   }
 }

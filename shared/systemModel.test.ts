@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkModel, edgeFor, layoutLayers, modelError, modelPhases, modelSeconds, traceGaps } from './systemModel';
+import { checkModel, edgeFor, layoutLayers, modelError, traceGaps } from './systemModel';
 import type { SystemModel } from './types';
 
 const model = (more: Partial<SystemModel> = {}): SystemModel => ({
@@ -68,12 +68,7 @@ describe('checkModel', () => {
   });
 });
 
-describe('timing and layout', () => {
-  it('plays each step in turn after a lead-in, as named phases', () => {
-    expect(modelSeconds(model())).toBe(2 + 3 * 1.8 + 1.5);
-    expect(modelPhases(model())).toEqual({ s1: [2, 3.8], s2: [3.8, 5.6], s3: [5.6, 7.4] });
-  });
-
+describe('layout', () => {
   it('puts parts in columns down the connections, one to a place, the same every time', () => {
     const { at, cols, rows } = layoutLayers(model());
     expect(['page', 'api', 'db'].map((id) => at.get(id)?.col)).toEqual([0, 1, 2]);

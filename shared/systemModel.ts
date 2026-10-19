@@ -1,5 +1,5 @@
-// A system model's pure rules (docs/studio.md): whether one the studio's computer sends holds together, checking its
-// cites against the code, how long its scenario plays, and where its parts stand. The same in the office (to refuse or
+// A system model's pure rules (a lead's `model` tool, docs/goals.md): whether one a lead sends holds together, checking
+// its cites against the code, and where its parts stand. The same in the office (to refuse or
 // check a model) and in the browser (to lay it out), so a model always lands the same way.
 
 import { isOneOf } from './records';
@@ -7,8 +7,6 @@ import { MODEL_CHANGES, MODEL_EDGE_KINDS, MODEL_KINDS, type ModelCite, type Mode
 
 export const MODEL_LIMITS = { nodes: 40, edges: 80, steps: 24, label: 48, question: 200, simplified: 8, checks: 5 } as const;
 const L = MODEL_LIMITS;
-/** How long each step of a scenario plays, and the lead-in before the first and the hold after the last (s). */
-export const MODEL_TIMING = { step: 1.8, lead: 2, hold: 1.5 } as const;
 
 const ID = /^[a-z][a-z0-9-]{0,31}$/;
 const citeError = (c: ModelCite | undefined, what: string) =>
@@ -131,19 +129,6 @@ export function traceGaps(m: SystemModel): string[] {
     return [`Step ${i + 1} starts at ${s.from}, but step ${i} ended at ${prev.to}: the scenario jumps there.`];
   });
 }
-
-/** How long a model's scenario plays: a lead-in, each step, and a hold. */
-export function modelSeconds(m: SystemModel): number {
-  return Math.min(60, Math.max(4, MODEL_TIMING.lead + m.trace.length * MODEL_TIMING.step + MODEL_TIMING.hold));
-}
-
-/** Each step's stretch of the scenario, named s1, s2…, so the scene can be retimed like any other. */
-export function modelPhases(m: SystemModel): Record<string, [number, number]> {
-  const { lead, step } = MODEL_TIMING;
-  return Object.fromEntries(m.trace.map((_, i) => [`s${i + 1}`, [round(lead + i * step), round(lead + (i + 1) * step)] as [number, number]]));
-}
-
-const round = (x: number) => Math.round(x * 100) / 100;
 
 /** Where a part sits in a layered layout: its column (how far down the connections it is) and its row in that column. */
 export interface Slot {

@@ -6,7 +6,7 @@ import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../s
 import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
 import type { SystemModel } from '../../../shared/types';
 import { citedLines, modelPage } from '../modelPage';
-import { sourceReader } from '../studioSource';
+import { sourceReader } from '../sourceReader';
 import { Part, Refused } from './core';
 
 /** The lead's office tools besides ship: the goal's note, show, model, ask (and the captain's answer) and propose_close. */
@@ -68,7 +68,7 @@ export class GoalTools extends Part {
 
   /**
    * The lead's model tool: a system model of how its code works (or what its change does), checked against the lead's
-   * own workspace, drawn as the studio draws them, and shown like any of show's visuals, the code it cites carried in the
+   * own workspace, drawn the one fixed way (shared/modelDrawing.ts), and shown like any of show's visuals, the code it cites carried in the
    * page. What didn't check out is drawn flagged and said back, for the lead to fix.
    */
   showModel(agent: Agent, input: { id: string; title: string; model: SystemModel }): Effect.Effect<string, Refused, Renderer | Workspace> {

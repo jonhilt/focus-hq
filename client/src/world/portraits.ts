@@ -4,23 +4,23 @@ import type { Avatar } from '../../../shared/types';
 import { Character } from './character';
 
 // Head-and-shoulders portraits of the crew, for the boards that list them (goalScreens.ts): each one their own
-// Character, lit and outlined as aboard, rendered once in a little studio of its own and kept for whoever has the
+// Character, lit and outlined as aboard, rendered once in a little booth of its own and kept for whoever has the
 // same looks.
 
 const SIZE = 192;
 
-interface Studio {
+interface Booth {
   renderer: THREE.WebGLRenderer;
   effect: OutlineEffect;
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
 }
 
-let studio: Studio | null | undefined;
+let booth: Booth | null | undefined;
 const portraits = new Map<string, HTMLCanvasElement>();
 
-/** A studio of its own, so drawing a portrait never touches the ship's renderer: null where there's no WebGL. */
-function open(): Studio | null {
+/** A booth of its own, so drawing a portrait never touches the ship's renderer: null where there's no WebGL. */
+function open(): Booth | null {
   try {
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
     renderer.setSize(SIZE, SIZE);
@@ -47,22 +47,22 @@ export function portrait(avatar: Avatar): HTMLCanvasElement | null {
   const key = JSON.stringify(avatar);
   const kept = portraits.get(key);
   if (kept) return kept;
-  if (studio === undefined) studio = open();
-  if (!studio) return null;
+  if (booth === undefined) booth = open();
+  if (!booth) return null;
   const sitter = new Character({ name: '', avatar, status: 'done', line: '' });
   sitter.group.traverse((o) => {
     if (o instanceof THREE.Sprite) o.visible = false;
   });
   sitter.update(0);
-  studio.scene.add(sitter.group);
+  booth.scene.add(sitter.group);
   // the outline effect leaves clearing to whoever renders: without it, each portrait lands on the last
-  studio.renderer.clear();
-  studio.effect.render(studio.scene, studio.camera);
-  studio.scene.remove(sitter.group);
+  booth.renderer.clear();
+  booth.effect.render(booth.scene, booth.camera);
+  booth.scene.remove(sitter.group);
   sitter.dispose();
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = SIZE;
-  canvas.getContext('2d')?.drawImage(studio.renderer.domElement, 0, 0);
+  canvas.getContext('2d')?.drawImage(booth.renderer.domElement, 0, 0);
   portraits.set(key, canvas);
   return canvas;
 }

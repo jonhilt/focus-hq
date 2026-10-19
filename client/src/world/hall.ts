@@ -32,11 +32,6 @@ export interface HallLook {
   sub: string;
 }
 
-/** The name of a hall's shell in its group: the studio sets it aside for a bigger hall of its own (room.ts). */
-export const HALL_SHELL = 'hall shell';
-/** The name of the sign over a hall's entrance, inside: the studio's says so. */
-export const HALL_SIGN = 'hall sign';
-
 /**
  * Puts a copy of the hall's shell (`kit`) into `group` (the hall's frame, standing where hallAt puts it): its floor
  * in `look`'s colour, still shaded where the walls meet it, the walls, ceiling and entrance, and what the player can't
@@ -46,7 +41,6 @@ export const HALL_SIGN = 'hall sign';
  */
 export function buildHall(group: THREE.Group, kit: THREE.Object3D, look: HallLook, builder: Builder, lined: boolean): Doorway {
   const shell = kit.clone();
-  shell.name = HALL_SHELL;
   group.add(shell);
   group.updateWorldMatrix(true, true);
   // (the loader makes Blender's names safe for animation paths: their spaces become underscores)
@@ -77,7 +71,6 @@ export function buildHall(group: THREE.Group, kit: THREE.Object3D, look: HallLoo
   const sign = new THREE.Mesh(new THREE.PlaneGeometry(3.4, 0.62), flat(lcarsSign(look.name, { color: look.color, sub: look.sub })));
   sign.rotation.y = Math.PI / 2;
   sign.position.set(ENTRANCE_X + 0.11, DOOR_H + 0.6, 0);
-  sign.name = HALL_SIGN;
   group.add(sign);
   return doorway;
 }

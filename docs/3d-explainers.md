@@ -103,12 +103,12 @@ The `explain` tool already has the right core shape. The stage is a pure `render
 1. **`render` is captured synchronously.** `KIT_PLAYER` reads `render` once, at load. A `type=module` script runs too late. A dynamic `import()` of `three.module.js` inside the classic script works only with a guard: `render(t)` stores `t`, does nothing until three has loaded, then redraws the last `t`. Nothing in the kit triggers that redraw, and if the lead forgets, the resting frame and snapshot stay blank.
    - An importmap placed in the stage **html** should work, since it is parsed before the lead's script, but this is untested. It would be needed for any addons that import the bare `three` specifier.
    - The classic `three.min.js` route pins three to 0.159 or older, which conflicts with the office's own 0.186.
-2. **The snapshot browser has no GPU flags and only a 400 ms settle.** `BrowserPool.launch` has none of the flags that `studio.ts`/`perf.ts` use. Newer Chrome may refuse SwiftShader without `--enable-unsafe-swiftshader`. Untested, but if it fails, the JPEG on the 3D screen is blank: the exact silent failure described above.
+2. **The snapshot browser has no GPU flags and only a 400 ms settle.** `BrowserPool.launch` has none of the flags that `perf.ts` uses. Newer Chrome may refuse SwiftShader without `--enable-unsafe-swiftshader`. Untested, but if it fails, the JPEG on the 3D screen is blank: the exact silent failure described above.
 3. **Dry-run cost.** About 4×`DUR` calls of `render` at load, each doing a GL draw under software rendering. Scenes must stay cheap. Otherwise the kit could expose a dry-run flag so `render` can skip `renderer.render()` during the dry run.
 4. **Leads don't know 3D is an option.** The tool text in `officeTool.ts` and `docs/goals.md` describes DOM/SVG stages only.
 
 **First small slice: "3D stages that snapshot reliably."**
-- In `browserTool.ts`, add WebGL launch args (`--enable-unsafe-swiftshader`, plus `--use-angle=metal` on macOS as studio does). For pages containing a canvas, settle until a `window.kitReady` flag is set or 3 s pass.
+- In `browserTool.ts`, add WebGL launch args (`--enable-unsafe-swiftshader`, plus `--use-angle=metal` on macOS as `perf.ts` does). For pages containing a canvas, settle until a `window.kitReady` flag is set or 3 s pass.
 - In `explainer.ts`, add `window.kitRedraw()`, which re-calls `draw` at the current `t` (or at `DUR` when resting). Add opt-in `stage.libs: ['three']` that injects a pinned importmap (three@0.186.1 from jsdelivr, matching the client) and preloads three before the lead's script runs. Expose it as `window.THREE`, then call `kitRedraw` and set `kitReady`.
 - In `explainer.test.ts`, check that the importmap is injected and that `kitRedraw` exists. Add a Playwright fixture that renders a tiny rotating-cube explainer and asserts the snapshot JPEG is not uniform.
 - Add one paragraph to the `explain` description: when to use 3D (only for spatial concepts), the render(t) rules, and the camera and label rules from section 4.
@@ -173,7 +173,7 @@ A lead can already put a three.js animated explainer on its screen with today's 
   - It reads `render` once, at load: `var draw = typeof render === 'function' ? render : null`. If `render` isn't defined synchronously by then, the page shows "must define render(t)".
   - It dry-runs `render(s)` every 0.25 s from 0 to `DUR`. Any throw shows a "Stage fault" panel.
   - It then rests on `render(DUR)`, dimmed. That resting frame is what the screen's picture shows.
-  - `window.kitPlay` and `window.kitDone` are only used by the studio filming script.
+  - `window.kitPlay` and `window.kitDone` were only used by a filming script, since removed.
 
 **Serving and sandbox**
 - `server/routes.ts` (`/artifacts/:lead/:file`) serves the html, as `artifactServing` in `server/apiRequests.ts` decides, with `Content-Security-Policy: sandbox allow-scripts allow-popups`. That gives an opaque origin but sets no `script-src` or `connect-src` limit, so CDN scripts and ES-module imports load (jsdelivr and unpkg send CORS headers).
@@ -187,7 +187,7 @@ A lead can already put a three.js animated explainer on its screen with today's 
   - a 400 ms wait, then a JPEG screenshot at quality 85
 - The 3D screen in the briefing room only ever shows that JPEG as a texture. Live animation happens only when the captain opens it up close.
 - The Chromium is launched `headless: true` with **no GPU flags**, trying in order: `FOCUS_BROWSER_PATH`, Playwright's own Chromium, then Chrome, then Edge.
-  - By contrast, `scripts/studio.ts` and `scripts/perf.ts` pass `--enable-gpu --ignore-gpu-blocklist`, plus `--use-angle=metal` on macOS.
+  - By contrast, `scripts/perf.ts` passes `--enable-gpu --ignore-gpu-blocklist`, plus `--use-angle=metal` on macOS.
   - So for leads, WebGL in the snapshot depends on Chromium's software fallback (SwiftShader). Newer Chrome builds may refuse that unless given `--enable-unsafe-swiftshader`. **I haven't tested this.** If it fails, the JPEG shows a blank canvas, or a page error that comes back to the lead.
 
 **three.js as a dependency**
@@ -201,7 +201,7 @@ A lead can already put a three.js animated explainer on its screen with today's 
 - `render(t)` should set the camera and objects from `t` and call `renderer.render()` itself (no `requestAnimationFrame` loop). The canvas has to be sized to 1050×500. `preserveDrawingBuffer: true` is a sensible choice for screenshots (my suggestion, not checked).
 
 **Changes worth considering**
-1. **GPU flags for the snapshot browser:** add WebGL-friendly launch args in `BrowserPool.launch` (`--enable-unsafe-swiftshader`, or the GPU flags from studio and perf), and a longer settle wait than 400 ms for WebGL pages. Otherwise the screen's picture of a 3D stage may be blank.
+1. **GPU flags for the snapshot browser:** add WebGL-friendly launch args in `BrowserPool.launch` (`--enable-unsafe-swiftshader`, or the GPU flags from perf), and a longer settle wait than 400 ms for WebGL pages. Otherwise the screen's picture of a 3D stage may be blank.
 2. **Make three.js a stage option:** have `explainerPage` inject three.js as an opt-in, e.g. `stage.libs: ['three']`, loaded before the lead's script, or the office serves its bundled copy. Add a hook so `render` can be called again once async loading finishes (e.g. `window.kitRedraw()`, which calls `draw(t)` at the current `t`).
 3. **Update the tool text:** the descriptions in `officeTool.ts` and `docs/goals.md` (the "Explaining things" bullet) mention only DOM and SVG stages, so leads won't think to use 3D. They need wording, and tests in `server/agents/explainer.test.ts`.
 

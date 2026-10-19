@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { hallScreens } from '../plugins';
 import { columns } from '../../../shared/board';
 import { holodecks } from '../../../shared/hidden';
-import type { Project, StudioTake } from '../../../shared/types';
+import type { Project } from '../../../shared/types';
 import { ACTIVE_STATUSES } from '../../../shared/types';
 import { state } from '../net/state';
 import { Builder, interactive } from './builder';
@@ -16,12 +16,9 @@ import { type Box2, DOOR_W, HALL_HALF, ROOM_WIDTH, roomSlot, rowsFor, type Seat,
 import { flat } from './materials';
 import { EngineeringStation } from './engineering';
 import { drawMsd, type MsdBoard } from './msd';
-import { AHEAD, type Portal, type PortalEnd } from './portal';
+import type { Portal, PortalEnd } from './portal';
 import { type Region, regionAt, shown } from './regions';
 import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
-import type { ScenePlayback } from './studio';
-import type { StudioSet } from './studioHall';
-import { api } from '../net/api';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
@@ -56,21 +53,6 @@ export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
   rooms = new Map<string, ProjectRoom>();
-  /** The captain's controls for the scene in the studio, if there's a studio. */
-  studioPlayback(): ScenePlayback | null {
-    return [...this.vacant.values()][0]?.studioPlayback ?? null;
-  }
-
-  /** The studio's set, if there's a studio: its shelf, opened round the camera. */
-  studioSet(): StudioSet | null {
-    return [...this.vacant.values()][0]?.studioSet ?? null;
-  }
-
-  /** The scene standing in the studio, if there is one. */
-  studioScene(): StudioTake | null {
-    return [...this.vacant.values()][0]?.studioScene ?? null;
-  }
-
   /** The vacant holodecks' empty halls, by slot. */
   private vacant = new Map<number, VacantHall>();
   engineering: EngineeringStation | null = null;
@@ -237,7 +219,6 @@ export class World {
     for (const room of this.rooms.values()) room.dispose();
     this.rooms.clear();
     this.engineering?.group.removeFromParent();
-    for (const hall of this.vacant.values()) hall.dispose();
     this.vacant.clear();
     this.engineering?.dispose();
     this.unbuildPlugins();
@@ -282,7 +263,6 @@ export class World {
     this.colliders = [...b.colliders, ...this.decks().flatMap((d) => d.colliders)];
     this.doors = [...b.doors, ...this.decks().flatMap((d) => d.doors)];
     this.portals = [...[...this.rooms.values()].flatMap((r) => r.portals()), ...[...this.vacant.values()].map((v) => v.portal)];
-    this.syncStudio();
     this.panelsDirty = true;
   }
 
@@ -405,7 +385,7 @@ export class World {
       const label = deck.areaAt(p);
       if (label) return { label };
     }
-    for (const hall of this.vacant.values()) if (hall.holds(p)) return { label: hall.isStudio ? 'Studio' : 'Vacant holodeck' };
+    for (const hall of this.vacant.values()) if (hall.holds(p)) return { label: 'Vacant holodeck' };
     if (Math.abs(p.x) < HALL_HALF) return { label: 'Corridor' };
     const index = slotAt(Math.floor(-p.z / ROOM_WIDTH), p.x > 0 ? 1 : -1);
     const room = [...this.rooms.values()].find((r) => r.slot.index === index);
@@ -445,7 +425,6 @@ export class World {
     for (const door of this.doors) door.update(camera, dt);
     for (const portal of this.portals) portal.update(camera, dt);
     for (const room of this.rooms.values()) room.update(t, now, camera);
-    for (const hall of this.vacant.values()) if (hall.holds(camera) || hall.portal.near(camera, AHEAD)) hall.update(t, camera);
     this.engineering?.update(t, camera);
     for (const part of this.pluginParts) part.update?.(t, camera);
     if (this.panelsDirty && now - this.lastPanels > 1000) {
@@ -513,27 +492,6 @@ export class World {
     ctx.fillStyle = LCARS.lilac;
     ctx.fillText((info?.mode === 'demo' ? 'Demo mode' : `autonomy: ${info?.settings.autonomy ?? '?'}`).toUpperCase(), area.x + area.w, bottom);
     this.dashboardTex.needsUpdate = true;
-  }
-
-  /**
-   * The studio: the first vacant holodeck, where the captain describes something and its computer builds it (studio.ts). It
-   * stays the studio while the ship has a vacant holodeck; a new project takes the next one.
-   */
-  syncStudio(): void {
-    const hall = [...this.vacant.values()][0];
-    if (!hall || !state.studio) return;
-    hall.showStudio(state.studio, (take, error, sheet) => void api.studioReport(take.id, take.version, error, sheet).catch(() => undefined));
-    // its bigger hall's walls in place of the hall's own, once, in the same array the player walks among
-    const swap = hall.studioColliders;
-    if (swap && swap.drop.size + swap.add.length && !this.colliders.includes(swap.add[0])) {
-      const kept = this.colliders.filter((b) => !swap.drop.has(b));
-      this.colliders.splice(0, this.colliders.length, ...kept, ...swap.add);
-    }
-  }
-
-  /** The vacant holodecks' empty halls: the studio stages its scenes in one (ui/holoStage.ts). */
-  vacantHalls(): VacantHall[] {
-    return [...this.vacant.values()];
   }
 
   room(projectId: string): ProjectRoom | undefined {

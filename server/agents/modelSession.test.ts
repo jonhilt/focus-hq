@@ -4,7 +4,7 @@ import type { Settings } from '../../shared/types';
 import { checkModel } from '../../shared/systemModel';
 import type { ReadOnlyRun } from './claudeCrew';
 import { demoModel, modelPrompt, sessionModel } from './modelSession';
-import { sourceReader } from './studioSource';
+import { sourceReader } from './sourceReader';
 
 /** The session's settings: a fake session never reads them. */
 const DEFAULT_SETTINGS = {} as Settings;

@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { MODEL_LIMITS } from '../../shared/systemModel';
 import { MODEL_CHANGES, MODEL_EDGE_KINDS, MODEL_KINDS } from '../../shared/types';
 
-// A system model as the crew's tools take it (the studio's computer, and each goal's lead): zod, as the Claude Agent
+// A system model as a goal lead's `model` tool takes it: zod, as the Claude Agent
 // SDK's tool boundary needs. What it means, and how the office checks it, is in shared/systemModel.ts.
 
 /** Where in the code something is, as a model cites it. */

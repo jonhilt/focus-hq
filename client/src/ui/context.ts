@@ -39,10 +39,6 @@ export interface Ui {
   openComms(): void;
   /** The captain's log: every journal and the ledger on one timeline, and what happened while you were away. */
   openLog(): void;
-  /** The studio holodeck's chat with its computer, docked so the room stays in view. */
-  openStudio(): void;
-  /** The system model standing in the studio, up close (modelPanel.ts). */
-  openModel(): void;
   /** The engineering station: the chief engineer's panel, with the ledger's report card and the plugins' parts. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

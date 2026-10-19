@@ -102,13 +102,6 @@ export function apiRouter(office: Office, store: Store): express.Router {
   }));
   r.delete('/projects/:id/draft', h((req) => office.planner.discard(param(req, 'id'))));
 
-  // the studio holodeck's computer: one conversation, and the scenes it stages in the middle of the hall
-  r.post('/studio/say', h((req) => office.studio.say(str(req.body.text))));
-  r.post('/studio/new', h(() => office.studio.startOver()));
-  r.post('/studio/tune', h((req) => office.studio.tune(typeof req.body.model === 'string' ? req.body.model : '', effort(req.body.effort))));
-  r.get('/studio/source', h((req) => office.studio.source(str(req.query.file), Number(req.query.line))));
-  r.post('/studio/takes/:id/recall', h((req) => office.studio.recall(param(req, 'id'))));
-  r.post('/studio/takes/:id/report', h((req) => office.studio.report(param(req, 'id'), Number(req.body.version), typeof req.body.error === 'string' ? req.body.error : undefined, typeof req.body.sheet === 'string' ? req.body.sheet : undefined)));
   // every closed goal the ledger kept, so what its lead showed can be found once it's off the room's log
   r.get('/goals/archive', h((req) => closedGoals(store.ledger, typeof req.query.project === 'string' ? req.query.project : undefined)));
   // the captain's log: every journal and the ledger on one timeline, since `since` (the last day by default, a week at most)

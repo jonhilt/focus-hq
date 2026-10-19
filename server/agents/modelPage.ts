@@ -1,8 +1,8 @@
 import { dataView, sequenceView, structureView, toSvg } from '../../shared/modelDrawing';
 import type { ModelCite, SystemModel } from '../../shared/types';
 
-// A lead's system model as a page for its station's screen (docs/goals.md): the same three views the studio draws
-// (shared/modelDrawing.ts), as SVG, with the code each part cites carried in the page. A screen's page can't reach the
+// A lead's system model as a page for its station's screen (docs/goals.md): the three views of
+// shared/modelDrawing.ts, as SVG, with the code each part cites carried in the page. A screen's page can't reach the
 // office (it runs sandboxed), so everything it needs is in it, and it steps and picks by CSS alone: the drawings mark
 // the shapes each step lights (data-steps) and each part's shapes (data-part), and a few lines of script add a class.
 // At rest (the picture on the screen) it shows the whole model, before the scenario starts.
