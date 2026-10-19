@@ -1,0 +1,10 @@
+[Unit]
+Description=Focus: renew the preview certificate weekly (Tailscale's last 90 days)
+
+[Timer]
+OnBootSec=2min
+OnCalendar=weekly
+Persistent=true
+
+[Install]
+WantedBy=timers.target

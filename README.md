@@ -81,6 +81,7 @@ Then on board:
 - [Autonomy](docs/autonomy.md): how much agents may do without asking
 - [Voice input](docs/voice-input.md): the Mic buttons and whisper.cpp
 - [On your phone (Tricorder)](docs/tricorder.md): the phone view, over Tailscale
+- [Running the office on a server](docs/vps.md): a Linux server reached over Tailscale, set up with `deploy/vps/setup.sh`
 
 **Running the office**
 

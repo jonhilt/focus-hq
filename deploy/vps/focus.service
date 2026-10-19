@@ -1,0 +1,21 @@
+[Unit]
+Description=Focus office
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+User=@USER@
+WorkingDirectory=@FOCUS_DIR@
+EnvironmentFile=-@HOME@/.config/focus/env
+Environment=PATH=@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
+Environment=COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+ExecStart=/usr/bin/pnpm start
+# the supervisor restarts the office after an auto update, and exits on a crash: come back either way
+Restart=always
+RestartSec=5
+# shutting down stops the previews and their stop commands first
+TimeoutStopSec=90
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

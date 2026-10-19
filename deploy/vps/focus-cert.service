@@ -1,0 +1,8 @@
+[Unit]
+Description=Focus: renew the preview certificate from Tailscale
+After=tailscaled.service network-online.target
+
+[Service]
+Type=oneshot
+User=@USER@
+ExecStart=@FOCUS_DIR@/deploy/vps/renew-cert.sh
