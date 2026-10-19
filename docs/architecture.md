@@ -22,6 +22,7 @@ server/
   updater.ts              auto update: fetch, fast-forward, install/build, restart
   index.ts                express + WebSocket (/ws) + Vite middleware (dev) or dist/ (prod)
   office.ts               projects/rooms, Kanban boards (polling GitHub), auto-assign, settings
+  officeRequests.ts       whether the office takes up an issue the captain files (a repo of the project's, a title) or a preview they start (an open PR on the board), and why not (pure)
   settings.ts             what a change to the captain's settings (PATCH /api/settings, any JSON) leaves them as: fields of the wrong kind ignored, models trimmed, the limit on agents at once kept to 1–32 (pure)
   projectChange.ts        what a change to a project's settings (PATCH /api/projects/:id, any JSON) leaves it as: fields of the wrong kind ignored, text trimmed, the limit on agents kept to the room's desks; an unknown theme, bad plugin id or unconnected repo refused (pure)
   store.ts                ~/.focus/state.json + per-agent terminal logs (jsonl) + run, review and slice journals (runs/, runs/reviews/, runs/slices/) + the ledger (ledger.jsonl)

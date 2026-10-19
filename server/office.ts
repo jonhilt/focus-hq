@@ -19,6 +19,7 @@ import type { Previews } from './previews';
 import type { Store } from './store';
 import { changeSettings } from './settings';
 import { projectChangeFollowUps } from './projectChange';
+import { issueRefusal, previewTarget } from './officeRequests';
 import { errorMessage, newId } from './util';
 import type { Voice } from './voice';
 
@@ -208,9 +209,8 @@ export class Office {
 
   /** `assign` hires an agent for the new issue straight away; `fromDraft` clears the planner's draft once it's filed. */
   async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort; cloud?: boolean }, fromDraft = false) {
-    const project = this.store.project(projectId);
-    if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
-    if (!title.trim()) throw new Error('An issue needs a title');
+    const refused = issueRefusal(this.store.project(projectId), repo, title);
+    if (refused) throw new Error(refused);
     const issue = await this.fileIssue(projectId, repo, title.trim(), body, labels);
     this.hub.toast('success', `Filed ${repo}#${issue.number}`, undefined, projectId);
     if (fromDraft) this.planner.discard(projectId);
@@ -318,10 +318,9 @@ export class Office {
    */
   startPreview(projectId: string, repo: string, number: number, picks?: PreviewSet): Promise<Preview> {
     const project = this.store.project(projectId);
-    if (!project.repos.includes(repo)) throw new Error(`${repo} is not part of ${project.name}`);
-    const board = this.store.boards.get(projectId);
-    const pr = board?.prs.find((p) => p.repo === repo && p.number === number);
-    if (!board || !pr) throw new Error(`${repo}#${number} is not an open pull request`);
+    const target = previewTarget(project, this.store.boards.get(projectId), repo, number);
+    if (typeof target === 'string') throw new Error(target);
+    const { board, pr } = target;
     const set = chosenSet(pr, board, project.repos, picks);
     return this.previews.start({ projectId, repos: project.repos, repo, number, title: pr.title, set, config: project.preview ?? {} });
   }
