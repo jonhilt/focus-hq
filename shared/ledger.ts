@@ -53,8 +53,17 @@ export type LedgerEntry =
    * the record a chief of staff learns from, and is checked against. Written once per lead's span, none included.
    */
   | { kind: 'captain-replies'; key: string; sessionId: string; agent: string; goal?: string; replies: CaptainReply[]; backfilled?: boolean }
+  /**
+   * Where the chief of staff (plugins/chief-of-staff) would have sent a lead's turn as it ended (`turnUuid` is its
+   * transcript's last line), in shadow mode: it acted on none of them, so they're checked against `captain-replies`.
+   * `message` is what it would have said to the lead (route 4); `version` is its prompt's.
+   */
+  | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: CosRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
+
+/** Where the chief of staff sends a lead's turn: 1 carry on, 2 a card in the captain's queue, 3 interrupt the captain, 4 back to the lead. */
+export type CosRoute = 1 | 2 | 3 | 4;
 
 /** The captain's message to a lead, in full, and the end of what the lead had said since the last message to it. */
 export interface CaptainReply {

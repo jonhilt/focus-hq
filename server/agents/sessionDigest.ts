@@ -94,6 +94,9 @@ function tail(text: string, max: number): string {
   return text.length <= max ? text : `[−${text.length - max}]… ${text.slice(-max)}`;
 }
 
+/** What a lead said since the last message to it, as the ledger keeps it: its last 2,000 characters, marked if cut. */
+export const leadTail = (said: readonly string[]): string => tail(said.join('\n\n'), LEAD_TAIL);
+
 /**
  * Each message the captain sent in a span of a transcript (after `afterUuid`, up to and including `toUuid`), in full,
  * with the end of what the agent had said since the last message to it (the office's included, which reset it too).
@@ -115,7 +118,7 @@ export function captainReplies(jsonl: string, afterUuid?: string, toUuid?: strin
         const from = messageFrom(b.text);
         if (from === 'captain') {
           const captain = b.text.replace(REMINDER, '').trim();
-          if (captain) replies.push({ at: line.timestamp, lead: tail(said.join('\n\n'), LEAD_TAIL), captain });
+          if (captain) replies.push({ at: line.timestamp, lead: leadTail(said), captain });
         }
         if (from) said = [];
       }

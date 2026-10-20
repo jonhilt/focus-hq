@@ -1,4 +1,4 @@
-import { type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
+import { type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -48,6 +48,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
       return 'retro';
     case 'session-digest':
     case 'captain-replies':
+    case 'cos-verdict':
       return 'sessions';
     case 'session-frictions':
       return 'frictions';
@@ -99,6 +100,8 @@ const MERGE_CHECK: Record<string, string> = {
   broken: 'merge refused, couldn’t check it',
   overridden: 'merged past the check',
 };
+/** Where the chief of staff would have sent a lead's turn, in a word or two. */
+const COS_ROUTE: Record<CosRoute, string> = { 1: 'carry on', 2: 'card', 3: 'interrupt', 4: 'back to the lead' };
 const TRIAGE: Record<string, string> = {
   'retry-qa': 'ran QA again',
   'send-back': 'sent it back',
@@ -193,6 +196,15 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`,
         detail: e.goal ?? '',
       };
+    case 'cos-verdict':
+      return {
+        ...base,
+        tag: 'CoS',
+        tone: e.route === 3 ? 'warn' : 'info',
+        title: `CoS: ${COS_ROUTE[e.route]} — ${e.why}`,
+        detail: [e.agent, e.goal, e.message && `would say: “${e.message}”`].filter(Boolean).join(' · '),
+        goal: e.goal,
+      };
     case 'session-frictions':
       return {
         ...base,
@@ -273,6 +285,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
       case 'goal-closed':
         return subject.kind === 'goal' && e.goal.title === subject.title;
       case 'captain-replies':
+      case 'cos-verdict':
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'session-frictions':
       case 'retro-decision':

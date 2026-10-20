@@ -178,7 +178,7 @@ function ledgerLines(events: readonly LedgerEvent[], since: number): LogLine[] {
   return events.filter((e) => e.at > since).map((e) => {
     const row = ledgerRow(e);
     const kind = e.kind === 'qa-verdict' ? (e.verdict === 'pass' ? 'pass' : 'fail') : (LEDGER_KINDS[e.kind] ?? 'other');
-    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : 'Office';
+    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : e.kind === 'cos-verdict' ? 'Chief of Staff' : 'Office';
     // the detail names who and the goal, which the line has on its own
     const detail = row.detail?.split(' · ').filter((d) => d !== who && d !== row.goal).join(' · ');
     return { t: e.at, who, source: 'ledger', kind, tag: row.tag, tone: row.tone, text: [row.title, detail].filter(Boolean).join(' · '), projectId: e.projectId, ...(row.goal && { goal: row.goal }) };

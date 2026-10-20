@@ -26,7 +26,7 @@ export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview'
 /** The crew's voices, and what a reply says aloud. */
 export { type CrewVoice, forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine } from '../shared/voice';
 export { leadVoice, quickVoice } from '../shared/crew';
-export type { FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
+export type { CosRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
 /** The ledger read as the office reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
 /** The office's permanent crew a plugin speaks for (the chief engineer), and a crew member of its own, always the same person. */

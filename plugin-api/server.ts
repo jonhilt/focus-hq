@@ -30,6 +30,8 @@ export { goalRecord, hasLeadWork, pickStation } from '../server/agents/lead';
 export { FILES as DEMO_FILES } from '../server/agents/demoRunner';
 /** Reading a Claude Code session's transcript (`host.transcript`), a line at a time. */
 export { type Block, blocks, clip, type Line, messageFrom, resultText, transcriptLines } from '../server/agents/transcript';
+/** What a lead said since the last message to it, clipped to its end as the ledger's `captain-replies` keep it. */
+export { leadTail } from '../server/agents/sessionDigest';
 /** Reading the office's journals (`host.journals`): a fact and what a journal adds up to, fact by fact, and a run's fact in words. */
 export type { Stamped } from '../server/journals';
 export { factLine, type JournalEntry, type RunFact } from '../server/agents/runJournal';

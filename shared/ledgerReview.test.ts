@@ -44,6 +44,12 @@ describe('ledgerRow', () => {
     const row = ledgerRow(ev({ kind: 'session-frictions', key: 's1', sessionId: 's1', reader: 'retro', frictions: [{ kind: 'demo-env', signature: 'demo port in use', quote: 'EADDRINUSE' }] }, 5));
     expect(row).toMatchObject({ title: '1 friction found in a session', detail: 'demo-env', quotes: ['demo port in use: “EADDRINUSE”'] });
   });
+
+  it('says where the chief of staff would have sent a lead’s turn, and what it would have said', () => {
+    const cos = (route: number, message?: string) => ev({ kind: 'cos-verdict', sessionId: 's1', agent: 'Cmdr. Vale', goal: GOAL, turnUuid: 'u', route, why: 'It can check.', message, model: 'claude-haiku-4-5', version: 'v5' }, 6);
+    expect(ledgerRow(cos(4, 'Run the tests.'))).toMatchObject({ group: 'sessions', tag: 'CoS', tone: 'info', title: 'CoS: back to the lead — It can check.', detail: 'Cmdr. Vale · Engineering deck · would say: “Run the tests.”', goal: GOAL });
+    expect(ledgerRow(cos(3))).toMatchObject({ tone: 'warn', title: 'CoS: interrupt — It can check.', detail: 'Cmdr. Vale · Engineering deck' });
+  });
 });
 
 describe('ledgerLog', () => {
