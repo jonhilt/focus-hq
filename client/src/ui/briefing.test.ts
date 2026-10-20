@@ -82,6 +82,15 @@ describe('shownThisTurn', () => {
     expect(shownThisTurn(art, [line('text', 'A, B or C?')]).map((a) => a.id)).toEqual(['b']);
   });
 
+  it('looks past the office’s notes of a hand raised and approved partway through the turn', () => {
+    const lines = [
+      { t: 10, kind: 'manager' as const, text: '▶ Captain: go' },
+      { t: 25, kind: 'manager' as const, text: '✋ Waiting for the captain to approve Bash' },
+      { t: 26, kind: 'manager' as const, text: '✔ Approved by the captain: Bash' },
+    ];
+    expect(shownThisTurn(art, lines).map((a) => a.id)).toEqual(['b', 'a']);
+  });
+
   it('is nothing when they showed nothing this turn', () => {
     expect(shownThisTurn(art, [{ t: 40, kind: 'manager', text: '▶ Captain: go' }])).toEqual([]);
     expect(shownThisTurn(undefined, [])).toEqual([]);

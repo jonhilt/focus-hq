@@ -42,12 +42,13 @@ export function keptOrder(before: readonly string[], keys: readonly string[]): s
 }
 
 /**
- * What a lead showed on their screen during the turn that's waiting on the captain (since the captain last spoke to
- * them, in their terminal), newest first; with no word from the captain in view, only the latest. A lead often asks
+ * What a lead showed on their screen during the turn that's waiting on the captain (since the captain last wrote to
+ * them, a ▶ line in their terminal), newest first; with no word from the captain in view, only the latest. A lead often asks
  * "A, B or C?" of options it showed rather than asked with pictures, so the briefing puts them in front of the captain.
  */
 export function shownThisTurn(artifacts: readonly GoalArtifact[] | undefined, lines: readonly TermLine[]): GoalArtifact[] {
   const newest = [...(artifacts ?? [])].sort((a, b) => b.at - a.at);
-  const spoke = lines.findLast((l) => l.kind === 'manager');
+  // words to the lead are ▶ lines; the office's own notes of a hand raised or approved, or a question asked, aren't
+  const spoke = lines.findLast((l) => l.kind === 'manager' && l.text.startsWith('▶'));
   return spoke ? newest.filter((a) => a.at >= spoke.t) : newest.slice(0, 1);
 }
