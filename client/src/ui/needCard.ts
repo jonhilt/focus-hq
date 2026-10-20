@@ -4,7 +4,7 @@ import type { Agent } from '../../../shared/types';
 import { api } from '../net/api';
 import { attention } from '../net/attention';
 import { state } from '../net/state';
-import { goalTags } from '../plugins';
+import { answeredLead, goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
 import { lastWords, shownThisTurn } from './briefing';
 import type { Ui } from './context';
@@ -68,6 +68,12 @@ export function needs(): Attention[] {
   return [...hails, ...read.map((agent): Attention => ({ kind: 'turn', agent }))];
 }
 
+/** Answers a lead, then tells the plugins the captain has (the lead as it stood when they did); a failure tells none. */
+const answer = (agent: Agent, fn: () => Promise<unknown>) => async () => {
+  await fn();
+  answeredLead(agent);
+};
+
 const said = (agent: Agent) => lastWords(state.lines.get(agent.id) ?? []);
 const open = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, label);
 
@@ -92,7 +98,7 @@ function replyBox(ui: Ui, agent: Agent): HTMLElement[] {
   const send = h('button', { class: 'btn small primary' }, 'Send');
   send.onclick = () => {
     const words = text.value.trim();
-    if (words) void busy(send, () => messageAgent(agent.id, agent.name, words), ui.error);
+    if (words) void busy(send, answer(agent, () => messageAgent(agent.id, agent.name, words)), ui.error);
   };
   return [text, h('div', { class: 'row' }, send, open(ui, agent, 'Open their panel'))];
 }
@@ -104,7 +110,7 @@ function pickBox(ui: Ui, agent: Agent): HTMLElement[] {
   const note = h('input', { class: 'briefing-note', placeholder: 'Add a word with your pick (optional)' });
   const options = q.options.map((o) => {
     const pick = h('button', { class: 'btn small primary' }, `Pick ${o.id.toUpperCase()}`);
-    pick.onclick = () => void busy(pick, () => answerLead(agent.id, q.id, o.id, note.value.trim() || undefined), ui.error);
+    pick.onclick = () => void busy(pick, answer(agent, () => answerLead(agent.id, q.id, o.id, note.value.trim() || undefined)), ui.error);
     return h('div', { class: 'briefing-option' },
       o.image ? h('img', { src: optionUrl(agent.id, q, o.id, 'jpg'), alt: o.label }) : null,
       h('strong', null, `${o.id.toUpperCase()} · ${o.label}`),
@@ -127,8 +133,8 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; 
       const allow = h('button', { class: 'btn small go' }, 'Approve');
       const deny = h('button', { class: 'btn small danger' }, 'Decline');
       if (req) {
-        allow.onclick = () => void busy(allow, () => api.permission(a.agent.id, req.id, true), ui.error);
-        deny.onclick = () => void busy(deny, () => api.permission(a.agent.id, req.id, false), ui.error);
+        allow.onclick = () => void busy(allow, answer(a.agent, () => api.permission(a.agent.id, req.id, true)), ui.error);
+        deny.onclick = () => void busy(deny, answer(a.agent, () => api.permission(a.agent.id, req.id, false)), ui.error);
       }
       // what they said as they raised it, and the tool it's for (the request itself is the heading)
       return { context: [said(a.agent), req ? `Tool: ${req.tool}` : ''].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, allow, deny, open(ui, a.agent, 'Open their panel'))], then: 'Approve: the tool runs and they carry on. Decline: they’re told no, and find another way or ask you.' };
@@ -142,7 +148,7 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; 
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
-      close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
+      close.onclick = () => void busy(close, answer(a.agent, () => closeGoal(a.agent)), ui.error);
       return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, close, open(ui, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
     }
     case 'qa':

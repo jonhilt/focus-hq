@@ -11,7 +11,7 @@
 .number-one-call-pending { font-weight: 600; color: var(--lcars-orange); }
 .number-one-call-topic { font-size: 13px; color: var(--lcars-lilac); }
 .number-one-call.on.dictating { --tone: var(--lcars-orange); }
-.number-one-call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-size: 14px; line-height: 1.35; }
+.number-one-call-lines { max-height: 180px; overflow: auto; display: flex; flex-direction: column; gap: 3px; font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0; }
 .number-one-call-line strong { font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; }
 .number-one-call-line.captain strong { color: var(--lcars-sky); }
 .number-one-call-line.ship strong { color: var(--lcars-lilac); }

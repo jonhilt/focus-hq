@@ -216,7 +216,7 @@ const KIT_CSS = String.raw`
   .stage { position:absolute; left:200px; top:58px; width:1050px; height:500px; }
   .caption { position:absolute; left:200px; top:584px; width:1050px; }
   .caption .bt { font:600 30px/1.1 var(--ui); color:var(--gold); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
-  .caption .bx { font:400 22px/1.4 var(--ui); color:var(--text); letter-spacing:.02em; max-width:1020px; }
+  .caption .bx { font:400 19px/1.45 var(--mono); color:var(--text); letter-spacing:0; max-width:1020px; }
   .btn { height:34px; border-radius:17px; border:0; padding:0 20px; color:#000; font:600 19px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
   .btn:hover { filter:brightness(1.15); }
   .seg { position:relative; height:34px; background:#241e38; cursor:pointer; overflow:hidden; }

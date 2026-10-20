@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
 import { office, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
-import { CHIEF_OF_STAFF } from './shared';
+import { CHIEF_OF_STAFF, type LatestVerdict, onTurn } from './shared';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
 const said = (uuid: string, text: string) => ({ type: 'assistant', uuid, message: { content: [{ type: 'text', text }] } });
@@ -19,10 +19,11 @@ async function aboard(answer: unknown = { route: 4, why: 'It can check itself.',
   };
   const transcript = { jsonl: jsonl([captain('a', 'Build saved items'), said('b', 'Slice 1 is up. Shall I start slice 2?')]) };
   let chief: ChiefOfStaff | undefined;
+  const kept: [string, LatestVerdict][] = [];
   const plugin: FocusPlugin = {
     id: CHIEF_OF_STAFF,
     start: (host) => {
-      const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.');
+      const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.', (id, v) => kept.push([id, v]));
       chief = c;
       return { turn: (agent, phase) => void c.turn(agent, phase) };
     },
@@ -32,7 +33,7 @@ async function aboard(answer: unknown = { route: 4, why: 'It can check itself.',
   await until(() => o.claude.turns.length === 1 && !!o.store.agents.get(agent.id)?.sessionId);
   const lead = (): Agent => o.store.agents.get(agent.id)!;
   const verdicts = () => o.store.ledger.filter((e) => e.kind === 'cos-verdict');
-  return { ...o, asked, transcript, chief: chief!, lead, verdicts };
+  return { ...o, asked, transcript, chief: chief!, lead, verdicts, kept };
 }
 
 describe('the chief of staff, in shadow mode', () => {
@@ -48,6 +49,21 @@ describe('the chief of staff, in shadow mode', () => {
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');
     // nothing was sent to the lead
     expect(o.claude.turns[0].sent).toEqual([]);
+  });
+
+  it('keeps the lead’s latest verdict for the browser, said once the captain answers that turn and no other', async () => {
+    const o = await aboard();
+    o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
+    await until(() => o.kept.length === 1);
+    const [id, verdict] = o.kept[0];
+    expect(id).toBe(o.lead().id);
+    expect(verdict).toMatchObject({ route: 4, why: 'It can check itself.' });
+    await until(() => o.lead().status === 'done');
+    expect(onTurn(verdict, o.lead())).toBe(true);
+    // a later turn, or a hand raised mid-turn, isn't the turn it judged
+    expect(onTurn(verdict, { ...o.lead(), finishedAt: verdict.endedAt + 60_000 })).toBe(false);
+    expect(onTurn(verdict, { ...o.lead(), status: 'working' })).toBe(false);
+    expect(onTurn(undefined, o.lead())).toBe(false);
   });
 
   it('judges a turn once, however often it ends', async () => {

@@ -4,7 +4,7 @@ A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), swi
 
 ## Shadow mode
 
-It never acts. It sends nothing to the lead, puts nothing in front of the captain, and changes nothing about how the turn goes on: the office carries on exactly as it would without it. Its verdicts are only kept, as `cos-verdict` lines in the ledger, so they can be checked against what the captain actually replied to the same turns (the `captain-replies` lines beside each lead's digest), before it's ever trusted to act.
+It never acts. It sends nothing to the lead, puts nothing in front of the captain before they've answered, and changes nothing about how the turn goes on: the office carries on exactly as it would without it. Its verdicts are only kept, as `cos-verdict` lines in the ledger, so they can be checked against what the captain actually replied to the same turns (the `captain-replies` lines beside each lead's digest), before it's ever trusted to act.
 
 ## The four routes
 
@@ -24,6 +24,10 @@ It never acts. It sends nothing to the lead, puts nothing in front of the captai
 
 The judge's prompt has the captain's standing orders in it: what they've wanted in turns like this before, learned from their past replies, and what's always theirs to decide. They're the captain's own preferences, so they're never in the repo: the plugin reads them from `standing-orders.txt` in its own folder (`~/.focus/plugins/chief-of-staff/`, or under `FOCUS_DATA_DIR`), afresh for every turn, so editing the file takes effect at once. Without the file, the prompt says there are none yet and the judge goes by the four routes' rules alone.
 
+## Once you've answered
+
+When you answer a lead in [Comms](../../docs/comms.md) (approve or decline a tool, pick an option, reply, close the goal), the chief of staff's verdict on that turn comes up as a toast, in its own words as it wrote them: `Chief of staff: Filing an issue for a bug you caught is your own step, not the captain's call`. Only after you've decided, never before, so the ledger's comparison of its verdicts with your replies stays honest. The plugin keeps each lead's latest verdict in its state (in memory only, `ChiefState`), with when the turn ended, and says it only if it's on the turn you answered: a tool you approve mid-turn, or a turn judged before the last, says nothing. A verdict still being judged as you answer is said when it comes in.
+
 ## Without it
 
 No verdicts are written. The ledger keeps the ones already in it, and its review still shows them.
@@ -35,4 +39,5 @@ No verdicts are written. The ledger keeps the ones already in it, and its review
 - `turn.ts`: pure: what the lead said this turn (`turnTail`), and whether your plan's limit stopped it (`atUsageLimit`).
 - `judge.ts`: pure: the prompt and its version, the standing orders' file, the schema, and the check on the verdict (`parseVerdict`).
 - `claudeJudge.ts`, `demoJudge.ts`: the live judge (a read-only Claude Code session on Haiku) and the demo's scripted one.
-- `client.ts`: its switch in a project's settings.
+- `shared.ts`: what the browser's told: each lead's latest verdict, and whether it's on the turn the captain answered (`onTurn`).
+- `client.ts`: its switch in a project's settings, and the toast once you've answered a turn.

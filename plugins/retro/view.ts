@@ -95,7 +95,7 @@ const FILE_IN = 'focus.retro.fileIn';
 
 function draft(ui: Ui, d: RetroDraft, i: number): HTMLElement {
   const head = h('div', { class: 'row' }, h('strong', { class: 'grow' }, `${i + 1}. ${d.title}`), h('span', { class: 'chip' }, KIND[d.kind]), h('span', { class: 'chip off' }, `${d.sessions} sessions`));
-  const text = h('div', { class: 'markdown' });
+  const text = h('div', { class: 'markdown retro-body' });
   text.innerHTML = markdownHtml(d.body);
   const details = h('details', null, h('summary', null, 'The issue as it would be filed'), text);
   const tags = h('p', null, h('span', { class: 'label' }, 'Measure '), d.measure, h('br'), h('small', { class: 'muted' }, d.signatures.join(' · ')));

@@ -25,7 +25,7 @@ On the right: where it's from (project › goal › who), what's needed, what to
 - ❗ **Stuck**: what they said last; **Open their panel** shows what went wrong.
 - 🙋 **QA needs you** and ⚠ **Resolve conflicts**: the pull request. **Pull requests** opens the board's, **GitHub ↗** the PR.
 
-Answered, it leaves the queue and whatever took its place is picked. **Later ›** moves on to the next and leaves it in the queue: nothing else waits on it. With nothing left, it says so and how many goals are getting on without you.
+Answered, it leaves the queue and whatever took its place is picked. **Later ›** moves on to the next and leaves it in the queue: nothing else waits on it. With nothing left, it says so and how many goals are getting on without you. A plugin hears that you've answered a lead (its `answered` part, [plugins](plugins.md#in-the-browser)), after you have: the [chief of staff](../plugins/chief-of-staff/README.md#once-youve-answered) says, in a toast, what it thought of that turn.
 
 There's nothing to mark as read. A line goes away when what it's about does: the lead is at work again after your reply, the hand is lowered, the goal is closed, the conflicts are resolved.
 

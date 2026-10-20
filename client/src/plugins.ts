@@ -127,6 +127,25 @@ export interface ClientParts {
    * own keys: true when the plugin used it. Use only keys of its own (its legend's), and check `ui.panels.isOpen`.
    */
   keydown?(e: KeyboardEvent): boolean;
+  /**
+   * The captain answered a goal's lead from Comms (approved or declined a tool, picked an option, replied, closed the
+   * goal), as it stood when they did: after they've decided, never before.
+   */
+  answered?(lead: Agent): void;
+}
+
+/** The parts of each plugin switched on, as its `start` returned them, by id. */
+export const startedParts = new Map<string, ClientParts>();
+
+/** Tells every plugin started that the captain answered `lead` from Comms. One that throws is logged and skipped. */
+export function answeredLead(lead: Agent): void {
+  for (const [id, parts] of startedParts) {
+    try {
+      parts.answered?.(lead);
+    } catch (err) {
+      console.error(`The ${id} plugin's word on an answer failed`, err);
+    }
+  }
 }
 
 /** What the World lends a plugin as it builds the ship. */

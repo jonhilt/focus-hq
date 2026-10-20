@@ -54,7 +54,7 @@ import { gpuFrame } from './world/gpuTimer';
 import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
 import type { MsdBoard } from './world/msd';
-import { type ClientParts, clientPlugin, clientPlugins, stationSays } from './plugins';
+import { clientPlugin, clientPlugins, startedParts, stationSays } from './plugins';
 import { isMesh } from './world/isMesh';
 
 /** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
@@ -328,11 +328,10 @@ async function main() {
     warm();
   };
   // each plugin switched on starts once, as the first snapshot says which are, before the world's built with their parts
-  const pluginParts = new Map<string, ClientParts>();
   const startPlugins = () => {
     for (const plugin of clientPlugins()) {
-      if (pluginParts.has(plugin.id)) continue;
-      pluginParts.set(plugin.id, plugin.start?.({ ui }) ?? {});
+      if (startedParts.has(plugin.id)) continue;
+      startedParts.set(plugin.id, plugin.start?.({ ui }) ?? {});
       const keys = plugin.legend ?? [];
       for (const { key, label } of keys) pauseKey.before(h('span', null, h('kbd', { class: 'k' }, key), label));
       hud.addKeys(keys);
@@ -615,7 +614,7 @@ async function main() {
   window.addEventListener('keydown', (e) => {
     if (!started || e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
     if (panels.isOpen) return;
-    for (const parts of pluginParts.values()) {
+    for (const parts of startedParts.values()) {
       if (parts.keydown?.(e)) {
         e.preventDefault();
         return;

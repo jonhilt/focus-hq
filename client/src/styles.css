@@ -23,6 +23,9 @@
   --radius: 14px;
   --ui: 'Antonio', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  /* text to read, as the agents' sessions show it: Antonio is for headings, labels and buttons, not paragraphs */
+  --read-size: 13px;
+  --read-leading: 1.45;
   color-scheme: dark;
   accent-color: var(--lcars-gold);
   scrollbar-color: var(--line) transparent;
@@ -930,3 +933,13 @@ body.recording .hud, body.recording .toast:not(.error) { display: none; }
 .personal-entry { margin-bottom: 8px; }
 .personal-entry .personal-text { margin: 0 0 8px; white-space: pre-wrap; }
 .personal-entry.closed .personal-text { opacity: 0.6; }
+
+/* Text to read (a lead's words, notes, reports, chat, help): in the agents' sessions' font, size and weight, however
+   it's laid out around it. Headings, labels, buttons and one-line rows stay in Antonio. A plugin's own reading text
+   takes the same: font-family var(--mono), font-size var(--read-size), line-height var(--read-leading). */
+.panel-body p, .panel-body li, .panel-body blockquote, .panel-body textarea, .compose input, .compose textarea, .briefing-note,
+.briefing-context, .briefing-option small, .question-context, .goal-note, .goal-queued-text, .chart-log section,
+.field small, .toast > span, .dialog-message, .splash p, .personal-text, .qa-report details {
+  font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0;
+}
+

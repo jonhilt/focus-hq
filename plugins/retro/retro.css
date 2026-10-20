@@ -1,3 +1,5 @@
 /* the retro's card on the engineering station's overview (view.ts) */
 .retro-card { display: flex; flex-direction: column; gap: 8px; border-left-color: var(--lcars-orange); }
 .retro-card .lbl { display: block; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--lcars-peach); }
+/* a draft issue's body, from markdown (view.ts) */
+.retro-body { font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0; }
