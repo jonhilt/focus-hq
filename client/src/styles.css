@@ -831,6 +831,16 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .under-way { --tone: var(--lcars-lilac); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; padding-right: 12px; }
 .under-way-station { background: var(--tone); color: var(--ink); align-self: stretch; display: flex; align-items: center; justify-content: flex-end; border-radius: 18px 0 0 18px; padding: 0 8px 0 18px; font-size: 18px; font-weight: 600; }
 .under-way small { display: block; }
+/* the briefing (ui/briefingPanel.ts): one thing that needs you at a time, large, with what to read and the answers */
+.briefing-head { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+.briefing-count { flex: 1; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--lcars-orange); }
+.briefing-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px; }
+.briefing-what { font-size: 24px; font-weight: 600; line-height: 1.2; display: flex; gap: 12px; }
+.briefing-context { white-space: pre-wrap; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }
+.briefing-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.briefing-option { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px; }
+.briefing-option img { width: 100%; max-height: 170px; object-fit: cover; object-position: top; border-radius: calc(var(--radius) / 2); }
+.briefing-reply, .briefing-note { width: 100%; box-sizing: border-box; }
 
 /* recording (H, or ?record=1): only the office, and errors */
 body.recording .hud, body.recording .toast:not(.error) { display: none; }

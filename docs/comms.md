@@ -22,6 +22,20 @@ There's nothing to mark as read. A line goes away when what it's about does: the
 
 A lead's turn stops counting on the badge once you've read it, when you open their panel (from Comms, a toast, their briefing room or the Tricorder). It doesn't vanish: it moves to the bottom of Needs you, quieter, until you answer and they're at work again. Their next turn counts again. Which turn you last read is kept on the lead (`lead.readTurn`, set through `POST /api/agents/:id/read`), so the 3D office and your phone agree. Only the screen you're looking at reads a turn: a lead's panel left open in a window that's hidden or out of focus reads nothing until you come back to it.
 
+## The briefing
+
+Sit in the captain's chair on the bridge and press <kbd>E</kbd> for your briefing: the same things as Needs you, in the same order, but one at a time, so you're deciding one thing rather than reading a list across every project. **Decision 2 of 5** at the top, with **‹ Back** and **Next ›** to step through without answering.
+
+Each one is shown large with what you need to decide it, and answered right there:
+
+- 💬 **Waiting for your reply**: what the lead said last (the end of their turn, from their terminal), and a box to reply in. **Send** sends it as if from their panel. Showing it reads their turn, as their panel does.
+- ❓ **Pick**: why they're asking, and the options side by side with their pictures. **Pick A**… answers, with anything you add in the box under them. **See them up close** opens the station's screen.
+- ✋ **Approve**: what they said as they raised their hand, and the tool it's for. **Approve** / **Decline**.
+- 🏁 **Ready to close**: what done looks like, from the goal's note, and what the lead said last. **Close goal**, or **Carry on** to open their panel.
+- ❗ **Stuck**, 🙋 **QA needs you** and ⚠ **Resolve conflicts**: what went wrong or the pull request, and the way to it.
+
+Once you've answered one, whatever took its place in the list comes up next. With nothing left, it says so and how many goals are getting on without you. The briefing is `client/src/ui/briefingPanel.ts`, and what it decides (a lead's last words, which item stays in front of you) is in `briefing.ts`.
+
 Toasts still pop up as things happen. Anything in them that needs you stays in Comms' Needs you, so a toast you missed doesn't matter; the rest is news, and isn't kept.
 
 The Tricorder's **Needs you** strip uses the same rule, order and wording (`needsYou` and `needLine` in `shared/tricorder.ts`; the client's `attention()` in `client/src/net/attention.ts` feeds it the shown projects' agents and PRs).

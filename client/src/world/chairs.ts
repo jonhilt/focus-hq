@@ -29,11 +29,11 @@ export function standingSpot(seat: Seat, places: readonly THREE.Vector3[]): THRE
   return best;
 }
 
-/** What a chair puts to hand, opened with E while you're sat in it: what needs you, the ready room's console, your ideas. */
-export type ChairUse = { kind: 'comms' } | { kind: 'manager'; tab?: ManagerTab };
+/** What a chair puts to hand, opened with E while you're sat in it: your briefing, the ready room's console, your ideas. */
+export type ChairUse = { kind: 'briefing' } | { kind: 'manager'; tab?: ManagerTab };
 
 export const CHAIR_USE: Record<Chair, { use: ChairUse; label: string }> = {
-  bridge: { use: { kind: 'comms' }, label: 'What needs you' },
+  bridge: { use: { kind: 'briefing' }, label: 'Your briefing' },
   'ready-room': { use: { kind: 'manager' }, label: 'Use the ready room console' },
   lounge: { use: { kind: 'manager', tab: 'personal-log' }, label: 'Your personal log' },
 };

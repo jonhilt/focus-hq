@@ -16,6 +16,7 @@ import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { stepDemoPace } from './ui/demoPace';
 import { openGoalsPanel } from './ui/goalsPanel';
+import { openBriefingPanel } from './ui/briefingPanel';
 import { openCommsPanel } from './ui/commsPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
@@ -199,6 +200,7 @@ async function main() {
         : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
     openComms: () => openCommsPanel(ui),
+    openBriefing: () => openBriefingPanel(ui),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -514,7 +516,7 @@ async function main() {
   };
   const useChair = (chair: Chair) => {
     const { use } = CHAIR_USE[chair];
-    if (use.kind === 'comms') ui.openComms();
+    if (use.kind === 'briefing') ui.openBriefing();
     else ui.openManager(use.tab);
   };
 

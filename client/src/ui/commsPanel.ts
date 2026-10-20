@@ -14,7 +14,7 @@ import { busy, fill, h } from './dom';
 import { closeGoal } from './goals';
 
 /** What a hail is about, the same hail from render to render: its row is built once and kept while it stands. */
-function hailKey(a: Attention): string {
+export function hailKey(a: Attention): string {
   switch (a.kind) {
     case 'hand':
       return `hand:${a.agent.id}:${a.agent.permission?.id}`;
@@ -33,7 +33,7 @@ function hailKey(a: Attention): string {
 }
 
 /** Who and where, on the line under what's needed: a lead's station and goal, or what anyone else is on, and the project. */
-function from(agent: Agent): HTMLElement {
+export function from(agent: Agent): HTMLElement {
   const project = state.project(agent.projectId);
   const work = agent.lead;
   return h('small', { class: 'need-from' },
