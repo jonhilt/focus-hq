@@ -6,7 +6,7 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeTriager } from './agents/claudeCrew';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
@@ -81,7 +81,6 @@ async function main() {
     office.agents.transcripts = demoTranscripts;
   } else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
-    office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
     // the captain's replies to leads, from the spans digested before they were kept, while their transcripts last
     void office.agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));
@@ -103,8 +102,8 @@ async function main() {
     game.repos = ['demo/space-dodger'];
     // so the demo shows a PR going QA pass → checks green → merged by itself
     game.autoMerge = true;
-    // and a PR QA fails going back to be fixed, which a new project leaves to the captain
-    for (const p of [shop, game]) p.autoSendBack = true;
+    // and every PR going to QA by itself, and one QA fails going back to be fixed, which a new project leaves to the captain
+    for (const p of [shop, game]) Object.assign(p, { autoQa: true, autoSendBack: true });
     // and what each plugin that works per project does, in both: switched on for them all (the others don't look)
     for (const p of [shop, game]) p.plugins = office.agents.plugins.ids();
     // the demo keeps no ledger: a few days of one, to review at the master systems table

@@ -254,7 +254,7 @@ export class Slices extends Part {
       this.store.sliceJournal(agent.id, { kind: 'shipped' });
       this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead, waypoints: shippedWaypoint(agent.lead, { title, summary: input.summary }, Date.now()) } });
       this.boardChanged(agent.projectId);
-      return [shipped(lines), ...movedNotes].join('\n\n');
+      return [shipped(lines, autoQaFor(project)), ...movedNotes].join('\n\n');
     });
   }
 

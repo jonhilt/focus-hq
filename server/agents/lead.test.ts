@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipped, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -44,13 +44,12 @@ describe('a goal’s lead', () => {
     expect(pickStation([], 1.5)).toBeUndefined();
   });
 
-  it('calls the goal by the captain’s first line, cut at a word', () => {
+  it('calls the goal by the captain’s first sentence, cut at a clause or a word', () => {
     expect(goalTitle('Shoppers can save items for later.\nAnd find them on any device')).toBe('Shoppers can save items for later');
     expect(goalTitle('\n\n  Stock   levels  ')).toBe('Stock levels');
     expect(goalTitle('   ')).toBe('A new goal');
     const long = goalTitle('Let shoppers save items for later from the cart and the product page, then find them again on any device');
-    expect(long).toBe('Let shoppers save items for later from the cart and the…');
-    expect(long.length).toBeLessThanOrEqual(61);
+    expect(long).toBe('Let shoppers save items for later from the cart');
   });
 
   it('works at the effort the captain picked, else the office’s default for leads', () => {
@@ -275,12 +274,25 @@ describe('what the lead writes and hears', () => {
   });
 });
 
+describe('shipped', () => {
+  it('tells the lead QA reviews what they shipped by itself, or only once the captain sends it', () => {
+    expect(shipped(['Opened acme/api#7'], true)).toBe("Opened acme/api#7\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict.");
+    expect(shipped(['Opened acme/api#7'], false)).toMatch(/^Opened acme\/api#7\n\nAuto-QA is off for this project: QA reviews a pull request when the captain sends it/);
+  });
+});
+
 describe('afterVerdict', () => {
   it('wakes the lead to fix a fail a couple of times, then hands it to the captain; a pass waits for the next message', () => {
-    expect(afterVerdict('fail', 1)).toBe('wake');
-    expect(afterVerdict('fail', 2)).toBe('wake');
-    expect(afterVerdict('fail', 3)).toBe('needs-you');
-    expect(afterVerdict('pass', 0)).toBe('pass-on');
+    expect(afterVerdict('fail', 1, true)).toBe('wake');
+    expect(afterVerdict('fail', 2, true)).toBe('wake');
+    expect(afterVerdict('fail', 3, true)).toBe('needs-you');
+    expect(afterVerdict('pass', 0, true)).toBe('pass-on');
+  });
+
+  it('spends no turn on a fail when the project doesn’t send fails back: the lead hears it with the captain’s next message', () => {
+    expect(afterVerdict('fail', 1, false)).toBe('pass-on');
+    expect(afterVerdict('fail', 3, false)).toBe('pass-on');
+    expect(qaVerdictNote('acme/api', 7, { verdict: 'fail', summary: 'Broken' }, undefined, false)).toMatch(/Send-back is off for this project, so it waits for the captain: fix it when they ask you to\.$/);
   });
 });
 

@@ -556,9 +556,10 @@ export function workspaceNote(work: LeadWork, branch: string): string {
   return `Your workspace, with every repo of the project checked out side by side:\n${workspaceList(work, branch)}`;
 }
 
-/** What the lead hears back after shipping: each pull request opened or updated. */
-export function shipped(lines: string[]): string {
-  return `${lines.join('\n')}\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict.`;
+/** What the lead hears back after shipping: each pull request opened or updated, and whether QA reviews it by itself. */
+export function shipped(lines: string[], autoQa: boolean): string {
+  const qa = autoQa ? "The room's QA officer reviews each pull request, and you'll hear their verdict." : "Auto-QA is off for this project: QA reviews a pull request when the captain sends it, and you'll hear that verdict.";
+  return `${lines.join('\n')}\n\n${qa}`;
 }
 
 /** A goal's own QA reviewer, reused from review to review like the room's QA officer. */
@@ -595,17 +596,17 @@ export function reviewsToStart<R extends { requestedAt: number }>(queued: R[], r
 export const LEAD_FIX_ROUNDS = 2;
 
 /**
- * What QA's verdict on one of the lead's pull requests does: a fail wakes the lead to fix it, for a couple of rounds;
- * after that, and on a pass, the lead hears it with the captain's next message, and a fail that keeps coming back is the
- * captain's to look at.
+ * What QA's verdict on one of the lead's pull requests does: a fail wakes the lead to fix it, for a couple of rounds, if
+ * the project sends fails back; after that, and on a pass, the lead hears it with the captain's next message, and a fail
+ * that keeps coming back is the captain's to look at. With send-back off a fail spends no turn: it's the captain's call.
  */
-export function afterVerdict(verdict: QaReport['verdict'], failedRounds: number): 'wake' | 'pass-on' | 'needs-you' {
-  if (verdict === 'pass') return 'pass-on';
+export function afterVerdict(verdict: QaReport['verdict'], failedRounds: number, sendBack: boolean): 'wake' | 'pass-on' | 'needs-you' {
+  if (verdict === 'pass' || !sendBack) return 'pass-on';
   return failedRounds <= LEAD_FIX_ROUNDS ? 'wake' : 'needs-you';
 }
 
-/** QA's verdict on one of the slice's pull requests, for the lead. */
-export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions' | 'advisory' | 'proofs'>, behind?: VerdictBehind): string {
+/** QA's verdict on one of the slice's pull requests, for the lead: a fail with send-back off is the captain's to send back. */
+export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions' | 'advisory' | 'proofs'>, behind?: VerdictBehind, sendBack = true): string {
   const verdict = report.advisory ? 'passed (with advice: it found problems, but no proof held)' : report.verdict === 'pass' ? 'passed' : 'failed';
   const advice = report.advisory && report.fixInstructions ? `\n\nQA's advice, yours to take or leave: ${report.fixInstructions}` : '';
   const fix = report.verdict === 'fail' ? `${report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : ''}${proofsToKeep(report).map((l) => `\n${l}`).join('')}` : advice;
@@ -613,7 +614,8 @@ export function qaVerdictNote(repo: string, number: number, report: Pick<QaRepor
     const what = `QA ${verdict} ${repo}#${number} at ${behind.tested.slice(0, 7)}, before your last ship (${behind.shipped.slice(0, 7)}): ${report.summary}${fix}`;
     return `${what}\n\nQA is reviewing ${behind.shipped.slice(0, 7)} now, and you'll hear that verdict too. Fix only what your last ship didn't already.`;
   }
-  const next = report.verdict === 'pass' ? 'It waits for the captain to merge it.' : 'Fix it and ship again, or tell the captain why not.';
+  const fails = sendBack ? 'Fix it and ship again, or tell the captain why not.' : 'Send-back is off for this project, so it waits for the captain: fix it when they ask you to.';
+  const next = report.verdict === 'pass' ? 'It waits for the captain to merge it.' : fails;
   return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}\n\n${next}`;
 }
 

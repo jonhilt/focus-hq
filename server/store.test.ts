@@ -109,10 +109,11 @@ describe('a new room’s theme', () => {
 });
 
 describe('a new project’s QA', () => {
-  it('tests every PR but leaves failed ones with the captain, while a project from before keeps sending them back', () => {
+  it('waits to be asked and leaves failed PRs with the captain, while a project from before keeps testing and sending back', () => {
     const store = new Store(false);
     const fresh = store.addProject('Shop');
-    expect([autoQaFor(fresh), autoSendBackFor(fresh), qaProofFor(fresh)]).toEqual([true, false, true]);
+    expect([autoQaFor(fresh), autoSendBackFor(fresh), qaProofFor(fresh)]).toEqual([false, false, true]);
+    expect(autoQaFor({ ...fresh, autoQa: undefined })).toBe(true);
     expect(autoSendBackFor({ ...fresh, autoSendBack: undefined })).toBe(true);
   });
 });

@@ -65,7 +65,7 @@ export interface Project {
   onlyMyPrs?: boolean;
   /** How ▶ Preview runs this project's pull requests. */
   preview?: PreviewConfig;
-  /** The QA officer tests every PR the office opens or updates (missing = on). */
+  /** The QA officer tests every PR the office opens or updates (missing = on; a new project starts off). */
   autoQa?: boolean;
   /** A PR the office opened that fails QA goes back to a developer to fix (missing = on; a new project starts off). */
   autoSendBack?: boolean;

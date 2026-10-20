@@ -60,6 +60,8 @@ export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.La
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
+  // a new project waits for the captain to send a PR to QA: the office's tests follow QA by itself, as a project from before does
+  project.autoQa = true;
   return { store, project, ...crew(store, workspace, github, triager, render) };
 }
 

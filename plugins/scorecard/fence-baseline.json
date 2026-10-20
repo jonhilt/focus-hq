@@ -43,7 +43,7 @@
   "plugins/usage/watch.ts": 2,
   "server/agents/browserTool.ts": 4,
   "server/agents/bugCorpus.ts": 1,
-  "server/agents/claudeCrew.ts": 3,
+  "server/agents/claudeCrew.ts": 2,
   "server/agents/conflicts.ts": 1,
   "server/agents/fakeOffice.ts": 2,
   "server/agents/manager/pluginHost.ts": 2,
