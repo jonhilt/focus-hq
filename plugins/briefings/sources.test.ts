@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Agent, LeadToolContext, PluginHost } from '../../plugin-api/server';
-import { officeSources } from './sources';
+import { officeSources, prOf, prText } from './sources';
 
 describe('the office’s sources', () => {
   // a checkout with one file in it (not a git repo, so no commit to cite), and a ledger of one line
@@ -29,5 +29,19 @@ describe('the office’s sources', () => {
 
   it('has nothing the lead said when their session’s transcript isn’t on this machine', async () => {
     expect(await sources.said(lead)).toEqual([]);
+  });
+
+  it('finds the pull request a ref names, in one of the lead’s repos', () => {
+    expect(prOf('#572', ['jonhilt/focus'])).toEqual({ repo: 'jonhilt/focus', number: 572 });
+    expect(prOf('focus#572', ['jonhilt/focus', 'jonhilt/site'])).toEqual({ repo: 'jonhilt/focus', number: 572 });
+    expect(prOf('jonhilt/site #3', ['jonhilt/focus', 'jonhilt/site'])).toEqual({ repo: 'jonhilt/site', number: 3 });
+    expect(prOf('#3', ['jonhilt/focus', 'jonhilt/site'])).toBe('say which repo #3 is in: jonhilt/focus, jonhilt/site.');
+    expect(prOf('other/focus#3', ['jonhilt/focus'])).toBe("other/focus isn't one of your repos (jonhilt/focus).");
+    expect(prOf('PR 572', ['jonhilt/focus'])).toMatch(/isn't a pull request/);
+  });
+
+  it('reads everything said on a pull request, inline comments with where they are', () => {
+    const text = prText({ title: 'Receipts', body: 'Every beat', comments: [{ body: 'QA passed' }], reviews: [{ body: '' }] }, [{ path: 'a.ts', line: 3, body: 'off by one' }]);
+    expect(text.split('\n')).toEqual(['Receipts', 'Every beat', 'QA passed', 'a.ts:3', 'off by one']);
   });
 });

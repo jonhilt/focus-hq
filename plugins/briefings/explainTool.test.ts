@@ -10,6 +10,7 @@ const sources: Sources = {
   file: (_lead, where) => Promise.resolve(where === 'server/ledger.ts' ? { text: 'const a = 1;\nappendFileSync(path, line); // never rewrites\n', cite: 'server/ledger.ts:{line} @abc1234' } : { error: `there's no file ${where} in your checkout.` }),
   said: () => Promise.resolve([{ text: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns.', at: '20 Oct, 09:44' }]),
   ledger: (seq) => (seq === 7 ? { text: 'qa-verdict\nfail', cite: 'ledger #7 · qa-verdict' } : undefined),
+  pr: (repo, number) => Promise.resolve(number === 572 ? { text: 'Briefings carry receipts\n## QA report: Passed\nI found no bug I could prove.', cite: `${repo}#572 · Briefings carry receipts` } : { error: `couldn't read ${repo}#${number} on GitHub: is the number right?` }),
 };
 const explainTool = tool(sources);
 
@@ -49,7 +50,7 @@ describe('the explain tool', () => {
     const shown: { page: { id: string; html: string }; frames: PageFrames }[] = [];
     const context: LeadToolContext = {
       agent: { id: 'lead1', name: 'Lt. Castellanos' } as Agent,
-      checkouts: [],
+      checkouts: [{ repo: 'jonhilt/focus', dir: '/nowhere' }],
       show: () => Promise.reject(new Error('explain shows its page with frames')),
       showFrames: (page, frames) => {
         shown.push({ page, frames });
@@ -115,6 +116,14 @@ describe('the explain tool', () => {
       await explainTool.run(context, withRefs([{ kind: 'said', quote: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns' }, { kind: 'ledger', where: '7', quote: 'fail' }], narration));
       expect(shown[0].page.html).toContain('"label":"Lt. Castellanos, 20 Oct, 09:44: “Haiku judged as well as Sonnet,…”"');
       expect(shown[0].page.html).toContain('"label":"ledger #7 · qa-verdict"');
+    });
+
+    it('takes a pull request, its comments and QA’s report among them, as a source', async () => {
+      const { context, shown } = lead();
+      await explainTool.run(context, withRefs([{ kind: 'pr', where: '#572', quote: 'I found no bug I could prove' }], 'QA found no bug it could prove.'));
+      expect(shown[0].page.html).toContain('"label":"jonhilt/focus#572 · Briefings carry receipts"');
+      await expect(explainTool.run(context, withRefs([{ kind: 'pr', where: '#572', quote: 'QA failed it' }]))).rejects.toThrow(/"QA failed it" isn't in jonhilt\/focus#572/);
+      await expect(explainTool.run(context, withRefs([{ kind: 'pr', where: '#9', quote: 'x' }]))).rejects.toThrow(/couldn't read jonhilt\/focus#9/);
     });
 
     it('sends it back, unshown, when a quote isn’t in its source or the caption or narration says what no quote does', async () => {

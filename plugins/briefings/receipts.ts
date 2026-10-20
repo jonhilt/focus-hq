@@ -1,13 +1,13 @@
 // Receipts (README.md): a beat of an explainer says where its facts come from, quoting each source word for word, and
 // the office checks both before the captain sees it: that every quote is in its source (a file in the lead's checkout,
-// the lead's own earlier words, a line of the ship's log), and that every number and name the beat's narration says is
+// the lead's own earlier words, a line of the ship's log, a pull request), and that every number and name the beat's narration says is
 // in its quotes. Pure, so it's unit tested (receipts.test.ts); finding the sources is the explain tool's.
 
 /** Where a beat's fact comes from, as the lead cites it: the source, and its words quoted exactly. */
 export interface Ref {
-  /** A file in the lead's checkout, the lead's own earlier words, or a line of the ship's log. */
-  kind: 'file' | 'said' | 'ledger';
-  /** The file's path (with its repo's folder first when the goal has more than one), or the ledger line's number; nothing for said. */
+  /** A file in the lead's checkout, the lead's own earlier words, a line of the ship's log, or a pull request. */
+  kind: 'file' | 'said' | 'ledger' | 'pr';
+  /** The file's path (with its repo's folder first when the goal has more than one), the ledger line's number, or the pull request (owner/repo#number); nothing for said. */
   where?: string;
   quote: string;
 }
