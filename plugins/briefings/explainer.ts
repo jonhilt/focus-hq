@@ -300,6 +300,8 @@ const KIT_PLAYER = String.raw`
   var draw = typeof render === 'function' ? render : null;
   if (!draw) window.kitFault('The stage script must define render(t).');
   var end = function (i) { return i + 1 < BEATS.length ? BEATS[i + 1].at : DUR; };
+  // how far short of the next beat's start a held beat's last frame is drawn
+  var HELD = .001;
   // hold: the beat a step just finished, whose caption stays up while its last frame does (t is then the next one's start)
   var t = DUR, raf = 0, stopAt = DUR, playing = false, hold = -1;
   // the voice-over: whether it's on, and the beat whose line is being said (-1 for none), finished or paused
@@ -343,9 +345,10 @@ const KIT_PLAYER = String.raw`
   }
   var describe = function (err, at) { return (at === undefined ? '' : 'at t = ' + at.toFixed(2) + 's: ') + (err && err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : String(err)); };
   function frame() {
-    if (draw) try { draw(t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
-    var bi = beatAt(t);
-    if (hold >= 0 && Math.abs(t - end(hold)) < .001) bi = hold;
+    var held = hold >= 0 && Math.abs(t - end(hold)) < .001;
+    // a held beat draws its own last frame: at t itself, a stage that switches scene at a beat's start shows the next one's
+    if (draw) try { draw(held ? t - HELD : t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
+    var bi = held ? hold : beatAt(t);
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
     if (bi !== chipsFor) receipts(bi);
     beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
