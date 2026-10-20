@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Moves your office's state from this machine (your Mac) to a server set up with setup.sh: stops the office there,
 # copies ~/.focus less what's rebuilt (rebuilt.txt), and starts it again. Stop the office here first: only one office
-# may run on its state at a time. See docs/vps.md#moving-your-office.
+# may run on its state at a time.
 #
 #   deploy/vps/migrate.sh <server>
 set -euo pipefail

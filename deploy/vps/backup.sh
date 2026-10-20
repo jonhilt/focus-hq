@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Snapshots the office's state (~/.focus, less what's rebuilt: rebuilt.txt) into a dated tarball, keeps the newest
 # FOCUS_BACKUP_KEEP (14), and copies it to FOCUS_BACKUP_TARGET with rsync if that's set (`mac:Backups/focus/`, a NAS:
-# anywhere off this machine). See docs/vps.md#backups.
+# anywhere off this machine).
 set -euo pipefail
 data=${FOCUS_DATA_DIR:-$HOME/.focus}
 dest=${FOCUS_BACKUP_DIR:-$HOME/focus-backups}

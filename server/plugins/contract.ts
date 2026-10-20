@@ -241,7 +241,7 @@ export interface PluginHost {
    */
   shipStatus(): Promise<ShipStatus>;
   /**
-   * The captain's personal log (docs/personal-log.md): what they've jotted down to come back to, oldest first, done and
+   * The captain's personal log: what they've jotted down to come back to, oldest first, done and
    * dropped included; and `note`, which jots a thought down for them, `via` whoever did (a crew member's name). Jot one
    * down only when the captain asks.
    */

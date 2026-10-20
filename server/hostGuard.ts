@@ -15,8 +15,8 @@ const LOOPBACK = ['localhost', '127.0.0.1', '::1'];
 const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
 
 /**
- * Where the office may be reached from: loopback, `HOST` itself, `.ts.net` (the Tricorder through Tailscale Serve,
- * docs/tricorder.md) and anything in `FOCUS_ALLOWED_HOSTS` (comma-separated, `.example.com` for a suffix). An office
+ * Where the office may be reached from: loopback, `HOST` itself, `.ts.net` (the Tricorder through Tailscale Serve)
+ * and anything in `FOCUS_ALLOWED_HOSTS` (comma-separated, `.example.com` for a suffix). An office
  * listening on every interface adds the machine's own name and addresses.
  */
 export function allowedHosts(host: string, extra = '', machine = { hostname: os.hostname(), addresses: interfaceAddresses() }): AllowedHosts {

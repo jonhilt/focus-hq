@@ -1,6 +1,8 @@
 # Focus HQ
 
-A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK) work GitHub issues and open PRs. `docs/architecture.md` maps the code; each feature has a page under `docs/`. When you change a feature, update its page there, not the README.
+A browser-based 3D office (Three.js) where Claude Code agents (Claude Agent SDK) work GitHub issues and open PRs. `docs/architecture.md` maps the folders.
+
+Docs hold only what the code can't: why it's built this way (and what was rejected), the promises it keeps (each tied to a test), and how to run it. Don't describe what code does in a doc: say it in a comment beside the code. Change a page only when a decision, a promise or a command changed, and don't copy numbers the code owns into it.
 
 ## Commands
 

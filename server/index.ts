@@ -167,7 +167,7 @@ async function main() {
     const { createServer } = await import('vite');
     const vite = await createServer({
       configFile: path.join(config.root, 'vite.config.ts'),
-      // .ts.net: the phone reaches the office through Tailscale Serve (see docs/tricorder.md)
+      // .ts.net: the phone reaches the office through Tailscale Serve
       server: { middlewareMode: true, hmr: { server }, allowedHosts: ['.ts.net'] },
       appType: 'spa',
     });

@@ -23,7 +23,7 @@ PRs merged on GitHub itself don't go through the office, so the check never sees
 3. **Merge** (`tryMerge`). `git merge-tree --write-tree` merges `head` onto `base` inside the clone, with no checkout and no push. If it conflicts, the conflicted files are the result. Otherwise `git commit-tree` makes a merge commit that sits on no branch.
 4. **Check**. The merge commit is checked out in the repo's checks folder (`data/checks/<owner>__<name>`). This is the same reused folder QA's carried-over checks use, so installed dependencies survive between runs. The office installs from the lockfile and runs the merge checks, stopping at the first one that fails.
 5. **Verdict** (`mergeVerdict`, pure). The PR merges only if git merged it by itself and every check passed (a repo with no checks to run counts as passing). Conflicts, a failing check, or a merge the office couldn't build or run all refuse it.
-6. **Merge on GitHub**. The office merges exactly the head it checked (`--match-head-commit`), using the repo's [merge method](configuration.md#merge-method).
+6. **Merge on GitHub**. The office merges exactly the head it checked (`--match-head-commit`), using the repo's merge method.
 
 Merges in one repo go one at a time. A merge asked for while another in the same repo is still going waits its turn, and shows that straight away: its card reads **queued behind #N** (the PR just ahead of it), its button **Queued behind #N**, and a toast says so. When its turn comes the card flips to **checking the merge**. That way each check runs against a base that already has the previous merge in it, which is the case the check exists for. If a merge lands on GitHub in the gap between the check and the office's own merge, the check doesn't see it.
 

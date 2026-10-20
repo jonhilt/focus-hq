@@ -1,7 +1,15 @@
 #!/usr/bin/env bash
-# Sets up a Linux server (Ubuntu 24.04 or Debian 12) to run the office, reached over Tailscale: see docs/vps.md.
+# Sets up a Linux server (Ubuntu 24.04 or Debian 12) to run the office, reached over Tailscale.
 # Run it as the user the office runs as (not root, with sudo), from anywhere: it clones Focus if it isn't there yet.
-# Safe to run again: each step skips what's already done.
+# Safe to run again: each step skips what's already done. From your Mac: `scp deploy/vps/setup.sh <server>:` then
+# `ssh -t <server> ./setup.sh`. Switch on HTTPS certificates for the tailnet first (admin console → DNS, MagicDNS).
+#
+# Size: about 2 GB of memory per agent at once plus a few for the office (16 GB, 4–8 vCPUs is comfortable), 80 GB+ disk.
+# On a server: cloud agents need a claude.ai login (`claude`, /login), not just the token; whisper.cpp and Kokoro run
+# on its CPU; anyone on the tailnet who reaches it controls the office. Don't copy your Mac's ~/.claude/settings.json
+# as it is: hooks with Mac paths fail on every tool call. Other settings go in ~/.config/focus/env, then
+# `sudo systemctl restart focus`. Moving your office: migrate.sh. Backups: backup.sh (restore: stop focus, untar over
+# ~/.focus, start it). Agents' sessions don't move (Claude Code names transcripts by path): they start new ones.
 #
 #   FOCUS_REPO   the repo to clone (default jonhilt/focus)
 #   FOCUS_DIR    where (default ~/focus)
@@ -105,7 +113,7 @@ if ! skipping systemd; then
   sudo systemctl daemon-reload
   sudo systemctl enable --now focus-backup.timer
   sudo systemctl enable --now focus-cert.timer
-  sudo systemctl start focus-cert.service || echo "No preview certificate yet: switch on HTTPS certificates for your tailnet (docs/vps.md), then: sudo systemctl start focus-cert"
+  sudo systemctl start focus-cert.service || echo "No preview certificate yet: switch on HTTPS certificates for your tailnet (the Tailscale admin console), then: sudo systemctl start focus-cert"
   sudo systemctl enable focus.service
   sudo systemctl restart focus.service
 fi
@@ -118,8 +126,8 @@ fi
 
 say "Done"
 cat <<EOF
-Next (docs/vps.md):
+Next (the top of deploy/vps/setup.sh says more):
   - Claude Code settings: write ~/.claude/settings.json for this machine (your Mac's has Mac paths in its hooks).
-  - Moving from your Mac: stop the office there, then copy its state (docs/vps.md#moving-your-office).
+  - Moving from your Mac: stop the office there, then from your Mac's checkout: deploy/vps/migrate.sh <this server>.
   - Logs: journalctl -u focus -f
 EOF

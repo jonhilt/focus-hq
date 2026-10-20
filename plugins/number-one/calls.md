@@ -2,7 +2,7 @@
 
 Press **📞 Call** in Number One's panel (<kbd>1</kbd>) and talk to the ship hands-free: no push-to-talk, no reading. A call can:
 
-- **How things stand.** "What's the crew doing?", "How's the Sock Shop?" The goals under way and who's on them, who's at work on issues, what's waiting on you (the same rule as [Comms](comms.md)), and the next queued goal. It's read straight off the board, so it's exact.
+- **How things stand.** "What's the crew doing?", "How's the Sock Shop?" The goals under way and who's on them, who's at work on issues, what's waiting on you (the same rule as Comms), and the next queued goal. It's read straight off the board, so it's exact.
 - **Start the next queued goal.** "Start the next queued goal." The ship asks first, naming the goal, the project and the station: *Start "Sock of the month subscription" in Sock Shop, at station 4?* Only a clear yes ("yes", "go ahead", "make it so") starts it. Anything else, or no answer within a minute, leaves it queued. When every station has a goal, or nothing's queued, the ship says so and asks nothing.
 - **Talk something through.** "Let's talk about the wishlist goal", "Let's talk about Sock Shop as a whole." See [below](#talking-something-through).
 
@@ -38,7 +38,7 @@ Switch the plugin on and set both keys where the office starts, then restart it:
 FOCUS_PLUGINS=number-one OPENAI_API_KEY=sk-… TYPESAFE_API_KEY=… pnpm start
 ```
 
-Until both are there, the Call button is greyed out, and its tooltip says which is missing. The browser asks for the microphone the first time you call. On the [Tricorder](../../docs/tricorder.md), over Tailscale's HTTPS, the same works from your phone once it has a Call button of its own.
+Until both are there, the Call button is greyed out, and its tooltip says which is missing. The browser asks for the microphone the first time you call. On the Tricorder, over Tailscale's HTTPS, the same works from your phone once it has a Call button of its own.
 
 `FOCUS_LIVE_VOICE` picks gpt-live-1's voice (`cedar` by default; it has 22, among them `marin`, `sage` and `verse`). `FOCUS_LIVE_MODEL`, `FOCUS_LIVE_URL`, `FOCUS_JEV_MODEL` (`jev-latest`) and `FOCUS_JEV_URL` point somewhere else.
 

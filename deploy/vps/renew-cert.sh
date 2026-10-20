@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Fetches this machine's ts.net certificate into the office's data folder, where preview mirrors pick it up as they
-# open (docs/previews.md#from-another-machine). Needs HTTPS certificates switched on for the tailnet, and the user to be
+# open (server/previewMirrors.ts). Needs HTTPS certificates switched on for the tailnet, and the user to be
 # tailscale's operator (setup.sh does that).
 set -euo pipefail
 dir=${FOCUS_DATA_DIR:-$HOME/.focus}/tls

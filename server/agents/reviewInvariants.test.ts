@@ -162,7 +162,7 @@ describe('what QA runs, as docs/qa.md promises', () => {
     expect(playbook.repos.filter((r) => r.repo !== 'demo/webshop-frontend').every((r) => !r.cloned && !r.commands.length)).toBe(true);
   });
 
-  // "The officer answers, and when the request means a change, proposes one … It changes nothing: applying it is the captain's"
+  // "The officer answers, and when what you ask means a change, proposes one … It changes nothing itself: **Apply** saves the change"
   it('proposes a change to QA’s settings when the captain asks at the Playbook, and changes nothing itself', async () => {
     const o = office(workspace(now));
     const project = o.store.projects[0];

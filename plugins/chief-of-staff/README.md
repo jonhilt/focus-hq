@@ -26,7 +26,7 @@ The judge's prompt has the captain's standing orders in it: what they've wanted 
 
 ## Once you've answered
 
-When you answer a lead in [Comms](../../docs/comms.md) (approve or decline a tool, pick an option, reply, close the goal), the chief of staff's verdict on that turn comes up as a toast, in its own words as it wrote them: `Chief of staff: Filing an issue for a bug you caught is your own step, not the captain's call`. Only after you've decided, never before, so the ledger's comparison of its verdicts with your replies stays honest. The plugin keeps each lead's latest verdict in its state (in memory only, `ChiefState`), with when the turn ended, and says it only if it's on the turn you answered: a tool you approve mid-turn, or a turn judged before the last, says nothing. A verdict still being judged as you answer is said when it comes in.
+When you answer a lead in Comms (approve or decline a tool, pick an option, reply, close the goal), the chief of staff's verdict on that turn comes up as a toast, in its own words as it wrote them: `Chief of staff: Filing an issue for a bug you caught is your own step, not the captain's call`. Only after you've decided, never before, so the ledger's comparison of its verdicts with your replies stays honest. The plugin keeps each lead's latest verdict in its state (in memory only, `ChiefState`), with when the turn ended, and says it only if it's on the turn you answered: a tool you approve mid-turn, or a turn judged before the last, says nothing. A verdict still being judged as you answer is said when it comes in.
 
 ## Without it
 

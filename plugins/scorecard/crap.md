@@ -9,7 +9,7 @@ CRAP = complexity² × (1 − coverage)³ + complexity
 - **complexity** is the function's cyclomatic complexity: 1, plus one for each `if`, loop, `case`, `catch`, `?:`, `&&`, `||`, `??`, `?.` and default parameter in its own body, counted as ESLint's `complexity` rule counts them. A nested function's branches count towards it, not its parent.
 - **coverage** is the share of the function's own statements the unit tests run, from vitest's v8 coverage. A file no test loads has none.
 
-A fully tested function scores its complexity; an untested one scores about its complexity squared. Above **30** a function is too complex for how little of it is tested: untested, that's complexity 6 and up; half covered, 12; 80% covered, 25; and past 31 no amount of testing brings it under. There are two ways down, and both make the next change cheaper: split it into small pure functions, or test it.
+A fully tested function scores its complexity; an untested one scores about its complexity squared. Above **30** a function is too complex for how little of it is tested: untested, that's complexity 6 and up; half covered, 13; 80% covered, 26; and from 31 no amount of testing brings it under. There are two ways down, and both make the next change cheaper: split it into small pure functions, or test it.
 
 ## Running it
 
@@ -17,7 +17,7 @@ A fully tested function scores its complexity; an untested one scores about its 
 | --- | --- |
 | `pnpm run crap` | runs the unit tests with coverage (about 30 s), then prints how many functions are over 30, the spread of scores and the riskiest 10 |
 | `pnpm run crap --top 25` | the riskiest 25 |
-| `pnpm run crap --all` | `client/src/` and `scripts/` too. Most of the client is checked in the browser, not by unit tests, so it scores high: that's expected, not a to-do list |
+| `pnpm run crap --all` | `client/src/` and `tools/` too. Most of the client is checked in the browser, not by unit tests, so it scores high: that's expected, not a to-do list |
 | `pnpm run crap --changed [base]` | also lists what the branch touched since `base` (from where the branch left it, `main` by default): how many functions, their total CRAP, and each one over 30 |
 | `pnpm run crap --coverage <file>` | scores from an existing `coverage-final.json` rather than running the tests |
 | `pnpm run crap --ratchet` | also checks each file's functions over 30 against `crap-baseline.json`, and exits 1 when a file has more, or fewer without the baseline lowered ([the ratchets](README.md#the-ratchets)) |

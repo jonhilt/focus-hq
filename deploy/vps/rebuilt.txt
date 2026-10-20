@@ -1,5 +1,5 @@
-# What in the office's data folder (~/.focus) is rebuilt or downloaded again, so backups and moves leave it out
-# (docs/data.md#what-to-back-up). One top-level name per line.
+# What in the office's data folder (~/.focus) is rebuilt or downloaded again, so backups and moves leave it out.
+# One top-level name per line.
 repos
 workspaces
 planning
