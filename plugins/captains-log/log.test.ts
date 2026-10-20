@@ -61,6 +61,14 @@ describe('the captain’s log', () => {
     expect(log[3]).toMatchObject({ tag: 'QA fail', tone: 'bad', projectId: 'p', text: 'web #4 · 1 of 4 checks failed · fail 1' });
   });
 
+  it('names the chief of staff, and quotes in full what it would have said and to whom', () => {
+    const ledger = [{ kind: 'cos-verdict', sessionId: 's1', agent: 'Lt. Oyelaran', goal: 'Saved items', turnUuid: 'u', route: 2, why: 'A design choice with the lead’s pick.', message: 'Lt. Oyelaran wants to keep saved items per device. Shall they?', model: 'haiku', version: 'v6', at: 3, projectId: 'p', seq: 1 }] as LedgerEvent[];
+    expect(captainsLog(sources({ ledger }), 0)).toEqual([expect.objectContaining({
+      who: 'Chief of Staff', tag: 'CoS', text: 'CoS: card — A design choice with the lead’s pick. · Lt. Oyelaran', goal: 'Saved items',
+      quotes: ['To the captain: “Lt. Oyelaran wants to keep saved items per device. Shall they?”'],
+    })]);
+  });
+
   it('keeps to the window, oldest first, the ledger first at the same moment', () => {
     const runs = [{ key: 'a', who: 'A', entries: [at<RunFact>(5, { kind: 'held', until: 9 }), at<RunFact>(20, { kind: 'unheld' })] as JournalEntry[] }];
     const ledger = [{ kind: 'closed', repo: 'o/web', pr: 4, by: 'captain', qa: 'none', failedRounds: 0, triages: 0, at: 20, projectId: 'p', seq: 2 }] as unknown as LedgerEvent[];

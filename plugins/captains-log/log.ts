@@ -181,7 +181,7 @@ function ledgerLines(events: readonly LedgerEvent[], since: number): LogLine[] {
     const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : e.kind === 'cos-verdict' ? 'Chief of Staff' : 'Office';
     // the detail names who and the goal, which the line has on its own
     const detail = row.detail?.split(' · ').filter((d) => d !== who && d !== row.goal).join(' · ');
-    return { t: e.at, who, source: 'ledger', kind, tag: row.tag, tone: row.tone, text: [row.title, detail].filter(Boolean).join(' · '), projectId: e.projectId, ...(row.goal && { goal: row.goal }) };
+    return { t: e.at, who, source: 'ledger', kind, tag: row.tag, tone: row.tone, text: [row.title, detail].filter(Boolean).join(' · '), ...(row.quotes && { quotes: row.quotes }), projectId: e.projectId, ...(row.goal && { goal: row.goal }) };
   });
 }
 

@@ -8,6 +8,11 @@ export class DemoJudge implements Judge {
   async judge(req: { prompt: string }): Promise<{ structured: unknown; costUsd?: number }> {
     await sleep(300 / demoPace());
     const asks = /\?\s*(>>>)?\s*$/.test(req.prompt);
-    return { structured: asks ? { route: 2, why: 'The lead asks a question with its pick: a card.', message: '' } : { route: 1, why: 'Progress within the slice, with its next step.', message: '' }, costUsd: 0 };
+    return {
+      structured: asks
+        ? { route: 2, why: 'The lead is asking you to choose, and it has said which way it would go, so this can wait in your queue.', message: 'The lead has a question for you and recommends the option it describes. Shall it go ahead with that?' }
+        : { route: 1, why: 'The lead is making progress within the slice and has said what it will do next.', message: 'Thanks, that all sounds right. Carry on with the next step you described.' },
+      costUsd: 0,
+    };
   }
 }

@@ -5,7 +5,7 @@ import { type CosRoute, isOneOf, isRecord } from '../../plugin-api/shared';
 // own folder as it runs (`STANDING_ORDERS`), and the prompt says there are none when there aren't.
 
 /** The prompt's version, kept on every verdict so verdicts from different prompts aren't compared as one. */
-export const JUDGE_VERSION = 'v5';
+export const JUDGE_VERSION = 'v6';
 
 /** The captain's standing orders, in the plugin's own folder (`host.dataDir()`): private, never in the repo. */
 export const STANDING_ORDERS = 'standing-orders.txt';
@@ -34,7 +34,15 @@ Unsure between 2 and 3: choose 3. Unsure between 1 and 4: choose 4. Unsure betwe
 
 const ORDERS_HEADING = "The captain's standing orders, learned from their past replies:";
 const NO_ORDERS = "None yet: nothing has been learned from the captain's replies, so go by the rules above alone.";
-const REPLY = 'Reply with JSON only: {"route":1|2|3|4,"why":"<one short line>","message":"<for route 4 only: exactly what you send the lead; otherwise empty>"}';
+const REPLY = `How to speak: like a capable human chief of staff, in plain, natural sentences. Never terse shorthand, clipped fragments or labels the reader has to decode. Someone who hasn't read the lead's transcript should understand you.
+
+Reply with JSON only: {"route":1|2|3|4,"why":"...","message":"..."}
+- why: a sentence or two saying, in plain words, why this turn goes where it does.
+- message: always the actual words you would send, written in full:
+  - route 1: what you'd say to the lead to let it carry on, naming the next step it said it would take;
+  - route 4: exactly what you'd send the lead;
+  - route 2: the card as the captain would read it: what's being decided and why it matters, the options, and the lead's recommendation;
+  - route 3: what you'd say to the captain right now, and why it can't wait.`;
 
 /** The judge's system prompt, with the captain's standing orders (the file's text) in their place, or none yet. */
 export function judgeSystemPrompt(standingOrders?: string): string {
@@ -44,7 +52,7 @@ export function judgeSystemPrompt(standingOrders?: string): string {
 /** What the judge reads: the goal, and the end of what the lead said this turn. */
 export const judgePrompt = (goal: string | undefined, tail: string): string => `Goal: ${goal || '(untitled)'}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
 
-/** Where the judge would send the turn, why, and (route 4) what it would say to the lead. */
+/** Where the judge would send the turn, why, and what it would say: to the lead (routes 1 and 4) or the captain (2 and 3). */
 export interface Verdict {
   route: CosRoute;
   why: string;
@@ -58,9 +66,9 @@ export const VERDICT_SCHEMA = {
   additionalProperties: false,
 };
 
-/** The judge's answer, if it's one: a route of the four and a reason; a message is kept for route 4 alone. */
+/** The judge's answer, if it's one: a route of the four, a reason, and the words it would send (empty if it gave none). */
 export function parseVerdict(structured: unknown): Verdict | undefined {
   if (!isRecord(structured) || !isOneOf(ROUTES, structured.route) || typeof structured.why !== 'string' || !structured.why.trim()) return undefined;
-  const message = structured.route === 4 && typeof structured.message === 'string' ? structured.message.trim() : '';
+  const message = typeof structured.message === 'string' ? structured.message.trim() : '';
   return { route: structured.route, why: structured.why.trim(), message };
 }

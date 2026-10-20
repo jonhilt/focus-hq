@@ -43,7 +43,7 @@ describe('the chief of staff, in shadow mode', () => {
     await until(() => o.verdicts().length === 1);
     expect(o.verdicts()[0]).toMatchObject({
       kind: 'cos-verdict', projectId: o.project.id, sessionId: 'session-1', agent: o.lead().name, goal: o.lead().lead?.title, turnUuid: 'b',
-      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: 'v5', costUsd: 0.001,
+      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: 'v6', costUsd: 0.001,
     });
     expect(o.asked[0].prompt).toBe(`Goal: ${o.lead().lead?.title}\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2?\n>>>`);
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');

@@ -65,6 +65,9 @@ export type LedgerEntry =
 /** Where the chief of staff sends a lead's turn: 1 carry on, 2 a card in the captain's queue, 3 interrupt the captain, 4 back to the lead. */
 export type CosRoute = 1 | 2 | 3 | 4;
 
+/** Who a chief of staff's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
+export const cosAddressee = (route: CosRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');
+
 /** The captain's message to a lead, in full, and the end of what the lead had said since the last message to it. */
 export interface CaptainReply {
   at?: string;

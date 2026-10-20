@@ -126,7 +126,7 @@ export function openCaptainsLogPanel(ui: Ui): void {
       h('span', { class: 'muted' }, time(l.t)),
       h('span', { class: 'chip', style: `--tone:${SOURCES[l.source].color}` }, l.tag),
       h('strong', { class: 'captains-log-who' }, l.who),
-      h('div', { class: 'grow' }, h('div', null, l.text), l.goal ? h('small', { class: 'muted' }, l.goal) : null),
+      h('div', { class: 'grow' }, h('div', null, l.text), ...(l.quotes ?? []).map((q) => h('q', null, q)), l.goal ? h('small', { class: 'muted' }, l.goal) : null),
     );
 
   ui.panels.open({ title: 'Captain’s log', body, wide: true });

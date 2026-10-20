@@ -43,6 +43,8 @@ export interface LogLine {
   tag: string;
   tone: LogTone;
   text: string;
+  /** Words quoted in full under the line: what the chief of staff would have said, and to whom. */
+  quotes?: string[];
   /** The room, the goal (its title) and the crew member it's about, for the log's filters. */
   projectId?: string;
   goal?: string;

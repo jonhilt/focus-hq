@@ -1,4 +1,4 @@
-import { type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
+import { cosAddressee, type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -202,7 +202,8 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         tag: 'CoS',
         tone: e.route === 3 ? 'warn' : 'info',
         title: `CoS: ${COS_ROUTE[e.route]} — ${e.why}`,
-        detail: [e.agent, e.goal, e.message && `would say: “${e.message}”`].filter(Boolean).join(' · '),
+        detail: [e.agent, e.goal].filter(Boolean).join(' · '),
+        ...(e.message && { quotes: [`To the ${cosAddressee(e.route)}: “${e.message}”`] }),
         goal: e.goal,
       };
     case 'session-frictions':
