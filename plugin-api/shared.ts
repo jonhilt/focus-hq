@@ -24,8 +24,8 @@ export { goalTitle } from '../shared/goalTitle';
 /** The ledger as the office reads it out: a line of it, and lines grouped by day. */
 export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';
 /** The crew's voices, and what a reply says aloud. */
-export { type CrewVoice, forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine } from '../shared/voice';
-export { leadVoice, quickVoice } from '../shared/crew';
+export { type CrewVoice, forSpeech, linesToSpeak, sentences, spokenLine } from '../shared/voice';
+export { leadVoice } from '../shared/crew';
 export type { CosRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
 /** The ledger read as the office reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';

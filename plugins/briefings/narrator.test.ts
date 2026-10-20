@@ -32,13 +32,11 @@ describe('what the player says', () => {
     expect(fromPlayer({ kit: 'voice', on: true })).toEqual({ kit: 'voice', on: true });
     expect(fromPlayer({ kit: 'voice', on: 'yes' })).toEqual({ kit: 'voice', on: false });
     expect(fromPlayer({ kit: 'say', beat: 2 })).toEqual({ kit: 'say', beat: 2 });
-    expect(fromPlayer({ kit: 'beat', beat: 1, title: 'Two' })).toEqual({ kit: 'beat', beat: 1, title: 'Two' });
-    expect(fromPlayer({ kit: 'beat', beat: 1 })).toEqual({ kit: 'beat', beat: 1, title: '' });
     for (const kit of ['pause', 'resume', 'hush'] as const) expect(fromPlayer({ kit })).toEqual({ kit });
   });
 
   it('ignores anything else a page posts', () => {
-    for (const data of [null, 'lines', [], { kit: 'lines', lines: 'x' }, { kit: 'say' }, { kit: 'beat', beat: '1' }, { kit: 'other' }]) expect(fromPlayer(data)).toBeUndefined();
+    for (const data of [null, 'lines', [], { kit: 'lines', lines: 'x' }, { kit: 'say' }, { kit: 'beat', beat: 1 }, { kit: 'other' }]) expect(fromPlayer(data)).toBeUndefined();
   });
 });
 
@@ -47,18 +45,16 @@ describe('the narrator', () => {
 
   it('hears only its own player', () => {
     const { narrator, told, hear } = narrated();
-    hear({ kit: 'beat', beat: 1, title: 'Two' }, {});
-    expect(narrator.spot).toBeUndefined();
+    hear({ kit: 'lines', lines: ['One.'] }, {});
+    expect(narrator.beats).toBeUndefined();
     expect(told).toEqual([]);
   });
 
-  it('tells the player whether the voice is on once it has its lines, and keeps where it is', () => {
+  it('tells the player whether the voice is on once it has its lines', () => {
     const { narrator, told, hear } = narrated();
     hear({ kit: 'lines', lines: ['One.', 'Two.'], titles: ['A', 'B'] });
     expect(told).toEqual([{ kit: 'voice', on: false }]);
     expect(narrator.beats).toEqual({ lines: ['One.', 'Two.'], titles: ['A', 'B'] });
-    hear({ kit: 'beat', beat: 1, title: 'B' });
-    expect(narrator.spot).toEqual({ beat: 1, title: 'B' });
   });
 
   it('remembers the voice switched on or off from the player', () => {
@@ -87,10 +83,9 @@ describe('the narrator', () => {
     expect(updated).toHaveBeenCalledWith(1);
   });
 
-  it('tells the player its pause, and stops for good when it ends', () => {
+  it('stops for good when it ends', () => {
     const { narrator, told } = narrated();
-    narrator.pause();
-    expect(told).toEqual([{ kit: 'pause' }]);
     narrator.end();
+    expect(told).toEqual([]);
   });
 });

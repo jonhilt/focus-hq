@@ -1,6 +1,5 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { beatLabel, beatMoments, beatNarration, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, type StageMoment, stageSeen, THREE_VERSION } from './explainer';
+import { beatLabel, beatMoments, beatNarration, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, type StageMoment, stageSeen } from './explainer';
 
 const L = EXPLAINER_LIMITS;
 const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
@@ -104,67 +103,24 @@ describe('explainerPage', () => {
     expect(refusal({ stage: { ...stage, css: '</style><script>' } })).toMatch(/<\/style>/);
     expect(refusal({ stage: { ...stage, html: 'x'.repeat(L.stageBytes) } })).toMatch(/MB/);
   });
-
-  it('loads three.js for a 3D stage before its script runs, and holds the stage and player back until then', () => {
-    const stage = { ...input().stage, libs: ['three', 'three/addons/environments/RoomEnvironment.js'] };
-    const { html } = page({ stage });
-    const map = JSON.parse(/<script type="importmap">(.*?)<\/script>/.exec(html)![1]) as { imports: Record<string, string> };
-    expect(map.imports.three).toBe(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.module.js`);
-    expect(map.imports['three/addons/']).toBe(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/examples/jsm/`);
-    expect(html).toMatch(/<script type="text\/x-kit" id="kit-stage">\s*function render\(t\)/);
-    expect(html).toContain('<script type="text/x-kit" id="kit-player">');
-    expect(html).toContain('var libs = ["three","three/addons/environments/RoomEnvironment.js"];');
-    // the scaffold runs before the stage, which can call kit3d() straight away
-    expect(html).toContain('<script type="text/x-kit" id="kit-3d">');
-    expect(html).toContain("['kit-3d', 'kit-stage', 'kit-player']");
-    expect(page({ stage: { ...stage, libs: ['three'] } }).html).toContain('var libs = ["three","three/addons/environments/RoomEnvironment.js"];');
-    // a flat stage runs as it always has
-    expect(page().html).not.toContain('importmap');
-    expect(page().html).not.toContain('text/x-kit');
-  });
-
-  it("pins the office's own three.js", () => {
-    const pkg = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8')) as { dependencies: Record<string, string> };
-    expect(pkg.dependencies.three.replace(/^\^/, '')).toBe(THREE_VERSION);
-  });
-
-  it('refuses libraries other than three.js and its addons', () => {
-    const stage = input().stage;
-    expect(refusal({ stage: { ...stage, libs: ['three'] } })).toBeUndefined();
-    expect(refusal({ stage: { ...stage, libs: ['https://evil.example/x.js'] } })).toMatch(/can't load/);
-    expect(refusal({ stage: { ...stage, libs: ['three', 'three/addons/../../x.js'] } })).toMatch(/can't load/);
-    expect(refusal({ stage: { ...stage, libs: ['three/addons/controls/OrbitControls.js'] } })).toMatch(/"three" in libs too/);
-  });
 });
 
 describe('checking an explainer', () => {
-  const label = (text: string, x: number, y: number, over: Partial<StageMoment['labels'][number]> = {}) => ({ text, x, y, w: 80, h: 30, onScreen: true, ...over });
-  const moment = (over: Partial<StageMoment> = {}): StageMoment => ({ at: 1, flat: 0.8, labels: [], ...over });
+  const moment = (over: Partial<StageMoment> = {}): StageMoment => ({ at: 1, flat: 0.8, ...over });
 
   it('looks at the middle of each beat', () => {
     expect(beatMoments([{ seconds: 4 }, { seconds: 6 }, { seconds: 2 }])).toEqual([2, 7, 11]);
   });
 
-  it('says nothing about beats that look well', () => {
-    expect(momentNotes([moment(), moment({ labels: [label('Client', 100, 100), label('Server', 400, 100)] })])).toEqual([]);
-  });
-
-  it('calls out an empty stage, and labels out of view, cut off, overlapping or too many', () => {
-    expect(momentNotes([moment({ flat: 0.999 })])).toEqual([expect.stringMatching(/^Beat 1 looks empty/)]);
-    const [notes] = momentNotes([moment({ labels: [label('Gone', 10, 10, { onScreen: false }), label('Edge', 1000, 10), label('A', 300, 200), label('B', 340, 210)] })]);
-    expect(notes).toBe('Beat 1: the "Gone" label\'s object is out of view; the "Edge" label is cut off at the stage\'s edge; the "A" and "B" labels overlap.');
-    // touching isn't overlapping
-    expect(momentNotes([moment({ labels: [label('A', 300, 200), label('B', 378, 200)] })])).toEqual([]);
-    const crowd = Array.from({ length: 7 }, (_, i) => label(`L${i}`, i * 120, 10));
-    expect(momentNotes([moment(), moment({ labels: crowd })])).toEqual(['Beat 2: 7 labels at once: a handful reads better.']);
+  it('says nothing about beats that look well, and calls out an empty stage', () => {
+    expect(momentNotes([moment(), moment({ flat: 0.99 })])).toEqual([]);
+    expect(momentNotes([moment(), moment({ flat: 0.999 })])).toEqual([expect.stringMatching(/^Beat 2 looks empty/)]);
   });
 
   it('reads what the player says it saw on its stage, and nothing it shouldn’t', () => {
-    const seen = { flat: 0.8, labels: [label('Client', 100, 100)] };
-    expect(stageSeen(2, seen)).toEqual({ at: 2, flat: 0.8, labels: [label('Client', 100, 100)] });
+    expect(stageSeen(2, { flat: 0.8 })).toEqual({ at: 2, flat: 0.8 });
     expect(stageSeen(2, null)).toBeNull();
-    expect(stageSeen(2, { flat: '0.8', labels: [] })).toBeNull();
-    expect(stageSeen(2, { flat: 0.8, labels: [{ text: 'Client', x: 1 }] })).toBeNull();
+    expect(stageSeen(2, { flat: '0.8' })).toBeNull();
   });
 
   it('asks the lead to look either way', () => {

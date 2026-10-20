@@ -21,7 +21,6 @@
     "perf": "tsx tools/perf.ts",
     "record-flows": "tsx tools/flows.ts",
     "zfight": "tsx tools/zfight.ts",
-    "voice:check": "tsx plugins/briefings/scripts/voiceCheck.ts",
     "gaps": "tsx tools/gaps.ts",
     "ship": "tsx tools/ship.ts",
     "crap": "tsx plugins/scorecard/scripts/crap.ts",

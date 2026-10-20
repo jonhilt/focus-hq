@@ -1,5 +1,5 @@
 import { bestBrowserVoice, type CrewVoice, forSpeech, isRecord, kokoroReady, speak } from '../../plugin-api/client';
-import { type BriefingBeats, type BriefingSpot, firstChangedBeat } from './shared';
+import { type BriefingBeats, firstChangedBeat } from './shared';
 import { explainerVoice } from './voice';
 
 /** What an explainer's player asks of the screen around it (see `KIT_PLAYER` in explainer.ts). */
@@ -7,7 +7,6 @@ type FromPlayer =
   | { kit: 'lines'; lines: string[]; titles?: string[] }
   | { kit: 'voice'; on: boolean }
   | { kit: 'say'; beat: number }
-  | { kit: 'beat'; beat: number; title: string }
   | { kit: 'pause' | 'resume' | 'hush' };
 
 /** The player's message, if it's one: anything else a page posts is ignored. */
@@ -23,8 +22,6 @@ export function fromPlayer(data: unknown): FromPlayer | undefined {
       return { kit: 'voice', on: m.on === true };
     case 'say':
       return typeof m.beat === 'number' ? { kit: 'say', beat: m.beat } : undefined;
-    case 'beat':
-      return typeof m.beat === 'number' ? { kit: 'beat', beat: m.beat, title: String(m.title ?? '').slice(0, 200) } : undefined;
     case 'pause':
     case 'resume':
     case 'hush':
@@ -60,8 +57,6 @@ export class Narrator {
   private saying: Saying | undefined;
   private on = false;
   private readonly fetching = new AbortController();
-  /** The beat the player's on, once it's said (an explainer shown before players said so never does). */
-  spot: BriefingSpot | undefined;
   /** Its beats as the player said them, to tell what the next version of it changed. */
   beats: BriefingBeats | undefined;
 
@@ -98,9 +93,6 @@ export class Narrator {
       case 'say':
         this.say(m.beat);
         break;
-      case 'beat':
-        this.spot = { beat: m.beat, title: m.title };
-        break;
       case 'pause':
         this.saying?.pause();
         break;
@@ -113,18 +105,13 @@ export class Narrator {
     }
   }
 
-  /** Pauses the player, and the line being said with it (the player says so): Play picks both up again. */
-  pause(): void {
-    this.tell({ kit: 'pause' });
-  }
-
   /** Stops the voice and any line still being fetched: the panel's closed, or shows something else. */
   end(): void {
     this.hush();
     this.fetching.abort();
   }
 
-  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number } | { kit: 'pause' } | { kit: 'show'; beat: number }): void {
+  private tell(message: { kit: 'voice'; on: boolean } | { kit: 'said'; beat: number } | { kit: 'show'; beat: number }): void {
     this.frame.contentWindow?.postMessage(message, '*');
   }
 

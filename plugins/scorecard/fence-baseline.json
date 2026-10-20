@@ -27,7 +27,6 @@
   "client/src/world/transporterRoom.ts": 4,
   "client/src/world/warmUp.ts": 7,
   "client/src/world/zfight.ts": 5,
-  "plugins/briefings/scripts/voiceCheck.ts": 2,
   "plugins/cartography/keeper.ts": 1,
   "plugins/cartography/model.ts": 1,
   "plugins/cartography/routes.ts": 1,

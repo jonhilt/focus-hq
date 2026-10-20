@@ -46,7 +46,7 @@ describe('the explain tool', () => {
         shown.push({ page, frames });
         return Promise.resolve({
           text: `“${page.title}” is on your station's screen.${errors}`,
-          frames: frames.at.map((at) => ({ at, image: new TextEncoder().encode(`beat at ${at}`), seen: { flat: page.html.includes('blank') ? 1 : 0.7, labels: [] } })),
+          frames: frames.at.map((at) => ({ at, image: new TextEncoder().encode(`beat at ${at}`), seen: { flat: page.html.includes('blank') ? 1 : 0.7 } })),
         });
       },
     };

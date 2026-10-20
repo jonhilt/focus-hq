@@ -22,7 +22,6 @@ export { CrewSpeaker, voicePrefs, VoiceSession, voiceToggle } from '../client/sr
 export { bestBrowserVoice, kokoroReady } from '../client/src/ui/crewVoice';
 export const speak = (text: string, voice: KokoroVoice, signal: AbortSignal, urgency?: 'now' | 'ahead'): Promise<Blob> => api.speak(text, voice, signal, urgency);
 /** Asks the captain how to pick a long conversation back up on your API key (a message's `costly` answer): undefined if they'd rather not. */
-export { askResume } from '../client/src/ui/resume';
 /** A crew member in 3D, and what they sit on and cast. */
 export { Character, type CrewView } from '../client/src/world/character';
 export { chair } from '../client/src/world/props';

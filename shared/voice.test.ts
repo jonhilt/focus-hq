@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TermLine, VoiceStatus } from './types';
-import { forSpeech, linesToSpeak, repliesToSpeak, sentences, spokenLine, voiceMissing } from './voice';
+import type { VoiceStatus } from './types';
+import { forSpeech, linesToSpeak, sentences, spokenLine, voiceMissing } from './voice';
 
 const status = (whisper: boolean, model: boolean): VoiceStatus => ({
   whisper: { found: whisper, command: 'whisper-cli' },
@@ -98,24 +98,6 @@ describe('linesToSpeak', () => {
       { from: 'guest', text: 'It starts in `src/cart.ts`.', spoken: 'It starts in the cart module.' },
     ];
     expect(linesToSpeak(chat, 0)).toEqual([{ speaker: 'guest', text: 'It starts in the cart module.' }]);
-  });
-});
-
-describe('repliesToSpeak', () => {
-  const line = (kind: TermLine['kind'], text: string): TermLine => ({ t: 0, kind, text });
-  const text = (t: string) => line('text', t);
-
-  it('says each reply in a batch on its own, its lines joined', () => {
-    const lines = [text('⏺ Let me check the ledger.'), line('tool', '⏺ Read(ledger.ts)'), text('⏺ It retries **twice**,'), text('  then gives up.')];
-    expect(repliesToSpeak(lines)).toEqual(['Let me check the ledger.', 'It retries twice, then gives up.']);
-  });
-
-  it('leaves out tool output and the manager’s own lines', () => {
-    expect(repliesToSpeak([line('manager', '▶ Captain: why?'), line('output', '  ⎿  ok')])).toEqual([]);
-  });
-
-  it('drops code, so a reply that is only code says nothing', () => {
-    expect(repliesToSpeak([text('⏺ ```ts'), text('  const a = 1;'), text('  ```')])).toEqual([]);
   });
 });
 
