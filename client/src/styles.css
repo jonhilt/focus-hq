@@ -836,7 +836,17 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .briefing-count { flex: 1; font-size: 14px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--lcars-orange); }
 .briefing-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px; }
 .briefing-what { font-size: 24px; font-weight: 600; line-height: 1.2; display: flex; gap: 12px; }
-.briefing-context { white-space: pre-wrap; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }
+.briefing-context { white-space: normal; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }
+.briefing-context > :first-child { margin-top: 0; }
+.briefing-context > :last-child { margin-bottom: 0; }
+.briefing-context p, .briefing-context ul, .briefing-context ol, .briefing-context pre, .briefing-context table, .briefing-context blockquote { margin: 0 0 0.6em; }
+.briefing-context h1, .briefing-context h2, .briefing-context h3, .briefing-context h4 { font-size: 1.05em; margin: 0.8em 0 0.3em; }
+.briefing-context ul, .briefing-context ol { padding-left: 2.2ch; }
+.briefing-context code { font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+.briefing-context pre { white-space: pre-wrap; }
+.briefing-context table { border-collapse: collapse; }
+.briefing-context th, .briefing-context td { border: 1px solid var(--line); padding: 2px 8px; text-align: left; }
+a.briefing-option { color: inherit; text-decoration: none; }
 .briefing-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
 .briefing-option { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px; }
 .briefing-option img { width: 100%; max-height: 170px; object-fit: cover; object-position: top; border-radius: calc(var(--radius) / 2); }

@@ -1,4 +1,4 @@
-import type { TermLine } from '../../../shared/types';
+import type { GoalArtifact, TermLine } from '../../../shared/types';
 
 // The bridge's briefing (briefingPanel.ts), one thing that needs the captain at a time: what it says a lead said last,
 // and which item it keeps in front of them as the list changes. Pure, so it's tested (briefing.test.ts).
@@ -39,4 +39,15 @@ export function keptOrder(before: readonly string[], keys: readonly string[]): s
   const kept = before.filter((k) => now.has(k));
   const had = new Set(kept);
   return [...kept, ...keys.filter((k) => !had.has(k))];
+}
+
+/**
+ * What a lead showed on their screen during the turn that's waiting on the captain (since the captain last spoke to
+ * them, in their terminal), newest first; with no word from the captain in view, only the latest. A lead often asks
+ * "A, B or C?" of options it showed rather than asked with pictures, so the briefing puts them in front of the captain.
+ */
+export function shownThisTurn(artifacts: readonly GoalArtifact[] | undefined, lines: readonly TermLine[]): GoalArtifact[] {
+  const newest = [...(artifacts ?? [])].sort((a, b) => b.at - a.at);
+  const spoke = lines.findLast((l) => l.kind === 'manager');
+  return spoke ? newest.filter((a) => a.at >= spoke.t) : newest.slice(0, 1);
 }

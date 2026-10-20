@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { TermKind } from '../../../shared/types';
-import { focusIndex, keptOrder, lastWords } from './briefing';
+import { focusIndex, keptOrder, lastWords, shownThisTurn } from './briefing';
 
 const line = (kind: TermKind, text: string) => ({ t: 0, kind, text });
 
@@ -67,5 +67,23 @@ describe('keptOrder', () => {
 
   it('is the order it came in, to start', () => {
     expect(keptOrder([], ['b', 'a'])).toEqual(['b', 'a']);
+  });
+});
+
+describe('shownThisTurn', () => {
+  const shown = (id: string, at: number) => ({ id, title: id, at });
+  const art = [shown('old', 1), shown('b', 30), shown('a', 20)];
+
+  it('is what the lead showed since the captain last spoke, newest first', () => {
+    expect(shownThisTurn(art, [{ t: 10, kind: 'manager', text: '▶ Captain: go' }, line('text', 'Pick one')]).map((a) => a.id)).toEqual(['b', 'a']);
+  });
+
+  it('is only the latest with no word from the captain in view', () => {
+    expect(shownThisTurn(art, [line('text', 'A, B or C?')]).map((a) => a.id)).toEqual(['b']);
+  });
+
+  it('is nothing when they showed nothing this turn', () => {
+    expect(shownThisTurn(art, [{ t: 40, kind: 'manager', text: '▶ Captain: go' }])).toEqual([]);
+    expect(shownThisTurn(undefined, [])).toEqual([]);
   });
 });

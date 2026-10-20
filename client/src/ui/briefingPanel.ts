@@ -1,16 +1,17 @@
-import { openQuestion, optionUrl } from '../../../shared/artifacts';
+import { artifactUrl, openQuestion, optionUrl } from '../../../shared/artifacts';
 import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
 import type { Agent } from '../../../shared/types';
 import { api } from '../net/api';
 import { attention, markRead } from '../net/attention';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
-import { focusIndex, keptOrder, lastWords } from './briefing';
+import { focusIndex, keptOrder, lastWords, shownThisTurn } from './briefing';
 import { from, hailKey } from './commsPanel';
 import type { Ui } from './context';
 import { busy, fill, h } from './dom';
 import { closeGoal } from './goals';
 import { answerLead, messageAgent } from './resume';
+import { markdownHtml } from './terminal';
 
 /** The colour of each kind of hail, as in Comms. */
 const TONE: Record<Attention['kind'], string> = {
@@ -36,6 +37,21 @@ function needs(): Attention[] {
 
 const said = (agent: Agent) => lastWords(state.lines.get(agent.id) ?? []);
 const open = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, label);
+
+/** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. */
+function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
+  const shown = shownThisTurn(agent.lead?.artifacts, state.lines.get(agent.id) ?? []);
+  if (!shown.length) return [];
+  const cards = shown.map((a) =>
+    h('a', { class: 'briefing-option', href: artifactUrl(agent.id, a, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' },
+      a.image ? h('img', { src: artifactUrl(agent.id, a, 'jpg'), alt: a.title }) : null,
+      h('strong', null, a.title),
+    ));
+  return [
+    h('div', { class: 'briefing-options' }, ...cards),
+    h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => ui.openScreen(agent.id) }, 'See their screen up close')),
+  ];
+}
 
 /** A reply to a lead, written and sent from the briefing. */
 function replyBox(ui: Ui, agent: Agent): HTMLElement[] {
@@ -89,7 +105,7 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[] }
     case 'question':
       return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent) };
     case 'turn':
-      return { context: said(a.agent), answers: replyBox(ui, a.agent) };
+      return { context: said(a.agent), answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent)] };
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
@@ -116,7 +132,7 @@ function card(ui: Ui, a: Attention): HTMLElement {
   return h('div', { class: 'briefing-card', style: `--tone:${TONE[a.kind]}` },
     h('div', { class: 'briefing-what' }, h('span', null, icon), what),
     'agent' in a ? from(a.agent) : project ? h('small', { class: 'need-from' }, project.name) : null,
-    context ? h('div', { class: 'briefing-context' }, context) : null,
+    context ? h('div', { class: 'briefing-context', innerHTML: markdownHtml(context) }) : null,
     ...answers,
   );
 }

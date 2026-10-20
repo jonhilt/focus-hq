@@ -28,13 +28,13 @@ Sit in the captain's chair on the bridge and press <kbd>E</kbd> for your briefin
 
 Each one is shown large with what you need to decide it, and answered right there:
 
-- 💬 **Waiting for your reply**: what the lead said last (the end of their turn, from their terminal), and a box to reply in. **Send** sends it as if from their panel. Showing it reads their turn, as their panel does.
+- 💬 **Waiting for your reply**: what the lead said last (the end of their turn, from their terminal, formatted as the markdown it is), what they showed on their screen that turn (since you last wrote to them), as pictures that open live, so an "A, B or C?" about options they showed can be answered here, and a box to reply in. **Send** sends it as if from their panel. Showing it reads their turn, as their panel does.
 - ❓ **Pick**: why they're asking, and the options side by side with their pictures. **Pick A**… answers, with anything you add in the box under them. **See them up close** opens the station's screen.
 - ✋ **Approve**: what they said as they raised their hand, and the tool it's for. **Approve** / **Decline**.
 - 🏁 **Ready to close**: what done looks like, from the goal's note, and what the lead said last. **Close goal**, or **Carry on** to open their panel.
 - ❗ **Stuck**, 🙋 **QA needs you** and ⚠ **Resolve conflicts**: what went wrong or the pull request, and the way to it.
 
-Once you've answered one, whatever took its place in the list comes up next. With nothing left, it says so and how many goals are getting on without you. The briefing is `client/src/ui/briefingPanel.ts`, and what it decides (a lead's last words, which item stays in front of you) is in `briefing.ts`.
+Once you've answered one, whatever took its place in the list comes up next. With nothing left, it says so and how many goals are getting on without you. The briefing is `client/src/ui/briefingPanel.ts`, and what it decides (a lead's last words, what they showed this turn, which item stays in front of you) is in `briefing.ts`.
 
 Toasts still pop up as things happen. Anything in them that needs you stays in Comms' Needs you, so a toast you missed doesn't matter; the rest is news, and isn't kept.
 
