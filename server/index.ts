@@ -6,7 +6,7 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeTriager } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeTriager, titleGoal } from './agents/claudeCrew';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
@@ -81,6 +81,7 @@ async function main() {
     office.agents.transcripts = demoTranscripts;
   } else {
     office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+    office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
     office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
     // the captain's replies to leads, from the spans digested before they were kept, while their transcripts last
     void office.agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));

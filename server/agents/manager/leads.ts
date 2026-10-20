@@ -5,6 +5,7 @@ import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, Queued
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
+import { takesTitle } from '../goalTitles';
 import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
@@ -15,6 +16,9 @@ import { type ManagerServices, Part, Refused, type WorkError } from './core';
 export class Leads extends Part {
   /** The leads whose goal is closing right now: nothing of theirs ships, so a WIP snapshot never reaches a pull request. */
   closingGoals = new Set<string>();
+
+  /** Titles a new goal from the captain's first words (Haiku, off the demo), to replace the title it starts with. */
+  titleGoal?: (brief: string) => Promise<string | undefined>;
 
   /**
    * Starts a goal at one of the room's team stations: a lead of its own (the captain's own Claude Code session for the
@@ -67,7 +71,26 @@ export class Leads extends Part {
       { kind: 'manager', text: `▶ ${how.from ? `Captain, from ${how.from}` : 'Captain'}: ${text.trim()}` },
     ]);
     this.core.seating.schedule();
+    this.retitle(id, title, text);
     return { agent };
+  }
+
+  /** Gives a new goal a title that says what the work is, once `titleGoal` answers, if nobody has retitled it meanwhile. */
+  private retitle(id: string, started: string, text: string): void {
+    const titler = this.titleGoal;
+    if (!titler) return;
+    void titler(text).then(
+      (proposed) => {
+        const agent = this.store.agents.get(id);
+        if (!agent || !hasLeadWork(agent) || !takesTitle(agent.lead.title, started, proposed)) return;
+        this.update(agent, { lead: { ...agent.lead, title: proposed }, issue: { ...agent.issue, title: proposed } });
+        this.print(agent, [{ kind: 'system', text: `✻ The goal is titled “${proposed}”` }]);
+      },
+      (err: unknown) => {
+        const agent = this.store.agents.get(id);
+        if (agent) this.print(agent, [{ kind: 'system', text: `✻ Couldn't give the goal a shorter title: ${errorMessage(err)}` }]);
+      },
+    );
   }
 
   /**

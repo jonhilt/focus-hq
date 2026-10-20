@@ -217,7 +217,7 @@ describe('dictated', () => {
         kind: 'new-goal',
         projectId: 'p1',
         projectName: 'Shop',
-        title: 'Find out why pull requests fail QA in the shop',
+        title: 'Find out why pull requests fail QA in the shop, and stop it…',
         said: 'Find out why pull requests fail QA in the shop, and stop it happening',
         text: `${words}\n\nFrom a call with the captain about Wishlist:\nCaptain: why?`,
       },

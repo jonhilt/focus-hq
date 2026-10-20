@@ -64,6 +64,11 @@ export class AgentManager {
   }
 
 
+  /** Titles a new goal from the captain's first words (missing in the demo, whose goals keep them). */
+  set titleGoal(titler: Leads['titleGoal']) {
+    this.core.leads.titleGoal = titler;
+  }
+
   /** The agents' transcripts on this machine, for digesting the ones from before digests began. */
   get transcripts(): Ledger['transcripts'] {
     return this.core.ledger.transcripts;

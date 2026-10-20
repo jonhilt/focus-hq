@@ -44,12 +44,13 @@ describe('a goal’s lead', () => {
     expect(pickStation([], 1.5)).toBeUndefined();
   });
 
-  it('calls the goal by the captain’s first sentence, cut at a clause or a word', () => {
+  it('calls the goal by the captain’s first line, cut at a word', () => {
     expect(goalTitle('Shoppers can save items for later.\nAnd find them on any device')).toBe('Shoppers can save items for later');
     expect(goalTitle('\n\n  Stock   levels  ')).toBe('Stock levels');
     expect(goalTitle('   ')).toBe('A new goal');
     const long = goalTitle('Let shoppers save items for later from the cart and the product page, then find them again on any device');
-    expect(long).toBe('Let shoppers save items for later from the cart');
+    expect(long).toBe('Let shoppers save items for later from the cart and the…');
+    expect(long.length).toBeLessThanOrEqual(61);
   });
 
   it('works at the effort the captain picked, else the office’s default for leads', () => {

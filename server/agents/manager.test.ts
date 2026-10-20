@@ -501,6 +501,25 @@ describe('AgentManager', () => {
     expect(() => agents.spinOffIdea(lead.id, 'Tidy the store', 'Again')).toThrow('isn’t one of the lead’s ideas');
   });
 
+  it('retitles a new goal once Haiku answers, unless it was retitled meanwhile', async () => {
+    const { agents, store, project } = office();
+    let answer!: (title: string | undefined) => void;
+    agents.titleGoal = () => new Promise((resolve) => (answer = resolve));
+    const { agent: lead } = agents.startGoal(project.id, 'we need better branch names - when merging PRS for example') as { agent: { id: string } };
+    expect(store.agent(lead.id).lead!.title).toBe('we need better branch names - when merging PRS for example');
+    answer('Readable branch names for slices');
+    await until(() => store.agent(lead.id).lead!.title === 'Readable branch names for slices');
+    expect(store.agent(lead.id).issue.title).toBe('Readable branch names for slices');
+
+    // the lead titled the next goal before Haiku answered: theirs stays
+    const { agent: other } = agents.startGoal(project.id, 'wishlists') as { agent: { id: string } };
+    const work = store.agent(other.id).lead!;
+    store.agent(other.id).lead = { ...work, title: 'Wishlists, by the lead' };
+    answer('Wishlists for shoppers');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(store.agent(other.id).lead!.title).toBe('Wishlists, by the lead');
+  });
+
   it('reopens a closed goal on its branch, with the same lead picking their conversation back up', async () => {
     const reopened: { id: string; branch: string }[] = [];
     const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });

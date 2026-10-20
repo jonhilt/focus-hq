@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, type SDKAssistantMessage, type SDKMessage, type SDKResultMessage, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
@@ -11,6 +12,8 @@ import type { ChatProject, ShipStatus } from './shipStatus';
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
+import { tidyGoalTitle } from '../../shared/goalTitle';
+import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for some, the web) and change nothing.
 // Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch where they're given them and the
@@ -276,3 +279,26 @@ export function shipTools(req: { projects: ChatProject[]; shipStatus: () => Prom
     ),
   ];
 }
+
+/** The model that titles a new goal: a quick, cheap job. */
+export const TITLE_MODEL = 'claude-haiku-4-5-20251001';
+
+/** A short title for a goal from the captain's first words, by Haiku; undefined when it doesn't give a usable one. */
+export async function titleGoal(brief: string, settings: Settings): Promise<string | undefined> {
+  const result = await runReadOnly({
+    cwd: os.tmpdir(),
+    system: goalTitleSystemPrompt(),
+    systemAppend: '',
+    prompt: goalTitlePrompt(brief),
+    settings,
+    signal: new AbortController().signal,
+    activity: () => undefined,
+    builtins: [],
+    schema: GOAL_TITLE_SCHEMA,
+    model: TITLE_MODEL,
+    maxTurns: 2,
+    timeoutMs: 60_000,
+  });
+  return tidyGoalTitle((result.structured as { title?: unknown } | undefined)?.title);
+}
+
