@@ -10,8 +10,12 @@ import { topics } from './brief';
 import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
 import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type QueuedGoal, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
-// Calls to Number One (../calls.md): one at a time, each a gpt-live-1 session the office is the backend of. The
+// Calls to Number One: one at a time, each a gpt-live-1 session the office is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.
+// Why three parts (the stack JFDI's voice mode ended up with): a realtime voice model holds the conversation, a fast
+// "System One" model (Jev) decides what was asked with calibrated confidence, and a state machine keeps each task on
+// rails, so anything consequential (a goal started, a word to a lead) happens only from confirming, on a clear yes in
+// the captain's own words.
 
 /** What a call needs from the office: how the ship stands, its log, and the acts the captain says yes to. */
 export interface CallOffice {
@@ -31,7 +35,7 @@ export interface CallKeys {
 export function callsMissing(keys: CallKeys, demo: boolean): string | undefined {
   if (demo) return undefined;
   const missing = [!keys.openai && 'OPENAI_API_KEY', !keys.typesafe && 'TYPESAFE_API_KEY'].filter(Boolean);
-  return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts (see plugins/number-one/calls.md)` : undefined;
+  return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts` : undefined;
 }
 
 /** The step the captain sees for the machine's state (`routing` has steps of its own inside). */

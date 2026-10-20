@@ -1,4 +1,4 @@
-// The astrometrics plugin in the browser (README.md): a screen in the holodeck of each project it's on for, showing one
+// The astrometrics plugin in the browser: a screen in the holodeck of each project it's on for, showing one
 // of the office's state machines with where that project's runs of it are now, lit; E on it opens it up close, with a
 // tab for each machine to toggle through, and the screen follows the one picked.
 import * as THREE from 'three';

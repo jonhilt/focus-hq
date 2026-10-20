@@ -1,4 +1,4 @@
-// Number One (README.md): the plugin's state, as its server part keeps it and the browser shows it, and who Number One
+// Number One: the plugin's state, as its server part keeps it and the browser shows it, and who Number One
 // is: their name, look and voice.
 import { type CrewVoice, fixedCrew, type Planner } from '../../plugin-api/shared';
 
@@ -67,7 +67,7 @@ export function chatAfterRestart(saved: NumberOneChat): NumberOneChat {
 // ---------------------------------------------------------------- calls
 
 // Calls: the captain talking to Number One hands-free. OpenAI's gpt-live-1 holds the conversation, Jev picks what the
-// captain asked for, and a state machine keeps each task on rails (calls.md).
+// captain asked for, and a state machine keeps each task on rails.
 
 /** Where a call's task stands: the machine's state, for the captain to see. */
 export type CallStep = 'listening' | 'routing' | 'confirming' | 'dictating' | 'acting' | 'ended';

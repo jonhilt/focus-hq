@@ -1,4 +1,4 @@
-// The captain's log in the browser (README.md): J anywhere aboard opens it.
+// The captain's log in the browser: J anywhere aboard opens it.
 import { openCaptainsLogPanel } from './panel';
 import { CAPTAINS_LOG } from './shared';
 import './captains-log.css';

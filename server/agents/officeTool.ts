@@ -67,7 +67,7 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
       ),
       tool(
         'note',
-        'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line, and contact and closeContact, which log and close loose threads on the goal\'s chart. Keep it short; the office refuses a note that grows into a spec.',
+        'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line, and contact and closeContact, which log and close loose threads on the goal\'s chart. Keep it short: a few lines, not a spec.',
         noteShape,
         (input) => answer(() => tools.note(input), "Couldn't update the note"),
       ),

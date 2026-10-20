@@ -1,4 +1,4 @@
-// Number One's chat in the browser (README.md): the panel in the ready room, with voice mode and the call strip.
+// Number One's chat in the browser: the panel in the ready room, with voice mode and the call strip.
 import { callView } from './callView';
 import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneMessage, type NumberOneState, type WorkSuggestion } from './shared';
 import { chatPanel, type ChatPanel } from './view';

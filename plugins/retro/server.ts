@@ -1,4 +1,4 @@
-// The retro plugin (README.md): the chief engineer at the engineering station looks back over the frictions found in
+// The retro plugin: the chief engineer at the engineering station looks back over the frictions found in
 // the agents' sessions and drafts an issue for each that keeps coming back, for the captain to accept (it's filed) or
 // reject. FOCUS_PLUGINS=retro.
 import type { FocusPlugin } from '../../plugin-api/server';

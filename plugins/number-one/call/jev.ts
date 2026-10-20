@@ -1,8 +1,7 @@
 import { Context, Data, Effect, Layer, Schema } from 'effect';
 
 // Jev, TypeSafe's "System One" model: given some state and a few typed questions, it answers each in one pass with a
-// calibrated probability rather than text, fast (70-500 ms). The call asks it what the captain wants
-// (../calls.md).
+// calibrated probability rather than text, fast (70-500 ms). The call asks it what the captain wants.
 
 export const JEV_URL = process.env.FOCUS_JEV_URL || 'https://api.typesafe.ai/v1/systemone';
 export const JEV_MODEL = process.env.FOCUS_JEV_MODEL || 'jev-latest';

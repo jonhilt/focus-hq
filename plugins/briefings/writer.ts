@@ -1,4 +1,4 @@
-// The office's briefing writer (README.md): a lead sends a brief (what to explain, and where its facts are) and a
+// The office's briefing writer: a lead sends a brief (what to explain, and where its facts are) and a
 // read-only session writes the explainer from it, on the model, effort and speed the captain set for briefings
 // (`writerRun`), reading the lead's code and what they've said. The explain tool checks its receipts as it does a
 // lead's, and hands the session back what didn't hold up, once.

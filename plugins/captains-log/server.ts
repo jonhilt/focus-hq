@@ -1,4 +1,4 @@
-// The captain's log (README.md): every journal the office keeps and the ledger on one timeline, served to its panel
+// The captain's log: every journal the office keeps and the ledger on one timeline, served to its panel
 // (J). FOCUS_PLUGINS=captains-log, for the whole office.
 import type { FocusPlugin } from '../../plugin-api/server';
 import { captainsLog, logSources } from './log';

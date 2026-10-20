@@ -1,4 +1,4 @@
-// The astrometrics plugin (README.md): the office's state machines, each laid out once as the office starts, and
+// The astrometrics plugin: the office's state machines, each laid out once as the office starts, and
 // where every run of them is now, kept up to date as their journals step, for the holodeck's screen to draw.
 // FOCUS_PLUGINS=astrometrics.
 import { errorMessage, type FocusPlugin } from '../../plugin-api/server';

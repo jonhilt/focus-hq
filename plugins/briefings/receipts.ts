@@ -1,4 +1,4 @@
-// Receipts (README.md): a beat of an explainer says where its facts come from, quoting each source word for word, and
+// Receipts: a beat of an explainer says where its facts come from, quoting each source word for word, and
 // the office checks both before the captain sees it: that every quote is in its source (a file in the lead's checkout,
 // the lead's own earlier words, a line of the ship's log, a pull request), and that every number and name the beat's narration says is
 // in its quotes. Pure, so it's unit tested (receipts.test.ts); finding the sources is the explain tool's.

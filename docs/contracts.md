@@ -1,12 +1,12 @@
 # Fakes behave like the real thing
 
-A third rule for the office's quality checks, beside [the two rules for state](invariants.md): **the fakes the tests rely on must behave like what they stand in for.** 12 of the [bug corpus](bug-corpus.md)'s 90 real fixes (kind `external`) were wrong assumptions about git, GitHub, the SDK or the shell: GitHub's pull request head lagging a push (57f3d0e), the mirror's local `main` never moving, so diffs against it were wrong (b0ac83c), a push refused over a branch GitHub had deleted (5e27b8e), an untracked `.idea/` counting as a change (b186a17), the SDK streaming `TaskUpdate`'s keys before repairing them (e230e21). Their tests passed because the fakes they ran on (`demoWorkspace`, the demo GitHub, `FakeClaude`) encode what the developer assumed, not what the real thing does.
+A third rule for the office's quality checks, beside [the two rules for state](invariants.md): **the fakes the tests rely on must behave like what they stand in for.** In the [bug corpus](bug-corpus.md) as of 2026-10-16, 12 of the 90 real fixes (kind `external`) were wrong assumptions about git, GitHub, the SDK or the shell: GitHub's pull request head lagging a push (57f3d0e), the mirror's local `main` never moving, so diffs against it were wrong (b0ac83c), a push refused over a branch GitHub had deleted (5e27b8e), an untracked `.idea/` counting as a change (b186a17), the SDK streaming `TaskUpdate`'s keys before repairing them (e230e21). Their tests passed because the fakes they ran on (`demoWorkspace`, the demo GitHub, `FakeClaude`) encode what the developer assumed, not what the real thing does.
 
 So each interface the office fakes gets a **contract**: one suite of behavioural expectations, run against the real implementation and against each fake. Where they disagree, either the fake is fixed or the expectation is excused for that fake, with the reason, as a **simplification**. A simplified expectation is held to fail (`it.fails`): a fake that comes to keep it is told to drop the excuse.
 
 ## Git: `WorkspaceOps`
 
-`server/agents/workspaceContract.ts` holds the contract, each expectation one scenario told through a `World` (the workspace, the agent committing, the base moving on GitHub, someone else pushing, GitHub deleting a merged branch). `workspaceContract.test.ts` runs it against `liveWorkspace` (`workspace.ts`) on throwaway repos, a bare repo as origin and the office's clone where `gh repo clone` would leave it, and against `demoWorkspace`. No network; about 8 s.
+`server/agents/workspaceContract.ts` holds the contract, each expectation one scenario told through a `World` (the workspace, the agent committing, the base moving on GitHub, someone else pushing, GitHub deleting a merged branch). `workspaceContract.test.ts` runs it against `liveWorkspace` (`workspace.ts`) on throwaway repos, a bare repo as origin and the office's clone where `gh repo clone` would leave it, and against `demoWorkspace`. No network.
 
 | expectation | taught by | git | demo |
 | --- | --- | --- | --- |
@@ -38,20 +38,20 @@ A live check would run the same tests against `ghCliLayer`: it needs a sandbox r
 
 `server/agents/claudeContract.ts` holds what the office relies on Claude Code saying down the SDK's `query`, each expectation read from one of three sessions as Claude Code and the office played it out, beat by beat. `claudeContract.test.ts` holds it against what real Claude Code said and against the session's stand-in (`claudeStandIn.ts`, which `claudeRunnerInvariants.test.ts` runs on). No network.
 
-The real side comes first from what's on disk, read only. The office's logs are rendered lines, not messages. Claude Code's transcripts (`~/.claude/projects/*.jsonl`, 1,026 of the office's sessions) keep the turns, tool calls and results, and Claude Code's queue (`queue-operation`: a message or a task's report enqueued, then taken in a turn of its own or folded into the one under way), but none of the SDK's own messages: no `result`, no background list, no `task_started`. Those were recorded live: `pnpm run claude-streams` (`tools/claudeStreams.ts`, behind `FOCUS_LIVE_CLAUDE=1`, never in `pnpm test`) runs three tiny scripted sessions on Haiku and keeps only the messages' shapes (`shapeOf`: kinds, flags, tool names, ids made up), a few cents each. The contract's real sessions (`REAL`) are those recordings, from Claude Code 2.1.289, with every id and word made up. Claude Code's own schema for the SDK's messages (in its bundle) says the rest: the background list is every live background task after a change, replaces the last, is sent whenever which tasks run changes and never at startup, and comes before a task's own start and end "in practice", the order otherwise unspecified.
+The real side comes first from what's on disk, read only. The office's logs are rendered lines, not messages. Claude Code's transcripts (`~/.claude/projects/*.jsonl`) keep the turns, tool calls and results, and Claude Code's queue (`queue-operation`: a message or a task's report enqueued, then taken in a turn of its own or folded into the one under way), but none of the SDK's own messages: no `result`, no background list, no `task_started`. Those were recorded live: `pnpm run claude-streams` (`tools/claudeStreams.ts`, behind `FOCUS_LIVE_CLAUDE=1`, never in `pnpm test`) runs three tiny scripted sessions on Haiku and keeps only the messages' shapes (`shapeOf`: kinds, flags, tool names, ids made up), a few cents each. The contract's real sessions (`REAL`) are those recordings, from Claude Code 2.1.289, with every id and word made up. Claude Code's own schema for the SDK's messages (in its bundle) says the rest: the background list is every live background task after a change, replaces the last, is sent whenever which tasks run changes and never at startup, and comes before a task's own start and end "in practice", the order otherwise unspecified.
 
-| expectation | taught by | real (recorded; in the transcripts) | stand-in |
+| expectation | taught by | real (recorded) | stand-in |
 | --- | --- | --- | --- |
-| every turn opens with `init` | | ✓ 12 turns of 12 | ✓ (it opened only the first: fixed) |
-| a message sent mid-turn is folded into it: the turn ends counting nothing queued, and no turn of its own follows | | ✓ 1 of 1; 180 of the 310 sent during a turn (the other 130 got a turn of their own) | ✓ (it could only queue one for the next turn: it can now fold, an action the session's checks pick among) |
-| a message sent as the turn ends gets a turn of its own, though the ending turn counted nothing queued | the race found on main | ✓ 2 of 2 | ✓ |
-| the background list comes before a task's own start and end, and already says it | | ✓ 12 of 12 | ✓ (it came after: fixed) |
-| a running workflow is in every background list from its start to its end | eab2be2 | ✓ 1 workflow of 1 | ✓ |
-| a task that ends while no turn is under way is taken in a turn of Claude Code's own | 879f9ec | ✓ 5 of 5; 151 reports while idle (10 more never taken, each as its session ended) | ✓ |
-| a task that ends during a turn is folded into it | | ✓ 1 of 1; 667 of the 736 reports during a turn | ✓ (it could only queue it: it can now fold) |
-| with the office's input closed, a report still gets its turn, and a tool needing approval there fails without asking | 879f9ec | ✓ 3 tools of 3, failing with "Tool permission request failed: AbortError: Stream closed"; the transcripts show 34 tools cancelled with "The user doesn't want to take this action right now" | ✓ (it counted them: it now shows the call and its failed result) |
-| Claude Code exits once the office's input has closed, with no turn under way and nothing running | | ✓ 5 of 5 | ✓ |
-| a background command's start says it's in the background, and names the tool call that started it | | ✓ 5 of 5; 429 background commands | ✓ |
+| every turn opens with `init` | | ✓ | ✓ (it opened only the first: fixed) |
+| a message sent mid-turn is folded into it: the turn ends counting nothing queued, and no turn of its own follows | | ✓ (in the transcripts, some sent during a turn got one of their own) | ✓ (it could only queue one for the next turn: it can now fold, an action the session's checks pick among) |
+| a message sent as the turn ends gets a turn of its own, though the ending turn counted nothing queued | the race found on main | ✓ | ✓ |
+| the background list comes before a task's own start and end, and already says it | | ✓ | ✓ (it came after: fixed) |
+| a running workflow is in every background list from its start to its end | eab2be2 | ✓ | ✓ |
+| a task that ends while no turn is under way is taken in a turn of Claude Code's own | 879f9ec | ✓ (in the transcripts, a few were never taken, each as its session ended) | ✓ |
+| a task that ends during a turn is folded into it | | ✓ | ✓ (it could only queue it: it can now fold) |
+| with the office's input closed, a report still gets its turn, and a tool needing approval there fails without asking | 879f9ec | ✓ failing with "Tool permission request failed: AbortError: Stream closed"; the transcripts show tools cancelled with "The user doesn't want to take this action right now" | ✓ (it counted them: it now shows the call and its failed result) |
+| Claude Code exits once the office's input has closed, with no turn under way and nothing running | | ✓ | ✓ |
+| a background command's start says it's in the background, and names the tool call that started it | | ✓ | ✓ |
 
 A level up, the test plays each real session's messages to the office's runner (`ClaudeRunner`), which keeps listening until the last turn is over in all three, including the one where the recording closed its input as the turn ended with a command running (879f9ec put back): the runner, unlike the recording, listened on through the report's turn. `FakeClaude` and `DemoRunner` stand in for the runner and Claude Code together and say nothing at the SDK's `query`, so only what the runner does can be held against them: `FakeClaude` takes a message whatever (`send` never refuses: excused, its turns end when the test says), and can't stop a task once deaf, as the runner can't once its input has closed. `DemoRunner` isn't held.
 
@@ -59,7 +59,7 @@ Beyond the contract, the stand-in plays what no recording shows, for the session
 
 ## Did it catch the real bugs?
 
-Each external fix's code was reversed onto today's (only its non-test changes), and the contracts run:
+Each external fix's code was reversed onto the code of the day (only its non-test changes), and the contracts run (as of 2026-10):
 
 | fix | | caught |
 | --- | --- | --- |

@@ -22,7 +22,7 @@ The rules are in `server/agents/bugCorpus.ts`, tested next to it; git, the workt
 
 ## The list
 
-`fixes.txt` is the 90 real defect fixes on `main` from 2026-10-04 to 10-16, read by hand from all 504 commits (keyword searches find a third of them: this repo's commit subjects say what's now true, "X no longer Y", not "fix"). Each has a kind:
+`fixes.txt` is the 90 real defect fixes on `main` from 2026-10-04 to 10-16, read by hand from all 504 commits (keyword searches find a third of them: this repo's commit subjects say what's now true, "X no longer Y", not "fix"). Each has a kind (cases as of the run on 2026-10-16):
 
 | kind | | fixes | cases |
 | --- | --- | ---: | ---: |
@@ -55,13 +55,13 @@ Each case is then traced to the commit that brought its bug in, as the SZZ metho
 | `first-testable` | the tests fail on it and can't run before it |
 | `untestable` | the tests can't run on it at all |
 
-Of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every suspect ruled out. Six of the 29 were brought in by an earlier fix. Confirming more is rarely possible: a test written with a fix leans on code from that day, so on older code it can't run at all, and a `git bisect` with it (tried, and dropped) only finds the first commit it can run on. Blame's suspects are the standard stand-in, with its known noise: a commit that moved or reformatted the lines can take the blame for them.
+As of that run, of the 39 cases, 29 are traced (3 confirmed by their tests) and 10 have every suspect ruled out. Six of the 29 were brought in by an earlier fix. Confirming more is rarely possible: a test written with a fix leans on code from that day, so on older code it can't run at all, and a `git bisect` with it (tried, and dropped) only finds the first commit it can run on. Blame's suspects are the standard stand-in, with its known noise: a commit that moved or reformatted the lines can take the blame for them.
 
 ## Replaying QA
 
 `pnpm run bug-replay` runs the QA officer's own review (its system prompt, prompt, report schema, model and Claude Code settings, as [QA's catch rate](qa-catch.md) does) on each commit a traced bug came from, as a pull request against the commit before it, in a throwaway clone of this repo. Each of these commits got past QA once, so it says how many of them today's QA, or a change to it, would stop, and for the right reason. Each bug is scored:
 
-- **caught**: the review stopped the change, and a **judge** (a different model from QA's, `claude-opus-5-5`, holding the fix's own diff as the answer key) says one of its findings is the very bug the fix fixed: the same wrong outcome from the same cause, not the same file or a vague worry. The judge was checked both ways before use (`JUDGE_SYSTEM` in `server/agents/bugReplay.ts`), and each run keeps the whole report so its calls can be checked by hand.
+- **caught**: the review stopped the change, and a **judge** (a different model from QA's, `claude-opus-5-5`, holding the fix's own diff as the answer key) says one of its findings is the very bug the fix fixed: the same wrong outcome from the same cause, not the same file or a vague worry. The judge was checked both ways before use, and each run keeps the whole report so its calls can be checked by hand.
 - **stopped for another bug**: the review stopped the change for something else.
 - **missed**: it let the change through.
 
@@ -74,13 +74,13 @@ It replays the office's QA as it is, which since the results below blocks a chan
 
 | | |
 | --- | --- |
-| `pnpm run bug-replay` | every commit a traced bug came from (24 for 26 bugs: the repo's first commit has nothing before it to review against), two reviews at a time |
+| `pnpm run bug-replay` | every commit a traced bug came from (except the repo's first, which has nothing before it to review against), a few reviews at a time |
 | `pnpm run bug-replay --commits 3` | the first few |
 | `pnpm run bug-replay --control` | as many controls: commits that landed a pull request changing the office's code, that no listed bug came from and no listed fix made, spread over the same stretch of history. QA failing one is most likely a false alarm |
 | `pnpm run bug-replay --dry` | what it would review, without reviewing |
 | `pnpm run bug-replay --only <sha>` | one commit a bug came from |
 
-A review costs what one in the office does, about $0.60 and a few minutes: a full run with controls is 48 reviews, about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `tools/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `tools/qaReview.ts`.
+A review costs what one in the office does (as of 2026-10, about $0.60 and a few minutes): a full run with controls was about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `tools/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `tools/qaReview.ts`.
 
 The clones are old builds, whose instructions say to run the office (`npm run demo`, `pnpm dev`) on the live office's port and data folder, 4477 and `~/.focus`. So each review's session runs with a free port and a data folder inside its clone (`PORT`, `FOCUS_DATA_DIR`, `reviewEnv` in `tools/replayRules.ts`), and when it ends, whatever is still running in the clone is stopped (`stopLeftovers`): a demo QA started in the background outlives the session otherwise. Both apply to `qa-catch` too.
 

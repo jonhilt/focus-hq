@@ -15,7 +15,7 @@ A fully tested function scores its complexity; an untested one scores about its 
 
 | | |
 | --- | --- |
-| `pnpm run crap` | runs the unit tests with coverage (about 30 s), then prints how many functions are over 30, the spread of scores and the riskiest 10 |
+| `pnpm run crap` | runs the unit tests with coverage, then prints how many functions are over 30, the spread of scores and the riskiest 10 |
 | `pnpm run crap --top 25` | the riskiest 25 |
 | `pnpm run crap --all` | `client/src/` and `tools/` too. Most of the client is checked in the browser, not by unit tests, so it scores high: that's expected, not a to-do list |
 | `pnpm run crap --changed [base]` | also lists what the branch touched since `base` (from where the branch left it, `main` by default): how many functions, their total CRAP, and each one over 30 |
@@ -34,5 +34,3 @@ Focus's QA runs `pnpm run crap --changed --ratchet` on every pull request to thi
 - Coverage says a line ran, not that a test checked what it did: a test with no assertions covers as well as a good one. Don't raise coverage for the score's sake.
 - Cyclomatic complexity counts paths, not how hard the code is to read: a flat `switch` scores high and reads easily.
 - It's per function, so it can't see coupling, duplication or naming.
-
-The scoring is in `scripts/crapScore.ts` (pure, tested next to it); `scripts/crap.ts` runs the tests and prints the report.

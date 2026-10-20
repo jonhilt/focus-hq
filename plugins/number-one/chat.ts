@@ -1,4 +1,4 @@
-// Number One's chat in the ready room (README.md): one conversation, a turn at a time, and the prompts and reply
+// Number One's chat in the ready room: one conversation, a turn at a time, and the prompts and reply
 // schema of their read-only Claude Code session.
 import { freshChat, numberOne, type NumberOneChat, type NumberOneLive, type NumberOneMessage, type NumberOneSaved, type WorkSuggestion } from './shared';
 import { type ChatProject, errorMessage, type PersonalEntry, type PluginState, type Project, projectList, type Settings, type ShipStatus, shownProjects, spokenLine, truncate } from '../../plugin-api/server';

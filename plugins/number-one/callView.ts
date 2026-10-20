@@ -2,7 +2,7 @@ import { type CallLine, type CallStatus, NUMBER_ONE, type NumberOneState } from 
 import { callOver, callStrip, type CallStrip } from './view';
 import { busy, callPlugin, h, office, onPluginState, pluginState } from '../../plugin-api/client';
 
-// Calls to Number One (calls.md): this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
+// Calls to Number One: this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
 // call on a line of its own, and tells every screen how it's going (the plugin's `call`). The call outlives Number
 // One's panel, so the captain can walk round the ship while they talk.
 

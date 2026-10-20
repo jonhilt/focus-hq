@@ -1,4 +1,4 @@
-// The retro on the engineering station (README.md): its card on the overview, and its own view, where the captain
+// The retro on the engineering station: its card on the overview, and its own view, where the captain
 // starts one and decides on its drafts.
 import {
   busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, office, pluginState, timeAgo, type Ui,

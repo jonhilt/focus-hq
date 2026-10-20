@@ -1,4 +1,4 @@
-// The briefings plugin's lead tool (README.md): mcp__office__explain, an animated explainer of a concept on the lead's
+// The briefings plugin's lead tool: mcp__office__explain, an animated explainer of a concept on the lead's
 // station's screen, in the office's LCARS player, with a picture of its stage at the middle of each beat for the lead
 // to look at and what the checks found there. Each beat's receipts are looked up in their sources first: an explainer
 // whose quotes aren't there, or whose caption or narration says what its quotes don't, goes back to the lead to fix.

@@ -1,4 +1,4 @@
-// The plan usage plugin (README.md): main engineering's readout of your Claude plan's usage, read from Claude Code's
+// The plan usage plugin: main engineering's readout of your Claude plan's usage, read from Claude Code's
 // structured /usage every few minutes, with how the office's sessions sign in. Its browser part puts it on the HUD,
 // across the top of the engineering overview, and on the MSD. FOCUS_PLUGINS=usage, for the whole office.
 import type { FocusPlugin } from '../../plugin-api/server';

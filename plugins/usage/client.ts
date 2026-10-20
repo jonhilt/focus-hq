@@ -1,4 +1,4 @@
-// The plan usage readout in the browser (README.md): a stat on the HUD wherever you are, the readout across the top of
+// The plan usage readout in the browser: a stat on the HUD wherever you are, the readout across the top of
 // the engineering overview, and its gauges on main engineering's MSD.
 import { type ClientPlugin, pluginState } from '../../plugin-api/client';
 import { drawUsage } from './msd';

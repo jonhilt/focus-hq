@@ -1,4 +1,4 @@
-// The briefings plugin's parts its server and browser share (README.md): the beats as the screen hears of them from the
+// The briefings plugin's parts its server and browser share: the beats as the screen hears of them from the
 // player, what a new version of a briefing changed, and the captain's setting for who writes a lead's brief up.
 import { type Effort, EFFORT_LEVELS, type Settings } from '../../plugin-api/shared';
 

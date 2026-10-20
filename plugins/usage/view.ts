@@ -6,7 +6,7 @@ const SIGN_IN = { plan: { chip: '', label: 'plan' }, key: { chip: 'warn', label:
 
 /**
  * Your plan's usage at the top of the engineering panel: a bar per limit, how the office signs in, and each agent on
- * board with what they sign in with and what their session has used at API prices (README.md).
+ * board with what they sign in with and what their session has used at API prices.
  */
 export function usageView(ui: Ui, usage: Usage | null): HTMLElement {
   const rows = usageRows(usage);

@@ -1,5 +1,5 @@
-// The number-one plugin (README.md): Number One in the ready room, the ship's first officer, who talks anything through
-// with the captain in a read-only chat, and takes the captain's calls hands-free (calls.md). FOCUS_PLUGINS=number-one.
+// The number-one plugin: Number One in the ready room, the ship's first officer, who talks anything through
+// with the captain in a read-only chat, and takes the captain's calls hands-free. FOCUS_PLUGINS=number-one.
 import { Calls } from './call/calls';
 import { NumberOne } from './chat';
 import { DemoNumberOne } from './demo';

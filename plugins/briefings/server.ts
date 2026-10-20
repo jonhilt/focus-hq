@@ -1,4 +1,4 @@
-// The briefings plugin (README.md): the lead's explain tool, an animated explainer of a concept on their station's
+// The briefings plugin: the lead's explain tool, an animated explainer of a concept on their station's
 // screen in the office's LCARS player, written by the lead or by the office's writer from their brief, on the model the
 // captain set (`/writer`). Its browser part narrates a briefing up close, and has the setting on the engineering panel.
 // FOCUS_PLUGINS=briefings, and switched on in each project's settings.

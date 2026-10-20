@@ -4,7 +4,7 @@ import type { RetroOfficer, RetroRequest } from './engineer';
 import { READ_SCHEMA, readerSystemPrompt } from './frictions';
 import { DRAFTS_SCHEMA, engineerPrompt, engineerSystemPrompt } from './retro';
 
-/** The model that reads sessions for frictions at retro time: it labels the same trouble the same way (see README.md). */
+/** The model that reads sessions for frictions at retro time: it labels the same trouble the same way. */
 export const READER_MODEL = 'claude-opus-5-5';
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changedLines, changedSummary, crapScore, distribution, type FileCoverage, functionsIn, overByFile, score, summary, touched, type Scored } from './crapScore';
+import { changedLines, changedSummary, CRAP_LINE, crapScore, distribution, type FileCoverage, functionsIn, overByFile, score, summary, touched, type Scored } from './crapScore';
 
 describe('crapScore', () => {
   it('is just the complexity when fully covered', () => {
@@ -12,6 +12,12 @@ describe('crapScore', () => {
 
   it('crosses 30 at about complexity 12 half covered', () => {
     expect(crapScore(12, 0.5)).toBe(30);
+  });
+
+  // crap.md quotes these: the first complexity over the line, untested, half covered, 80% covered and fully covered
+  it('puts a function over the line from complexity 6 untested, 13 half covered, 26 at 80% and 31 fully covered', () => {
+    const firstOver = (coverage: number) => Array.from({ length: 100 }, (_, i) => i + 1).find((c) => crapScore(c, coverage) > CRAP_LINE);
+    expect([0, 0.5, 0.8, 1].map(firstOver)).toEqual([6, 13, 26, 31]);
   });
 });
 

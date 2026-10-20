@@ -1,4 +1,4 @@
-// The briefings plugin in the browser (README.md): round a lead's explainer up close, its voice-over, which hears from
+// The briefings plugin in the browser: round a lead's explainer up close, its voice-over, which hears from
 // the player's page and talks each beat through; and on the engineering panel, the captain's setting for the writer.
 import { callPlugin, type ClientPlugin, h, leadVoice, office, pluginState, type ScreenPart, type ScreenView, Switch, type Ui } from '../../plugin-api/client';
 import { EFFORT_LEVELS } from '../../plugin-api/shared';

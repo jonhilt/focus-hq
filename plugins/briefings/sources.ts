@@ -1,4 +1,4 @@
-// Where a briefing's receipts are looked up (README.md): the lead's checkout (each file cited at the commit it's at, and
+// Where a briefing's receipts are looked up: the lead's checkout (each file cited at the commit it's at, and
 // whether it's changed since), the lead's own words in their session's transcript, the ship's log by line, and a pull
 // request on GitHub (its title, description, comments, QA's report among them, and reviews). The
 // office's real sources are `officeSources`; `receiptFor` works on any, so the explain tool is tested on stand-ins.

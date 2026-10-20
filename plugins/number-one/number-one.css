@@ -1,4 +1,4 @@
-/* Number One's chat in the ready room, beside the core's .briefing-* chat, and the call strip over it (README.md) */
+/* Number One's chat in the ready room, beside the core's .briefing-* chat, and the call strip over it */
 .briefing-msg.number-one { --tone: var(--lcars-lilac); align-self: flex-start; border-left: 6px solid var(--tone); border-top-left-radius: 0; border-bottom-left-radius: 0; }
 .briefing-chat.number-one { height: 100%; max-width: 860px; margin: 0 auto; }
 .number-one-call { margin-bottom: 8px; display: flex; flex-direction: column; gap: 6px; }

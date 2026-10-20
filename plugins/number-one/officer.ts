@@ -1,4 +1,4 @@
-// Number One's Claude Code session (README.md): read-only, like the rest of the permanent crew, with the ship's state
+// Number One's Claude Code session: read-only, like the rest of the permanent crew, with the ship's state
 // and any project's code on demand through the office's ship tools.
 import { CODE_TOOLS, type ReadOnlyResult, type ShipSessionRun, WEB_TOOLS } from '../../plugin-api/server';
 import { asNumberOneReply, type NumberOneOfficer, type NumberOneReply, type NumberOneTurn, numberOnePrompt, numberOneReplySchema, numberOneSystemPrompt } from './chat';

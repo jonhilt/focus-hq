@@ -141,14 +141,14 @@ describe('Calls', () => {
 
   it("won't take a call without both keys", async () => {
     const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
-    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts (see plugins/number-one/calls.md)', call: null });
+    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TYPESAFE_API_KEY');
   });
 });
 
 describe('callsMissing', () => {
   it('names each missing key, and needs none in the demo', () => {
-    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where the office starts (see plugins/number-one/calls.md)');
+    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where the office starts');
     expect(callsMissing({ openai: 'a', typesafe: 'b' }, false)).toBeUndefined();
     expect(callsMissing({}, true)).toBeUndefined();
   });

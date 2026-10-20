@@ -1,4 +1,4 @@
-// Number One in the ready room (README.md): the plugin's part of the ship, in the visitor's chair at the captain's desk.
+// Number One in the ready room: the plugin's part of the ship, in the visitor's chair at the captain's desk.
 import * as THREE from 'three';
 import { chatNow, NUMBER_ONE, numberOne, type NumberOneState } from './shared';
 import { numberOneView } from './view';

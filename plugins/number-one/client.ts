@@ -1,4 +1,4 @@
-// Number One in the browser (README.md): their figure in the ready room, their chat on E or the 1 key, a toast when a
+// Number One in the browser: their figure in the ready room, their chat on E or the 1 key, a toast when a
 // reply lands while you're elsewhere, and the call this browser carries.
 import { followCalls } from './callView';
 import { seatNumberOne } from './figure';

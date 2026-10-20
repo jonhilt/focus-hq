@@ -1,4 +1,4 @@
-// The chief engineer's retros (README.md): the plugin's state, as its server part saves it and the browser shows it.
+// The chief engineer's retros: the plugin's state, as its server part saves it and the browser shows it.
 
 import type { AgentStatus } from '../../plugin-api/shared';
 
