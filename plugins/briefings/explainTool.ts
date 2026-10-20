@@ -1,7 +1,7 @@
 // The briefings plugin's lead tool (README.md): mcp__office__explain, an animated explainer of a concept on the lead's
 // station's screen, in the office's LCARS player, with a picture of its stage at the middle of each beat for the lead
 // to look at and what the checks found there. Each beat's receipts are looked up in their sources first: an explainer
-// whose quotes aren't there, or whose narration says what its quotes don't, goes back to the lead to fix.
+// whose quotes aren't there, or whose caption or narration says what its quotes don't, goes back to the lead to fix.
 import { z } from 'zod';
 import type { LeadTool, LeadToolContext } from '../../plugin-api/server';
 import { beatMoments, EXPLAINER_LIMITS as E, explainerCheck, type ExplainerInput, explainerPage, momentNotes, STAGE_CLIP, STAGE_SIZE, stageSeen } from './explainer';
@@ -25,7 +25,7 @@ export const explainShape = {
       kind: z.enum(['file', 'said', 'ledger']).describe('file: a file in your checkout; said: your own words earlier in this session; ledger: a line of the ship\'s log.'),
       where: z.string().optional().describe('For file, its path (its repo\'s folder first when the goal has more than one); for ledger, the line\'s seq. Nothing for said.'),
       quote: z.string().max(R.quote).describe(`The source's words that back this beat, exactly as the source has them (at most ${R.quote} characters).`),
-    })).max(R.refs).optional().describe(`Receipts: where this beat's facts come from, ${R.refs} at most. Every number and name its narration says must be in one of their quotes, or the office sends the explainer back. A beat with none shows as your interpretation. Explaining how Focus itself works, cite the code as it is (file), not the design you meant.`),
+    })).max(R.refs).optional().describe(`Receipts: where this beat's facts come from, ${R.refs} at most. Every number and name its caption and narration say must be in one of their quotes, or the office sends the explainer back. A beat with none shows as your interpretation. Explaining how Focus itself works, cite the code as it is (file), not the design you meant.`),
     narration: z.string().max(E.narration).optional().describe(`What a voice says over this beat when the captain plays it with the voice on (at most ${E.narration} characters): talk them through what they're looking at, as if sitting beside them pointing at the stage ("on the left is the queue; watch what happens when the worker goes down"), in plain spoken words with no code or file paths. The beat holds on its last frame until it's said. Its title and caption are read out if left out.`),
   })).min(E.minBeats).max(E.maxBeats).describe(`The beats in order (${E.minBeats} to ${E.maxBeats}), each one step of the explanation: they play one after another, and the captain can step through them one at a time.`),
   stage: z.object({
@@ -44,7 +44,7 @@ async function beatReceipts(input: ExplainerInput, lead: LeadToolContext, source
     const found = await Promise.all(refs.map((ref) => receiptFor(ref, lead, sources)));
     const good = found.filter((f): f is Receipt => typeof f !== 'string');
     receipts.push(good);
-    const missing = refs.length ? unbacked(beat.narration ?? `${beat.title}. ${beat.text}`, good.map((r) => r.quote)) : [];
+    const missing = refs.length ? unbacked([beat.text, beat.narration ?? ''].join('\n'), good.map((r) => r.quote)) : [];
     problems.push(...receiptProblems(i, found.filter((f): f is string => typeof f === 'string'), missing));
   }
   return { receipts, problems };

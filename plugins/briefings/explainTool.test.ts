@@ -117,12 +117,15 @@ describe('the explain tool', () => {
       expect(shown[0].page.html).toContain('"label":"ledger #7 · qa-verdict"');
     });
 
-    it('sends it back, unshown, when a quote isn’t in its source or the narration says what no quote does', async () => {
+    it('sends it back, unshown, when a quote isn’t in its source or the caption or narration says what no quote does', async () => {
       const { context, shown } = lead();
       const badQuote = withRefs([{ kind: 'file', where: 'server/ledger.ts', quote: 'rewrites the whole file' }]);
       await expect(explainTool.run(context, badQuote)).rejects.toThrow(/Beat 1: "rewrites the whole file" isn't in server\/ledger\.ts/);
       const unbacked = withRefs([{ kind: 'said', quote: 'Haiku judged as well as Sonnet' }], 'Haiku beat Opus on 600 turns.');
       await expect(explainTool.run(context, unbacked)).rejects.toThrow(/Beat 1 says "600", "Opus", which none of its quotes do/);
+      const captioned = withRefs([{ kind: 'said', quote: 'Haiku judged as well as Sonnet' }], 'Haiku judged as well as Sonnet.');
+      captioned.beats[0].text = 'Haiku matched Sonnet on 600 turns.';
+      await expect(explainTool.run(context, captioned)).rejects.toThrow(/Beat 1 says "600", which none/);
       await expect(explainTool.run(context, withRefs([{ kind: 'ledger', where: '8', quote: 'fail' }]))).rejects.toThrow(/no line 8/);
       await expect(explainTool.run(context, withRefs([{ kind: 'file', where: 'nope.ts', quote: 'x' }]))).rejects.toThrow(/no file nope\.ts/);
       expect(shown).toEqual([]);
