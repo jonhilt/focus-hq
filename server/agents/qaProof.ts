@@ -1,5 +1,5 @@
 import { Effect } from 'effect';
-import type { QaProof, QaReport } from '../../shared/types';
+import type { QaProof, QaReport, QaStep } from '../../shared/types';
 import { truncate } from '../util';
 import { isRecord } from './transcript';
 
@@ -17,28 +17,48 @@ export const PROOF_MS = 10 * 60_000;
 /**
  * How QA hunts the bugs that get past review, and the rule it works to: fail only with proof. From the bug replay's
  * hunting arm (docs/bug-corpus.md#replaying-qa), kept general: QA reviews other projects' repos, with other test runners.
+ * Three steps, each a headline for the QA station's Playbook and the exact text QA gets (`HUNTING` puts them together).
  */
-export const HUNTING = `
-## Hunting the bugs that get past review
-
-Bugs that reach the main branch are rarely in the code as it reads: they're in paths the change's own tests never walk. Before your verdict, hunt these in the changed code:
+const HUNT: QaStep = {
+  title: 'Hunts the bugs that get past review',
+  text: `Bugs that reach the main branch are rarely in the code as it reads: they're in paths the change's own tests never walk. Before your verdict, hunt these in the changed code:
 
 - **Restart, shutdown and close.** State that's persisted, restored or cleared: what happens across a clean shutdown and restart, a crash mid-way, a close and reopen? Flags left set, lists reset to empty, a stop that clears what should survive.
 - **Two things at once.** The same action twice in quick succession, or two callers at once: double launches, a second request while the first is still in flight, an older copy overwriting a newer one, a read just after a write that sees the old state.
 - **Assumptions about outside systems.** git, the hosting service's API, an SDK, the shell, the network, the clock: a ref that hasn't moved yet, a status that's unknown for a while, a glob or quote the shell reads differently, a stream that arrives before it's whole, a call that fails or times out.
-- **Edge-case input.** Empty, repeated, renumbered, very large, the wrong type or extension, ids that restart.
+- **Edge-case input.** Empty, repeated, renumbered, very large, the wrong type or extension, ids that restart.`,
+};
 
-**Probe, don't just read.** Reading these paths is how they got past review before. For each piece of state the change persists, restores or clears, and each action that can run twice or race, write a probe: a test, in the repo's own test framework, that drives that path through the real code (stop and restart it, call it twice at once, feed it the odd input) and asserts what the change promises should hold. Name each probe as the repo names its tests with \`.proof\` before the test suffix, beside the code it tests (\`queue.proof.test.ts\`, \`test_queue_proof.py\`, \`queue_proof_test.go\`), and run it. Delete the probes that pass. A probe that fails on an assertion because of the change (not a typo, a missing import or a setup mistake) is proof of a bug: keep it, and don't fix the code. Make it assert: a crash the test only sees as an error is weaker proof than an \`expect\` that says what should have happened.
+const PROBE: QaStep = {
+  title: 'Writes probe tests that drive those paths',
+  text: `**Probe, don't just read.** Reading these paths is how they got past review before. For each piece of state the change persists, restores or clears, and each action that can run twice or race, write a probe: a test, in the repo's own test framework, that drives that path through the real code (stop and restart it, call it twice at once, feed it the odd input) and asserts what the change promises should hold. Name each probe as the repo names its tests with \`.proof\` before the test suffix, beside the code it tests (\`queue.proof.test.ts\`, \`test_queue_proof.py\`, \`queue_proof_test.go\`), and run it. Delete the probes that pass. A probe that fails on an assertion because of the change (not a typo, a missing import or a setup mistake) is proof of a bug: keep it, and don't fix the code. Make it assert: a crash the test only sees as an error is weaker proof than an \`expect\` that says what should have happened.`,
+};
 
-## Fail only with proof
-
-The office checks your proof itself, before it posts your report, and your verdict blocks the pull request only if a proof holds. Name each in your report's \`proofs\`:
+const PROOF: QaStep = {
+  title: 'Fails a PR only with proof the office checks',
+  text: `The office checks your proof itself, before it posts your report, and your verdict blocks the pull request only if a proof holds. Name each in your report's \`proofs\`:
 
 - **test**: a test file that fails (one of your probes, or a test already in the repo that the change breaks), and the command that runs just that file from the repo's root, as you ran it (\`pnpm vitest run src/queue.proof.test.ts\`, \`python -m pytest tests/test_queue_proof.py\`). It must name the file, and it runs without a shell: no pipes, \`&&\` or redirects. It holds when the test fails on an assertion: one that fails to load, compile or find its imports doesn't.
 - **check**: one of the project's own checks (its type check, lint or build) that fails, and its command (\`pnpm run typecheck\`). It holds when the command exits with a failure.
 - **screenshot**: only for what nothing but a browser can show (a broken layout, a blank page, a control that doesn't respond), the number of the screenshot that shows it, counting from 1 in the order you took them. It holds when that screenshot is one that goes on the pull request and the change touches UI code. Prefer a test whenever the logic behind the page can be tested.
 
-Fail the change only with at least one proof, and name it in a failed check. Findings without proof are still worth giving: put them in your checks, summary and fix instructions, and they go on the pull request as advice, with a pass. A proof test you keep goes to the developer to add to their branch and make pass, so write it as a test worth keeping.
+Fail the change only with at least one proof, and name it in a failed check. Findings without proof are still worth giving: put them in your checks, summary and fix instructions, and they go on the pull request as advice, with a pass. A proof test you keep goes to the developer to add to their branch and make pass, so write it as a test worth keeping.`,
+};
+
+/** Proof mode's steps, in the order QA gets them after "How to test". */
+export const HUNTING_STEPS: readonly QaStep[] = [HUNT, PROBE, PROOF];
+
+/** Proof mode's section of QA's instructions. */
+export const HUNTING = `
+## Hunting the bugs that get past review
+
+${HUNT.text}
+
+${PROBE.text}
+
+## Fail only with proof
+
+${PROOF.text}
 `;
 
 /** The `proofs` property of QA's report schema (QA_SCHEMA in qa.ts). */

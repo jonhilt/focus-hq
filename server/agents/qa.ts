@@ -1,27 +1,22 @@
 import { createHash } from 'node:crypto';
-import type { Agent, FailedCheck, FileAccount, QaProof, QaReport, QaReview, QaScreenshot, QaSpotCheck, Settings } from '../../shared/types';
-import { filesCovered, mustOpen, spotCheckUrl } from '../../shared/qa';
+import type { Agent, FailedCheck, FileAccount, Project, QaPlaybook, QaProof, QaRepoChecks, QaReport, QaReview, QaScreenshot, QaSpotCheck, QaStep } from '../../shared/types';
+import { filesCovered, mustOpen, qaProofFor, spotCheckUrl } from '../../shared/qa';
 import { fieldsOf, isRecord } from '../../shared/records';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
+import { mergeCheckCommands, type PackageFacts } from '../packageManager';
 import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
-import { HUNTING, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
+import { HUNTING, HUNTING_STEPS, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
 // The QA officer's instructions, their report's schema, and the PR comment the office posts. Pure, so they're unit
 // tested (qa.test.ts).
 
+export { qaAgentModel } from '../../shared/qa';
+
 /** How many of the screenshots QA takes on purpose go on the pull request: the last ones. */
 export const MAX_SCREENSHOTS = 8;
-
-/**
- * The model a QA officer or goal reviewer works on, stamped on them each time they sit down to a review, so a change to
- * the setting applies from the next review: the office's QA model, else its `model` setting. Missing = Claude Code's default.
- */
-export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): string | undefined {
-  return settings.qaModel.trim() || settings.model.trim() || undefined;
-}
 
 /** How many places in the diff QA picks for the captain to spot-check, at most. */
 export const SPOT_CHECKS = 3;
@@ -381,7 +376,37 @@ Test this PR on its own first, as below. Then, where the repos depend on each ot
 `;
 }
 
-export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = []): string {
+/**
+ * QA's "How to test" steps for a pull request into `baseBranch`, numbered in this order in its instructions
+ * (`qaSystemAppend`) and listed by title at the QA station's Playbook. `checks` are the commands of the repo's own checks
+ * when the office knows them (`repoChecks`); without them QA works out which there are.
+ */
+export function qaSteps(baseBranch: string, checks: readonly string[] = []): QaStep[] {
+  const run = checks.length
+    ? `run these checks: ${checks.map((c) => `\`${c}\``).join(', ')}, and anything else the repo's CLAUDE.md asks.`
+    : "run the project's test suite, linters, type checks and build (whichever exist).";
+  return [
+    { title: 'Works out the acceptance criteria', text: 'Read the PR description and the linked issue, and work out the acceptance criteria. Check every one.' },
+    {
+      title: 'Reviews the diff as a careful reviewer would',
+      text: `Review the code as a careful reviewer would: \`git diff origin/${baseBranch}...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, new logic without tests, and new tests that run code without checking what it does (they raise coverage but catch nothing).`,
+    },
+    { title: 'Runs the checks', text: `Install dependencies if needed, then ${run}` },
+    {
+      title: 'Reads every changed line no test exercises',
+      text: `Then go through every file the diff changes (\`git diff --stat origin/${baseBranch}...HEAD\` lists them all: however many there are, don't pick a few), and find those whose changes no test exercises. Scripts, schemas, prompts and config often aren't tested, and a coverage report may not reach them. Read each of those files' changed lines one by one: a green suite says nothing about them, and they're where bugs get through. For each line, ask what input or state makes it wrong: a comparison off by one, a condition or guard the wrong way round, an argument or index read from the wrong place, a flag, default or schema setting flipped. A real bug there fails the PR like any other: name its file and line. Your report's files lists every changed file, none left out: the tests that exercise it (or none) and what you checked.`,
+    },
+    {
+      title: 'Clicks through UI changes in a browser',
+      text: `If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
+   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.`,
+    },
+    { title: 'Probes with throwaway scripts', text: `You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}` },
+  ];
+}
+
+/** QA's instructions for reviewing `pr` at `sha`: `checks` are the commands of its repo's checks, for step 3 (`qaSteps`). */
+export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = [], checks: readonly string[] = []): string {
   const brief = project.qaBrief?.trim();
   const proof = project.qaProof !== false;
   return `
@@ -393,13 +418,7 @@ Pull request #${pr.number} "${pr.title}", branch \`${pr.branch}\` into \`${pr.ba
 Your current directory is a throwaway checkout of its head, commit ${sha.slice(0, 7)}, detached.
 ${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\n` : ''}
 How to test:
-1. Read the PR description and the linked issue, and work out the acceptance criteria. Check every one.
-2. Review the code as a careful reviewer would: \`git diff origin/${pr.baseBranch}...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, new logic without tests, and new tests that run code without checking what it does (they raise coverage but catch nothing).
-3. Install dependencies if needed, then run the project's test suite, linters, type checks and build (whichever exist).
-4. Then go through every file the diff changes (\`git diff --stat origin/${pr.baseBranch}...HEAD\` lists them all: however many there are, don't pick a few), and find those whose changes no test exercises. Scripts, schemas, prompts and config often aren't tested, and a coverage report may not reach them. Read each of those files' changed lines one by one: a green suite says nothing about them, and they're where bugs get through. For each line, ask what input or state makes it wrong: a comparison off by one, a condition or guard the wrong way round, an argument or index read from the wrong place, a flag, default or schema setting flipped. A real bug there fails the PR like any other: name its file and line. Your report's files lists every changed file, none left out: the tests that exercise it (or none) and what you checked.
-5. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
-   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
-6. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}
+${qaSteps(pr.baseBranch, checks).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
 ${proof ? HUNTING : ''}
 Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 
@@ -407,6 +426,37 @@ Finish with the structured QA report: the verdict, a two to four sentence summar
 
 Spot-checks: the captain rarely reads a whole diff, but likes to look at the riskiest few places with their own eyes. From your review, pick up to ${SPOT_CHECKS} places most worth that look, riskiest first: a new route or permission, a changed guard or merge gate, a deleted or weakened test, data that could be lost, a tricky concurrency or error path. Give the file, the line where it starts, and in a sentence what could go wrong there. Pick none for a change too small or plain to need it.
 `.trim();
+}
+
+/** What QA runs on `repo`, from what its clone's root says (`facts`; none when there's no clone) and the project's merge checks. */
+export function repoChecks(repo: string, facts: PackageFacts | undefined, chosen?: readonly string[]): QaRepoChecks {
+  return {
+    repo,
+    cloned: !!facts,
+    packageJson: !!facts?.packageJson,
+    claudeMd: !!facts?.claudeMd,
+    commands: facts ? mergeCheckCommands(facts.scripts, facts.lockfiles, chosen).map((command) => command.join(' ')) : [],
+  };
+}
+
+/** A pull request to show QA's instructions with before there's a real one: #123 into `main` in `repo`. */
+function examplePr(repo: string): PullRequestDetail {
+  return { number: 123, title: 'Example PR', body: '', url: `https://github.com/${repo}/pull/123`, branch: 'feature', baseBranch: 'main', headSha: '1234567', linkedIssues: [] };
+}
+
+/**
+ * The QA station's Playbook for `project`, from QA's instructions as they'd be now (the officer `officer`): its steps,
+ * proof mode's only when it's on, the checks it runs on each repo, and the whole instructions for an example pull request
+ * in the first repo, whose checks step 3 names.
+ */
+export function qaPlaybook(officer: string, project: Pick<Project, 'name' | 'repos' | 'qaBrief' | 'qaProof'>, repos: QaRepoChecks[]): QaPlaybook {
+  const checks = repos[0]?.commands ?? [];
+  const pr = examplePr(project.repos[0] ?? 'owner/repo');
+  return {
+    steps: [...qaSteps(pr.baseBranch, checks), ...(qaProofFor(project) ? HUNTING_STEPS : [])],
+    repos,
+    prompt: qaSystemAppend({ name: officer }, project, pr, pr.headSha, [], checks),
+  };
 }
 
 /**

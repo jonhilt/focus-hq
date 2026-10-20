@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { mergeCheckScripts } from '../shared/mergeCheck';
+import { isRecord } from '../shared/records';
 
 // Which package manager a Node project uses, told by its lockfile, and the commands to install and run its scripts with
 // it. Pure, so it's unit tested (packageManager.test.ts); `lockfilesIn` and `packageManagerIn` look at the disk.
@@ -81,4 +83,32 @@ export function missingPackageManager(pm: PackageManager): string {
 /** Runs the package.json script `name`: `npm test`, `pnpm run lint`… */
 export function scriptCommand(pm: PackageManager, name: string): string[] {
   return name === 'test' ? [pm, 'test'] : [pm, 'run', name];
+}
+
+/** What a checkout's root says about its checks: whether it has a package.json, its scripts, its lockfiles and a CLAUDE.md. */
+export interface PackageFacts {
+  packageJson: boolean;
+  scripts?: Record<string, unknown>;
+  lockfiles: string[];
+  claudeMd: boolean;
+}
+
+/** The scripts of a package.json's text `pkg`: none when there's no file, it doesn't parse, or it has no scripts. */
+export function packageJsonScripts(pkg: string | undefined): Record<string, unknown> | undefined {
+  if (pkg === undefined) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(pkg);
+    return isRecord(parsed) && isRecord(parsed.scripts) ? parsed.scripts : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The commands of the merge check (`mergeCheckScripts`, from the project's `chosen` scripts) for a repo with these
+ * package.json `scripts` and `lockfiles`, run with its package manager. QA is told to run the same ones.
+ */
+export function mergeCheckCommands(scripts: Record<string, unknown> | undefined, lockfiles: Iterable<string>, chosen?: readonly string[]): string[][] {
+  const pm = packageManagerFor(lockfiles);
+  return mergeCheckScripts(scripts, chosen).map((name) => scriptCommand(pm, name));
 }

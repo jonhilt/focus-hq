@@ -2,13 +2,13 @@ import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
 import { autoSendBackFor, prKey, pullUrl, qaProofFor, sameCommit } from '../../../shared/qa';
-import type { Agent, FailedCheck, FixFor, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
+import type { Agent, FailedCheck, FixFor, QaPlaybook, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPrompt, type QaSibling, qaSystemAppend, verdictMark } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPlaybook, qaPrompt, type QaSibling, qaSystemAppend, repoChecks, verdictMark } from '../qa';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { PROOF_MS, prove } from '../qaProof';
@@ -205,7 +205,7 @@ export class Reviews extends Part {
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       const review = this.store.reviews.get(prKey(agent.repo, pr.number));
       if (review) this.record(prKey(agent.repo, pr.number), { kind: 'testing', sha, title: pr.title });
-      rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings);
+      rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings, yield* this.checksIn(agent));
       rt.shots = undefined;
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.take().map((m) => `- ${m}`).join('\n')}`;
@@ -239,17 +239,36 @@ export class Reviews extends Part {
       .map((s) => ({ repo: s.repo, number: s.number, folder: this.folderOf(agent.projectId, s.repo), sha: s.sha }));
   }
 
-  /** The QA officer's instructions; rebuilt from GitHub if the office restarted since the review began. */
-  qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub> {
+  /** The QA officer's instructions; rebuilt from GitHub and their checkout if the office restarted since the review began. */
+  qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace> {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       if (!rt.qaSystem) {
         const pr = yield* (yield* GitHub).getPullRequest(agent.repo, agent.issue.number);
         const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
-        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha, this.siblingsOf(agent));
+        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha, this.siblingsOf(agent), yield* this.checksIn(agent));
       }
       return rt.qaSystem;
     });
+  }
+
+  /** The commands of the repo's checks in the reviewer's checkout, for step 3 of QA's instructions: none, and QA works them out. */
+  private checksIn(agent: Agent): Effect.Effect<string[], never, Workspace> {
+    return Effect.gen({ self: this }, function* () {
+      const workspace = yield* Workspace;
+      const facts = yield* workspace.packageFacts(workspace.dir(this.reviewDir(agent)));
+      return repoChecks(agent.repo, facts, this.store.project(agent.projectId).mergeChecks).commands;
+    });
+  }
+
+  /** The QA station's Playbook: what QA does on the project, from its instructions as they'd be now and the office's clone of each repo. */
+  playbook(projectId: string): Promise<QaPlaybook> {
+    const project = this.store.project(projectId);
+    return this.runtime.runPromise(Effect.gen(function* () {
+      const workspace = yield* Workspace;
+      const repos = yield* Effect.forEach(project.repos, (repo) => workspace.cloneFacts(repo).pipe(Effect.map((facts) => repoChecks(repo, facts, project.mergeChecks))));
+      return qaPlaybook(qaOfficerFor(projectId).name, project, repos);
+    }));
   }
 
   /**

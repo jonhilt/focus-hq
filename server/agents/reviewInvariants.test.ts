@@ -134,3 +134,31 @@ describe('QA reviews, under the office’s two rules', () => {
     await checkAtOnce(reviews, { runs: 20 });
   });
 });
+
+describe('what QA runs, as docs/qa.md promises', () => {
+  const facts = { packageJson: true, scripts: { typecheck: 'tsc', lint: 'eslint .', test: 'vitest run' }, lockfiles: ['pnpm-lock.yaml'], claudeMd: true };
+
+  // "A review's step 3 names the same commands, read from QA's checkout of the PR."
+  it('tells QA to run the merge checks its checkout of the PR has', async () => {
+    const o = office({ ...workspace(now), packageFacts: () => Promise.resolve(facts) });
+    const project = o.store.projects[0];
+    const pr = prs[0];
+    if (!project || !pr) throw new Error('the demo has no project or pull request');
+    o.store.updateProject(project.id, { mergeChecks: ['lint', 'test'] });
+    o.agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await steady(() => o.claude.turns.length);
+    o.agents.shutDown();
+    expect(o.claude.turns[0]?.req.systemAppend).toContain("run these checks: `pnpm run lint`, `pnpm test`, and anything else the repo's CLAUDE.md asks.");
+  });
+
+  // "per repo, the project's merge checks the repo's package.json has … read from the office's clone; with no clone … QA works the checks out itself"
+  it('shows at the Playbook what QA runs on each repo, from the office’s clone', async () => {
+    const o = office({ ...workspace(now), cloneFacts: (repo) => Promise.resolve(repo === 'demo/webshop-frontend' ? facts : undefined) });
+    const project = o.store.projects[0];
+    if (!project) throw new Error('the demo has no project');
+    const playbook = await o.agents.qaPlaybook(project.id);
+    o.agents.shutDown();
+    expect(playbook.repos.find((r) => r.repo === 'demo/webshop-frontend')?.commands).toEqual(['pnpm run typecheck', 'pnpm run lint', 'pnpm test']);
+    expect(playbook.repos.filter((r) => r.repo !== 'demo/webshop-frontend').every((r) => !r.cloned && !r.commands.length)).toBe(true);
+  });
+});

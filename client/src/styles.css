@@ -601,6 +601,17 @@ input[type='color'] { width: 48px; height: 40px; border: 2px solid var(--line); 
 .qa-now strong { text-transform: uppercase; letter-spacing: 0.06em; }
 .qa-now small { display: block; color: var(--muted); }
 textarea.qa-brief { width: 100%; min-height: 160px; font-family: var(--mono); font-size: 13px; }
+/* the QA station's Playbook: what QA does on this project, a section at a time */
+.qa-playbook-section { margin: 18px 0 0; }
+.qa-playbook-section h3 { margin: 0 0 8px; font-size: 14px; color: var(--lcars-periwinkle); text-transform: uppercase; letter-spacing: 0.06em; }
+.qa-steps { margin: 0; padding-left: 22px; }
+.qa-steps li { margin: 4px 0; }
+.qa-steps summary, .qa-prompt summary { cursor: pointer; }
+.qa-step-text, .qa-prompt pre { white-space: pre-wrap; font-family: var(--mono); font-size: 12px; background: var(--surface-2); border-radius: var(--radius); padding: 8px 10px; margin: 6px 0; }
+.qa-prompt pre { max-height: 420px; overflow-y: auto; }
+.qa-repo-checks { list-style: none; margin: 0 0 10px; padding: 0; }
+.qa-repo-checks li { margin: 6px 0; }
+input.qa-merge-checks { width: 100%; font-family: var(--mono); }
 .qa-report p { margin: 8px 0; line-height: 1.4; }
 .qa-report .m { font-size: 13px; margin-top: 2px; }
 .qa-report.passed { --tone: var(--lcars-green); }

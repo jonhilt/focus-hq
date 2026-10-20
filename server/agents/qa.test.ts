@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPrompt, qaSystemAppend, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, repoChecks, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
+import { HUNTING, HUNTING_STEPS } from './qaProof';
+import { SCRATCH_RULE } from './scratch';
+import { WAIT_RULE } from './wait';
 
 const report = (r: Partial<QaReport> = {}): QaReport => ({
   verdict: 'pass',
@@ -195,6 +198,34 @@ describe('QA instructions', () => {
     expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).toContain('new tests that run code without checking what it does');
   });
 
+  it('number the steps the Playbook lists, word for word as QA has always had them', () => {
+    const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, { ...pr, baseBranch: 'develop' }, pr.headSha);
+    const steps = qaSteps('develop');
+    expect(text).toContain(`How to test:\n${steps.map((s, i) => `${i + 1}. ${s.text}`).join('\n')}\n`);
+    // the section as it read before the steps were a list
+    expect(text).toContain(`How to test:
+1. Read the PR description and the linked issue, and work out the acceptance criteria. Check every one.
+2. Review the code as a careful reviewer would: \`git diff origin/develop...HEAD\`. Look for bugs, unhandled errors and edge cases, security problems, leftover debug code, new logic without tests, and new tests that run code without checking what it does (they raise coverage but catch nothing).
+3. Install dependencies if needed, then run the project's test suite, linters, type checks and build (whichever exist).
+4. Then go through every file the diff changes (\`git diff --stat origin/develop...HEAD\` lists them all: however many there are, don't pick a few), and find those whose changes no test exercises. Scripts, schemas, prompts and config often aren't tested, and a coverage report may not reach them. Read each of those files' changed lines one by one: a green suite says nothing about them, and they're where bugs get through. For each line, ask what input or state makes it wrong: a comparison off by one, a condition or guard the wrong way round, an argument or index read from the wrong place, a flag, default or schema setting flipped. A real bug there fails the PR like any other: name its file and line. Your report's files lists every changed file, none left out: the tests that exercise it (or none) and what you checked.
+5. If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
+   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.
+6. You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}
+`);
+  });
+
+  it('name the repo’s checks when the office knows them, else leave QA to work them out', () => {
+    const named = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha, [], ['pnpm run typecheck', 'pnpm test']);
+    expect(named).toContain("3. Install dependencies if needed, then run these checks: `pnpm run typecheck`, `pnpm test`, and anything else the repo's CLAUDE.md asks.");
+    expect(qaSteps('main', [])[2].text).toContain('(whichever exist)');
+  });
+
+  it('build proof mode’s section from its steps', () => {
+    expect(HUNTING.startsWith('\n## Hunting the bugs that get past review\n\n')).toBe(true);
+    for (const step of HUNTING_STEPS) expect(HUNTING).toContain(step.text);
+    expect(HUNTING).toContain(`${HUNTING_STEPS[1].text}\n\n## Fail only with proof\n\n${HUNTING_STEPS[2].text}\n`);
+  });
+
   it('diff against the PR’s base and name the commit under test', () => {
     const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, { ...pr, baseBranch: 'develop' }, pr.headSha);
     expect(text).toContain('git diff origin/develop...HEAD');
@@ -271,6 +302,38 @@ describe('fixPrompt', () => {
     const text = fixPrompt(pr, { sha: 'fed9876543', report: failed }, true);
     expect(text).toContain('git push origin HEAD:focus/7-save-for-later-ab12');
     expect(text).not.toContain('The office pushes');
+  });
+});
+
+describe('repoChecks', () => {
+  const facts = { packageJson: true, scripts: { typecheck: 'tsc', lint: 'eslint .', test: 'vitest run' }, lockfiles: ['pnpm-lock.yaml'], claudeMd: true };
+
+  it('turns the project’s merge checks the repo has into commands for its package manager', () => {
+    expect(repoChecks('acme/shop', facts)).toEqual({ repo: 'acme/shop', cloned: true, packageJson: true, claudeMd: true, commands: ['pnpm run typecheck', 'pnpm run lint', 'pnpm test'] });
+    expect(repoChecks('acme/shop', facts, ['test']).commands).toEqual(['pnpm test']);
+  });
+
+  it('has none for a repo without a clone or a package.json', () => {
+    expect(repoChecks('acme/shop', undefined)).toEqual({ repo: 'acme/shop', cloned: false, packageJson: false, claudeMd: false, commands: [] });
+    expect(repoChecks('acme/shop', { packageJson: false, lockfiles: [], claudeMd: false }).commands).toEqual([]);
+  });
+});
+
+describe('qaPlaybook', () => {
+  const repos = [repoChecks('acme/shop', { packageJson: true, scripts: { lint: 'eslint .' }, lockfiles: [], claudeMd: false })];
+
+  it('lists the steps QA gets, proof mode’s only when it’s on', () => {
+    const on = qaPlaybook('Lt. Q', { name: 'Shop', repos: ['acme/shop'] }, repos);
+    expect(on.steps.map((s) => s.title)).toEqual([...qaSteps('main').map((s) => s.title), ...HUNTING_STEPS.map((s) => s.title)]);
+    expect(qaPlaybook('Lt. Q', { name: 'Shop', repos: ['acme/shop'], qaProof: false }, repos).steps).toHaveLength(qaSteps('main').length);
+  });
+
+  it('shows QA’s whole instructions for an example pull request, with the first repo’s checks', () => {
+    const playbook = qaPlaybook('Lt. Q', { name: 'Shop', repos: ['acme/shop'], qaBrief: 'Works at phone width' }, repos);
+    expect(playbook.prompt).toContain('Pull request #123 "Example PR", branch `feature` into `main`: https://github.com/acme/shop/pull/123');
+    expect(playbook.prompt).toContain('run these checks: `npm run lint`');
+    expect(playbook.prompt).toContain('Works at phone width');
+    for (const step of playbook.steps) expect(playbook.prompt).toContain(step.text);
   });
 });
 

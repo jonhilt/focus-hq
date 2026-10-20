@@ -60,6 +60,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.delete('/projects/:id', h((req) => office.deleteProject(param(req, 'id'))));
   r.post('/projects/:id/repos', h((req) => office.connectRepo(param(req, 'id'), str(req.body.repo))));
   r.delete('/projects/:id/repos', h((req) => office.disconnectRepo(param(req, 'id'), str(req.query.repo))));
+  // what QA does on the project, from its instructions and settings as they are now (the QA station's Playbook)
+  r.get('/projects/:id/qa-playbook', h((req) => office.agents.qaPlaybook(param(req, 'id'))));
   r.post('/projects/:id/refresh', h(async (req) => {
     await office.refreshBoard(param(req, 'id'));
     return store.boards.get(param(req, 'id'));

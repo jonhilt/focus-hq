@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dependenciesChanged, installable, installCommand, installFailedNote, installStamp, packageManagerFor, scriptCommand } from './packageManager';
+import { dependenciesChanged, installable, installCommand, installFailedNote, installStamp, mergeCheckCommands, packageJsonScripts, packageManagerFor, scriptCommand } from './packageManager';
 
 describe('packageManagerFor', () => {
   it('follows the lockfile', () => {
@@ -37,6 +37,28 @@ describe('scriptCommand', () => {
   it('runs tests with the test shorthand and anything else with run', () => {
     expect(scriptCommand('npm', 'test')).toEqual(['npm', 'test']);
     expect(scriptCommand('pnpm', 'typecheck')).toEqual(['pnpm', 'run', 'typecheck']);
+  });
+});
+
+describe('packageJsonScripts', () => {
+  it('reads the scripts, and none from a missing, broken or scriptless package.json', () => {
+    expect(packageJsonScripts('{"scripts":{"test":"vitest run"}}')).toEqual({ test: 'vitest run' });
+    expect(packageJsonScripts(undefined)).toBeUndefined();
+    expect(packageJsonScripts('{ not json')).toBeUndefined();
+    expect(packageJsonScripts('{"name":"x"}')).toBeUndefined();
+  });
+});
+
+describe('mergeCheckCommands', () => {
+  const scripts = { typecheck: 'tsc', lint: 'eslint .', test: 'vitest run', build: 'vite build' };
+
+  it('runs the chosen scripts the repo has, with the package manager of its lockfile', () => {
+    expect(mergeCheckCommands(scripts, ['pnpm-lock.yaml'])).toEqual([['pnpm', 'run', 'typecheck'], ['pnpm', 'run', 'lint'], ['pnpm', 'test']]);
+    expect(mergeCheckCommands(scripts, [], ['build', 'e2e'])).toEqual([['npm', 'run', 'build']]);
+  });
+
+  it('runs none without a package.json', () => {
+    expect(mergeCheckCommands(undefined, ['yarn.lock'])).toEqual([]);
   });
 });
 

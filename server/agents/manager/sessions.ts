@@ -218,7 +218,7 @@ export class AgentSessions extends Part {
   }
 
   /** The agent's instructions. The QA officer's may need GitHub, and that can fail. */
-  instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub> {
+  instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace> {
     if (agent.task === 'review') return this.core.reviews.qaSystem(agent);
     if (agent.task === 'lead' && agent.lead) return Effect.succeed(leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station));
     return Effect.succeed(systemAppend(agent, this.core.plugins.brief(agent.brief)));

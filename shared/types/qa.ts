@@ -174,3 +174,31 @@ export interface QaReview {
   requestedAt: number;
   finishedAt?: number;
 }
+
+/** One step of QA's instructions: a headline in plain words, and the exact text QA gets. */
+export interface QaStep {
+  title: string;
+  text: string;
+}
+
+/** What QA runs on one of the project's repos, as the office's clone of it says. */
+export interface QaRepoChecks {
+  repo: string;
+  /** The office has a clone of it to look in (it makes one the first time an agent works in the repo). */
+  cloned: boolean;
+  /** The clone has a package.json at its root. */
+  packageJson: boolean;
+  /** The clone has a CLAUDE.md at its root, which QA's session loads. */
+  claudeMd: boolean;
+  /** The commands QA is told to run (the project's merge checks the repo has); none: QA works them out itself. */
+  commands: string[];
+}
+
+/** What QA does on a project, built from its instructions and settings as they are now: the QA station's Playbook. */
+export interface QaPlaybook {
+  /** "How to test", in order, proof mode's steps only when it's on. Step 3 names the first repo's checks. */
+  steps: QaStep[];
+  repos: QaRepoChecks[];
+  /** QA's whole instructions, for an example pull request in the project's first repo. */
+  prompt: string;
+}

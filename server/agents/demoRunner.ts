@@ -4,6 +4,7 @@ import path from 'node:path';
 import type { TermLine } from '../../shared/types';
 import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
+import type { PackageFacts } from '../packageManager';
 import { randomHex, sleep } from '../util';
 import type { Transcript } from './transcript';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
@@ -732,6 +733,13 @@ export class DemoRunner implements AgentRunner {
 /** The proof test the demo's QA writes beside a file it fails a PR for. */
 const demoProofFile = (file: string) => file.replace(/(\.\w+)$/, '.proof.test$1');
 
+const DEMO_PACKAGE: PackageFacts = {
+  packageJson: true,
+  scripts: { dev: 'vite', build: 'vite build', typecheck: 'tsc --noEmit', lint: 'eslint .', test: 'vitest run' },
+  lockfiles: ['package-lock.json'],
+  claudeMd: true,
+};
+
 export const demoWorkspace: WorkspaceOps = {
   create: async (_repo, agentId) => `/demo/${agentId}`,
   remove: async () => undefined,
@@ -786,6 +794,9 @@ export const demoWorkspace: WorkspaceOps = {
     return { code: 1, output: ` FAIL  ${file} > handles an empty list\nAssertionError: expected [] to have a length of 1 but got +0\n\n Tests  1 failed (1)` };
   },
   readIn: async (_dir, file) => `import { expect, it } from 'vitest';\n\n// ${file}\nit('handles an empty list', () => {\n  expect(render([])).toHaveLength(1);\n});\n`,
+  // the demo's repos are npm projects with the usual checks and a CLAUDE.md, as their pretend runs above say
+  packageFacts: async () => DEMO_PACKAGE,
+  cloneFacts: async () => DEMO_PACKAGE,
 };
 
 /** The demo planner's judgement of an idea too big for one issue: a rebuild, or a list of three or more features. */

@@ -1,4 +1,4 @@
-import type { FileAccount, PullRequest, QaFile, QaReport, QaReview, QaSpotCheck } from './types';
+import type { FileAccount, PullRequest, QaFile, QaReport, QaReview, QaSpotCheck, Settings } from './types';
 
 // QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
 
@@ -56,6 +56,14 @@ export function verdictBehindHead(review: QaReview | undefined, pr: Pick<PullReq
   if (review.status !== 'passed' && review.status !== 'failed') return false;
   if (review.followUp?.kind === 'fixing' || review.followUp?.kind === 'triaging') return false;
   return !sameCommit(review.sha, pr.headSha);
+}
+
+/**
+ * The model a QA officer or goal reviewer works on, stamped on them each time they sit down to a review, so a change to
+ * the setting applies from the next review: the office's QA model, else its `model` setting. Missing = Claude Code's default.
+ */
+export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): string | undefined {
+  return settings.qaModel.trim() || settings.model.trim() || undefined;
 }
 
 /** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */

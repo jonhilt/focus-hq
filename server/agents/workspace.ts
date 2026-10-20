@@ -2,9 +2,9 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, missingPackageManager, packageManagerFor, packageManagerIn, scriptCommand } from '../packageManager';
+import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, mergeCheckCommands, missingPackageManager, type PackageFacts, packageJsonScripts, packageManagerFor, packageManagerIn } from '../packageManager';
 import { CommandError, errorMessage, KeyedLock, run, sleep } from '../util';
-import { type MergeHeads, mergeCheckScripts, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheck';
+import { type MergeHeads, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheck';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
@@ -390,8 +390,7 @@ export function tryMerge(repo: string, heads: MergeHeads, chosen?: readonly stri
     const merged = await lock.with(repo, () => mergeCommit(mirror, heads));
     if ('files' in merged) return { kind: 'conflicts', ...heads, files: merged.files };
     await lock.with(repo, () => detachAt(mirror, dir, merged.sha));
-    const pm = packageManagerIn(dir);
-    const results = await installAndRun(dir, mergeCheckScripts(packageScripts(dir), chosen).map((name) => scriptCommand(pm, name)));
+    const results = await installAndRun(dir, mergeCheckCommands(packageScripts(dir), lockfilesIn(dir), chosen));
     return { kind: 'checked', ...heads, merge: merged.sha, results: results ?? [] };
   });
 }
@@ -451,6 +450,13 @@ export async function readIn(dir: string, file: string): Promise<string | undefi
   const full = path.resolve(root, file);
   if (full !== root && !full.startsWith(root + path.sep)) return undefined;
   return fs.promises.readFile(full, 'utf8').catch(() => undefined);
+}
+
+/** What `dir`'s root says about its checks: its package.json and scripts, lockfiles and CLAUDE.md. Undefined when there's no `dir`. */
+export async function packageFacts(dir: string): Promise<PackageFacts | undefined> {
+  if (!fs.existsSync(dir)) return undefined;
+  const pkg = await readIn(dir, 'package.json');
+  return { packageJson: pkg !== undefined, scripts: packageJsonScripts(pkg), lockfiles: lockfilesIn(dir), claudeMd: fs.existsSync(path.join(dir, 'CLAUDE.md')) };
 }
 
 /** The files HEAD changes against origin's `baseBranch`, as the three-dot diff QA reviews names them. */
@@ -646,4 +652,6 @@ export const liveWorkspace: WorkspaceOps = {
   tryMerge: tryMerge,
   runIn: runIn,
   readIn: readIn,
+  packageFacts: packageFacts,
+  cloneFacts: (repo) => packageFacts(mirrorDir(repo)),
 };

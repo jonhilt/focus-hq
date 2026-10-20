@@ -4,6 +4,7 @@ import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
+import type { PackageFacts } from '../packageManager';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
@@ -69,6 +70,10 @@ export class Workspace extends Context.Service<Workspace, {
   runIn(dir: string, args: string[], timeoutMs: number): Effect.Effect<CommandRun>;
   /** A file in a checkout; undefined when it isn't there. */
   readIn(dir: string, file: string): Effect.Effect<string | undefined>;
+  /** What a checkout's root says about its checks; undefined when there's no such folder, or it can't be read. */
+  packageFacts(dir: string): Effect.Effect<PackageFacts | undefined>;
+  /** The same of the office's own clone of `repo`; undefined until it has one. */
+  cloneFacts(repo: string): Effect.Effect<PackageFacts | undefined>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
   static fromOps(ops: WorkspaceOps): Layer.Layer<Workspace> {
@@ -103,6 +108,8 @@ export class Workspace extends Context.Service<Workspace, {
         git('check the merge', () => ops.tryMerge(repo, heads, chosen)).pipe(Effect.catch((err) => Effect.succeed<MergeTrial>({ kind: 'broken', ...heads, reason: err.reason }))),
       runIn: (dir, args, timeoutMs) => Effect.promise(() => ops.runIn?.(dir, args, timeoutMs) ?? Promise.resolve({ code: null, output: 'there is no checkout to run it in' })),
       readIn: (dir, file) => Effect.promise(() => ops.readIn?.(dir, file) ?? Promise.resolve(undefined)),
+      packageFacts: (dir) => Effect.promise(() => (ops.packageFacts?.(dir) ?? Promise.resolve(undefined)).catch(() => undefined)),
+      cloneFacts: (repo) => Effect.promise(() => (ops.cloneFacts?.(repo) ?? Promise.resolve(undefined)).catch(() => undefined)),
     }));
   }
 }

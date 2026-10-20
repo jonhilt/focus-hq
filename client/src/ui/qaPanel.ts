@@ -1,7 +1,9 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
+import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheck';
 import { autoMergeFor } from '../../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, spotCheckUrl } from '../../../shared/qa';
+import { type QaSwitch, qaSwitchSays, qaWhoLine } from '../../../shared/qaPlaybook';
 import { triageLabel } from '../../../shared/triage';
 import type { Effort, QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';
@@ -12,16 +14,27 @@ import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { type NavItem, shownView, SideNav, Switch } from './panels';
+import { checksList, fullPrompt, stepsList } from './qaPlaybook';
 
-/** The QA station's views: the reports, and what QA does and checks on this project. */
-type QaView = 'reports' | 'settings';
+/** The QA station's views: the reports, and the playbook: what QA does on this project, with the switches that change it. */
+type QaView = 'reports' | 'playbook';
 
-/** A switch with what it does beside it. */
-const toggle = (s: Switch, what: string) => h('div', { class: 'qa-toggle' }, s.el, h('span', { class: 'muted' }, what));
+/** A switch with what it means for the project, as it's set, beside it. */
+function toggle(label: string, which: QaSwitch, on: boolean, save: (on: boolean) => void): HTMLElement {
+  const says = h('span', { class: 'muted' }, qaSwitchSays(which, on));
+  const s = new Switch(label, on, {
+    changed: (now) => {
+      says.textContent = qaSwitchSays(which, now);
+      save(now);
+    },
+  });
+  return h('div', { class: 'qa-toggle' }, s.el, says);
+}
 
 /**
  * The room's QA station: what the QA officer is doing and the reports they've written on the open pull requests, and on
- * the sidebar's other view, what they check on this project (the QA brief) and what they do on their own.
+ * the sidebar's other view, the Playbook: what QA does on this project, built from its instructions and settings as they
+ * are now (when it runs, who it is, its steps, the checks it runs, the brief and its instructions in full).
  */
 export function openQaPanel(ui: Ui, projectId: string): void {
   const project = state.project(projectId);
@@ -29,42 +42,71 @@ export function openQaPanel(ui: Ui, projectId: string): void {
   const officer = qaOfficerFor(projectId);
   const body = h('div');
 
-  // settings live outside the re-rendered part, so typing in the brief survives reports arriving
+  // the playbook lives outside the re-rendered part, so typing in the brief survives reports arriving
+  const steps = h('div', null, h('p', { class: 'muted' }, 'Loading…'));
+  const checks = h('div');
+  const prompt = h('div');
+  const loadPlaybook = () => void api.qaPlaybook(projectId).then((playbook) => {
+    const open = prompt.querySelector('details')?.open ?? false;
+    fill(steps, stepsList(playbook));
+    fill(checks, checksList(playbook));
+    fill(prompt, fullPrompt(playbook, project.repos[0]));
+    const details = prompt.querySelector('details');
+    if (details) details.open = open;
+  }, (e: Error) => fill(steps, h('p', { class: 'planner-error' }, `Couldn’t load QA’s steps: ${e.message}`)));
+  const save = (patch: Parameters<typeof api.updateProject>[1]) => api.updateProject(projectId, patch).then(loadPlaybook, (e: Error) => ui.error(e.message));
+
   const brief = h('textarea', {
     class: 'qa-brief',
     value: project.qaBrief ?? '',
     placeholder: 'e.g.\n- Every page works at phone width (375px)\n- No errors in the browser console\n- API changes come with a test against the endpoint',
   });
   const saved = h('small', { class: 'muted' });
-  brief.addEventListener('change', () => {
-    void api.updateProject(projectId, { qaBrief: brief.value }).then(
-      () => (saved.textContent = 'Saved. Applies from the next review.'),
-      (e: Error) => ui.error(e.message),
-    );
-  });
-  const save = (patch: Parameters<typeof api.updateProject>[1]) => void api.updateProject(projectId, patch).catch((e: Error) => ui.error(e.message));
-  const auto = new Switch('Test every PR', autoQaFor(project), { changed: (on) => save({ autoQa: on }) });
-  const sendBack = new Switch('Send failed PRs back', autoSendBackFor(project), { changed: (on) => save({ autoSendBack: on }) });
-  const proof = new Switch('Block only with proof', qaProofFor(project), { changed: (on) => save({ qaProof: on }) });
-  const merge = new Switch('Auto-merge', autoMergeFor(project), { changed: (on) => save({ autoMerge: on }) });
+  brief.addEventListener('change', () => void save({ qaBrief: brief.value }).then(() => (saved.textContent = 'Saved. Applies from the next review.')));
   const effort = effortPicker(project.qaEffort);
   effort.title = 'How hard QA thinks: the QA officer, and each goal’s reviewer';
-  effort.onchange = () => save({ qaEffort: (pickedEffort(effort) ?? '') as Effort });
-  const settings = h('div', { class: 'qa-settings' },
-    toggle(auto, 'Tests every pull request the crew opens or updates.'),
-    toggle(sendBack, 'Sends a failed pull request the crew opened back to be fixed, up to 3 rounds.'),
-    toggle(proof, 'QA fails a pull request only with proof the office checks itself: a test that fails when it runs it, a failing check, or a screenshot of a broken page. Findings without proof go on the PR as advice.'),
-    toggle(merge, 'Merges a pull request the crew opened once QA passed its latest commit and its checks are green.'),
-    h('div', { class: 'qa-toggle' }, effort, h('span', { class: 'muted' }, 'How hard QA thinks from the next review: the QA officer, and each goal’s reviewer.')),
-    h('div', { class: 'field', style: 'margin:16px 0 0' },
-      h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
-      withMic(ui, brief),
-      saved,
+  const who = h('span', { class: 'muted' });
+  const showWho = () => (who.textContent = state.info ? qaWhoLine(state.info.settings, pickedEffort(effort)) : '');
+  effort.onchange = () => {
+    showWho();
+    void save({ qaEffort: (pickedEffort(effort) ?? '') as Effort });
+  };
+  showWho();
+  const mergeChecks = h('input', { type: 'text', class: 'qa-merge-checks', value: (project.mergeChecks ?? DEFAULT_MERGE_CHECKS).join(', '), placeholder: 'none: only conflicts stop a merge' });
+  mergeChecks.addEventListener('change', () => void save({ mergeChecks: mergeChecks.value.split(/[\s,]+/).filter(Boolean) }));
+  const section = (title: string, ...children: (HTMLElement | string | null)[]) => h('section', { class: 'qa-playbook-section' }, h('h3', null, title), ...children);
+  const playbook = h('div', { class: 'qa-settings qa-playbook' },
+    h('p', { class: 'muted' }, `What ${officer.name} does on ${project.name}, read from QA's instructions and these settings as they are now.`),
+    section('When QA runs',
+      toggle('Test every PR', 'autoQa', autoQaFor(project), (on) => void save({ autoQa: on })),
+      toggle('Send failed PRs back', 'autoSendBack', autoSendBackFor(project), (on) => void save({ autoSendBack: on })),
+      toggle('Block only with proof', 'qaProof', qaProofFor(project), (on) => void save({ qaProof: on })),
+      toggle('Auto-merge', 'autoMerge', autoMergeFor(project), (on) => void save({ autoMerge: on })),
     ),
+    section('Who, and how hard', h('div', { class: 'qa-toggle' }, effort, who)),
+    section('Its steps', steps),
+    section('The checks it runs',
+      checks,
+      h('div', { class: 'field' },
+        h('label', null, 'Scripts to run (the merge check runs the same)'),
+        mergeChecks,
+        h('small', null, 'package.json scripts, by name. A repo with a merge-check script runs that alone; empty runs none.'),
+      ),
+    ),
+    section('Your brief',
+      h('div', { class: 'field' },
+        h('label', null, `What should ${officer.name} check on every ${project.name} PR?`),
+        withMic(ui, brief),
+        saved,
+      ),
+    ),
+    section('Its instructions in full', prompt),
   );
+  ui.panels.own(state.on('info', showWho));
+  loadPlaybook();
 
   const live = h('div');
-  const views: Record<QaView, HTMLElement> = { reports: live, settings };
+  const views: Record<QaView, HTMLElement> = { reports: live, playbook };
   let picked: QaView | undefined;
   const nav = new SideNav<QaView>((view) => {
     picked = view;
@@ -76,7 +118,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     const queued = reviews.filter((r) => r.status === 'queued').length;
     const items: NavItem<QaView>[] = [
       { key: 'reports', label: 'Reports', readout: reviews.length ? String(reviews.length) : '' },
-      { key: 'settings', label: 'Settings' },
+      { key: 'playbook', label: 'Playbook' },
     ];
     const view = shownView(items, picked) ?? 'reports';
     nav.show(items, view);
@@ -110,7 +152,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     );
   };
 
-  fill(body, live, settings);
+  fill(body, live, playbook);
   ui.panels.open({ title: `${project.name} · QA station`, body, nav, accent: LCARS.sky, wide: true });
   ui.panels.own(state.on('review', (id) => id === projectId && render()));
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && a.task === 'review' && render()));

@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -71,6 +71,8 @@ export const api = {
   undigested: () => call<{ sessions: number }>('GET', '/digests/backfill'),
   backfillDigests: () => call<{ sessions: number }>('POST', '/digests/backfill'),
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
+  /** What QA does on the project, built from its instructions and settings as they are now. */
+  qaPlaybook: (projectId: string) => call<QaPlaybook>('GET', `/projects/${projectId}/qa-playbook`),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number, override = false) => call<{ checking: true }>('POST', '/prs/merge', { projectId, repo, number, override }),
