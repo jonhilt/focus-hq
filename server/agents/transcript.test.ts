@@ -2,6 +2,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
+import { RESUMED_NOTE } from './runJournal';
 import { blocks, field, isRecord, messageFrom, resultText, transcriptFolders, transcriptLines, transcriptReader } from './transcript';
 
 describe('messageFrom', () => {
@@ -10,6 +12,8 @@ describe('messageFrom', () => {
     expect(messageFrom('[QA officer Ensign Halloran] QA failed jonhilt/focus#154')).toBe('qa');
     expect(messageFrom('Please QA pull request #12 in demo/shop')).toBe('office');
     expect(messageFrom('This session is being continued from a previous conversation')).toBe('compacted');
+    expect(messageFrom(CARRY_ON_AFTER_LIMIT)).toBe('office');
+    expect(messageFrom(RESUMED_NOTE)).toBe('office');
   });
 
   it('leaves out the harness’s own messages, and takes the rest as the captain’s', () => {

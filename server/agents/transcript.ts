@@ -70,6 +70,9 @@ const OPENINGS: [string, MessageFrom | null][] = [
   ['QA failed pull request', 'office'],
   ['Answer with one word', 'office'],
   ['Notes from your manager', 'office'],
+  // carrying on after a usage limit (`CARRY_ON_AFTER_LIMIT`) and after a restart (`RESUMED_NOTE`)
+  ['The office paused you mid-turn', 'office'],
+  ['Focus restarted while you were working', 'office'],
   ['This session is being continued', 'compacted'],
   ['<command-name>', null],
   ['<local-command', null],
