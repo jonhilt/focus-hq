@@ -1,6 +1,6 @@
 import type { GoalArtifact, TermLine } from '../../../shared/types';
 
-// The bridge's briefing (briefingPanel.ts), one thing that needs the captain at a time: what it says a lead said last,
+// Comms' inbox (commsPanel.ts, needCard.ts), what needs the captain: what it says a lead said last,
 // and which item it keeps in front of them as the list changes. Pure, so it's tested (briefing.test.ts).
 
 /**

@@ -25,7 +25,7 @@
 
 Three chairs aboard are the captain's: the captain's chair on the bridge, the one at your desk in the ready room, and the one at the head of the observation lounge's table, facing its screen. Press <kbd>E</kbd> on one to sit down. Sat there, <kbd>E</kbd> opens what the room puts to hand, unless the crosshair is on something else to use (the ready room's console, say):
 
-- **Bridge**: your [briefing](comms.md#the-briefing): what needs you, one thing at a time.
+- **Bridge**: [Comms](comms.md): the inbox of what needs you.
 - **Ready room**: the ready room console.
 - **Observation lounge**: your [personal log](personal-log.md), the ideas you've jotted down to talk through.
 

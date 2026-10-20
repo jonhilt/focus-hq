@@ -2,19 +2,52 @@ import { artifactUrl, openQuestion, optionUrl } from '../../../shared/artifacts'
 import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
 import type { Agent } from '../../../shared/types';
 import { api } from '../net/api';
-import { attention, markRead } from '../net/attention';
+import { attention } from '../net/attention';
 import { state } from '../net/state';
+import { goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
-import { focusIndex, keptOrder, lastWords, shownThisTurn } from './briefing';
-import { from, hailKey } from './commsPanel';
+import { lastWords, shownThisTurn } from './briefing';
 import type { Ui } from './context';
-import { busy, fill, h } from './dom';
+import { busy, h } from './dom';
 import { closeGoal } from './goals';
 import { answerLead, messageAgent } from './resume';
 import { markdownHtml } from './terminal';
 
-/** The colour of each kind of hail, as in Comms. */
-const TONE: Record<Attention['kind'], string> = {
+// What needs the captain, and one of them shown large to decide and answer: the right of Comms' inbox (commsPanel.ts).
+
+/** What a hail is about, the same hail from render to render. */
+export function hailKey(a: Attention): string {
+  switch (a.kind) {
+    case 'hand':
+      return `hand:${a.agent.id}:${a.agent.permission?.id}`;
+    case 'question':
+      return `question:${a.agent.id}:${openQuestion(a.agent)?.id}`;
+    case 'error':
+      return `error:${a.agent.id}:${a.agent.finishedAt}`;
+    case 'wrap-up':
+      return `wrap-up:${a.agent.id}:${a.agent.lead?.closing?.at}`;
+    case 'turn':
+      return `turn:${a.agent.id}:${a.agent.finishedAt}`;
+    case 'qa':
+    case 'conflicts':
+      return `${a.kind}:${a.projectId}:${a.pr.repo}#${a.pr.number}`;
+  }
+}
+
+/** Who and where: a lead's station and goal, or what anyone else is on, with the project and any plugin's tags. */
+export function from(agent: Agent): HTMLElement {
+  const project = state.project(agent.projectId);
+  const work = agent.lead;
+  return h('small', { class: 'need-from' },
+    agent.name,
+    work ? ` · Station ${work.station + 1} · ${work.title}` : agent.brief ? ` · ${agent.brief.label}: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
+    project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
+    ...goalTags(agent, 'line').map((tag) => tag.el),
+  );
+}
+
+/** The colour of each kind of hail. */
+export const TONE: Record<Attention['kind'], string> = {
   hand: LCARS.gold,
   error: LCARS.red,
   question: LCARS.gold,
@@ -25,10 +58,10 @@ const TONE: Record<Attention['kind'], string> = {
 };
 
 /** A lead's turn keeps its key once it's read, so reading it here doesn't move it out from under the captain. */
-const keyOf = (a: Attention): string => (a.kind === 'turn' ? `turn:${a.agent.id}:${a.agent.finishedAt}` : hailKey(a));
+export const keyOf = (a: Attention): string => (a.kind === 'turn' ? `turn:${a.agent.id}:${a.agent.finishedAt}` : hailKey(a));
 
-/** Everything that needs the captain, in Comms' order: the hails, then the leads whose turn they've read but not answered. */
-function needs(): Attention[] {
+/** Everything that needs the captain: the hails, most urgent first, then the leads whose turn they've read but not answered. */
+export function needs(): Attention[] {
   const hails = attention();
   const hailing = new Set(hails.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
   const read = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id) && turnRead(l));
@@ -53,7 +86,7 @@ function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
   ];
 }
 
-/** A reply to a lead, written and sent from the briefing. */
+/** A reply to a lead, written and sent from here. */
 function replyBox(ui: Ui, agent: Agent): HTMLElement[] {
   const text = h('textarea', { class: 'briefing-reply', rows: 3, placeholder: `Reply to ${agent.name}…` });
   const send = h('button', { class: 'btn small primary' }, 'Send');
@@ -87,7 +120,7 @@ function pickBox(ui: Ui, agent: Agent): HTMLElement[] {
 }
 
 /** What the captain reads to decide, and what answers it, for one hail. */
-function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[] } {
+function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; then: string } {
   switch (a.kind) {
     case 'hand': {
       const req = a.agent.permission;
@@ -98,19 +131,19 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[] }
         deny.onclick = () => void busy(deny, () => api.permission(a.agent.id, req.id, false), ui.error);
       }
       // what they said as they raised it, and the tool it's for (the request itself is the heading)
-      return { context: [said(a.agent), req ? `Tool: ${req.tool}` : ''].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, allow, deny, open(ui, a.agent, 'Open their panel'))] };
+      return { context: [said(a.agent), req ? `Tool: ${req.tool}` : ''].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, allow, deny, open(ui, a.agent, 'Open their panel'))], then: 'Approve: the tool runs and they carry on. Decline: they’re told no, and find another way or ask you.' };
     }
     case 'error':
-      return { context: said(a.agent), answers: [h('div', { class: 'row' }, open(ui, a.agent, 'Open their panel'))] };
+      return { context: said(a.agent), answers: [h('div', { class: 'row' }, open(ui, a.agent, 'Open their panel'))], then: 'Their panel shows what went wrong, and starts them again.' };
     case 'question':
-      return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent) };
+      return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent), then: 'Pick: they hear your pick, and your word with it, and carry on.' };
     case 'turn':
-      return { context: said(a.agent), answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent)] };
+      return { context: said(a.agent), answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent)], then: 'Send: they carry on with your reply.' };
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, close, open(ui, a.agent, 'Carry on'))] };
+      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, close, open(ui, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
     }
     case 'qa':
     case 'conflicts':
@@ -120,70 +153,28 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[] }
           h('button', { class: 'btn small primary', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
           h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
         )],
+        then: a.kind === 'qa' ? 'Pull requests: read QA’s report, then merge, close or send it back.' : 'Pull requests: send it back to its lead to resolve, or resolve it on GitHub.',
       };
   }
 }
 
-/** One hail, large: what's needed, who and where, what to read to decide, and the answers. */
-function card(ui: Ui, a: Attention): HTMLElement {
-  const { icon, what } = needLine(a, state.reviews);
-  const { context, answers } = body(ui, a);
-  const project = 'projectId' in a ? state.project(a.projectId) : undefined;
-  return h('div', { class: 'briefing-card', style: `--tone:${TONE[a.kind]}` },
-    h('div', { class: 'briefing-what' }, h('span', null, icon), what),
-    'agent' in a ? from(a.agent) : project ? h('small', { class: 'need-from' }, project.name) : null,
-    context ? h('div', { class: 'briefing-context', innerHTML: markdownHtml(context) }) : null,
-    ...answers,
-  );
+/** Where a hail's from, as a trail: the project, the goal, and who. */
+function trail(a: Attention): string {
+  const project = state.project('agent' in a ? a.agent.projectId : a.projectId)?.name;
+  if (!('agent' in a)) return [project, `${a.pr.repo}#${a.pr.number}`].filter(Boolean).join(' › ');
+  const work = a.agent.lead;
+  return [project, work?.title ?? a.agent.issue.title, work ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name].filter(Boolean).join(' › ');
 }
 
-/**
- * The briefing, from the captain's chair: what needs them, one thing at a time rather than a list across every
- * project. Each is shown large with what to read to decide (a lead's last words, a question's options and their
- * pictures, a raised hand's request) and answered right here; answered, the next takes its place. Back and Next step
- * through without answering. Reading a lead's turn here reads it, as their panel does.
- */
-export function openBriefingPanel(ui: Ui): void {
-  let shown: string | null = null;
-  let at = 0;
-  let order: string[] = [];
-  const count = h('span', { class: 'briefing-count' });
-  const back = h('button', { class: 'btn small' }, '‹ Back');
-  const next = h('button', { class: 'btn small' }, 'Next ›');
-  const stage = h('div');
-  const root = h('div', { class: 'briefing' }, h('div', { class: 'briefing-head' }, count, back, next), stage);
-
-  const render = (step = 0) => {
-    const byKey = new Map(needs().map((a) => [keyOf(a), a]));
-    const keys = (order = keptOrder(order, [...byKey.keys()]));
-    const i = focusIndex(keys, step ? null : shown, step ? at + step : at);
-    back.disabled = i <= 0;
-    next.disabled = i < 0 || i >= keys.length - 1;
-    if (i < 0) {
-      count.textContent = 'All clear';
-      shown = null;
-      const going = state.shown.flatMap((p) => state.leadsIn(p.id)).length;
-      fill(stage, h('div', { class: 'briefing-card briefing-clear' },
-        h('div', { class: 'briefing-what' }, h('span', null, '✓'), 'Nothing needs you.'),
-        h('small', { class: 'muted' }, going ? `${going} goal${going === 1 ? '' : 's'} under way without you.` : 'No goals under way.'),
-        h('div', { class: 'row' }, h('button', { class: 'btn small', onclick: () => ui.openComms() }, 'Comms')),
-      ));
-      return;
-    }
-    at = i;
-    count.textContent = `Decision ${i + 1} of ${keys.length}`;
-    // rebuilt only when it's another hail, so a reply being written isn't wiped by the next update
-    if (keys[i] === shown) return;
-    shown = keys[i];
-    const a = byKey.get(shown);
-    if (!a) return;
-    if (a.kind === 'turn') markRead(a.agent);
-    fill(stage, card(ui, a));
-  };
-  back.onclick = () => render(-1);
-  next.onclick = () => render(1);
-
-  ui.panels.open({ title: 'Briefing', body: root, wide: true, accent: LCARS.orange });
-  render();
-  for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, () => render()));
+/** One hail, large: where it's from, what's needed, what to read to decide, the answers, and what each leads to. */
+export function needCard(ui: Ui, a: Attention): HTMLElement {
+  const { icon, what } = needLine(a, state.reviews);
+  const { context, answers, then } = body(ui, a);
+  return h('div', { class: 'briefing-card', style: `--tone:${TONE[a.kind]}` },
+    h('div', { class: 'need-trail' }, trail(a), ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
+    h('div', { class: 'briefing-what' }, h('span', null, icon), what),
+    context ? h('div', { class: 'briefing-context', innerHTML: markdownHtml(context) }) : null,
+    ...answers,
+    h('small', { class: 'need-then' }, then),
+  );
 }

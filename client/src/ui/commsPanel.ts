@@ -1,106 +1,30 @@
 import { statusLine } from '../../../shared/agentStatus';
-import { openQuestion } from '../../../shared/artifacts';
 import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
-import { api } from '../net/api';
-import { attention } from '../net/attention';
+import { markRead } from '../net/attention';
 import { state } from '../net/state';
 import { goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
+import { focusIndex, keptOrder } from './briefing';
 import type { Ui } from './context';
-import { busy, fill, h } from './dom';
-import { closeGoal } from './goals';
-
-/** What a hail is about, the same hail from render to render: its row is built once and kept while it stands. */
-export function hailKey(a: Attention): string {
-  switch (a.kind) {
-    case 'hand':
-      return `hand:${a.agent.id}:${a.agent.permission?.id}`;
-    case 'question':
-      return `question:${a.agent.id}:${openQuestion(a.agent)?.id}`;
-    case 'error':
-      return `error:${a.agent.id}:${a.agent.finishedAt}`;
-    case 'wrap-up':
-      return `wrap-up:${a.agent.id}:${a.agent.lead?.closing?.at}`;
-    case 'turn':
-      return `turn:${a.agent.id}:${a.agent.finishedAt}`;
-    case 'qa':
-    case 'conflicts':
-      return `${a.kind}:${a.projectId}:${a.pr.repo}#${a.pr.number}`;
-  }
-}
-
-/** Who and where, on the line under what's needed: a lead's station and goal, or what anyone else is on, and the project. */
-export function from(agent: Agent): HTMLElement {
-  const project = state.project(agent.projectId);
-  const work = agent.lead;
-  return h('small', { class: 'need-from' },
-    agent.name,
-    work ? ` · Station ${work.station + 1} · ${work.title}` : agent.brief ? ` · ${agent.brief.label}: ${agent.issue.title}` : ` · ${agent.task === 'issue' ? '#' : 'PR #'}${agent.issue.number} ${agent.issue.title}`,
-    project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null,
-    ...goalTags(agent, 'line').map((tag) => tag.el),
-  );
-}
+import { fill, h } from './dom';
+import { keyOf, needCard, needs, TONE } from './needCard';
 
 const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
-const talk = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small primary', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, label);
 
-/** One line of Needs you: an icon, what's needed, who and where under it, and the buttons that answer it. */
-function needRow(tone: string, { icon, what }: { icon: string; what: string }, where: HTMLElement, ...actions: HTMLElement[]): HTMLElement {
-  return h('div', { class: 'need', style: `--tone:${tone}` },
-    h('span', { class: 'need-icon' }, icon),
-    h('div', { class: 'grow' }, h('div', { class: 'need-what', title: what }, what), where),
-    ...actions,
+/** One line of the inbox's queue: what's needed, then the project and goal, then who (and any plugin's tags). */
+function queueRow(a: Attention, pick: () => void): HTMLElement {
+  const { icon, what } = needLine(a, state.reviews);
+  const project = state.project('agent' in a ? a.agent.projectId : a.projectId);
+  const goal = 'agent' in a ? (a.agent.lead?.title ?? a.agent.issue.title) : `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number} ${a.pr.title}`;
+  const who = 'agent' in a ? `${a.agent.name}${a.agent.lead ? ` · Station ${a.agent.lead.station + 1}` : ''}` : 'Pull request';
+  return h('button', { class: 'need inbox-row', style: `--tone:${TONE[a.kind]}`, onclick: pick },
+    h('div', { class: 'need-what', title: what }, h('span', { class: 'need-icon' }, icon), what),
+    h('div', { class: 'inbox-where' }, project ? h('b', { style: `color:${project.color}` }, project.name) : null, project ? ' · ' : null, goal),
+    h('small', { class: 'need-from' }, who, ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
   );
-}
-
-/** A lead waiting for the captain's reply: Reply opens their panel, where the conversation is. Read, it's quieter. */
-function turnRow(ui: Ui, lead: Agent, read: boolean): HTMLElement {
-  const line = needLine({ kind: 'turn', agent: lead }, state.reviews);
-  const row = needRow(LCARS.orange, read ? { ...line, what: `${line.what} · read` } : line, from(lead), talk(ui, lead, 'Reply'), beam(ui, lead));
-  row.classList.toggle('read', read);
-  return row;
-}
-
-function hailRow(ui: Ui, a: Attention): HTMLElement {
-  const line = needLine(a, state.reviews);
-  switch (a.kind) {
-    case 'hand': {
-      const req = a.agent.permission;
-      const allow = h('button', { class: 'btn small go' }, 'Approve');
-      const deny = h('button', { class: 'btn small danger' }, 'Decline');
-      if (req) {
-        allow.onclick = () => void busy(allow, () => api.permission(a.agent.id, req.id, true), ui.error);
-        deny.onclick = () => void busy(deny, () => api.permission(a.agent.id, req.id, false), ui.error);
-      }
-      return needRow(LCARS.gold, line, from(a.agent), allow, deny, talk(ui, a.agent, 'Open'));
-    }
-    case 'question': {
-      // the options are pictures: they're picked on the station's screen, up close
-      const pick = h('button', { class: 'btn small primary', title: 'See the options up close and pick one', onclick: () => ui.openScreen(a.agent.id) }, 'Pick one');
-      return needRow(LCARS.gold, line, from(a.agent), pick, beam(ui, a.agent));
-    }
-    case 'error':
-      return needRow(LCARS.red, line, from(a.agent), talk(ui, a.agent, 'Open'), beam(ui, a.agent));
-    case 'wrap-up': {
-      const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
-      close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return needRow('#99cc66', line, from(a.agent), close, talk(ui, a.agent, 'Carry on'));
-    }
-    case 'turn':
-      return turnRow(ui, a.agent, false);
-    case 'qa':
-    case 'conflicts': {
-      const project = state.project(a.projectId);
-      return needRow(a.kind === 'qa' ? LCARS.lilac : LCARS.red, line,
-        h('small', { class: 'need-from' }, `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number} · ${a.pr.title}`, project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
-        h('button', { class: 'btn small primary', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
-        h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
-      );
-    }
-  }
 }
 
 /** A goal that's getting on without the captain: a line each, to talk to its lead or beam over. */
@@ -118,76 +42,87 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
 }
 
 /**
- * Rows kept by key while they stand: the list is only rebuilt when what's in it changes, so a button that's busy
- * (Approve, Close goal) isn't swapped for a fresh one under the pointer by the next render.
- */
-class KeptRows<T> {
-  private rows = new Map<string, HTMLElement>();
-
-  constructor(
-    readonly el: HTMLElement,
-    private readonly key: (item: T) => string,
-    private readonly build: (item: T) => HTMLElement,
-    private readonly empty: HTMLElement,
-  ) {}
-
-  show(items: readonly T[]): void {
-    const next = new Map(items.map((item) => [this.key(item), this.rows.get(this.key(item)) ?? this.build(item)]));
-    if ([...next.keys()].join('|') !== [...this.rows.keys()].join('|') || !this.el.childElementCount) {
-      fill(this.el, ...(next.size ? next.values() : [this.empty]));
-    }
-    this.rows = next;
-  }
-}
-
-/** A line of Needs you: a hail, or a lead whose turn the captain has read but not answered yet. */
-type Need = { hail: Attention } | { read: Agent };
-
-/**
- * Comms: what needs the captain, across the ship, opened from anywhere with C. Needs you comes first, a line each
- * saying what's needed (`needLine`) and the buttons that answer it: the hails from `attention()`, most urgent first, then the leads whose turn the
- * captain has read but not answered (quieter, and not on the badge). The conversation itself is in the lead's panel,
- * which Reply opens. Then the goals getting on without them, and each project's goals panel. Nothing to mark as read:
- * a line clears when what it's about does.
+ * Comms, opened from anywhere with C and from the captain's chair with E: an inbox of what needs the captain across
+ * the ship. On the left the queue, most urgent first (the hails from `attention()`, then the leads whose turn they've
+ * read but not answered, quieter), each line saying what's needed, the project and goal, and who; below it the goals
+ * getting on without them, and each project's goals. On the right the one picked, large: what to read to decide (a
+ * lead's last words, what they showed, a question's options) and the answers, each saying what it leads to. Answered,
+ * it leaves the queue and the next one's picked; Later moves on and leaves it there. Picking a lead's turn reads it,
+ * as their panel does. The queue keeps its order while it's open (`keptOrder`), so nothing moves under the pointer.
  */
 export function openCommsPanel(ui: Ui): void {
-  const needs = new KeptRows<Need>(
-    h('div', { class: 'needs' }),
-    (n) => ('hail' in n ? hailKey(n.hail) : `read:${n.read.id}:${n.read.finishedAt}`),
-    (n) => ('hail' in n ? hailRow(ui, n.hail) : turnRow(ui, n.read, true)),
-    h('p', { class: 'muted' }, '✓ All quiet. Nothing needs you.'),
-  );
-  const underWay = h('div', { class: 'under-way-list' });
+  let picked: string | null = null;
+  let shown: string | null = null;
+  let at = 0;
+  let order: string[] = [];
+  const rows = new Map<string, HTMLElement>();
+  const queueHead = h('h3');
+  const queue = h('div', { class: 'needs' });
   const underWayHead = h('h3', null, 'Under way');
+  const underWay = h('div', { class: 'under-way-list' });
   const gateways = h('div', { class: 'row' });
-  const needsHead = h('h3');
-  const body = h('div', { class: 'comms' },
-    needsHead, needs.el,
-    underWayHead, underWay,
-    h('h3', null, 'Goals'), gateways,
+  const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next' }, 'Later ›');
+  const detail = h('div', { class: 'inbox-detail' });
+  const body = h('div', { class: 'comms inbox' },
+    h('div', { class: 'inbox-left' }, queueHead, queue, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
+    h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, later), detail),
   );
 
-  const render = () => {
-    const now = attention();
-    const hailing = new Set(now.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-    const leads = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id));
-    const read = leads.filter((l) => turnRead(l));
-    needs.show([...now.map((hail) => ({ hail })), ...read.map((l) => ({ read: l }))]);
-    const count = now.length + read.length;
-    needsHead.textContent = count ? `Needs you (${count})` : 'Needs you';
+  const render = (step = 0) => {
+    const list = needs();
+    const keys = (order = keptOrder(order, list.map(keyOf)));
+    const byKey = new Map(list.map((a) => [keyOf(a), a]));
+    const items = keys.flatMap((k) => byKey.get(k) ?? []);
+    const i = focusIndex(keys, step ? null : picked, step && keys.length ? (at + step) % keys.length : at);
+    queueHead.textContent = keys.length ? `Needs you (${keys.length})` : 'Needs you';
+    later.disabled = keys.length < 2;
 
-    const going = leads.filter((l) => !turnRead(l));
+    // a row is built once per item and kept, so the queue isn't rebuilt under the pointer
+    const next = new Map(items.map((a) => {
+      const k = keyOf(a);
+      return [k, rows.get(k) ?? queueRow(a, () => { picked = k; render(); })] as const;
+    }));
+    for (const a of items) {
+      const row = next.get(keyOf(a));
+      row?.classList.toggle('read', a.kind === 'turn' && turnRead(a.agent));
+      row?.classList.toggle('sel', keyOf(a) === keys[i]);
+    }
+    if ([...next.keys()].join('|') !== [...rows.keys()].join('|') || !queue.childElementCount) {
+      fill(queue, ...(next.size ? next.values() : [h('p', { class: 'muted' }, '✓ All quiet.')]));
+    }
+    rows.clear();
+    for (const [k, row] of next) rows.set(k, row);
+
+    const needing = new Set(items.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
+    const going = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !needing.has(l.id));
     underWayHead.hidden = underWay.hidden = !going.length;
     fill(underWay, ...going.map((l) => underWayRow(ui, l)));
-
     fill(gateways, ...state.shown.map((p) => {
       const waiting = p.goalQueue?.length ?? 0;
       return h('button', { class: 'btn small', style: `--tone:${p.color}`, title: `${p.name}’s goals: start one, see the line and the closed ones`, onclick: () => ui.openGoals(p.id) },
         `${p.name} · ${state.leadsIn(p.id).length}/${TEAM_STATIONS}${waiting ? ` +${waiting}` : ''}`);
     }));
+
+    if (i < 0) {
+      picked = shown = null;
+      fill(detail, h('div', { class: 'briefing-card briefing-clear' },
+        h('div', { class: 'briefing-what' }, h('span', null, '✓'), 'Nothing needs you.'),
+        h('small', { class: 'muted' }, going.length ? `${going.length} goal${going.length === 1 ? '' : 's'} under way without you.` : 'No goals under way.'),
+      ));
+      return;
+    }
+    at = i;
+    picked = keys[i];
+    // rebuilt only when it's another item, so a reply being written isn't wiped by the next update
+    if (picked === shown) return;
+    shown = picked;
+    const a = items[i];
+    if (a.kind === 'turn') markRead(a.agent);
+    fill(detail, needCard(ui, a));
   };
+  later.onclick = () => render(1);
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();
-  for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, render));
+  for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, () => render()));
 }
