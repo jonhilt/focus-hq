@@ -1,4 +1,5 @@
 import { isRecord } from '../../plugin-api/shared';
+import type { Receipt, Ref } from './receipts';
 
 /** A page for the lead's screen, as show takes it. */
 export interface ExplainerPage {
@@ -29,6 +30,8 @@ export interface ExplainerBeat {
   label?: string;
   /** What the voice says over it, talking the captain through the stage; its title and caption when missing. */
   narration?: string;
+  /** Where its facts come from, quoted (receipts.ts); none, and it's the lead's interpretation. */
+  refs?: Ref[];
 }
 
 export interface ExplainerInput {
@@ -108,8 +111,11 @@ export function explainerCheck(notes: readonly string[]): string {
   return notes.length ? `${look} The office's checks found: ${notes.join(' ')}` : `${look} The office's check for an empty stage found nothing.`;
 }
 
-/** The player page for an explainer, ready to show under its id and title. Or why it was refused. */
-export function explainerPage(input: ExplainerInput): ExplainerPage | { error: string } {
+/**
+ * The player page for an explainer, ready to show under its id and title. Or why it was refused. `receipts`: each beat's,
+ * as the office found them in their sources; a beat with none shows as the lead's interpretation.
+ */
+export function explainerPage(input: ExplainerInput, receipts: readonly (readonly Receipt[])[] = []): ExplainerPage | { error: string } {
   const L = EXPLAINER_LIMITS;
   const n = input.beats.length;
   if (n < L.minBeats || n > L.maxBeats) return { error: `Give ${L.minBeats} to ${L.maxBeats} beats (you gave ${n})` };
@@ -131,7 +137,7 @@ export function explainerPage(input: ExplainerInput): ExplainerPage | { error: s
 
   let at = 0;
   const beats = input.beats.map((b, i) => {
-    const beat = { at, title: clean(b.title), text: clean(b.text), label: beatLabel(b), colour: BEAT_COLOURS[i], say: beatNarration(b) };
+    const beat = { at, title: clean(b.title), text: clean(b.text), label: beatLabel(b), colour: BEAT_COLOURS[i], say: beatNarration(b), receipts: receipts[i] ?? [] };
     at += b.seconds;
     return beat;
   });
@@ -140,7 +146,7 @@ export function explainerPage(input: ExplainerInput): ExplainerPage | { error: s
 }
 
 /** The player around the lead's stage. The kit's own script defines its helpers on window, so the lead's names win. */
-function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string; say: string }[], dur: number, stageHtml: string, stageCss: string, stageScript: string): string {
+function page(title: string, beats: { at: number; title: string; text: string; label: string; colour: string; say: string; receipts: readonly Receipt[] }[], dur: number, stageHtml: string, stageCss: string, stageScript: string): string {
   // the left column holds the beats between the two elbows, however many there are
   const beatH = Math.floor((320 - 6 * (beats.length - 1)) / beats.length);
   // Antonio in capitals is about 0.47em a character: a long title takes the lilac block's room too, then shrinks to fit
@@ -170,6 +176,8 @@ ${stageHtml}
 <div class="fault" id="kit-fault"><div class="hd">Stage fault</div><div class="bd" id="kit-fault-text"></div></div>
 <button class="run" id="kit-run">▶ Run briefing</button>
 <div class="caption"><div class="bt" id="kit-bt"></div><div class="bx" id="kit-bx"></div></div>
+<div class="receipts" id="kit-rc"></div>
+<div class="quoted" id="kit-quote" hidden><div class="hd" id="kit-quote-from"></div><div class="bd" id="kit-quote-text"></div></div>
 <div class="bar" style="left:306px;right:0;top:766px">
   <button class="btn" id="kit-prev" style="background:var(--lilac)">◀ Step</button>
   <button class="btn" id="kit-pp" style="background:var(--gold);width:118px">▶ Play</button>
@@ -226,6 +234,14 @@ const KIT_CSS = String.raw`
   .fault .bd { padding:12px 16px; font:400 14px/1.5 var(--mono); color:var(--text); white-space:pre-wrap; }
   .faulted .fault { display:block; }
   .faulted .run { display:none; }
+  .receipts { position:absolute; left:200px; top:726px; width:1050px; height:28px; display:flex; gap:8px; overflow:hidden; }
+  .rc { height:26px; border-radius:13px; border:2px solid var(--sky); background:#000; color:var(--sky); padding:0 12px; font:500 14px/22px var(--mono); white-space:nowrap; cursor:pointer; max-width:340px; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .rc.on { background:var(--sky); color:#000; }
+  .rc.interp { border-style:dashed; border-color:var(--muted); color:var(--muted); cursor:default; font-family:var(--ui); text-transform:uppercase; letter-spacing:.06em; }
+  .rest .receipts { opacity:.35; }
+  .quoted { position:absolute; left:200px; top:398px; width:1050px; border:3px solid var(--sky); border-radius:22px; background:#000; overflow:hidden; z-index:4; }
+  .quoted .hd { background:var(--sky); color:#000; font:600 17px/30px var(--mono); padding:0 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .quoted .bd { padding:10px 16px; font:400 16px/1.45 var(--mono); color:var(--text); white-space:pre-wrap; max-height:110px; overflow:auto; }
 
   /* for the lead's stage */
   .panel { position:absolute; border:3px solid var(--c, var(--sky)); border-radius:22px; background:#000; overflow:hidden; }
@@ -304,12 +320,34 @@ const KIT_PLAYER = String.raw`
     d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
     el('kit-segs').appendChild(d); return d;
   });
+  // the receipts for the beat on screen: a chip per source, which opens to its quote; never said aloud
+  var chipsFor = -1;
+  function receipts(bi) {
+    chipsFor = bi; el('kit-quote').hidden = true;
+    var row = el('kit-rc'); row.textContent = '';
+    if (!BEATS[bi].receipts.length) {
+      var none = document.createElement('span'); none.className = 'rc interp'; none.textContent = 'Interpretation';
+      none.title = 'No source cited: this beat is the lead’s reading'; row.appendChild(none); return;
+    }
+    BEATS[bi].receipts.forEach(function (r) {
+      var chip = document.createElement('button'); chip.className = 'rc'; chip.textContent = r.label; chip.title = r.quote;
+      chip.onclick = function () {
+        var open = chip.classList.contains('on');
+        Array.prototype.forEach.call(row.children, function (c) { c.classList.remove('on'); });
+        el('kit-quote').hidden = open;
+        if (open) return;
+        chip.classList.add('on'); el('kit-quote-from').textContent = r.label; el('kit-quote-text').textContent = r.quote;
+      };
+      row.appendChild(chip);
+    });
+  }
   var describe = function (err, at) { return (at === undefined ? '' : 'at t = ' + at.toFixed(2) + 's: ') + (err && err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : String(err)); };
   function frame() {
     if (draw) try { draw(t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
     var bi = beatAt(t);
     if (hold >= 0 && Math.abs(t - end(hold)) < .001) bi = hold;
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
+    if (bi !== chipsFor) receipts(bi);
     beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
     segEls.forEach(function (d, i) {
       var k = Math.min(1, Math.max(0, (t - BEATS[i].at) / (end(i) - BEATS[i].at)));

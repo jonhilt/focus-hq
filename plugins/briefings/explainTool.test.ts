@@ -2,7 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Agent, LeadToolContext, PageFrames } from '../../plugin-api/server';
 import { EXPLAINER_LIMITS, explainerPage } from './explainer';
-import { explainShape, explainTool } from './explainTool';
+import { explainShape, explainTool as tool } from './explainTool';
+import type { Sources } from './sources';
+
+// the office's sources, stood in for: one file in the checkout, one thing the lead said, one ledger line
+const sources: Sources = {
+  file: (_lead, where) => Promise.resolve(where === 'server/ledger.ts' ? { text: 'const a = 1;\nappendFileSync(path, line); // never rewrites\n', cite: 'server/ledger.ts:{line} @abc1234' } : { error: `there's no file ${where} in your checkout.` }),
+  said: () => Promise.resolve([{ text: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns.', at: '20 Oct, 09:44' }]),
+  ledger: (seq) => (seq === 7 ? { text: 'qa-verdict\nfail', cite: 'ledger #7 · qa-verdict' } : undefined),
+};
+const explainTool = tool(sources);
 
 const text = (n: number) => 'x'.repeat(n);
 
@@ -39,7 +48,7 @@ describe('the explain tool', () => {
   function lead(errors = '') {
     const shown: { page: { id: string; html: string }; frames: PageFrames }[] = [];
     const context: LeadToolContext = {
-      agent: { id: 'lead1' } as Agent,
+      agent: { id: 'lead1', name: 'Lt. Castellanos' } as Agent,
       checkouts: [],
       show: () => Promise.reject(new Error('explain shows its page with frames')),
       showFrames: (page, frames) => {
@@ -83,5 +92,40 @@ describe('the explain tool', () => {
     const demo = explainTool.demo?.({ folders: ['web', 'api'], again: false });
     expect(z.object(explainShape).safeParse(demo).success).toBe(true);
     expect(JSON.stringify(demo)).toContain('web');
+  });
+
+  describe('receipts', () => {
+    const withRefs = (refs: unknown[], narration = 'It appends each line and never rewrites.') => {
+      const base = input('function render(t) {}');
+      return { ...base, beats: [{ ...base.beats[0], narration, refs }, base.beats[1]] };
+    };
+
+    it('shows each beat’s receipts as chips, and a beat without any as interpretation', async () => {
+      const { context, shown } = lead();
+      await explainTool.run(context, withRefs([{ kind: 'file', where: 'server/ledger.ts', quote: 'appendFileSync(path, line); // never rewrites' }]));
+      const html = shown[0].page.html;
+      expect(html).toContain('"receipts":[{"label":"server/ledger.ts:2 @abc1234","quote":"appendFileSync(path, line); // never rewrites"}]');
+      expect(html).toContain('"receipts":[]');
+      expect(html).toContain("'Interpretation'");
+    });
+
+    it('takes the lead’s own words and the ledger as sources too', async () => {
+      const { context, shown } = lead();
+      const narration = 'Haiku judged as well as Sonnet: thirty five cents for five hundred and fifty five turns.';
+      await explainTool.run(context, withRefs([{ kind: 'said', quote: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns' }, { kind: 'ledger', where: '7', quote: 'fail' }], narration));
+      expect(shown[0].page.html).toContain('"label":"Lt. Castellanos, 20 Oct, 09:44: “Haiku judged as well as Sonnet,…”"');
+      expect(shown[0].page.html).toContain('"label":"ledger #7 · qa-verdict"');
+    });
+
+    it('sends it back, unshown, when a quote isn’t in its source or the narration says what no quote does', async () => {
+      const { context, shown } = lead();
+      const badQuote = withRefs([{ kind: 'file', where: 'server/ledger.ts', quote: 'rewrites the whole file' }]);
+      await expect(explainTool.run(context, badQuote)).rejects.toThrow(/Beat 1: "rewrites the whole file" isn't in server\/ledger\.ts/);
+      const unbacked = withRefs([{ kind: 'said', quote: 'Haiku judged as well as Sonnet' }], 'Haiku beat Opus on 600 turns.');
+      await expect(explainTool.run(context, unbacked)).rejects.toThrow(/Beat 1 says "600", "Opus", which none of its quotes do/);
+      await expect(explainTool.run(context, withRefs([{ kind: 'ledger', where: '8', quote: 'fail' }]))).rejects.toThrow(/no line 8/);
+      await expect(explainTool.run(context, withRefs([{ kind: 'file', where: 'nope.ts', quote: 'x' }]))).rejects.toThrow(/no file nope\.ts/);
+      expect(shown).toEqual([]);
+    });
   });
 });

@@ -4,10 +4,11 @@
 import type { FocusPlugin } from '../../plugin-api/server';
 import { explainTool } from './explainTool';
 import { BRIEFINGS } from './shared';
+import { officeSources } from './sources';
 
 const briefings: FocusPlugin = {
   id: BRIEFINGS,
-  start: () => ({ leadTools: [explainTool] }),
+  start: (host) => ({ leadTools: [explainTool(officeSources(host))] }),
 };
 
 export default briefings;
