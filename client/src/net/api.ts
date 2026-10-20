@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -26,7 +26,8 @@ async function send<T>(method: string, url: string, init: RequestInit): Promise<
 
 export const api = {
   createProject: (name: string, color: string, repos: string[], theme?: RoomTheme) => call<Project>('POST', '/projects', { name, color, repos, theme }),
-  updateProject: (id: string, patch: Partial<Project> & { plugin?: { id: string; on: boolean } }) => call<Project>('PATCH', `/projects/${id}`, patch),
+  /** A null QA effort goes back to the model's default. */
+  updateProject: (id: string, patch: Omit<Partial<Project>, 'qaEffort'> & { qaEffort?: Effort | null; plugin?: { id: string; on: boolean } }) => call<Project>('PATCH', `/projects/${id}`, patch),
   /** An empty method goes back to Settings' merge method for that repo. */
   setMergeMethod: (id: string, repo: string, method: MergeMethod | '') => call<Project>('PATCH', `/projects/${id}`, { mergeMethod: { repo, method } }),
   deleteProject: (id: string) => call('DELETE', `/projects/${id}`),
@@ -73,6 +74,8 @@ export const api = {
   sendToQa: (projectId: string, repo: string, number: number) => call<QaReview>('POST', '/prs/qa', { projectId, repo, number }),
   /** What QA does on the project, built from its instructions and settings as they are now. */
   qaPlaybook: (projectId: string) => call<QaPlaybook>('GET', `/projects/${projectId}/qa-playbook`),
+  /** The QA officer's answer to the talk so far at the Playbook, and maybe a change for the captain to apply (it applies nothing). */
+  qaChat: (projectId: string, messages: QaChatTurn[]) => call<QaChatReply>('POST', `/projects/${projectId}/qa-chat`, { messages }),
   resolveConflicts: (projectId: string, repo: string, number: number) =>
     call<ConflictsOutcome>('POST', '/prs/resolve-conflicts', { projectId, repo, number }),
   mergePr: (projectId: string, repo: string, number: number, override = false) => call<{ checking: true }>('POST', '/prs/merge', { projectId, repo, number, override }),

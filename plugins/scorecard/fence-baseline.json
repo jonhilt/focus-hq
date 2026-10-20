@@ -9,7 +9,6 @@
   "client/src/ui/dictation.ts": 1,
   "client/src/ui/frameStats.ts": 6,
   "client/src/ui/managerPanel.ts": 5,
-  "client/src/ui/qaPanel.ts": 1,
   "client/src/world/gaps.ts": 2,
   "client/src/world/gpuTimer.ts": 2,
   "client/src/world/hall.ts": 2,

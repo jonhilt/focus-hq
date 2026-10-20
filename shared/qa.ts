@@ -66,6 +66,9 @@ export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): str
   return settings.qaModel.trim() || settings.model.trim() || undefined;
 }
 
+/** The longest QA brief a project keeps, in characters. */
+export const QA_BRIEF_MAX = 4000;
+
 /** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
 export function autoQaFor(project: { autoQa?: boolean }): boolean {
   return project.autoQa !== false;

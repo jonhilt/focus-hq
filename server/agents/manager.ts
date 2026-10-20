@@ -1,6 +1,6 @@
 import type { Layer } from 'effect';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MergeCheck, MessageReply, PullRequest, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
@@ -205,6 +205,10 @@ export class AgentManager {
 
   qaPlaybook(projectId: string): Promise<QaPlaybook> {
     return this.core.reviews.playbook(projectId);
+  }
+
+  qaChat(projectId: string, messages: unknown): Promise<QaChatReply> {
+    return this.core.reviews.chat(projectId, messages);
   }
 
   requestMerge(repo: string, number: number, on: boolean): QaReview {

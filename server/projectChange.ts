@@ -1,6 +1,8 @@
 // A project's settings, as the captain's change to them leaves them.
 
+import { mergeCheckNames } from '../shared/mergeCheck';
 import { switchPlugin } from '../shared/projectPlugins';
+import { QA_BRIEF_MAX } from '../shared/qa';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, type PreviewConfig, type Project, ROOM_THEMES } from '../shared/types';
 
 /** A JSON object's fields, to check one at a time: anything else has none. */
@@ -36,25 +38,14 @@ export function changeProject(project: Project, patch: unknown): Project {
     hidden: flag(p.hidden, project.hidden),
   };
   if (typeof p.maxAgents === 'number' && Number.isFinite(p.maxAgents)) changed.maxAgents = Math.max(1, Math.min(DESKS_PER_ROOM, Math.round(p.maxAgents)));
-  if (typeof p.qaBrief === 'string') changed.qaBrief = p.qaBrief.slice(0, 4000);
+  if (typeof p.qaBrief === 'string') changed.qaBrief = p.qaBrief.slice(0, QA_BRIEF_MAX);
   if (p.qaEffort !== undefined) changed.qaEffort = EFFORT_LEVELS.find((e) => e === p.qaEffort);
   // one plugin at a time, so two windows switching different ones don't undo each other
   if (p.plugin !== undefined) changed.plugins = switchPlugin(project.plugins, String(fields(p.plugin).id ?? ''), fields(p.plugin).on === true);
   if (p.mergeMethod !== undefined) changed.mergeMethods = mergeMethodsAfter(project, fields(p.mergeMethod));
   if (p.preview !== undefined && typeof p.preview === 'object') changed.preview = previewAfter(fields(p.preview));
-  if (p.mergeChecks === null || typeof p.mergeChecks === 'string' || Array.isArray(p.mergeChecks)) changed.mergeChecks = mergeChecksAfter(p.mergeChecks);
+  if (p.mergeChecks === null || typeof p.mergeChecks === 'string' || Array.isArray(p.mergeChecks)) changed.mergeChecks = mergeCheckNames(p.mergeChecks);
   return changed;
-}
-
-/**
- * The scripts the merge check runs (a list, or names split by commas or spaces): each a package.json script's name,
- * at most 10; null goes back to the default (typecheck, lint, test), and an empty list runs none.
- */
-function mergeChecksAfter(v: string | unknown[] | null): string[] | undefined {
-  if (v === null) return undefined;
-  const names: unknown[] = typeof v === 'string' ? v.split(/[\s,]+/) : v;
-  const valid = names.flatMap((n) => (typeof n === 'string' && /^[\w:.-]+$/.test(n.trim()) ? [n.trim()] : []));
-  return [...new Set(valid)].slice(0, 10);
 }
 
 /** A repo's merge method set, or (empty or unknown) cleared to follow the office-wide setting. */

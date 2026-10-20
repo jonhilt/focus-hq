@@ -9,6 +9,17 @@ import type { MergeCheck, PullRequest } from './types';
 /** The package.json scripts run on the merge when the project hasn't chosen others. */
 export const DEFAULT_MERGE_CHECKS: readonly string[] = ['typecheck', 'lint', 'test'];
 
+/**
+ * The scripts the merge check runs, as a project's setting (a list, or names split by commas or spaces): each a
+ * package.json script's name, at most 10; null goes back to the default (typecheck, lint, test), and an empty list runs none.
+ */
+export function mergeCheckNames(v: string | unknown[] | null): string[] | undefined {
+  if (v === null) return undefined;
+  const names: unknown[] = typeof v === 'string' ? v.split(/[\s,]+/) : v;
+  const valid = names.flatMap((n) => (typeof n === 'string' && /^[\w:.-]+$/.test(n.trim()) ? [n.trim()] : []));
+  return [...new Set(valid)].slice(0, 10);
+}
+
 /** A repo that has a package.json script of this name says exactly what checks a merge of it: that script, alone. */
 export const MERGE_CHECK_SCRIPT = 'merge-check';
 

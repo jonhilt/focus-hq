@@ -1,5 +1,6 @@
 // QA reviews of pull requests, and what the office does about the ones that fail.
 
+import type { Effort } from './agents';
 import type { FailedCheck } from './github';
 
 export interface QaCheck {
@@ -201,4 +202,30 @@ export interface QaPlaybook {
   repos: QaRepoChecks[];
   /** QA's whole instructions, for an example pull request in the project's first repo. */
   prompt: string;
+}
+
+/** One line of the captain's talk with the QA officer at the Playbook: who said it, and what. */
+export interface QaChatTurn {
+  who: 'captain' | 'officer';
+  text: string;
+}
+
+/**
+ * The settings the QA officer may propose a change to at the Playbook: its four switches, how hard it thinks (null: the
+ * model's default), the merge checks' scripts and the brief (its whole new text). Its steps stay as they are.
+ */
+export interface QaSettingsChange {
+  autoQa?: boolean;
+  autoSendBack?: boolean;
+  qaProof?: boolean;
+  autoMerge?: boolean;
+  qaEffort?: Effort | null;
+  mergeChecks?: string[];
+  qaBrief?: string;
+}
+
+/** The QA officer's answer to the captain: what it says, and maybe a change to its settings, for the captain to apply. */
+export interface QaChatReply {
+  reply: string;
+  change?: QaSettingsChange;
 }

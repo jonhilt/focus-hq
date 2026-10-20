@@ -2,6 +2,7 @@ import { Context, Data, Effect, Layer, Schedule, type Scope } from 'effect';
 import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
+import type { QaChatAnswer, QaChatRequest, QaChatter } from './qaChat';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
 import type { PackageFacts } from '../packageManager';
@@ -21,6 +22,13 @@ export class GitFailed extends Data.TaggedError('GitFailed')<{ what: string; rea
 
 /** The operations officer couldn't finish looking at a stuck pull request. */
 export class TriageFailed extends Data.TaggedError('TriageFailed')<{ reason: string }> {
+  override get message() {
+    return this.reason;
+  }
+}
+
+/** The QA officer couldn't answer the captain at the Playbook. */
+export class QaChatFailed extends Data.TaggedError('QaChatFailed')<{ reason: string }> {
   override get message() {
     return this.reason;
   }
@@ -240,6 +248,18 @@ export class Triage extends Context.Service<Triage, {
     return Layer.succeed(Triage, Triage.of({
       triage: (req, activity) =>
         Effect.tryPromise({ try: (signal) => triager.triage({ ...req, signal }, activity), catch: (err) => new TriageFailed({ reason: errorMessage(err) }) }),
+    }));
+  }
+}
+
+/** The QA officer answering the captain at the Playbook: it proposes, and changes nothing. */
+export class QaChat extends Context.Service<QaChat, {
+  /** Interrupting it stops the call. */
+  answer(req: Omit<QaChatRequest, 'signal'>): Effect.Effect<QaChatAnswer, QaChatFailed>;
+}>()('focus/agents/QaChat') {
+  static fromChatter(chatter: QaChatter): Layer.Layer<QaChat> {
+    return Layer.succeed(QaChat, QaChat.of({
+      answer: (req) => Effect.tryPromise({ try: (signal) => chatter.answer({ ...req, signal }), catch: (err) => new QaChatFailed({ reason: errorMessage(err) }) }),
     }));
   }
 }

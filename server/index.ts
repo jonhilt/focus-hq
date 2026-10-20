@@ -6,13 +6,14 @@ import express from 'express';
 import { clock } from '../shared/clock';
 import { keyFallback } from './agents/apiKey';
 import { BrowserPool } from './agents/browserTool';
-import { ClaudeDrafter, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { ClaudeDrafter, ClaudeQaChat, ClaudeTriager, titleGoal } from './agents/claudeCrew';
+import { DemoQaChat } from './agents/demoQaChat';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
-import { Renderer, Sessions, Triage, Workspace } from './agents/services';
+import { QaChat, Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { IssuePlanner } from './agents/planner';
 import * as git from './agents/workspace';
@@ -71,7 +72,7 @@ async function main() {
   };
   const office = new Office(store, hub, github, previews, planner, new Voice(hub, config.demo), await currentVersion());
   office.voice.warmSpeech();
-  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers));
+  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers), QaChat.fromChatter(config.demo ? new DemoQaChat() : new ClaudeQaChat()));
   office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
   // the office's own repo, for plugins that work on it (the demo has none)
   office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));

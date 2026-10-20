@@ -10,7 +10,8 @@ import { agentAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
-import { type Frames, type Picture, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
+import { type Frames, type Picture, QaChat, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
+import { DemoQaChat } from './demoQaChat';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped, what it was sent and which background tasks it stopped. */
@@ -92,6 +93,8 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     Sessions.fromRunner(claude),
     Triage.fromTriager(triager),
     Renderer.fromBrowser({ render }),
+    // the demo's QA officer at the Playbook, answering at once
+    QaChat.fromChatter(new DemoQaChat(0)),
   );
   return { claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }

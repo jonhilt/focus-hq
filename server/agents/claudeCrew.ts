@@ -14,6 +14,8 @@ import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type Tri
 import { checkoutLatest } from './workspace';
 import { tidyGoalTitle } from '../../shared/goalTitle';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
+import { qaAgentModel } from '../../shared/qa';
+import { parseQaChat, QA_CHAT_SCHEMA, type QaChatAnswer, qaChatPrompt, type QaChatRequest, qaChatSystemPrompt, type QaChatter } from './qaChat';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for some, the web) and change nothing.
 // Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch where they're given them and the
@@ -219,6 +221,32 @@ export class ClaudeTriager implements Triager {
     const decision = parseTriage(result.structured);
     if (!decision) throw new Error('Finished without choosing what to do');
     return { ...decision, costUsd: result.costUsd };
+  }
+}
+
+/**
+ * The QA officer answering the captain at the Playbook: one call on the QA model, given the Playbook and the talk in
+ * its message, with no tools, so it reads nothing and changes nothing.
+ */
+export class ClaudeQaChat implements QaChatter {
+  async answer(req: QaChatRequest): Promise<QaChatAnswer> {
+    const result = await runReadOnly({
+      cwd: os.tmpdir(),
+      system: qaChatSystemPrompt(req),
+      systemAppend: '',
+      prompt: qaChatPrompt(req),
+      settings: req.settings,
+      signal: req.signal,
+      activity: () => undefined,
+      builtins: [],
+      schema: QA_CHAT_SCHEMA,
+      model: qaAgentModel(req.settings),
+      maxTurns: 3,
+      timeoutMs: 3 * 60_000,
+    });
+    const answer = parseQaChat(result.structured);
+    if (!answer) throw new Error('The QA officer finished without answering');
+    return { ...answer, costUsd: result.costUsd };
   }
 }
 

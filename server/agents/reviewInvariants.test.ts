@@ -161,4 +161,19 @@ describe('what QA runs, as docs/qa.md promises', () => {
     expect(playbook.repos.find((r) => r.repo === 'demo/webshop-frontend')?.commands).toEqual(['pnpm run typecheck', 'pnpm run lint', 'pnpm test']);
     expect(playbook.repos.filter((r) => r.repo !== 'demo/webshop-frontend').every((r) => !r.cloned && !r.commands.length)).toBe(true);
   });
+
+  // "The officer answers, and when the request means a change, proposes one … It changes nothing: applying it is the captain's"
+  it('proposes a change to QA’s settings when the captain asks at the Playbook, and changes nothing itself', async () => {
+    const o = office(workspace(now));
+    const project = o.store.projects[0];
+    if (!project) throw new Error('the demo has no project');
+    const before = structuredClone(o.store.project(project.id));
+    const answer = await o.agents.qaChat(project.id, [{ who: 'captain', text: 'Send failed PRs back to whoever opened them' }]);
+    const question = await o.agents.qaChat(project.id, [{ who: 'captain', text: 'Why does it read every file?' }]);
+    o.agents.shutDown();
+    expect(answer.change).toEqual({ autoSendBack: true });
+    expect(question.change).toBeUndefined();
+    expect(o.store.project(project.id)).toEqual(before);
+    await expect(o.agents.qaChat(project.id, [])).rejects.toThrow('Say something');
+  });
 });

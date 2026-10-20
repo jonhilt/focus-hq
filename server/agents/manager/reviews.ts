@@ -2,7 +2,9 @@ import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
 import { autoSendBackFor, prKey, pullUrl, qaProofFor, sameCommit } from '../../../shared/qa';
-import type { Agent, FailedCheck, FixFor, QaPlaybook, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
+import { qaChatChange, qaChatTurns, qaSettingsNow } from '../../../shared/qaChat';
+import { qaWhoLine } from '../../../shared/qaPlaybook';
+import type { Agent, FailedCheck, FixFor, Project, QaChatReply, QaPlaybook, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
@@ -15,7 +17,7 @@ import { PROOF_MS, prove } from '../qaProof';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
 import { type Reported, type ReviewFact, type ReviewRecovery, resumedFacts, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
-import { Workspace } from '../services';
+import { QaChat, Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -263,11 +265,33 @@ export class Reviews extends Part {
 
   /** The QA station's Playbook: what QA does on the project, from its instructions as they'd be now and the office's clone of each repo. */
   playbook(projectId: string): Promise<QaPlaybook> {
-    const project = this.store.project(projectId);
-    return this.runtime.runPromise(Effect.gen(function* () {
+    return this.runtime.runPromise(this.playbookOf(this.store.project(projectId)));
+  }
+
+  private playbookOf(project: Project): Effect.Effect<QaPlaybook, never, Workspace> {
+    return Effect.gen(function* () {
       const workspace = yield* Workspace;
       const repos = yield* Effect.forEach(project.repos, (repo) => workspace.cloneFacts(repo).pipe(Effect.map((facts) => repoChecks(repo, facts, project.mergeChecks))));
-      return qaPlaybook(qaOfficerFor(projectId).name, project, repos);
+      return qaPlaybook(qaOfficerFor(project.id).name, project, repos);
+    });
+  }
+
+  /**
+   * The QA officer's answer to the captain at the Playbook (`messages`: the talk so far, from the client), given the
+   * Playbook as it is: what it says, and the change it proposes, kept to the settings it may change and those that
+   * differ from how they are now. It changes nothing: applying it is the captain's (PATCH /projects/:id).
+   */
+  async chat(projectId: string, messages: unknown): Promise<QaChatReply> {
+    const project = this.store.project(projectId);
+    const turns = qaChatTurns(messages);
+    const settings = this.store.settings;
+    return this.runtime.runPromise(Effect.gen({ self: this }, function* () {
+      const playbook = yield* this.playbookOf(project);
+      const now = qaSettingsNow(project);
+      const answer = yield* (yield* QaChat).answer({ officer: qaOfficerFor(projectId).name, projectName: project.name, playbook, now, who: qaWhoLine(settings, project.qaEffort), turns, settings });
+      // weighed against the settings as they are once it answers, in case the captain changed one meanwhile
+      const change = qaChatChange(answer.change, qaSettingsNow(this.store.project(projectId)));
+      return { reply: answer.reply, ...(change && { change }) };
     }));
   }
 
