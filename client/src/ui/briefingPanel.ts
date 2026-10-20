@@ -5,7 +5,7 @@ import { api } from '../net/api';
 import { attention, markRead } from '../net/attention';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
-import { focusIndex, lastWords } from './briefing';
+import { focusIndex, keptOrder, lastWords } from './briefing';
 import { from, hailKey } from './commsPanel';
 import type { Ui } from './context';
 import { busy, fill, h } from './dom';
@@ -130,6 +130,7 @@ function card(ui: Ui, a: Attention): HTMLElement {
 export function openBriefingPanel(ui: Ui): void {
   let shown: string | null = null;
   let at = 0;
+  let order: string[] = [];
   const count = h('span', { class: 'briefing-count' });
   const back = h('button', { class: 'btn small' }, '‹ Back');
   const next = h('button', { class: 'btn small' }, 'Next ›');
@@ -137,8 +138,8 @@ export function openBriefingPanel(ui: Ui): void {
   const root = h('div', { class: 'briefing' }, h('div', { class: 'briefing-head' }, count, back, next), stage);
 
   const render = (step = 0) => {
-    const list = needs();
-    const keys = list.map(keyOf);
+    const byKey = new Map(needs().map((a) => [keyOf(a), a]));
+    const keys = (order = keptOrder(order, [...byKey.keys()]));
     const i = focusIndex(keys, step ? null : shown, step ? at + step : at);
     back.disabled = i <= 0;
     next.disabled = i < 0 || i >= keys.length - 1;
@@ -158,7 +159,8 @@ export function openBriefingPanel(ui: Ui): void {
     // rebuilt only when it's another hail, so a reply being written isn't wiped by the next update
     if (keys[i] === shown) return;
     shown = keys[i];
-    const a = list[i];
+    const a = byKey.get(shown);
+    if (!a) return;
     if (a.kind === 'turn') markRead(a.agent);
     fill(stage, card(ui, a));
   };

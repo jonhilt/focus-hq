@@ -28,3 +28,15 @@ export function focusIndex(keys: readonly string[], current: string | null, at: 
   const still = current === null ? -1 : keys.indexOf(current);
   return still >= 0 ? still : Math.min(Math.max(at, 0), keys.length - 1);
 }
+
+/**
+ * The briefing's order while it's open: what it already had in the order it had them (so reading a lead's turn, which
+ * moves it from the hails to the end of the needs, doesn't move it out from under the captain), then anything new in
+ * the order it came.
+ */
+export function keptOrder(before: readonly string[], keys: readonly string[]): string[] {
+  const now = new Set(keys);
+  const kept = before.filter((k) => now.has(k));
+  const had = new Set(kept);
+  return [...kept, ...keys.filter((k) => !had.has(k))];
+}
