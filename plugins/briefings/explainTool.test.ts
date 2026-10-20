@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Agent, LeadToolContext, PageFrames } from '../../plugin-api/server';
 import { EXPLAINER_LIMITS, explainerPage } from './explainer';
-import { explainShape, explainTool as tool } from './explainTool';
+import { explainShape, explainTool as tool, WRITTEN } from './explainTool';
 import type { Sources } from './sources';
+import type { Write } from './writer';
 
 // the office's sources, stood in for: one file in the checkout, one thing the lead said, one ledger line
 const sources: Sources = {
@@ -12,7 +13,17 @@ const sources: Sources = {
   ledger: (seq) => (seq === 7 ? { text: 'qa-verdict\nfail', cite: 'ledger #7 · qa-verdict' } : undefined),
   pr: (repo, number) => Promise.resolve(number === 572 ? { text: 'Briefings carry receipts\n## QA report: Passed\nI found no bug I could prove.', cite: `${repo}#572 · Briefings carry receipts` } : { error: `couldn't read ${repo}#${number} on GitHub: is the number right?` }),
 };
-const explainTool = tool(sources);
+// the office's writer, stood in for: it writes each brief up as the next explainer it's given, and keeps what it was asked
+function writer(...explainers: { beats: unknown[]; stage: unknown }[]) {
+  const asked: { brief: string; fix?: { sessionId?: string; problems: string[] } }[] = [];
+  const write: Write = (_lead, brief, fix) => {
+    asked.push({ brief: brief.brief, fix: fix && { sessionId: fix.sessionId, problems: fix.problems } });
+    const next = explainers[Math.min(asked.length, explainers.length) - 1];
+    return Promise.resolve({ input: { id: brief.id, title: brief.title, ...WRITTEN.parse(next) }, sessionId: 's1', model: 'claude-opus-5-5', effort: 'low', fast: true, seconds: 74.4, costUsd: 0.214 });
+  };
+  return { write, asked };
+}
+const explainTool = tool(sources, writer().write);
 
 const text = (n: number) => 'x'.repeat(n);
 
@@ -23,8 +34,8 @@ describe('the explain tool schema', () => {
   const input = (beats: { title: string; text: string; seconds: number; label?: string }[]) => ({ id: 'x', title: 'X', beats, stage: { html: '', script: 'function render(t) {}' } });
 
   it('says each limit in its description', () => {
-    const beatShape = (explainShape.beats as unknown as z.ZodArray<z.ZodObject<Record<string, z.ZodType>>>).element.shape;
-    expect(explainShape.beats.description).toContain(`${E.minBeats} to ${E.maxBeats}`);
+    const beatShape = (WRITTEN.shape.beats as unknown as z.ZodArray<z.ZodObject<Record<string, z.ZodType>>>).element.shape;
+    expect(WRITTEN.shape.beats.description).toContain(`${E.minBeats} to ${E.maxBeats}`);
     expect(beatShape.title.description).toContain(String(E.beatTitle));
     expect(beatShape.text.description).toContain(String(E.text));
     expect(beatShape.seconds.description).toContain(`${E.minSeconds} to ${E.maxSeconds}`);
@@ -138,6 +149,38 @@ describe('the explain tool', () => {
       await expect(explainTool.run(context, withRefs([{ kind: 'ledger', where: '8', quote: 'fail' }]))).rejects.toThrow(/no line 8/);
       await expect(explainTool.run(context, withRefs([{ kind: 'file', where: 'nope.ts', quote: 'x' }]))).rejects.toThrow(/no file nope\.ts/);
       expect(shown).toEqual([]);
+    });
+  });
+
+  describe('a brief', () => {
+    const backed = { title: 'Judge', text: 'Haiku judged as well as Sonnet.', seconds: 3, refs: [{ kind: 'said', quote: 'Haiku judged as well as Sonnet' }] };
+    const unbacked = { ...backed, text: 'Haiku beat Opus.' };
+    const stage = { html: '<div id="a"></div>', script: 'function render(t) {}' };
+    const brief = { id: 'judge', title: 'The judge', brief: 'Explain the backtest, and ask v1 or v2.' };
+
+    it('goes to the office’s writer, whose explainer goes up with who wrote it and what it cost', async () => {
+      const { context, shown } = lead();
+      const { write, asked } = writer({ beats: [backed, { ...backed, title: 'Pick' }], stage });
+      const reply = await tool(sources, write).run(context, brief);
+      expect(asked).toEqual([{ brief: 'Explain the backtest, and ask v1 or v2.', fix: undefined }]);
+      expect(shown[0].page.html).toContain('“Haiku judged as well as Sonnet”');
+      expect(typeof reply === 'string' ? reply : reply.text).toContain('Written from your brief by Opus 5.5 on fast mode at low effort, 74 s, $0.21.');
+    });
+
+    it('goes back to the writer with what didn’t hold up, twice at most, then to the lead', async () => {
+      const { context, shown } = lead();
+      const fixed = writer({ beats: [unbacked, backed], stage }, { beats: [backed, backed], stage });
+      await tool(sources, fixed.write).run(context, brief);
+      expect(fixed.asked[1].fix).toEqual({ sessionId: 's1', problems: ['Beat 1 says "Opus", which none of its quotes do: quote the source that says it, or leave it out.'] });
+      expect(shown).toHaveLength(1);
+      const stuck = writer({ beats: [unbacked, backed], stage });
+      await expect(tool(sources, stuck.write).run(context, brief)).rejects.toThrow(/writer's explainer still don't hold up after 2 goes[\s\S]*"Opus"/);
+      expect(stuck.asked).toHaveLength(3);
+      expect(shown).toHaveLength(1);
+    });
+
+    it('is needed when there are no beats and stage', async () => {
+      await expect(explainTool.run(lead().context, { id: 'x', title: 'X' })).rejects.toThrow('Send a brief, or the beats and the stage.');
     });
   });
 });

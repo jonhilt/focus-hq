@@ -5,7 +5,7 @@ import type { Agent as OfficeAgent, LeadAgent as OfficeLeadAgent, Project as Off
 import type { LedgerEvent as OfficeLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, SystemModel, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, Effort, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, SystemModel, Waypoint,
 } from '../shared/types';
 /** A time of day, with the day when it isn't today (`14:05`, `Tue 09:30`). */
 export { clock } from '../shared/clock';
@@ -14,7 +14,7 @@ export type Agent = Readonly<OfficeAgent>;
 export type LeadAgent = Readonly<OfficeLeadAgent>;
 export type Project = Readonly<OfficeProject>;
 export type LedgerEvent = Readonly<OfficeLedgerEvent>;
-export { ACTIVE_STATUSES, AWAY_DESK, MODEL_KINDS } from '../shared/types';
+export { ACTIVE_STATUSES, AWAY_DESK, EFFORT_LEVELS, MODEL_KINDS } from '../shared/types';
 /** Reading the office as it stands: the projects the captain hasn't hidden, a project's board, what needs the captain, a pull request's QA badge, a goal's title, what the ledger says of something. */
 export { shownProjects } from '../shared/hidden';
 export { columns } from '../shared/board';

@@ -59,6 +59,11 @@ describe('readOnlyOptions', () => {
     expect(options).toMatchObject({ model: 'haiku', systemPrompt: 'Extract.', outputFormat: { type: 'json_schema', schema } });
     expect(readOnlyOptions(crewRun({ settings: { model: 'opus' } as Settings }), new AbortController()).model).toBe('opus');
   });
+
+  it('opts into fast mode only when asked', () => {
+    expect(readOnlyOptions(crewRun({ fast: true }), new AbortController()).settings).toEqual({ fastMode: true });
+    expect(readOnlyOptions(crewRun(), new AbortController()).settings).toBeUndefined();
+  });
 });
 
 describe('blockActivity', () => {

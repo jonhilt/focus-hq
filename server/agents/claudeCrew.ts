@@ -60,6 +60,8 @@ export interface ReadOnlyRun {
   timeoutMs?: number;
   /** How hard it thinks; missing = the model's default. */
   effort?: Effort;
+  /** Fast mode: quicker output at a higher price, on a model that has it (Opus). */
+  fast?: boolean;
 }
 
 export interface ReadOnlyResult {
@@ -96,6 +98,8 @@ export function readOnlyOptions(run: ReadOnlyRun, abort: AbortController): Optio
     outputFormat: run.schema ? { type: 'json_schema', schema: run.schema } : undefined,
     maxTurns: run.maxTurns ?? 40,
     effort: run.effort,
+    // the SDK leaves fast mode off unless a session opts in through its flag settings
+    settings: run.fast ? { fastMode: true } : undefined,
     resume: run.resume,
     env: agentEnv(),
   };
