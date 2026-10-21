@@ -6,6 +6,7 @@
 import { type Agent, errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { DiagramKeeper } from './keeper';
 import { mapTool } from './leadTool';
+import { statechartTool } from './statechartTool';
 import { crossCoupling, type OwnedCommit } from './crossRepo';
 import { changedFiles, mapRepo, mapRepoAndLog } from './map';
 import { crossCalls as callsAcross, type RepoRoutes } from './routes';
@@ -154,7 +155,7 @@ const cartography: FocusPlugin = {
     const cartographer = new Cartographer(host, state, diagrams);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {
-      leadTools: [mapTool],
+      leadTools: [mapTool, statechartTool],
       routes: [
         {
           method: 'post',
