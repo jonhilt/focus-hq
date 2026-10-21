@@ -10,7 +10,7 @@ import { answeredLead, goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
 import { lastWords, shownThisTurn } from './briefing';
 import type { Ui } from './context';
-import { busy, h } from './dom';
+import { busy, h, timeAgo } from './dom';
 import { closeGoal } from './goals';
 import { answerLead, messageAgent } from './resume';
 import { markdownHtml } from './terminal';
@@ -182,19 +182,27 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; 
   }
 }
 
-/** Where a hail's from, as a trail: the project, the goal, and who. */
-function trail(a: Attention): string {
-  const project = state.project('agent' in a ? a.agent.projectId : a.projectId)?.name;
-  if (!('agent' in a)) return [project, `${a.pr.repo}#${a.pr.number}`].filter(Boolean).join(' › ');
-  const work = a.agent.lead;
-  return [project, work?.title ?? a.agent.issue.title, work ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name].filter(Boolean).join(' › ');
+/** What it's part of, as the pane's title: a lead's goal, what anyone else is on, or the pull request. */
+function titleOf(a: Attention): string {
+  if (!('agent' in a)) return `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number} ${a.pr.title}`;
+  return a.agent.lead?.title ?? a.agent.issue.title;
 }
 
-/** One hail, large: where it's from, what's needed, what to read to decide, the answers, and what each leads to. */
+/** Where a hail's from, under its title: the project, who, and how long it's waited. */
+function trail(a: Attention): string {
+  const project = state.project('agent' in a ? a.agent.projectId : a.projectId)?.name;
+  if (!('agent' in a)) return [project, 'Pull request'].filter(Boolean).join(' · ');
+  const work = a.agent.lead;
+  const since = a.kind === 'hand' ? a.agent.permission?.at : a.agent.finishedAt;
+  return [project, work ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
+}
+
+/** One hail, large: the goal it's part of, where it's from, what's needed, what to read to decide, the answers, and what each leads to. */
 export function needCard(ui: Ui, a: Attention): HTMLElement {
   const { icon, what } = needLine(a, state.reviews);
   const { context, answers, then } = body(ui, a);
   return h('div', { class: 'briefing-card', style: `--tone:${TONE[a.kind]}` },
+    h('div', { class: 'need-title' }, titleOf(a)),
     h('div', { class: 'need-trail' }, trail(a), ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
     h('div', { class: 'briefing-what' }, h('span', null, icon), what),
     context ? h('div', { class: 'briefing-context', innerHTML: markdownHtml(context) }) : null,

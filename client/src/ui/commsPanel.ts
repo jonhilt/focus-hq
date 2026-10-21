@@ -1,172 +1,151 @@
-import { statusLine } from '../../../shared/agentStatus';
-import { goalState } from '../../../shared/board';
-import { UNIFORM } from '../../../shared/crew';
-import { type Attention, laneOf, needLine, turnRead } from '../../../shared/tricorder';
-import { type Agent, TEAM_STATIONS } from '../../../shared/types';
-import type { DecisionEvent } from '../../../shared/captainsInbox';
+import type { DecisionEvent, InboxItem } from '../../../shared/captainsInbox';
+import { type Attention } from '../../../shared/tricorder';
 import { viaNote } from '../../../shared/ledger';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
 import { state } from '../net/state';
-import { goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
 import { focusIndex, keptOrder } from './briefing';
 import type { Ui } from './context';
-import { fill, h, timeAgo } from './dom';
+import { fill, h } from './dom';
 import { COMMS_KEYS, commsKey } from './commsKeys';
+import { decidedBy, lanes, perProject, sentByCos, tagOf, waited } from './commsList';
 import { keyOf, needCard, needs, openFromComms, TONE } from './needCard';
 
 /** How many of the captain's recent decisions Comms lists. */
-const DECIDED_SHOWN = 8;
+const DECIDED_SHOWN = 6;
 
 /** The item the captain had picked when Comms last closed: it opens on it again, while it's still waiting. */
 let kept: string | null = null;
+/** The project the list was narrowed to when Comms last closed, if it was. */
+let keptProject: string | null = null;
 
-/** When the chief of staff's words go by themselves, on the queue's line: to the minute, as the line is redrawn every few seconds. */
-const sendsIn = (a: Attention, now: number): string => {
-  const at = a.kind === 'turn' ? a.agent.lead?.cos?.sendsAt : undefined;
+/** When the chief of staff's words go by themselves, on the tray's line: to the minute, as the line is redrawn every few seconds. */
+const sendsIn = (a: Attention | undefined, now: number): string => {
+  const at = a?.kind === 'turn' ? a.agent.lead?.cos?.sendsAt : undefined;
   if (at === undefined) return '';
   const min = Math.ceil((at - now) / 60_000);
   return min > 1 ? `⏱ sends itself in ${min} min` : '⏱ sends itself within a minute';
 };
 
-const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
+/** The colour down an item's edge: an interrupt is red, a card gold, anything else its kind's. */
+const toneOf = (i: InboxItem): string => (i.cos?.route === 3 ? LCARS.red : i.cos?.route === 2 ? LCARS.gold : TONE[i.kind]);
 
-/** One line of the inbox's queue: what's needed, then the project and goal, then who (and any plugin's tags). */
-function queueRow(a: Attention, pick: () => void): HTMLElement {
-  const { icon, what } = needLine(a, state.reviews);
-  const project = state.project('agent' in a ? a.agent.projectId : a.projectId);
-  const goal = 'agent' in a ? (a.agent.lead?.title ?? a.agent.issue.title) : `${a.pr.repo.split('/')[1] ?? a.pr.repo}#${a.pr.number} ${a.pr.title}`;
-  const who = 'agent' in a ? `${a.agent.name}${a.agent.lead ? ` · Station ${a.agent.lead.station + 1}` : ''}` : 'Pull request';
-  return h('button', { class: 'need inbox-row', style: `--tone:${TONE[a.kind]}`, onclick: pick },
-    h('div', { class: 'need-what', title: what }, h('span', { class: 'need-icon' }, icon), what),
-    h('div', { class: 'inbox-where' }, project ? h('b', { style: `color:${project.color}` }, project.name) : null, project ? ' · ' : null, goal),
-    h('small', { class: 'need-from' }, who, ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
+/** One line of the list: what it asks in a word, the goal, who and how long it's waited, then what's needed. */
+function itemRow(i: InboxItem, pick: () => void): HTMLElement {
+  return h('button', { class: 'need inbox-row', style: `--tone:${toneOf(i)}`, onclick: pick },
+    h('div', { class: 'inbox-row-head' },
+      h('span', { class: 'inbox-tag' }, tagOf(i)),
+      h('span', { class: 'inbox-goal', title: i.goal }, i.goal),
+      h('small', { class: 'muted' }, `· ${i.who.replace(/^Lt\. /, '')}${i.since ? ` · ${waited(i.since, Date.now())}` : ''}`),
+    ),
+    h('div', { class: 'need-what', title: i.what }, i.what),
     h('small', { class: 'need-sends' }),
   );
 }
 
-/** Something the captain decided lately: what it was, who for, and what they said. */
+/** Something decided lately: the goal and when, then what was said, and who said it. */
 function decidedRow(d: DecisionEvent): HTMLElement {
-  const project = state.project(d.projectId);
-  return h('div', { class: 'decided' },
-    h('small', { class: 'muted' }, `${timeAgo(d.at)} · ${d.agent}${d.goal ? ` · ${d.goal}` : ''}${viaNote(d.via) ? ` · ${viaNote(d.via)}` : ''}`,
-      project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
-    h('div', { class: 'decided-what', title: d.item.what }, d.item.what),
-    h('div', { class: 'decided-answer', title: d.answer }, `→ ${d.answer}`),
-  );
-}
-
-/** A goal that's getting on without the captain: a line each, to talk to its lead or beam over. */
-function underWayRow(ui: Ui, lead: Agent): HTMLElement {
-  const project = state.project(lead.projectId);
-  return h('div', { class: 'under-way', style: `--tone:${UNIFORM[lead.avatar.division]}` },
-    h('span', { class: 'under-way-station' }, String((lead.lead?.station ?? 0) + 1).padStart(2, '0')),
-    h('div', { class: 'grow' },
-      h('div', null, h('strong', null, lead.lead?.title ?? lead.issue.title), project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
-      h('small', { class: 'muted' }, `${lead.name} · ${goalState(lead)} · ${statusLine(lead)}`, ...goalTags(lead, 'line').map((tag) => tag.el)),
-    ),
-    h('button', { class: 'btn small', onclick: () => openFromComms(ui, lead.id) }, 'Talk'),
-    beam(ui, lead),
+  const via = viaNote(d.via);
+  return h('div', { class: 'decided', title: `${d.item.what}${via ? ` (${via})` : ''}` },
+    h('div', { class: 'inbox-row-head' }, h('span', { class: 'inbox-goal' }, d.goal ?? d.agent), h('small', { class: 'muted' }, `· ${waited(d.at, Date.now())}`)),
+    h('div', { class: 'decided-answer' }, `${decidedBy(d)}: “${d.answer}”`),
   );
 }
 
 /**
- * Comms, opened from anywhere with C and from the captain's chair with E: an inbox of what needs the captain across
- * the ship. On the left the queue, most urgent first (the hails from `attention()`, then the leads whose turn they've
- * read but not answered, quieter), each line saying what's needed, the project and goal, and who; below it the goals
- * getting on without them, and each project's goals. On the right the one picked, large: what to read to decide (a
- * lead's last words, what they showed, a question's options) and the answers, each saying what it leads to. Answered,
- * it leaves the queue and the next one's picked; Later moves on and leaves it there. Picking a lead's turn reads it,
- * as their panel does. The queue keeps its order while it's open (`keptOrder`), so nothing moves under the pointer.
+ * Comms, opened from anywhere with C and from the captain's chair with E: the captain's inbox (shared/captainsInbox.ts),
+ * read from the office as a bot reads it, so both see the same. Along the top each project with what waits there, to
+ * narrow the list to it. On the left what the chief of staff flags for the captain, most urgent first, then what they
+ * decided lately, then its tray: the turns it has words ready for, and what it sent by itself today. On the right the
+ * one picked, large: the goal, what to read to decide, and the answers. Answered, it leaves the list and the next one's
+ * picked. Picking a lead's turn reads it, as their panel does. The list keeps its order while it's open (`keptOrder`),
+ * so nothing moves under the pointer.
  */
 export function openCommsPanel(ui: Ui): void {
   let picked: string | null = kept;
+  let project: string | null = keptProject;
   let shown: string | null = null;
   let at = 0;
   let order: string[] = [];
+  let open: InboxItem[] = [];
+  let decidedLately: DecisionEvent[] = [];
+  let trayOpen = false;
   const rows = new Map<string, HTMLElement>();
+  const tabs = h('div', { class: 'comms-tabs' });
   const queueHead = h('h3');
   const queue = h('div', { class: 'needs' });
-  const readyHead = h('h3', { title: 'Turns the chief of staff would carry on, or send back to the lead: its words are ready for you to send' });
-  const ready = h('div', { class: 'needs' });
   const reading = h('small', { class: 'muted cos-reading' });
   const decidedHead = h('h3', null, 'Recently decided');
   const decided = h('div', { class: 'decided-list' });
-  const underWayHead = h('h3', null, 'Under way');
-  const underWay = h('div', { class: 'under-way-list' });
-  const gateways = h('div', { class: 'row' });
-  const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next (J)' }, 'Later ›');
+  const trayLine = h('button', { class: 'cos-tray-line', title: 'The turns the chief of staff carries on or sends back: its words, ready to send', onclick: () => { trayOpen = !trayOpen; render(); } });
+  const tray = h('div', { class: 'needs cos-tray' });
   const keysHint = h('small', { class: 'muted comms-keys' }, COMMS_KEYS);
   const detail = h('div', { class: 'inbox-detail' });
   const body = h('div', { class: 'comms inbox' },
-    h('div', { class: 'inbox-left' }, queueHead, queue, reading, readyHead, ready, decidedHead, decided, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
-    h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, keysHint, later), detail),
+    tabs,
+    h('div', { class: 'inbox-left' }, queueHead, queue, reading, decidedHead, decided, trayLine, tray, keysHint),
+    h('div', { class: 'inbox-right' }, detail),
   );
 
   const render = (step = 0) => {
     const now = Date.now();
-    const all = needs();
-    // what the chief of staff is still reading waits out of sight, for a minute at most (`laneOf`)
-    const judging = all.filter((a) => laneOf(a, now) === 'judging');
-    const list = all.filter((a) => laneOf(a, now) !== 'judging');
-    const keys = (order = keptOrder(order, list.map(keyOf)));
-    const byKey = new Map(list.map((a) => [keyOf(a), a]));
-    // what needs the captain first, then what's ready to send, each in the order it's kept
-    const items = [...keys.flatMap((k) => byKey.get(k) ?? [])].sort((a, b) => Number(laneOf(a, now) === 'ready') - Number(laneOf(b, now) === 'ready'));
-    const keyed = items.map(keyOf);
-    const i = focusIndex(keyed, step ? null : picked, step && keyed.length ? (((at + step) % keyed.length) + keyed.length) % keyed.length : at);
-    const readyCount = items.filter((a) => laneOf(a, now) === 'ready').length;
-    const needCount = items.length - readyCount;
-    queueHead.textContent = needCount ? `Needs you (${needCount})` : 'Needs you';
-    readyHead.textContent = `Ready to send (${readyCount})`;
-    readyHead.hidden = ready.hidden = !readyCount;
-    reading.hidden = !judging.length;
-    reading.textContent = `The chief of staff is reading ${judging.length === 1 ? '1 turn' : `${judging.length} turns`}…`;
-    later.disabled = keyed.length < 2;
+    const local = new Map(needs().map((a) => [keyOf(a), a]));
+    // only what the office's inbox has, and the office here knows of (a bot's answer can land before this office hears)
+    const known = open.filter((i) => local.has(i.id));
+    const { flagged, ready, reading: judging } = lanes(known, project);
+    const keys = (order = keptOrder(order, flagged.map((i) => i.id)));
+    const byId = new Map(known.map((i) => [i.id, i]));
+    const items = keys.flatMap((k) => byId.get(k) ?? []);
+    // the tray's rows are picked like the list's, when it's open
+    const pickable = [...items, ...(trayOpen ? ready : [])];
+    const ids = pickable.map((i) => i.id);
+    const i = focusIndex(ids, step ? null : picked, step && ids.length ? (((at + step) % ids.length) + ids.length) % ids.length : at);
 
-    // a row is built once per item and kept, so the queue isn't rebuilt under the pointer
-    const next = new Map(items.map((a) => {
-      const k = keyOf(a);
-      return [`${k}|${laneOf(a, now)}`, rows.get(`${k}|${laneOf(a, now)}`) ?? queueRow(a, () => { picked = k; render(); })] as const;
-    }));
-    for (const a of items) {
-      const row = next.get(`${keyOf(a)}|${laneOf(a, now)}`);
-      row?.classList.toggle('read', a.kind === 'turn' && turnRead(a.agent));
-      row?.classList.toggle('sel', keyOf(a) === keyed[i]);
+    const counts = perProject(lanes(known, null).flagged);
+    fill(tabs, ...state.shown.map((p) =>
+      h('button', { class: `comms-tab${project === p.id ? ' on' : ''}`, style: `--tone:${p.color}`, title: project === p.id ? 'Show every project' : `Only ${p.name}`, onclick: () => { project = keptProject = project === p.id ? null : p.id; render(); } },
+        p.name, counts.get(p.id) ? h('b', null, String(counts.get(p.id))) : null)),
+      h('button', { class: 'comms-tab goals', title: 'The goals: start one, see the line and the closed ones', onclick: () => ui.openGoals(project ?? state.shown[0]?.id ?? '') }, 'Goals ›'),
+    );
+    queueHead.textContent = items.length ? `Needs you · ${items.length}` : 'Needs you';
+    reading.hidden = !judging;
+    reading.textContent = `The chief of staff is reading ${judging === 1 ? '1 turn' : `${judging} turns`}…`;
+
+    // a row is built once per item and kept, so the list isn't rebuilt under the pointer
+    const next = new Map(pickable.map((it) => [`${it.id}|${it.lane}`, rows.get(`${it.id}|${it.lane}`) ?? itemRow(it, () => { picked = it.id; render(); })] as const));
+    for (const it of pickable) {
+      const row = next.get(`${it.id}|${it.lane}`);
+      row?.classList.toggle('read', !!it.read);
+      row?.classList.toggle('sel', it.id === ids[i]);
       const sends = row?.querySelector('.need-sends');
-      if (sends) sends.textContent = sendsIn(a, now);
+      if (sends) sends.textContent = sendsIn(local.get(it.id), now);
     }
     if ([...next.keys()].join('|') !== [...rows.keys()].join('|') || !queue.childElementCount) {
-      const rowsIn = (lane: 'needs-you' | 'ready') => items.filter((a) => (laneOf(a, now) === 'ready') === (lane === 'ready')).flatMap((a) => next.get(`${keyOf(a)}|${laneOf(a, now)}`) ?? []);
-      const needRows = rowsIn('needs-you');
-      fill(queue, ...(needRows.length ? needRows : [h('p', { class: 'muted' }, '✓ All quiet.')]));
-      fill(ready, ...rowsIn('ready'));
+      const rowsOf = (list: InboxItem[]) => list.flatMap((it) => next.get(`${it.id}|${it.lane}`) ?? []);
+      fill(queue, ...(items.length ? rowsOf(items) : [h('p', { class: 'muted' }, '✓ Nothing needs you.')]));
+      fill(tray, ...(trayOpen ? rowsOf(ready) : []));
     }
     rows.clear();
     for (const [k, row] of next) rows.set(k, row);
 
-    const needing = new Set(items.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-    const going = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !needing.has(l.id));
-    underWayHead.hidden = underWay.hidden = !going.length;
-    fill(underWay, ...going.map((l) => underWayRow(ui, l)));
-    fill(gateways, ...state.shown.map((p) => {
-      const waiting = p.goalQueue?.length ?? 0;
-      return h('button', { class: 'btn small', style: `--tone:${p.color}`, title: `${p.name}’s goals: start one, see the line and the closed ones`, onclick: () => ui.openGoals(p.id) },
-        `${p.name} · ${state.leadsIn(p.id).length}/${TEAM_STATIONS}${waiting ? ` +${waiting}` : ''}`);
-    }));
+    const today = new Date(now).setHours(0, 0, 0, 0);
+    const sent = sentByCos(decidedLately, today);
+    trayLine.hidden = !ready.length && !sent;
+    trayLine.textContent = `Chief of staff: ${[ready.length ? `${ready.length} ready to send` : '', sent ? `sent ${sent} by itself today` : ''].filter(Boolean).join(' · ')} ${trayOpen ? '‹' : '›'}`;
+    const mine = decidedLately.filter((d) => d.via !== 'chief-of-staff' && (!project || d.projectId === project)).slice(0, DECIDED_SHOWN);
+    decidedHead.hidden = decided.hidden = !mine.length;
+    fill(decided, ...mine.map(decidedRow));
 
     if (i < 0) {
       picked = shown = kept = null;
-      fill(detail, h('div', { class: 'briefing-card briefing-clear' },
-        h('div', { class: 'briefing-what' }, h('span', null, '✓'), 'Nothing needs you.'),
-        h('small', { class: 'muted' }, going.length ? `${going.length} goal${going.length === 1 ? '' : 's'} under way without you.` : 'No goals under way.'),
-      ));
+      fill(detail, h('div', { class: 'briefing-card briefing-clear' }, h('div', { class: 'briefing-what' }, h('span', null, '✓'), 'Nothing needs you.')));
       return;
     }
     at = i;
-    picked = kept = keyed[i];
-    const a = items[i];
+    picked = kept = ids[i];
+    const a = local.get(ids[i]);
+    if (!a) return;
     // rebuilt only when it's another item (or the chief of staff has judged it since, or it's held), so a reply being written isn't
     // wiped by the next update
     const showing = `${picked}|${a.kind === 'turn' ? `${a.agent.lead?.cos?.judged?.route ?? ''}|${a.agent.lead?.cos?.sendsAt ?? ''}` : ''}`;
@@ -175,7 +154,17 @@ export function openCommsPanel(ui: Ui): void {
     if (a.kind === 'turn') markRead(a.agent);
     fill(detail, needCard(ui, a));
   };
-  later.onclick = () => render(1);
+
+  // the inbox is the office's, asked for again (at most every quarter second) whenever anything it's made of changes
+  let asking: ReturnType<typeof setTimeout> | undefined;
+  const refresh = () => {
+    clearTimeout(asking);
+    asking = setTimeout(() => void api.inbox().then((inbox) => {
+      open = inbox.open.filter((i) => !state.isHidden(i.projectId));
+      decidedLately = inbox.decided.filter((d) => !state.isHidden(d.projectId));
+      render();
+    }, () => undefined), 250);
+  };
 
   // by keyboard (commsKeys.ts): never while the captain is writing in the pane
   const onKey = (e: KeyboardEvent) => {
@@ -194,23 +183,17 @@ export function openCommsPanel(ui: Ui): void {
     }
   };
 
-  // what the captain decided lately is the ledger's, asked for again whenever the ledger grows
-  const showDecided = () =>
-    void api.inbox().then(({ decided: ds }) => {
-      const shown = ds.filter((d) => !state.isHidden(d.projectId)).slice(0, DECIDED_SHOWN);
-      decidedHead.hidden = decided.hidden = !shown.length;
-      fill(decided, ...shown.map(decidedRow));
-    }, () => undefined);
-
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   window.addEventListener('keydown', onKey);
   ui.panels.own(() => window.removeEventListener('keydown', onKey));
+  decidedHead.hidden = decided.hidden = trayLine.hidden = true;
   render();
-  // a turn the chief of staff hasn't judged in a minute comes out of hiding by itself
-  const tick = setInterval(() => render(), 5000);
-  ui.panels.own(() => clearInterval(tick));
-  decidedHead.hidden = decided.hidden = true;
-  showDecided();
-  ui.panels.own(state.on('report', showDecided));
-  for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, () => render()));
+  refresh();
+  // what the chief of staff has been reading a minute comes out of hiding by itself, and the countdowns move on
+  const tick = setInterval(refresh, 5000);
+  ui.panels.own(() => {
+    clearInterval(tick);
+    clearTimeout(asking);
+  });
+  for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects', 'report'] as const) ui.panels.own(state.on(event, refresh));
 }
