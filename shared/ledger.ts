@@ -1,6 +1,7 @@
 import type { QaBadgeState } from './qa';
 import { isRecord } from './records';
-import type { AgentTask, ArchivedGoal, GoalRecord, TriageAction } from './types';
+import type { AgentTask, ArchivedGoal, GoalRecord, CosRoute, TriageAction } from './types';
+export type { CosRoute } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
 // closed goals, and a digest of each agent session as it ends. The office appends to it as things happen and never
@@ -67,8 +68,6 @@ export type LedgerEntry =
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 
-/** Where the chief of staff sends a lead's turn: 1 carry on, 2 a card in the captain's queue, 3 interrupt the captain, 4 back to the lead. */
-export type CosRoute = 1 | 2 | 3 | 4;
 
 /** Who a chief of staff's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
 export const cosAddressee = (route: CosRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');

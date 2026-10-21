@@ -30,6 +30,7 @@ import { type Interaction, REACH } from './world/builder';
 import { CHAIR_USE, chairInHand, seatedView } from './world/chairs';
 import type { Chair } from './world/deckExtras';
 import { OVERLAY_LAYER } from './world/frame';
+import { type TurnStage, turnNews, turnStage } from '../../shared/captainsInbox';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
@@ -366,15 +367,14 @@ async function main() {
   const notify = (level: 'info' | 'success' | 'error', text: string, link?: NewsLink) => {
     hud.toast(level, text, link && linkAction(ui, link));
   };
-  // a goal's lead finishing a turn: it's your turn, unless you're already looking at them
-  const leadTurns = new Map<string, string>();
+  // a goal's lead's turn coming to you, unless you're already looking at them: as it ends, or as the chief of staff
+  // judges it a card or an interrupt (`turnNews`); what it would carry on or send back stays quiet, in Comms
+  const leadTurns = new Map<string, TurnStage>();
   state.on('agent', (a) => {
     if (a.task !== 'lead' || state.isHidden(a.projectId)) return;
-    const before = leadTurns.get(a.id);
-    leadTurns.set(a.id, a.status);
-    if (a.status === 'done' && before && before !== 'done' && !agentPanelOpen(a.id)) {
-      notify('info', `🖖 ${a.name} is waiting for you`, { kind: 'agent', id: a.id, talk: true });
-    }
+    const news = turnNews(leadTurns.get(a.id), a);
+    leadTurns.set(a.id, turnStage(a));
+    if (news && !agentPanelOpen(a.id)) notify(news.level, news.text, { kind: 'agent', id: a.id, talk: true });
   });
   // crew working their consoles: a few blips from a station as its terminal scrolls, now and then rather than per line
   const chatter = new Map<string, number>();

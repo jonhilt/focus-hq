@@ -40,4 +40,4 @@ export const attention = (): Attention[] => needsYou(state.shownAgents(), shownP
  * Everything waiting on the captain across the shown projects: the hails, then the leads whose turn they've read but
  * not answered (`waiting`). The office's inbox (`GET /api/inbox`) is the same list.
  */
-export const needs = (): Attention[] => waiting(state.shownAgents(), shownPrs(), state.reviews, state.shown.flatMap((p) => state.leadsIn(p.id)));
+export const needs = (): Attention[] => waiting(state.shownAgents(), shownPrs(), state.reviews, state.shown.flatMap((p) => state.leadsIn(p.id)), Date.now());

@@ -89,8 +89,9 @@ export class DemoRunner implements AgentRunner {
     const journal = (type: 'user' | 'assistant', content: unknown[]) => {
       if (!session.startsWith('demo-lead-')) return;
       const lines = this.journals.get(session) ?? [];
-      if (!lines.some((l) => l.includes(`"began":"${began}"`))) lines.push(JSON.stringify({ type: 'user', timestamp: began, began, message: { content: req.prompt } }));
-      lines.push(JSON.stringify({ type, timestamp: new Date().toISOString(), message: { content } }));
+      // each line with its uuid, as Claude Code writes them: the chief of staff names a turn by its last
+      if (!lines.some((l) => l.includes(`"began":"${began}"`))) lines.push(JSON.stringify({ type: 'user', uuid: randomHex(8), timestamp: began, began, message: { content: req.prompt } }));
+      lines.push(JSON.stringify({ type, uuid: randomHex(8), timestamp: new Date().toISOString(), message: { content } }));
       this.journals.set(session, lines);
     };
     let calls = 0;

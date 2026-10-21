@@ -1,6 +1,6 @@
 import { autonomyChangeLine } from '../../../shared/autonomy';
 import { goneReply } from '../../../shared/mergeGate';
-import type { Agent, Autonomy, Effort, MessageReply, ResumeHow } from '../../../shared/types';
+import type { Agent, Autonomy, CosRead, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
 import { resumeChoice } from '../apiKey';
 import { backgroundStop } from '../lead';
@@ -40,6 +40,20 @@ export class Comms extends Part {
     const agent = this.store.agent(id);
     if (!agent.lead || agent.status !== 'done' || agent.finishedAt === undefined || agent.lead.readTurn === agent.finishedAt) return;
     this.update(agent, { lead: { ...agent.lead, readTurn: agent.finishedAt } });
+  }
+
+  /** A lead's turn ended, and a plugin judges it for the captain's inbox: it's being read from now (`lead.cos`). */
+  reading(id: string): void {
+    const agent = this.store.agents.get(id);
+    if (agent?.lead) this.update(agent, { lead: { ...agent.lead, cos: { at: Date.now() } } });
+  }
+
+  /** How a plugin judged a lead's last turn: kept while that turn is still being read, dropped once their next has started. */
+  judged(id: string, judged: NonNullable<CosRead['judged']>): void {
+    const agent = this.store.agents.get(id);
+    const read = agent?.lead?.cos;
+    if (!agent?.lead || !read || read.judged) return;
+    this.update(agent, { lead: { ...agent.lead, cos: { ...read, judged } } });
   }
 
   /**

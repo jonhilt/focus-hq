@@ -1,5 +1,5 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
-import type { Inbox } from '../../../shared/captainsInbox';
+import type { Decide, Inbox } from '../../../shared/captainsInbox';
 import type { PersonalEntry } from '../../../shared/personalLog';
 import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
@@ -110,6 +110,8 @@ export const api = {
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain's inbox: what needs them, and what they decided lately (docs/ledger.md#the-captains-inbox-api). */
   inbox: () => call<Inbox>('GET', '/inbox'),
+  /** Answers an inbox item by its id, from the office (docs/comms.md#the-inbox-api). */
+  decide: (id: string, decide: Decide) => call<{ ok: true } | MessageReply>('POST', `/inbox/${encodeURIComponent(id)}/decide`, { ...decide, via: 'office' }),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),

@@ -28,6 +28,7 @@ const chief: Subject<Kept> = {
         record: (projectId, entry) => void ledger.push({ ...entry, projectId, at: ledger.length, seq: ledger.length + 1 }),
         ledger: () => [...ledger],
         settings: () => settings,
+        goals: { judged: () => undefined },
       };
       // the model answering is a step out there: a restart can fall while it does
       const judge: Judge = { model: 'haiku', judge: () => later('haiku', () => Promise.resolve({ structured: { route: 2, why: 'A pick.', message: '' } })) };

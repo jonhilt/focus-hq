@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { office, until } from './agents/fakeOffice';
+import type { CosRead } from '../shared/types';
 import { Inbox } from './captainsInbox';
+import type { FocusPlugin } from './plugins/contract';
 
 /** An office with a lead whose first turn has ended, waiting on the captain, and its inbox. */
 async function waitingLead() {
@@ -62,3 +64,42 @@ describe('the captain’s inbox, as the API serves it', () => {
     expect(decisions().map((d) => [d.item.kind, d.answer])).toEqual([['turn', 'Go on'], ['hand', 'Declined']]);
   });
 });
+
+/** An office whose leads' turns a plugin judges, as the chief of staff does, with `judged` for each. */
+async function judgedLead(judged: NonNullable<CosRead['judged']>) {
+  const o = office();
+  const judge: FocusPlugin = {
+    id: 'judge',
+    start: (host) => ({
+      judgesTurns: (agent) => agent.task === 'lead',
+      turn: (agent, phase) => void (phase === 'end' && host.goals.judged(agent.id, judged)),
+    }),
+  };
+  o.agents.startPlugins([judge], { demo: false, ownRepo: () => undefined });
+  const inbox = new Inbox(o.store, { agents: o.agents, githubLogin: undefined });
+  const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+  await until(() => o.claude.turns.length === 1);
+  o.claude.turns[0].end({ ok: true, summary: 'Settings page next.' });
+  await until(() => o.store.agent(agent.id).status === 'done');
+  return { ...o, inbox, id: agent.id, decisions: () => o.store.ledger.filter((e) => e.kind === 'captain-decision') };
+}
+
+describe('the captain’s inbox, with a chief of staff reading the leads’ turns', () => {
+  it('files a turn it would carry on as ready, and sends its words to the lead, from it, when the captain says', async () => {
+    const { inbox, claude, decisions } = await judgedLead({ route: 1, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' });
+    const [item] = inbox.view().open;
+    expect(item).toMatchObject({ kind: 'turn', lane: 'ready', what: 'Carry on to the settings page', cos: { route: 1 } });
+    await inbox.decide(item.id, { send: true }, 'office');
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toContain('[Chief of Staff] Go on to the settings page.');
+    expect(decisions()).toMatchObject([{ item: { id: item.id, what: 'Carry on to the settings page' }, answer: 'Sent the chief of staff’s words' }]);
+  });
+
+  it('files a card under needs you, headed by its line, and won’t send words it has none ready for', async () => {
+    const { inbox } = await judgedLead({ route: 2, ask: 'Slice 2: filters or drag-reorder first?', why: 'A pick.', message: 'Filters, the lead says.' });
+    const [item] = inbox.view().open;
+    expect(item).toMatchObject({ lane: 'needs-you', what: 'Slice 2: filters or drag-reorder first?' });
+    await expect(inbox.decide(item.id, { send: true }, 'office')).rejects.toThrow(/words ready/);
+  });
+});
+

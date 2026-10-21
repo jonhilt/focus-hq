@@ -6,7 +6,7 @@ import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
-import type { Agent, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
+import type { Agent, CosRead, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -75,6 +75,12 @@ export interface PluginParts {
    * where it stands now, as `host.signIn()` reads it.
    */
   signInChanged?(signIn: SignIn): void;
+  /**
+   * Whether it judges this goal lead's turns for the captain's inbox (the chief of staff, where it's switched on). As such
+   * a turn ends, the office marks it as being read (`lead.cos`), and the captain's inbox holds it back, unhailing, until
+   * the plugin says how it judged it (`host.goals.judged`) or `JUDGING_MS` passes (shared/tricorder.ts).
+   */
+  judgesTurns?(agent: Readonly<Agent>): boolean;
   /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
@@ -321,6 +327,11 @@ export interface PluginGoals {
    * key, picking a long conversation back up can cost: then it comes back `costly`, for the captain to say `how`.
    */
   message(agentId: string, text: string, opts?: { from?: string; how?: ResumeHow }): MessageReply;
+  /**
+   * How a plugin that judges turns (`judgesTurns`) judged a goal lead's last one, for the captain's inbox. Taken only
+   * while that turn is still being read: once the lead's next turn has started, it's too late, and it's dropped.
+   */
+  judged(agentId: string, judged: NonNullable<CosRead['judged']>): void;
 }
 
 /** A journal the office keeps, as a plugin has it: what it's about and its facts, oldest first. */

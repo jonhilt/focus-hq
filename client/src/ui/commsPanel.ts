@@ -1,7 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
-import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
+import { type Attention, laneOf, needLine, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
 import type { DecisionEvent } from '../../../shared/captainsInbox';
 import { api } from '../net/api';
@@ -74,6 +74,9 @@ export function openCommsPanel(ui: Ui): void {
   const rows = new Map<string, HTMLElement>();
   const queueHead = h('h3');
   const queue = h('div', { class: 'needs' });
+  const readyHead = h('h3', { title: 'Turns the chief of staff would carry on, or send back to the lead: its words are ready for you to send' });
+  const ready = h('div', { class: 'needs' });
+  const reading = h('small', { class: 'muted cos-reading' });
   const decidedHead = h('h3', null, 'Recently decided');
   const decided = h('div', { class: 'decided-list' });
   const underWayHead = h('h3', null, 'Under way');
@@ -82,31 +85,46 @@ export function openCommsPanel(ui: Ui): void {
   const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next' }, 'Later ›');
   const detail = h('div', { class: 'inbox-detail' });
   const body = h('div', { class: 'comms inbox' },
-    h('div', { class: 'inbox-left' }, queueHead, queue, decidedHead, decided, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
+    h('div', { class: 'inbox-left' }, queueHead, queue, reading, readyHead, ready, decidedHead, decided, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
     h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, later), detail),
   );
 
   const render = (step = 0) => {
-    const list = needs();
+    const now = Date.now();
+    const all = needs();
+    // what the chief of staff is still reading waits out of sight, for a minute at most (`laneOf`)
+    const judging = all.filter((a) => laneOf(a, now) === 'judging');
+    const list = all.filter((a) => laneOf(a, now) !== 'judging');
     const keys = (order = keptOrder(order, list.map(keyOf)));
     const byKey = new Map(list.map((a) => [keyOf(a), a]));
-    const items = keys.flatMap((k) => byKey.get(k) ?? []);
-    const i = focusIndex(keys, step ? null : picked, step && keys.length ? (at + step) % keys.length : at);
-    queueHead.textContent = keys.length ? `Needs you (${keys.length})` : 'Needs you';
-    later.disabled = keys.length < 2;
+    // what needs the captain first, then what's ready to send, each in the order it's kept
+    const items = [...keys.flatMap((k) => byKey.get(k) ?? [])].sort((a, b) => Number(laneOf(a, now) === 'ready') - Number(laneOf(b, now) === 'ready'));
+    const keyed = items.map(keyOf);
+    const i = focusIndex(keyed, step ? null : picked, step && keyed.length ? (at + step) % keyed.length : at);
+    const readyCount = items.filter((a) => laneOf(a, now) === 'ready').length;
+    const needCount = items.length - readyCount;
+    queueHead.textContent = needCount ? `Needs you (${needCount})` : 'Needs you';
+    readyHead.textContent = `Ready to send (${readyCount})`;
+    readyHead.hidden = ready.hidden = !readyCount;
+    reading.hidden = !judging.length;
+    reading.textContent = `The chief of staff is reading ${judging.length === 1 ? '1 turn' : `${judging.length} turns`}…`;
+    later.disabled = keyed.length < 2;
 
     // a row is built once per item and kept, so the queue isn't rebuilt under the pointer
     const next = new Map(items.map((a) => {
       const k = keyOf(a);
-      return [k, rows.get(k) ?? queueRow(a, () => { picked = k; render(); })] as const;
+      return [`${k}|${laneOf(a, now)}`, rows.get(`${k}|${laneOf(a, now)}`) ?? queueRow(a, () => { picked = k; render(); })] as const;
     }));
     for (const a of items) {
-      const row = next.get(keyOf(a));
+      const row = next.get(`${keyOf(a)}|${laneOf(a, now)}`);
       row?.classList.toggle('read', a.kind === 'turn' && turnRead(a.agent));
-      row?.classList.toggle('sel', keyOf(a) === keys[i]);
+      row?.classList.toggle('sel', keyOf(a) === keyed[i]);
     }
     if ([...next.keys()].join('|') !== [...rows.keys()].join('|') || !queue.childElementCount) {
-      fill(queue, ...(next.size ? next.values() : [h('p', { class: 'muted' }, '✓ All quiet.')]));
+      const rowsIn = (lane: 'needs-you' | 'ready') => items.filter((a) => (laneOf(a, now) === 'ready') === (lane === 'ready')).flatMap((a) => next.get(`${keyOf(a)}|${laneOf(a, now)}`) ?? []);
+      const needRows = rowsIn('needs-you');
+      fill(queue, ...(needRows.length ? needRows : [h('p', { class: 'muted' }, '✓ All quiet.')]));
+      fill(ready, ...rowsIn('ready'));
     }
     rows.clear();
     for (const [k, row] of next) rows.set(k, row);
@@ -130,11 +148,13 @@ export function openCommsPanel(ui: Ui): void {
       return;
     }
     at = i;
-    picked = keys[i];
-    // rebuilt only when it's another item, so a reply being written isn't wiped by the next update
-    if (picked === shown) return;
-    shown = picked;
+    picked = keyed[i];
     const a = items[i];
+    // rebuilt only when it's another item (or the chief of staff has judged it since), so a reply being written isn't
+    // wiped by the next update
+    const showing = `${picked}|${a.kind === 'turn' ? (a.agent.lead?.cos?.judged?.route ?? '') : ''}`;
+    if (showing === shown) return;
+    shown = showing;
     if (a.kind === 'turn') markRead(a.agent);
     fill(detail, needCard(ui, a));
   };
@@ -150,6 +170,9 @@ export function openCommsPanel(ui: Ui): void {
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();
+  // a turn the chief of staff hasn't judged in a minute comes out of hiding by itself
+  const tick = setInterval(() => render(), 5000);
+  ui.panels.own(() => clearInterval(tick));
   decidedHead.hidden = decided.hidden = true;
   showDecided();
   ui.panels.own(state.on('report', showDecided));

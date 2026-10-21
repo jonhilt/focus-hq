@@ -78,6 +78,7 @@ Live bugs the checks found on today's code, each now held in a plain test.
 - **A message sent while a developer's work went up was never heard when the delivery failed** (fixed; a delivery promise).
 - **A follow-up that came as the work went up wasn't asked to commit what it left** (fixed; a delivery promise).
 - **A developer asked to commit, whose turn a restart cut off, was asked again** (fixed; the delivery's restart check). A second restart inside that same picked-up turn would still ask again.
+- **A lead's turn the office stopped as it went down was left being read by the chief of staff after the restart** (caught before it merged; the lead's restart check, `managerInvariants.test.ts`): it looked like a turn ended, so it came back hidden from the captain while the lead carried on. A turn ends for the chief of staff only when the office isn't going down.
 
 ## What it can't tell
 

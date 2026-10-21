@@ -1,8 +1,8 @@
 import { openQuestion } from './artifacts';
 import type { LedgerEvent } from './ledger';
 import { isRecord } from './records';
-import { type Attention, needLine, needsYou, turnRead } from './tricorder';
-import type { Agent, PullRequest, QaReview } from './types';
+import { type Attention, hails, type Lane, laneOf, needLine, turnRead } from './tricorder';
+import type { Agent, PullRequest, QaReview, CosRead } from './types';
 
 // The captain's inbox, as the office keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
 // stays the same from look to look, and what they decided lately, from the ledger's `captain-decision` lines. Comms and
@@ -29,14 +29,14 @@ export function hailKey(a: Attention): string {
 }
 
 /**
- * Everything that needs the captain: the hails (`needsYou`), most urgent first, then the leads whose turn they've read
- * but not answered.
+ * Everything waiting on the captain: what needs them (`needsYou`), most urgent first, then the leads whose turn they've
+ * read but not answered, then the turns the chief of staff has words ready for or is still reading (`laneOf`).
  */
-export function waiting(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, leads: Agent[]): Attention[] {
-  const hails = needsYou(agents, prs, reviews);
-  const hailing = new Set(hails.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-  const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l));
-  return [...hails, ...read.map((agent): Attention => ({ kind: 'turn', agent }))];
+export function waiting(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, leads: Agent[], now: number): Attention[] {
+  const all = hails(agents, prs, reviews);
+  const hailing = new Set(all.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
+  const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l)).map((agent): Attention => ({ kind: 'turn', agent }));
+  return [...all.filter((a) => laneOf(a, now) === 'needs-you'), ...read, ...all.filter((a) => laneOf(a, now) !== 'needs-you')];
 }
 
 /** One thing that needs the captain, as the inbox's API gives it. */
@@ -58,40 +58,54 @@ export interface InboxItem {
   read?: boolean;
   /** A question's options, to pick one of by its id. */
   options?: { id: string; label: string; detail?: string }[];
+  /** Whether it needs the captain, or is a lead's turn the chief of staff has words ready for, or is reading (`laneOf`). */
+  lane: Lane;
+  /** A lead's turn as the chief of staff judged it: its route, the line on what's decided, why, and its words. */
+  cos?: NonNullable<CosRead['judged']>;
 }
 
-export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>): InboxItem {
+export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, now: number): InboxItem {
   const { what } = needLine(a, reviews);
-  if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what };
+  const lane = laneOf(a, now);
+  if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane };
+  const cos = a.kind === 'turn' ? a.agent.lead?.cos?.judged : undefined;
   const { agent } = a;
   const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
   const q = a.kind === 'question' ? openQuestion(agent) : undefined;
   return {
-    id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what,
+    id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what, lane,
+    ...(cos && { cos }),
     ...(since !== undefined && { since }),
     ...(a.kind === 'turn' && turnRead(agent) && { read: true }),
     ...(q && { options: q.options.map((o) => ({ id: o.id, label: o.label, ...(o.detail && { detail: o.detail }) })) }),
   };
 }
 
-/** How the captain answers an item: approve or decline a hand, pick a question's option, say something, or close the goal. */
-export type Decide = { allow: boolean } | { option: string; note?: string } | { text: string } | { close: true };
+/**
+ * How the captain answers an item: approve or decline a hand, pick a question's option, say something, close the goal,
+ * or send the chief of staff's words to the lead (a turn in the `ready` lane).
+ */
+export type Decide = { allow: boolean } | { option: string; note?: string } | { text: string } | { close: true } | { send: true };
 
 /** Where the captain decided: in the office, or through the API (a bot speaking for them). */
 export type DecidedVia = 'office' | 'api';
 
+const SAY_HOW = 'Say how you decide: allow, option, text, close or send';
+
 /** A decision's body, as it comes over the API: one of `Decide`'s shapes, or why not. */
 export function decideOf(body: unknown): Decide {
-  if (!isRecord(body)) throw new Error('Say how you decide: allow, option, text or close');
+  if (!isRecord(body)) throw new Error(SAY_HOW);
   if (typeof body.allow === 'boolean') return { allow: body.allow };
   if (typeof body.option === 'string' && body.option) return { option: body.option, ...(typeof body.note === 'string' && body.note.trim() && { note: body.note.trim() }) };
   if (typeof body.text === 'string' && body.text.trim()) return { text: body.text.trim() };
   if (body.close === true) return { close: true };
-  throw new Error('Say how you decide: allow, option, text or close');
+  if (body.send === true) return { send: true };
+  throw new Error(SAY_HOW);
 }
 
 /** Why a decision doesn't answer this kind of item, if it doesn't: a hand is allowed or not, a pull request is the board's. */
-export function decideRefusal(kind: Attention['kind'], d: Decide): string | null {
+export function decideRefusal({ kind, cos }: Pick<InboxItem, 'kind' | 'cos'>, d: Decide): string | null {
+  if ('send' in d) return cos && (cos.route === 1 || cos.route === 4) ? null : 'Only a turn the chief of staff has words ready for can be sent them';
   if (kind === 'qa' || kind === 'conflicts') return 'A pull request is decided on the board: merge, close or send it back there';
   if (kind === 'hand') return 'allow' in d ? null : 'A raised hand is approved or declined: allow true or false';
   if ('allow' in d) return 'Only a raised hand is approved or declined';
@@ -105,6 +119,7 @@ export function answerText(d: Decide): string {
   if ('allow' in d) return d.allow ? 'Approved' : 'Declined';
   if ('option' in d) return `Picked ${d.option.toUpperCase()}${d.note ? `: ${d.note}` : ''}`;
   if ('close' in d) return 'Closed the goal';
+  if ('send' in d) return 'Sent the chief of staff’s words';
   return d.text;
 }
 
@@ -137,3 +152,29 @@ export interface Inbox {
  * a conversation back up (`costly`), or warning before closing a goal (`warn`).
  */
 export const landed = (reply: unknown): boolean => !(isRecord(reply) && ('costly' in reply || 'warn' in reply));
+
+/** Where a goal's lead's turn stands for the captain: at work, being read, or ended and judged (or not judged at all). */
+export type TurnStage = 'working' | 'reading' | 'ready' | 'card' | 'interrupt' | 'waiting';
+
+export function turnStage(lead: Pick<Agent, 'status' | 'lead'>): TurnStage {
+  if (lead.status !== 'done') return 'working';
+  const cos = lead.lead?.cos;
+  if (!cos) return 'waiting';
+  if (!cos.judged) return 'reading';
+  return ({ 1: 'ready', 2: 'card', 3: 'interrupt', 4: 'ready' } as const)[cos.judged.route];
+}
+
+/**
+ * The toast as a lead's turn comes to the captain, if it does: a turn no chief of staff reads, a card, or an interrupt.
+ * One it would carry on or send back, or is still reading, says nothing: it's in Comms, off the badge.
+ */
+export function turnNews(before: TurnStage | undefined, lead: Pick<Agent, 'name' | 'status' | 'lead'>): { level: 'info' | 'error'; text: string } | null {
+  const now = turnStage(lead);
+  if (!before || before === now) return null;
+  const ask = lead.lead?.cos?.judged?.ask ?? '';
+  if (now === 'interrupt') return { level: 'error', text: `🚨 ${lead.name}: ${ask}` };
+  if (now === 'card') return { level: 'info', text: `🗂 ${lead.name}: ${ask}` };
+  if (now === 'waiting' && before === 'working') return { level: 'info', text: `🖖 ${lead.name} is waiting for you` };
+  return null;
+}
+

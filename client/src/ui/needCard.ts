@@ -1,5 +1,6 @@
 import { artifactUrl, openQuestion, optionUrl } from '../../../shared/artifacts';
-export { hailKey as keyOf } from '../../../shared/captainsInbox';
+import { hailKey as keyOf } from '../../../shared/captainsInbox';
+export { keyOf };
 import { type Attention, needLine } from '../../../shared/tricorder';
 import type { Agent } from '../../../shared/types';
 import { api } from '../net/api';
@@ -63,6 +64,21 @@ function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
   ];
 }
 
+/** The chief of staff's words for a lead whose turn it would carry on or send back, sent as they are with one press. */
+function sendBox(ui: Ui, a: Attention & { agent: Agent }, words: string): HTMLElement[] {
+  const send = h('button', { class: 'btn small primary', title: 'Send the lead these words, from the chief of staff' }, 'Send the chief of staff’s words');
+  send.onclick = () => void busy(send, answer(a.agent, () => api.decide(keyOf(a), { send: true })), ui.error);
+  return [h('small', { class: 'muted' }, `The chief of staff’s words for ${a.agent.name}:`), h('blockquote', { class: 'cos-words', innerHTML: markdownHtml(words) }), h('div', { class: 'row' }, send)];
+}
+
+/** What the chief of staff made of a lead's turn, when it has: why it goes where it does, and to the captain its words. */
+function cosContext(agent: Agent): string {
+  const cos = agent.lead?.cos?.judged;
+  if (!cos) return '';
+  const toCaptain = cos.route === 2 || cos.route === 3;
+  return [`**Chief of Staff:** ${cos.why}`, toCaptain && cos.message ? `> ${cos.message.replaceAll('\n', '\n> ')}` : ''].filter(Boolean).join('\n\n');
+}
+
 /** A reply to a lead, written and sent from here. */
 function replyBox(ui: Ui, agent: Agent): HTMLElement[] {
   const text = h('textarea', { class: 'briefing-reply', rows: 3, placeholder: `Reply to ${agent.name}…` });
@@ -114,8 +130,13 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; 
       return { context: said(a.agent), answers: [h('div', { class: 'row' }, open(ui, a.agent, 'Open their panel'))], then: 'Their panel shows what went wrong, and starts them again.' };
     case 'question':
       return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent), then: 'Pick: they hear your pick, and your word with it, and carry on.' };
-    case 'turn':
-      return { context: said(a.agent), answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent)], then: 'Send: they carry on with your reply.' };
+    case 'turn': {
+      const cos = a.agent.lead?.cos?.judged;
+      const ready = cos && (cos.route === 1 || cos.route === 4) ? cos.message : '';
+      const context = [cosContext(a.agent), said(a.agent)].filter(Boolean).join('\n\n---\n\n');
+      if (ready) return { context, answers: [...sendBox(ui, a, ready), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent)], then: 'Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words.' };
+      return { context, answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent)], then: 'Send: they carry on with your reply.' };
+    }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');

@@ -32,19 +32,32 @@ function agentAttention(agent: Agent): Attention | null {
   return agent.status === 'done' && !turnRead(agent) ? { kind: 'turn', agent } : null;
 }
 
+/** How long a lead's ended turn waits for the chief of staff's read before it hails the captain unjudged. */
+export const JUDGING_MS = 60_000;
+
+/**
+ * Where a hail goes in the captain's inbox: `needs-you` (counted, and on the badge), `ready` (a lead's turn the chief
+ * of staff would carry on or send back to the lead, its words ready for the captain to send) or `judging` (a lead's
+ * turn the chief of staff is reading, for up to `JUDGING_MS`; then it needs the captain, judged or not). Only a lead's
+ * turn has a chief of staff's read; everything else needs the captain.
+ */
+export type Lane = 'needs-you' | 'ready' | 'judging';
+
+export function laneOf(a: Attention, now: number): Lane {
+  const read = a.kind === 'turn' ? a.agent.lead?.cos : undefined;
+  if (!read) return 'needs-you';
+  if (!read.judged) return now - read.at < JUDGING_MS ? 'judging' : 'needs-you';
+  return read.judged.route === 1 || read.judged.route === 4 ? 'ready' : 'needs-you';
+}
+
 /** How urgent each kind is, most first: what has stopped an agent mid-work, then what's holding a goal up, then the PRs. */
 const URGENCY: Attention['kind'][] = ['hand', 'error', 'question', 'turn', 'wrap-up', 'qa', 'conflicts'];
 
 /** When an agent's hail began, for oldest first within a kind: the hand's raised, or the turn ended. */
 const since = (a: Attention): number => ('agent' in a ? (a.kind === 'hand' ? a.agent.permission?.at : a.agent.finishedAt) ?? 0 : 0);
 
-/**
- * The Needs you strip, most urgent first (`URGENCY`, then oldest first): agents with a raised hand, a question for you or in error, goals' leads proposing to wrap up or waiting for a reply
- * (unless the manager has read that turn: `turnRead`), PRs QA gave up on and PRs that conflict with
- * their base (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs"
- * filter applies here too.
- */
-export function needsYou(
+/** Every hail, the chief of staff's lanes included, most urgent first. */
+export function hails(
   agents: Agent[],
   prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[],
   reviews: ReadonlyMap<string, QaReview>,
@@ -57,6 +70,22 @@ export function needsYou(
   return [...fromAgents, ...fromPrs].sort((a, b) => URGENCY.indexOf(a.kind) - URGENCY.indexOf(b.kind) || since(a) - since(b));
 }
 
+/**
+ * The Needs you strip, most urgent first (`URGENCY`, then oldest first): agents with a raised hand, a question for you or in error, goals' leads proposing to wrap up or waiting for a reply
+ * (unless the manager has read that turn: `turnRead`), PRs QA gave up on and PRs that conflict with
+ * their base (unless someone's resolving it already). `prs` are the PRs the boards show, so a project's "only my PRs"
+ * filter applies here too. A lead's turn the chief of staff is reading, or would carry on or send back, isn't here
+ * (`laneOf`): the captain's inbox has it in its own lane.
+ */
+export function needsYou(
+  agents: Agent[],
+  prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[],
+  reviews: ReadonlyMap<string, QaReview>,
+  now = Date.now(),
+): Attention[] {
+  return hails(agents, prs, reviews).filter((a) => laneOf(a, now) === 'needs-you');
+}
+
 /** What a hail needs from the captain, in a few words, the same in Comms and on the Tricorder: an icon and a line. */
 export function needLine(a: Attention, reviews: ReadonlyMap<string, QaReview>): { icon: string; what: string } {
   switch (a.kind) {
@@ -67,7 +96,7 @@ export function needLine(a: Attention, reviews: ReadonlyMap<string, QaReview>): 
     case 'question':
       return { icon: '❓', what: `Pick: ${openQuestion(a.agent)?.question ?? 'they ask you'}` };
     case 'turn':
-      return { icon: '💬', what: 'Waiting for your reply' };
+      return turnLine(a.agent);
     case 'wrap-up':
       return { icon: '🏁', what: `Ready to close${a.agent.lead?.closing?.reason ? `: ${a.agent.lead.closing.reason}` : ''}` };
     case 'qa': {
@@ -77,6 +106,14 @@ export function needLine(a: Attention, reviews: ReadonlyMap<string, QaReview>): 
     case 'conflicts':
       return { icon: '⚠', what: 'Resolve conflicts with its base branch' };
   }
+}
+
+/** A lead's turn, as the chief of staff read it, when it has: an interrupt, a card, or its words ready to send. */
+function turnLine(agent: Agent): { icon: string; what: string } {
+  const judged = agent.lead?.cos?.judged;
+  if (!judged) return { icon: '💬', what: 'Waiting for your reply' };
+  const icon = { 1: '▶', 2: '🗂', 3: '🚨', 4: '↩' }[judged.route];
+  return { icon, what: judged.ask };
 }
 
 /** A project's agents at work or waiting for a slot, oldest first. The QA officer counts while they're reviewing. */

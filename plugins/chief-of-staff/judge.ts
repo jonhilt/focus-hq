@@ -5,7 +5,7 @@ import { type CosRoute, isOneOf, isRecord } from '../../plugin-api/shared';
 // own folder as it runs (`STANDING_ORDERS`), and the prompt says there are none when there aren't.
 
 /** The prompt's version, kept on every verdict so verdicts from different prompts aren't compared as one. */
-export const JUDGE_VERSION = 'v6';
+export const JUDGE_VERSION = 'v7';
 
 /** The captain's standing orders, in the plugin's own folder (`host.dataDir()`): private, never in the repo. */
 export const STANDING_ORDERS = 'standing-orders.txt';
@@ -30,13 +30,15 @@ Your message must be specific and actionable.
 2 = A CARD. It goes into the captain's queue with the lead's recommendation as the default, and the captain answers when ready. Use this for a real decision of the captain's, explained well, with a clear recommendation: design, scope or next-slice choices that aren't covered by a standing order, and a slice shipping or the goal being proposed for closing.
 
 3 = INTERRUPT. The captain is told now. Use this for facts only the captain has; options with no recommendation where you can't get one; production data, permissions, money, licences, security, or anything outward-facing that isn't already approved; the lead contradicting a decision of the captain's; the goal's direction itself being in question; and anything under ALWAYS THE CAPTAIN'S below.
+Spending money is always 3, however clear the recommendation: paid API or agent runs, paid services, subscriptions, anything bought.
 Unsure between 2 and 3: choose 3. Unsure between 1 and 4: choose 4. Unsure between 4 and 2: choose 2. Never use 1 or 4 for something under ALWAYS THE CAPTAIN'S.`;
 
 const ORDERS_HEADING = "The captain's standing orders, learned from their past replies:";
 const NO_ORDERS = "None yet: nothing has been learned from the captain's replies, so go by the rules above alone.";
 const REPLY = `How to speak: like a capable human chief of staff, in plain, natural sentences. Never terse shorthand, clipped fragments or labels the reader has to decode. Someone who hasn't read the lead's transcript should understand you.
 
-Reply with JSON only: {"route":1|2|3|4,"why":"...","message":"..."}
+Reply with JSON only: {"route":1|2|3|4,"ask":"...","why":"...","message":"..."}
+- ask: the headline the captain's inbox shows for this turn, one short line (under 90 characters) a skimming reader understands without the goal open: on routes 2 and 3 what's being decided, as a question ("Spend about $40 on 60 paid runs to test the prompt?"); on routes 1 and 4 what you'd tell the lead, in brief ("Carry on to the settings page", "Run the tests before asking").
 - why: a sentence or two saying, in plain words, why this turn goes where it does.
 - message: always the actual words you would send, written in full:
   - route 1: what you'd say to the lead to let it carry on, naming the next step it said it would take;
@@ -52,23 +54,30 @@ export function judgeSystemPrompt(standingOrders?: string): string {
 /** What the judge reads: the goal, and the end of what the lead said this turn. */
 export const judgePrompt = (goal: string | undefined, tail: string): string => `Goal: ${goal || '(untitled)'}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
 
-/** Where the judge would send the turn, why, and what it would say: to the lead (routes 1 and 4) or the captain (2 and 3). */
+/** Where the judge would send the turn, its headline, why, and what it would say: to the lead (routes 1 and 4) or the captain (2 and 3). */
 export interface Verdict {
   route: CosRoute;
+  ask: string;
   why: string;
   message: string;
 }
 
 export const VERDICT_SCHEMA = {
   type: 'object',
-  properties: { route: { type: 'integer', enum: [...ROUTES] }, why: { type: 'string' }, message: { type: 'string' } },
-  required: ['route', 'why', 'message'],
+  properties: { route: { type: 'integer', enum: [...ROUTES] }, ask: { type: 'string' }, why: { type: 'string' }, message: { type: 'string' } },
+  required: ['route', 'ask', 'why', 'message'],
   additionalProperties: false,
 };
 
-/** The judge's answer, if it's one: a route of the four, a reason, and the words it would send (empty if it gave none). */
+const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * The judge's answer, if it's one: a route of the four, a reason, its headline, and the words it would send (empty if it
+ * gave none). With no headline, its reason stands in.
+ */
 export function parseVerdict(structured: unknown): Verdict | undefined {
-  if (!isRecord(structured) || !isOneOf(ROUTES, structured.route) || typeof structured.why !== 'string' || !structured.why.trim()) return undefined;
-  const message = typeof structured.message === 'string' ? structured.message.trim() : '';
-  return { route: structured.route, why: structured.why.trim(), message };
+  if (!isRecord(structured) || !isOneOf(ROUTES, structured.route)) return undefined;
+  const why = text(structured.why);
+  if (!why) return undefined;
+  return { route: structured.route, ask: text(structured.ask) || why, why, message: text(structured.message) };
 }

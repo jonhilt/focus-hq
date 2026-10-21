@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerText, decideOf, decideRefusal, hailKey, inboxItem, landed, recentDecisions } from './captainsInbox';
+import { answerText, decideOf, decideRefusal, hailKey, inboxItem, landed, recentDecisions, turnNews, turnStage, waiting } from './captainsInbox';
 import type { LedgerEvent } from './ledger';
 import type { Attention } from './tricorder';
 import type { Agent, PullRequest } from './types';
@@ -22,20 +22,28 @@ describe('deciding an inbox item', () => {
     expect(decideOf({ option: 'b', note: ' ' })).toEqual({ option: 'b' });
     expect(decideOf({ text: ' Go on ' })).toEqual({ text: 'Go on' });
     expect(decideOf({ close: true })).toEqual({ close: true });
-    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }]) expect(() => decideOf(bad)).toThrow(/allow, option, text or close/);
+    expect(decideOf({ send: true })).toEqual({ send: true });
+    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close or send/);
   });
 
   it('only answers an item with what fits it', () => {
-    expect(decideRefusal('hand', { allow: true })).toBeNull();
-    expect(decideRefusal('hand', { text: 'ok' })).toMatch(/approved or declined/);
-    expect(decideRefusal('turn', { allow: true })).toMatch(/Only a raised hand/);
-    expect(decideRefusal('question', { option: 'a' })).toBeNull();
-    expect(decideRefusal('question', { text: 'Neither' })).toBeNull();
-    expect(decideRefusal('turn', { option: 'a' })).toMatch(/Only a question/);
-    expect(decideRefusal('wrap-up', { close: true })).toBeNull();
-    expect(decideRefusal('wrap-up', { text: 'One more thing' })).toBeNull();
-    expect(decideRefusal('turn', { close: true })).toMatch(/ready to close/);
-    expect(decideRefusal('qa', { text: 'merge' })).toMatch(/on the board/);
+    expect(decideRefusal({ kind: 'hand' }, { allow: true })).toBeNull();
+    expect(decideRefusal({ kind: 'hand' }, { text: 'ok' })).toMatch(/approved or declined/);
+    expect(decideRefusal({ kind: 'turn' }, { allow: true })).toMatch(/Only a raised hand/);
+    expect(decideRefusal({ kind: 'question' }, { option: 'a' })).toBeNull();
+    expect(decideRefusal({ kind: 'question' }, { text: 'Neither' })).toBeNull();
+    expect(decideRefusal({ kind: 'turn' }, { option: 'a' })).toMatch(/Only a question/);
+    expect(decideRefusal({ kind: 'wrap-up' }, { close: true })).toBeNull();
+    expect(decideRefusal({ kind: 'wrap-up' }, { text: 'One more thing' })).toBeNull();
+    expect(decideRefusal({ kind: 'turn' }, { close: true })).toMatch(/ready to close/);
+    expect(decideRefusal({ kind: 'qa' }, { text: 'merge' })).toMatch(/on the board/);
+    // the chief of staff's words are sent only for a turn it has words ready for: carry on, or back to the lead
+    const cos = (route: 1 | 2 | 3 | 4) => ({ route, ask: 'a', why: 'w', message: 'm' });
+    expect(decideRefusal({ kind: 'turn', cos: cos(1) }, { send: true })).toBeNull();
+    expect(decideRefusal({ kind: 'turn', cos: cos(4) }, { send: true })).toBeNull();
+    expect(decideRefusal({ kind: 'turn', cos: cos(2) }, { send: true })).toMatch(/words ready/);
+    expect(decideRefusal({ kind: 'turn' }, { send: true })).toMatch(/words ready/);
+    expect(decideRefusal({ kind: 'turn', cos: cos(1) }, { text: 'No, stop' })).toBeNull();
   });
 
   it('says what was decided in a few words', () => {
@@ -43,6 +51,7 @@ describe('deciding an inbox item', () => {
     expect(answerText({ option: 'b', note: 'cheaper' })).toBe('Picked B: cheaper');
     expect(answerText({ close: true })).toBe('Closed the goal');
     expect(answerText({ text: 'Go on' })).toBe('Go on');
+    expect(answerText({ send: true })).toBe('Sent the chief of staff’s words');
   });
 
   it('counts an answer as given unless the office came back to ask about cost, or warn before closing', () => {
@@ -78,21 +87,71 @@ describe('an inbox item', () => {
 
   it('says who, the goal, what’s needed and since when, with a question’s options', () => {
     const lead = agent({ lead: { title: 'Saved items', questions: [question] } as never });
-    expect(inboxItem({ kind: 'question', agent: lead }, new Map())).toEqual({
-      id: 'question:a1:q1', kind: 'question', projectId: 'p', agentId: 'a1', who: 'Ada', goal: 'Saved items', what: 'Pick: Which layout?', since: 50,
+    expect(inboxItem({ kind: 'question', agent: lead }, new Map(), 0)).toEqual({
+      id: 'question:a1:q1', kind: 'question', projectId: 'p', agentId: 'a1', who: 'Ada', goal: 'Saved items', what: 'Pick: Which layout?', since: 50, lane: 'needs-you',
       options: [{ id: 'a', label: 'Cards', detail: 'Friendlier' }, { id: 'b', label: 'List' }],
     });
   });
 
   it('marks a turn the captain has read, and dates a hand from when it went up', () => {
     const read = agent({ lead: { title: 'Saved items', readTurn: 50 } as never });
-    expect(inboxItem({ kind: 'turn', agent: read }, new Map())).toMatchObject({ read: true, since: 50, goal: 'Saved items' });
+    expect(inboxItem({ kind: 'turn', agent: read }, new Map(), 0)).toMatchObject({ read: true, since: 50, goal: 'Saved items' });
     const hand = agent({ task: 'issue', permission: { id: 'r1', at: 70, summary: 'npm publish' } as never });
-    expect(inboxItem({ kind: 'hand', agent: hand }, new Map())).toMatchObject({ since: 70, goal: 'Wishlist', what: 'Approve: npm publish' });
+    expect(inboxItem({ kind: 'hand', agent: hand }, new Map(), 0)).toMatchObject({ since: 70, goal: 'Wishlist', what: 'Approve: npm publish' });
   });
 
   it('names a pull request’s by the PR, with no agent', () => {
-    expect(inboxItem({ kind: 'conflicts', projectId: 'p', pr }, new Map())).toEqual({ id: 'conflicts:p:acme/shop#12', kind: 'conflicts', projectId: 'p', who: 'acme/shop#12', goal: 'Save for later', what: 'Resolve conflicts with its base branch' });
+    expect(inboxItem({ kind: 'conflicts', projectId: 'p', pr }, new Map(), 0)).toEqual({ id: 'conflicts:p:acme/shop#12', kind: 'conflicts', projectId: 'p', who: 'acme/shop#12', goal: 'Save for later', what: 'Resolve conflicts with its base branch', lane: 'needs-you' });
+  });
+});
+
+describe('a lead’s turn and the chief of staff', () => {
+  const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1000, judged: { route, ask: route === 3 ? 'Spend $40 on paid runs?' : 'Carry on to the settings page', why: 'w', message: 'Go on to the settings page.' } });
+  const lead = (id: string, cos?: object, more: Partial<Agent> = {}) => agent({ id, finishedAt: 1000, lead: { title: id, ...(cos && { cos }) } as never, ...more });
+
+  it('holds a turn back while it’s being read, for a minute, then lets it hail unjudged', () => {
+    const reading = lead('a', { at: 1000 });
+    expect(inboxItem({ kind: 'turn', agent: reading }, new Map(), 1000 + 59_999)).toMatchObject({ lane: 'judging', what: 'Waiting for your reply' });
+    expect(inboxItem({ kind: 'turn', agent: reading }, new Map(), 1000 + 60_000)).toMatchObject({ lane: 'needs-you', what: 'Waiting for your reply' });
+  });
+
+  it('files a card or an interrupt under needs you, headed by its line, and carry-on or back-to-lead as ready to send', () => {
+    expect(inboxItem({ kind: 'turn', agent: lead('a', judged(3)) }, new Map(), 2000)).toMatchObject({ lane: 'needs-you', what: 'Spend $40 on paid runs?', cos: { route: 3 } });
+    expect(inboxItem({ kind: 'turn', agent: lead('a', judged(2)) }, new Map(), 2000).lane).toBe('needs-you');
+    expect(inboxItem({ kind: 'turn', agent: lead('a', judged(1)) }, new Map(), 2000)).toMatchObject({ lane: 'ready', what: 'Carry on to the settings page', cos: { message: 'Go on to the settings page.' } });
+    expect(inboxItem({ kind: 'turn', agent: lead('a', judged(4)) }, new Map(), 2000).lane).toBe('ready');
+  });
+
+  it('reads only a lead’s turn: a hand they raise needs the captain whatever it judged', () => {
+    const hand = lead('a', judged(1), { permission: { id: 'r1', at: 1500, summary: 'npm publish' } as never });
+    expect(inboxItem({ kind: 'hand', agent: hand }, new Map(), 2000)).toMatchObject({ lane: 'needs-you', what: 'Approve: npm publish' });
+  });
+
+  it('lists what needs the captain first, then turns they’ve read, then what’s ready or being read', () => {
+    const leads = [lead('ready', judged(1)), lead('reading', { at: 1000 }), lead('card', judged(2)), lead('read', undefined), lead('plain')];
+    leads[3] = lead('read', undefined, { lead: { title: 'read', readTurn: 1000 } as never });
+    const order = waiting(leads, [], new Map(), leads, 2000).map((a) => ('agent' in a ? a.agent.id : ''));
+    expect(order).toEqual(['card', 'plain', 'read', 'ready', 'reading']);
+  });
+});
+
+describe('the toast as a lead’s turn comes to the captain', () => {
+  const at = (status: Agent['status'], cos?: object) => agent({ name: 'Lt. Vale', status, lead: { title: 'g', ...(cos && { cos }) } as never });
+  const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1, judged: { route, ask: 'Spend $40?', why: 'w', message: 'm' } });
+
+  it('says a turn no chief of staff reads is waiting, as it ends', () => {
+    expect(turnNews('working', at('done'))).toEqual({ level: 'info', text: '🖖 Lt. Vale is waiting for you' });
+    expect(turnNews(undefined, at('done'))).toBeNull();
+    expect(turnNews('waiting', at('done'))).toBeNull();
+  });
+
+  it('says nothing while it’s read, then a card or an interrupt by its line, and nothing for what it would send', () => {
+    expect(turnNews('working', at('done', { at: 1 }))).toBeNull();
+    expect(turnNews('reading', at('done', judged(3)))).toEqual({ level: 'error', text: '🚨 Lt. Vale: Spend $40?' });
+    expect(turnNews('reading', at('done', judged(2)))).toEqual({ level: 'info', text: '🗂 Lt. Vale: Spend $40?' });
+    expect(turnNews('reading', at('done', judged(1)))).toBeNull();
+    expect(turnNews('reading', at('done', judged(4)))).toBeNull();
+    expect(turnStage(at('working', judged(3)))).toBe('working');
   });
 });
 

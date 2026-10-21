@@ -106,6 +106,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     goals: {
       start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
       startQueued: (projectId, queueId, station) => core.leads.startQueued(projectId, queueId, { station }),
+      judged: (agentId, judged) => core.comms.judged(agentId, judged),
       message: (agentId, text, opts) => (opts?.from === undefined ? core.goalTools.captainMessage(agentId, text, opts?.how) : core.comms.message(agentId, text, opts.from, opts.how)),
     },
     fileIssue: (projectId, repo, title, body) => {

@@ -115,7 +115,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/personal-log/:id', h((req) => office.markPersonal(personalMark(param(req, 'id'), req.body))));
   // the captain's inbox: what needs them and what they decided lately, answered by id (docs/ledger.md#the-captains-inbox-api)
   r.get('/inbox', h(() => inbox.view()));
-  r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), 'api')));
+  r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), req.body.via === 'office' ? 'office' : 'api', resumeHow(req.body.how))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

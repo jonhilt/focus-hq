@@ -52,6 +52,8 @@ export class Hud {
     state.on('preview', refresh);
     state.on('review', refresh);
     state.on('plugin', refresh);
+    // a lead's turn the chief of staff hasn't judged in a minute comes onto the badge by itself (`laneOf`)
+    setInterval(refresh, 5000);
   }
 
   /** Adds keys to the controls listed (a plugin's legend), before Esc. */

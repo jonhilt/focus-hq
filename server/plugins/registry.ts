@@ -105,6 +105,15 @@ export class Plugins {
     this.each('turn', (parts) => parts.turn?.(lend(agent), phase));
   }
 
+  /** Whether a plugin judges this goal lead's turns for the captain's inbox (`PluginParts.judgesTurns`). */
+  judgesTurns(agent: Agent): boolean {
+    let judges = false;
+    this.each('judgesTurns', (parts) => {
+      judges ||= parts.judgesTurns?.(lend(agent)) === true;
+    });
+    return judges;
+  }
+
   /** A lead drew a model: each plugin hears of its own copy of it. */
   modelShown(agent: Agent, shown: ModelShown): void {
     this.each('modelShown', (parts) => parts.modelShown?.(lend(agent), lend(shown)));

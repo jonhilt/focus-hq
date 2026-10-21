@@ -1,10 +1,17 @@
-# The chief of staff (shadow mode)
+# The chief of staff
 
-A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), switched on per project too (the manager's **Projects** tab, under **Plugins**: **Chief of staff (shadow)**). As a goal's lead ends a turn, the chief of staff judges where that turn would go, and writes its verdict in the [ledger](../../docs/ledger.md#session-digests). It needs no other plugin.
+A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), switched on per project too (the manager's **Projects** tab, under **Plugins**: **Chief of staff**). As a goal's lead ends a turn, the chief of staff judges where that turn goes, writes its verdict in the [ledger](../../docs/ledger.md#session-digests), and hands it to the captain's inbox, which files the turn by it. It needs no other plugin.
 
-## Shadow mode
+## What it does with a turn
 
-It never acts. It sends nothing to the lead, puts nothing in front of the captain before they've answered, and changes nothing about how the turn goes on: the office carries on exactly as it would without it. Its verdicts are only kept, as `cos-verdict` lines in the ledger, so they can be checked against what the captain actually replied to the same turns (the `captain-replies` lines beside each lead's digest), before it's ever trusted to act.
+It sends nothing itself: the captain does, from Comms or the inbox's API. What it decides is where a lead's ended turn waits for them:
+
+- **While it reads the turn** (up to a minute: `JUDGING_MS`, shared/tricorder.ts) the turn is held back: off the badge, no toast, a line in Comms saying how many it's reading. A turn it hasn't judged by then needs the captain as if it weren't there, so a judge that's slow, failing or switched off never hides one.
+- **A card or an interrupt** (routes 2 and 3) needs the captain: it's on the badge, headed by its one line on what's being decided, with its reason and its words to the captain on the turn. As it's judged, a toast says so: an interrupt as an error, so it sounds like one.
+- **Carry on, or back to the lead** (routes 1 and 4) are **Ready to send**: off the badge and quiet, with its words for the lead. The captain sends them with one press (the lead hears them `[Chief of Staff]`), or replies in their own words instead.
+- **Its read of a turn ends as the lead's next turn starts.** A verdict that comes after that is dropped (it's still in the ledger), and a turn the office stopped as it went down isn't read: it carries on after the restart.
+
+Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 
 ## The four routes
 
@@ -16,13 +23,9 @@ It never acts. It sends nothing to the lead, puts nothing in front of the captai
 ## How it judges a turn
 
 - **Which turns:** a goal lead's turn as it ends, in a project it's switched on for. It's judged in the background: the turn doesn't wait, and a judgement that fails is logged and dropped. A turn the lead said nothing in isn't judged, nor is one your plan's usage limit stopped: the office carries those on itself. A turn is judged once however often it ends.
-- **Who judges:** Claude Haiku, in a read-only session with no tools and a structured answer: the route, why, and the words it would send (to the lead on routes 1 and 4, to the captain on 2 and 3). The demo's judge is scripted.
+- **Who judges:** Claude Haiku, in a read-only session with no tools and a structured answer: the route, a one-line headline for the inbox (`ask`: what's being decided, or in brief what it would tell the lead), why, and the words it would send (to the lead on routes 1 and 4, to the captain on 2 and 3). Spending money is always an interrupt. The demo's judge is scripted.
 - **What it writes:** a `cos-verdict` line in the ledger, with the prompt's version and what it cost.
 
 ## The captain's standing orders
 
 The judge's prompt has the captain's standing orders in it: what they've wanted in turns like this before, learned from their past replies, and what's always theirs to decide. They're the captain's own preferences, so they're never in the repo: the plugin reads them from `standing-orders.txt` in its own folder (`~/.focus/plugins/chief-of-staff/`, or under `FOCUS_DATA_DIR`), afresh for every turn, so editing the file takes effect at once. Without the file, the judge goes by the four routes' rules alone.
-
-## Once you've answered
-
-When you answer a lead, the chief of staff's verdict on that turn comes up as a toast. Only after you've decided, never before, so the ledger's comparison of its verdicts with your replies stays honest. It's said only if it's on the turn you answered.

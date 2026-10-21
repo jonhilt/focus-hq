@@ -204,6 +204,11 @@ export interface LeadWork {
    */
   readTurn?: number;
   /**
+   * The chief of staff's read of the lead's last turn, for the captain's inbox (`laneOf` in shared/tricorder.ts): from the
+   * turn's end (`at`) until it's `judged`, by a plugin that judges turns (`PluginParts.judgesTurns`). Cleared as the next starts.
+   */
+  cos?: CosRead;
+  /**
    * Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. `branch` is the one it's
    * on when that isn't the goal's (`Agent.branch`): the office starts a repo a fresh one from its base when it ships
    * again after its pull request merged (`needsFreshBranch`).
@@ -270,3 +275,22 @@ export interface GoalArtifact {
   /** There's a picture of it for the screen. Missing when the office couldn't render one (no browser to hand). */
   image?: boolean;
 }
+
+/** Where the chief of staff sends a turn: 1 carry on, 2 a card for the captain, 3 interrupt the captain, 4 back to the lead. */
+export type CosRoute = 1 | 2 | 3 | 4;
+
+/** A lead's turn as the chief of staff judged it, or is judging it. */
+export interface CosRead {
+  /** When the turn ended. */
+  at: number;
+  judged?: {
+    route: CosRoute;
+    /** What's being decided, in a line: the captain's inbox leads with it. */
+    ask: string;
+    /** Why the turn goes where it does. */
+    why: string;
+    /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
+    message: string;
+  };
+}
+

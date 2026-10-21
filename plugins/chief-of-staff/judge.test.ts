@@ -8,7 +8,9 @@ describe('the judge', () => {
     expect(prompt).toContain('message: always the actual words you would send');
     expect(judgeSystemPrompt(undefined)).toContain('past replies:\nNone yet');
     expect(judgeSystemPrompt('  \n')).toContain('past replies:\nNone yet');
-    expect(JUDGE_VERSION).toBe('v6');
+    expect(JUDGE_VERSION).toBe('v7');
+    expect(prompt).toContain('Spending money is always 3');
+    expect(prompt).toContain('- ask: the headline');
   });
 
   it('reads the goal and the end of what the lead said, as the backtest did', () => {
@@ -16,10 +18,11 @@ describe('the judge', () => {
     expect(judgePrompt(undefined, 'Hi')).toContain('Goal: (untitled)');
   });
 
-  it('takes a verdict of the four routes, with the words it would send on any of them', () => {
-    expect(parseVerdict({ route: 4, why: ' It can check. ', message: ' Run the tests. ' })).toEqual({ route: 4, why: 'It can check.', message: 'Run the tests.' });
-    expect(parseVerdict({ route: 2, why: 'A pick.', message: 'Shall it go ahead with option A?' })).toEqual({ route: 2, why: 'A pick.', message: 'Shall it go ahead with option A?' });
-    expect(parseVerdict({ route: 1, why: 'Progress.' })).toEqual({ route: 1, why: 'Progress.', message: '' });
+  it('takes a verdict of the four routes, with its headline and the words it would send on any of them', () => {
+    expect(parseVerdict({ route: 4, ask: ' Run the tests first ', why: ' It can check. ', message: ' Run the tests. ' })).toEqual({ route: 4, ask: 'Run the tests first', why: 'It can check.', message: 'Run the tests.' });
+    expect(parseVerdict({ route: 2, ask: 'Option A?', why: 'A pick.', message: 'Shall it go ahead with option A?' })).toEqual({ route: 2, ask: 'Option A?', why: 'A pick.', message: 'Shall it go ahead with option A?' });
+    // with no headline, its reason stands in
+    expect(parseVerdict({ route: 1, why: 'Progress.' })).toEqual({ route: 1, ask: 'Progress.', why: 'Progress.', message: '' });
     expect(parseVerdict({ route: 5, why: 'x', message: '' })).toBeUndefined();
     expect(parseVerdict({ route: 1, why: '', message: '' })).toBeUndefined();
     expect(parseVerdict('1')).toBeUndefined();
