@@ -74,7 +74,7 @@ export interface Project {
    * `AUTO_SEND_MS` (shared/tricorder.ts) unless the captain holds them (missing = off: the captain sends them).
    */
   cosAutoSend?: boolean;
-  /** PRs the office opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
+  /** PRs Ops opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
   autoMerge?: boolean;
   /**
    * The package.json scripts the merge check runs on a PR merged onto its base before Ops merges it

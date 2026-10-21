@@ -55,7 +55,7 @@ function decidedRow(d: DecisionEvent): HTMLElement {
 
 /**
  * Comms, opened from anywhere with C and from the captain's chair with E: the captain's inbox (shared/captainsInbox.ts),
- * read from the office as a bot reads it, so both see the same. Along the top each project with what waits there, to
+ * read from Focus as a bot reads it, so both see the same. Along the top each project with what waits there, to
  * narrow the list to it. On the left what the chief of staff flags for the captain, most urgent first, then what they
  * decided lately, then its tray: the turns it has words ready for, and what it sent by itself today. On the right the
  * one picked, large: the goal, what to read to decide, and the answers. Answered, it leaves the list and the next one's
@@ -91,7 +91,7 @@ export function openCommsPanel(ui: Ui): void {
   const render = (step = 0) => {
     const now = Date.now();
     const local = new Map(needs().map((a) => [keyOf(a), a]));
-    // only what the office's inbox has, and the office here knows of (a bot's answer can land before this office hears)
+    // only what Focus's inbox has, and this browser knows of (a bot's answer can land before this browser hears)
     const known = open.filter((i) => local.has(i.id));
     const { flagged, ready, reading: judging } = lanes(known, project);
     const keys = (order = keptOrder(order, flagged.map((i) => i.id)));
@@ -155,7 +155,7 @@ export function openCommsPanel(ui: Ui): void {
     fill(detail, needCard(ui, a));
   };
 
-  // the inbox is the office's, asked for again (at most every quarter second) whenever anything it's made of changes
+  // the inbox is Focus's, asked for again (at most every quarter second) whenever anything it's made of changes
   let asking: ReturnType<typeof setTimeout> | undefined;
   const refresh = () => {
     clearTimeout(asking);
