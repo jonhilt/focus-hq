@@ -1,4 +1,5 @@
 import { columns } from '../../../shared/board';
+import { waiting } from '../../../shared/captainsInbox';
 import { type Attention, needsYou, turnRead } from '../../../shared/tricorder';
 import type { Agent } from '../../../shared/types';
 import { api } from './api';
@@ -24,11 +25,19 @@ export function markRead(agent: Agent): void {
   api.readTurn(agent.id).catch(() => asked.delete(key));
 }
 
-/** Everything waiting on the captain across the shown projects: `needsYou` over the agents and the boards' PRs. */
-export function attention(): Attention[] {
+/** The pull requests the shown projects' boards show, for what needs the captain. */
+function shownPrs() {
   const login = state.info?.github.login;
-  const prs = state.shown.flatMap((project) =>
+  return state.shown.flatMap((project) =>
     columns(project, state.boards.get(project.id), state.agentsIn(project.id), login).prs.map((pr) => ({ projectId: project.id, pr })),
   );
-  return needsYou(state.shownAgents(), prs, state.reviews);
 }
+
+/** What's hailing the captain across the shown projects, for the badge: `needsYou` over the agents and the boards' PRs. */
+export const attention = (): Attention[] => needsYou(state.shownAgents(), shownPrs(), state.reviews);
+
+/**
+ * Everything waiting on the captain across the shown projects: the hails, then the leads whose turn they've read but
+ * not answered (`waiting`). The office's inbox (`GET /api/inbox`) is the same list.
+ */
+export const needs = (): Attention[] => waiting(state.shownAgents(), shownPrs(), state.reviews, state.shown.flatMap((p) => state.leadsIn(p.id)));

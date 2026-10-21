@@ -1,8 +1,9 @@
 import { artifactUrl, openQuestion, optionUrl } from '../../../shared/artifacts';
-import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
+export { hailKey as keyOf } from '../../../shared/captainsInbox';
+import { type Attention, needLine } from '../../../shared/tricorder';
 import type { Agent } from '../../../shared/types';
 import { api } from '../net/api';
-import { attention } from '../net/attention';
+export { needs } from '../net/attention';
 import { state } from '../net/state';
 import { answeredLead, goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
@@ -14,25 +15,6 @@ import { answerLead, messageAgent } from './resume';
 import { markdownHtml } from './terminal';
 
 // What needs the captain, and one of them shown large to decide and answer: the right of Comms' inbox (commsPanel.ts).
-
-/** What a hail is about, the same hail from render to render. */
-export function hailKey(a: Attention): string {
-  switch (a.kind) {
-    case 'hand':
-      return `hand:${a.agent.id}:${a.agent.permission?.id}`;
-    case 'question':
-      return `question:${a.agent.id}:${openQuestion(a.agent)?.id}`;
-    case 'error':
-      return `error:${a.agent.id}:${a.agent.finishedAt}`;
-    case 'wrap-up':
-      return `wrap-up:${a.agent.id}:${a.agent.lead?.closing?.at}`;
-    case 'turn':
-      return `turn:${a.agent.id}:${a.agent.finishedAt}`;
-    case 'qa':
-    case 'conflicts':
-      return `${a.kind}:${a.projectId}:${a.pr.repo}#${a.pr.number}`;
-  }
-}
 
 /** Who and where: a lead's station and goal, or what anyone else is on, with the project and any plugin's tags. */
 export function from(agent: Agent): HTMLElement {
@@ -56,17 +38,6 @@ export const TONE: Record<Attention['kind'], string> = {
   qa: LCARS.lilac,
   conflicts: LCARS.red,
 };
-
-/** A lead's turn keeps its key once it's read, so reading it here doesn't move it out from under the captain. */
-export const keyOf = (a: Attention): string => (a.kind === 'turn' ? `turn:${a.agent.id}:${a.agent.finishedAt}` : hailKey(a));
-
-/** Everything that needs the captain: the hails, most urgent first, then the leads whose turn they've read but not answered. */
-export function needs(): Attention[] {
-  const hails = attention();
-  const hailing = new Set(hails.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-  const read = state.shown.flatMap((p) => state.leadsIn(p.id)).filter((l) => !hailing.has(l.id) && turnRead(l));
-  return [...hails, ...read.map((agent): Attention => ({ kind: 'turn', agent }))];
-}
 
 /** Answers a lead, then tells the plugins the captain has (the lead as it stood when they did); a failure tells none. */
 const answer = (agent: Agent, fn: () => Promise<unknown>) => async () => {

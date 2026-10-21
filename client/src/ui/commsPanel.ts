@@ -3,14 +3,19 @@ import { goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
 import { type Attention, needLine, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
+import type { DecisionEvent } from '../../../shared/captainsInbox';
+import { api } from '../net/api';
 import { markRead } from '../net/attention';
 import { state } from '../net/state';
 import { goalTags } from '../plugins';
 import { LCARS } from '../world/starship';
 import { focusIndex, keptOrder } from './briefing';
 import type { Ui } from './context';
-import { fill, h } from './dom';
+import { fill, h, timeAgo } from './dom';
 import { keyOf, needCard, needs, TONE } from './needCard';
+
+/** How many of the captain's recent decisions Comms lists. */
+const DECIDED_SHOWN = 8;
 
 const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
 
@@ -24,6 +29,17 @@ function queueRow(a: Attention, pick: () => void): HTMLElement {
     h('div', { class: 'need-what', title: what }, h('span', { class: 'need-icon' }, icon), what),
     h('div', { class: 'inbox-where' }, project ? h('b', { style: `color:${project.color}` }, project.name) : null, project ? ' · ' : null, goal),
     h('small', { class: 'need-from' }, who, ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
+  );
+}
+
+/** Something the captain decided lately: what it was, who for, and what they said. */
+function decidedRow(d: DecisionEvent): HTMLElement {
+  const project = state.project(d.projectId);
+  return h('div', { class: 'decided' },
+    h('small', { class: 'muted' }, `${timeAgo(d.at)} · ${d.agent}${d.goal ? ` · ${d.goal}` : ''}${d.via === 'api' ? ' · via the API' : ''}`,
+      project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
+    h('div', { class: 'decided-what', title: d.item.what }, d.item.what),
+    h('div', { class: 'decided-answer', title: d.answer }, `→ ${d.answer}`),
   );
 }
 
@@ -58,13 +74,15 @@ export function openCommsPanel(ui: Ui): void {
   const rows = new Map<string, HTMLElement>();
   const queueHead = h('h3');
   const queue = h('div', { class: 'needs' });
+  const decidedHead = h('h3', null, 'Recently decided');
+  const decided = h('div', { class: 'decided-list' });
   const underWayHead = h('h3', null, 'Under way');
   const underWay = h('div', { class: 'under-way-list' });
   const gateways = h('div', { class: 'row' });
   const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next' }, 'Later ›');
   const detail = h('div', { class: 'inbox-detail' });
   const body = h('div', { class: 'comms inbox' },
-    h('div', { class: 'inbox-left' }, queueHead, queue, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
+    h('div', { class: 'inbox-left' }, queueHead, queue, decidedHead, decided, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
     h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, later), detail),
   );
 
@@ -122,7 +140,18 @@ export function openCommsPanel(ui: Ui): void {
   };
   later.onclick = () => render(1);
 
+  // what the captain decided lately is the ledger's, asked for again whenever the ledger grows
+  const showDecided = () =>
+    void api.inbox().then(({ decided: ds }) => {
+      const shown = ds.filter((d) => !state.isHidden(d.projectId)).slice(0, DECIDED_SHOWN);
+      decidedHead.hidden = decided.hidden = !shown.length;
+      fill(decided, ...shown.map(decidedRow));
+    }, () => undefined);
+
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();
+  decidedHead.hidden = decided.hidden = true;
+  showDecided();
+  ui.panels.own(state.on('report', showDecided));
   for (const event of ['agent', 'agent-removed', 'board', 'review', 'projects'] as const) ui.panels.own(state.on(event, () => render()));
 }

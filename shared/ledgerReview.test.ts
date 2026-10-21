@@ -51,6 +51,12 @@ describe('ledgerRow', () => {
     expect(ledgerRow(cos(3, 'Production needs your sign-off.'))).toMatchObject({ tone: 'warn', title: 'CoS: interrupt — It can check.', quotes: ['To the captain: “Production needs your sign-off.”'] });
     expect(ledgerRow(cos(2)).quotes).toBeUndefined();
   });
+
+  it('says what the captain decided, for whom, and when it came through the API', () => {
+    const decided = (via: string) => ev({ kind: 'captain-decision', agent: 'Cmdr. Vale', goal: GOAL, item: { id: 'turn:a:1', kind: 'turn', what: 'Waiting for your reply' }, answer: 'Ship it', via }, 7);
+    expect(ledgerRow(decided('office'))).toMatchObject({ group: 'sessions', tag: 'Captain', tone: 'info', title: 'Decided: Waiting for your reply → Ship it', detail: 'Cmdr. Vale · Engineering deck', goal: GOAL });
+    expect(ledgerRow(decided('api')).detail).toBe('Cmdr. Vale · Engineering deck · via the API');
+  });
 });
 
 describe('ledgerLog', () => {
@@ -110,6 +116,12 @@ describe('trace', () => {
     expect(t.totals.verdicts).toBe(3);
     expect(t.totals.sessions).toBe(2);
     expect(t.steps.some((s) => s.pr?.pr === 300)).toBe(false);
+  });
+
+  it('includes what the captain decided on the goal, and not on another', () => {
+    const decided = (goal: string) => ev({ kind: 'captain-decision', agent: 'Lt. Halloran', goal, item: { id: 'turn:a:1', kind: 'turn', what: 'Waiting for your reply' }, answer: 'Go on', via: 'office' }, 8);
+    expect(trace([...events, decided(GOAL), decided('Another goal')], { kind: 'goal', title: GOAL }).steps.filter((s) => s.tag === 'Captain')).toHaveLength(1);
+    expect(trace([...events, decided(GOAL)], { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Captain')).toBe(false);
   });
 
   it('includes the goal closing when it has', () => {

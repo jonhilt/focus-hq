@@ -1,6 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
+import { decideOf } from '../shared/captainsInbox';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
@@ -8,6 +9,7 @@ import { replay } from './agents/runJournal';
 import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
+import { Inbox } from './captainsInbox';
 import type { Office } from './office';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -30,6 +32,7 @@ const param = (req: Request, name: string) => str(req.params[name]);
 export function apiRouter(office: Office, store: Store): express.Router {
   const r = express.Router();
   r.use(express.json({ limit: '2mb' }));
+  const inbox = new Inbox(store, office);
 
   r.get('/state', h(() => office.snapshot()));
   // how the 3D view runs in a browser opened with ?stats=1, kept here so a run on another machine can be read where the office is
@@ -110,6 +113,9 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/personal-log', h(() => store.personalEntries));
   r.post('/personal-log', h((req) => office.notePersonal(req.body.text, logFrom(req.body.from))));
   r.post('/personal-log/:id', h((req) => office.markPersonal(personalMark(param(req, 'id'), req.body))));
+  // the captain's inbox: what needs them and what they decided lately, answered by id (docs/ledger.md#the-captains-inbox-api)
+  r.get('/inbox', h(() => inbox.view()));
+  r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), 'api')));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));
@@ -162,20 +168,31 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/agents/:id/workflows/:workflow/script', h((req) => office.agents.workflowScript(param(req, 'id'), param(req, 'workflow'))));
   r.get('/agents/:id/workflows/:workflow/agents/:agent/lines', h((req) => office.agents.workflowAgentLines(param(req, 'id'), param(req, 'workflow'), param(req, 'agent'))));
   // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
-  r.post('/agents/:id/message', h((req) => office.agents.message(param(req, 'id'), str(req.body.text), undefined, resumeHow(req.body.how))));
-  r.post('/agents/:id/answer', h((req) => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), typeof req.body.note === 'string' ? req.body.note : undefined, resumeHow(req.body.how))));
+  // the captain's answers, each recorded when it answers something in their inbox (`Inbox.answering`)
+  r.post('/agents/:id/message', h((req) => {
+    const text = str(req.body.text);
+    return inbox.answering(param(req, 'id'), { text: text.trim() }, 'office', () => office.agents.message(param(req, 'id'), text, undefined, resumeHow(req.body.how)));
+  }));
+  r.post('/agents/:id/answer', h((req) => {
+    const d = decideOf(req.body);
+    const note = typeof req.body.note === 'string' ? req.body.note : undefined;
+    return inbox.answering(param(req, 'id'), d, 'office', () => office.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), note, resumeHow(req.body.how)));
+  }));
   r.post('/agents/:id/read', h((req) => office.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/spot-checks', h((req) => office.agents.tickSpotCheck(param(req, 'id'), Number(req.body.slice), Number(req.body.index), req.body.checked === true)));
   r.post('/agents/:id/contacts/:contact/spin-off', h((req) => office.agents.spinOffContact(param(req, 'id'), param(req, 'contact'), str(req.body.text))));
   r.post('/agents/:id/ideas/spin-off', h((req) => office.agents.spinOffIdea(param(req, 'id'), str(req.body.idea), str(req.body.text))));
-  r.post('/agents/:id/permission', h((req) => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), req.body.allow === true)));
+  r.post('/agents/:id/permission', h((req) => {
+    const allow = req.body.allow === true;
+    return inbox.answering(param(req, 'id'), { allow }, 'office', () => office.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), allow));
+  }));
   r.post('/agents/:id/stop', h((req) => office.agents.stop(param(req, 'id'))));
   r.post('/agents/:id/compact', h((req) => office.agents.compactNow(param(req, 'id'))));
   r.post('/agents/:id/cloud', h((req) => office.agents.moveToCloud(param(req, 'id'))));
   r.post('/agents/:id/cloud/terminal', h((req) => office.agents.openCloudTerminal(param(req, 'id'))));
   r.post('/agents/:id/cloud/attach', h((req) => office.agents.attachCloud(param(req, 'id'), str(req.body.link))));
   r.post('/agents/:id/cloud/stay', h((req) => office.agents.stayLocal(param(req, 'id'))));
-  r.post('/agents/:id/close', h((req) => office.agents.closeGoal(param(req, 'id'), req.body.force === true)));
+  r.post('/agents/:id/close', h((req) => inbox.answering(param(req, 'id'), { close: true }, 'office', () => office.agents.closeGoal(param(req, 'id'), req.body.force === true))));
   r.post('/agents/:id/effort', h((req) => {
     const level = effort(req.body.effort);
     if (!level) throw new Error('Pick an effort level');

@@ -875,6 +875,10 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .inbox-row.sel { background: color-mix(in srgb, var(--tone) 22%, var(--surface-2)); outline: 2px solid var(--tone); outline-offset: -2px; }
 .inbox-row .need-icon { margin-right: 8px; }
 .inbox-where { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.decided-list { display: flex; flex-direction: column; gap: 6px; }
+.decided { background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 4px solid var(--muted); padding: 6px 10px; }
+.decided-what, .decided-answer { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.decided-answer { color: var(--lcars-peach); }
 .inbox-left .under-way { display: grid; grid-template-columns: auto auto 1fr; column-gap: 10px; row-gap: 6px; padding: 0 12px 8px 0; }
 .inbox-left .under-way-station { grid-column: 1; grid-row: 1 / 3; }
 .inbox-left .under-way .grow { grid-column: 2 / 4; grid-row: 1; padding-top: 8px; }

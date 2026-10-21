@@ -48,6 +48,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
       return 'retro';
     case 'session-digest':
     case 'captain-replies':
+    case 'captain-decision':
     case 'cos-verdict':
       return 'sessions';
     case 'session-frictions':
@@ -196,6 +197,15 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`,
         detail: e.goal ?? '',
       };
+    case 'captain-decision':
+      return {
+        ...base,
+        tag: 'Captain',
+        tone: 'info',
+        title: `Decided: ${e.item.what} → ${e.answer}`,
+        detail: [e.agent, e.goal, e.via === 'api' ? 'via the API' : ''].filter(Boolean).join(' · '),
+        goal: e.goal,
+      };
     case 'cos-verdict':
       return {
         ...base,
@@ -286,6 +296,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
       case 'goal-closed':
         return subject.kind === 'goal' && e.goal.title === subject.title;
       case 'captain-replies':
+      case 'captain-decision':
       case 'cos-verdict':
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'session-frictions':

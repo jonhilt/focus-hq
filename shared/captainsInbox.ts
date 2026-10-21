@@ -1,0 +1,139 @@
+import { openQuestion } from './artifacts';
+import type { LedgerEvent } from './ledger';
+import { isRecord } from './records';
+import { type Attention, needLine, needsYou, turnRead } from './tricorder';
+import type { Agent, PullRequest, QaReview } from './types';
+
+// The captain's inbox, as the office keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
+// stays the same from look to look, and what they decided lately, from the ledger's `captain-decision` lines. Comms and
+// anything outside the office (a bot on the API) read the same list and answer it the same way. Pure, so it's tested
+// (shared/inbox.test.ts).
+
+/** What a hail is about, the same hail from look to look. A lead's turn keeps its key once it's read. */
+export function hailKey(a: Attention): string {
+  switch (a.kind) {
+    case 'hand':
+      return `hand:${a.agent.id}:${a.agent.permission?.id}`;
+    case 'question':
+      return `question:${a.agent.id}:${openQuestion(a.agent)?.id}`;
+    case 'error':
+      return `error:${a.agent.id}:${a.agent.finishedAt}`;
+    case 'wrap-up':
+      return `wrap-up:${a.agent.id}:${a.agent.lead?.closing?.at}`;
+    case 'turn':
+      return `turn:${a.agent.id}:${a.agent.finishedAt}`;
+    case 'qa':
+    case 'conflicts':
+      return `${a.kind}:${a.projectId}:${a.pr.repo}#${a.pr.number}`;
+  }
+}
+
+/**
+ * Everything that needs the captain: the hails (`needsYou`), most urgent first, then the leads whose turn they've read
+ * but not answered.
+ */
+export function waiting(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, leads: Agent[]): Attention[] {
+  const hails = needsYou(agents, prs, reviews);
+  const hailing = new Set(hails.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
+  const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l));
+  return [...hails, ...read.map((agent): Attention => ({ kind: 'turn', agent }))];
+}
+
+/** One thing that needs the captain, as the inbox's API gives it. */
+export interface InboxItem {
+  id: string;
+  kind: Attention['kind'];
+  projectId: string;
+  /** The agent it's about; none for a pull request's. */
+  agentId?: string;
+  /** Who: the agent's name, or the pull request (`repo#n`). */
+  who: string;
+  /** The goal it's part of (a lead's), or what the agent or PR is on. */
+  goal: string;
+  /** What's needed, in a line. */
+  what: string;
+  /** When it began: the hand went up, the turn ended. */
+  since?: number;
+  /** A lead's turn the captain has read: still theirs to answer, but no longer hailing. */
+  read?: boolean;
+  /** A question's options, to pick one of by its id. */
+  options?: { id: string; label: string; detail?: string }[];
+}
+
+export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>): InboxItem {
+  const { what } = needLine(a, reviews);
+  if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what };
+  const { agent } = a;
+  const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
+  const q = a.kind === 'question' ? openQuestion(agent) : undefined;
+  return {
+    id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what,
+    ...(since !== undefined && { since }),
+    ...(a.kind === 'turn' && turnRead(agent) && { read: true }),
+    ...(q && { options: q.options.map((o) => ({ id: o.id, label: o.label, ...(o.detail && { detail: o.detail }) })) }),
+  };
+}
+
+/** How the captain answers an item: approve or decline a hand, pick a question's option, say something, or close the goal. */
+export type Decide = { allow: boolean } | { option: string; note?: string } | { text: string } | { close: true };
+
+/** Where the captain decided: in the office, or through the API (a bot speaking for them). */
+export type DecidedVia = 'office' | 'api';
+
+/** A decision's body, as it comes over the API: one of `Decide`'s shapes, or why not. */
+export function decideOf(body: unknown): Decide {
+  if (!isRecord(body)) throw new Error('Say how you decide: allow, option, text or close');
+  if (typeof body.allow === 'boolean') return { allow: body.allow };
+  if (typeof body.option === 'string' && body.option) return { option: body.option, ...(typeof body.note === 'string' && body.note.trim() && { note: body.note.trim() }) };
+  if (typeof body.text === 'string' && body.text.trim()) return { text: body.text.trim() };
+  if (body.close === true) return { close: true };
+  throw new Error('Say how you decide: allow, option, text or close');
+}
+
+/** Why a decision doesn't answer this kind of item, if it doesn't: a hand is allowed or not, a pull request is the board's. */
+export function decideRefusal(kind: Attention['kind'], d: Decide): string | null {
+  if (kind === 'qa' || kind === 'conflicts') return 'A pull request is decided on the board: merge, close or send it back there';
+  if (kind === 'hand') return 'allow' in d ? null : 'A raised hand is approved or declined: allow true or false';
+  if ('allow' in d) return 'Only a raised hand is approved or declined';
+  if ('option' in d && kind !== 'question') return 'Only a question has options to pick';
+  if ('close' in d && kind !== 'wrap-up') return 'Only a goal ready to close can be closed';
+  return null;
+}
+
+/** What the captain decided, in a few words, for the record. */
+export function answerText(d: Decide): string {
+  if ('allow' in d) return d.allow ? 'Approved' : 'Declined';
+  if ('option' in d) return `Picked ${d.option.toUpperCase()}${d.note ? `: ${d.note}` : ''}`;
+  if ('close' in d) return 'Closed the goal';
+  return d.text;
+}
+
+/** How many hours of decisions the inbox shows, and at most how many. */
+const DECIDED_HOURS = 48;
+const DECIDED_MAX = 30;
+
+export type DecisionEvent = Extract<LedgerEvent, { kind: 'captain-decision' }>;
+
+/** What the captain decided lately, newest first. */
+export function recentDecisions(ledger: readonly LedgerEvent[], now: number): DecisionEvent[] {
+  const since = now - DECIDED_HOURS * 3_600_000;
+  const out: DecisionEvent[] = [];
+  for (let i = ledger.length - 1; i >= 0 && out.length < DECIDED_MAX; i--) {
+    const e = ledger[i];
+    if (e.at < since) break;
+    if (e.kind === 'captain-decision') out.push(e);
+  }
+  return out;
+}
+
+/** The inbox as the API gives it: what needs the captain, and what they decided lately. */
+export interface Inbox {
+  open: InboxItem[];
+  decided: DecisionEvent[];
+}
+
+/**
+ * Whether an answer went through, from what the office replied: not when it came back to ask about the cost of picking
+ * a conversation back up (`costly`), or warning before closing a goal (`warn`).
+ */
+export const landed = (reply: unknown): boolean => !(isRecord(reply) && ('costly' in reply || 'warn' in reply));

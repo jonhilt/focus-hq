@@ -77,6 +77,11 @@ export class Office {
     return this.infoChanged();
   }
 
+  /** Who the office is on GitHub, when it knows: whose pull requests the boards' "only mine" shows. */
+  get githubLogin(): string | undefined {
+    return this.info.github.login;
+  }
+
   /** What the office says of itself now: its settings, and in a demo office the pace its agents go at. */
   private served(): ServerInfo {
     return { ...this.info, settings: this.store.settings, ...(config.demo && { demoPace: demoPace() }) };

@@ -20,6 +20,5 @@
   "server/voice.ts": 1,
   "shared/ledgerReview.ts": 1,
   "shared/mergeGate.ts": 1,
-  "shared/modelDrawing.ts": 1,
-  "shared/tricorder.ts": 1
+  "shared/modelDrawing.ts": 1
 }

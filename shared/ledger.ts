@@ -59,6 +59,11 @@ export type LedgerEntry =
    * `message` is what it would have said to the lead (route 4); `version` is its prompt's.
    */
   | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: CosRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
+  /**
+   * The captain answered something in their inbox (shared/captainsInbox.ts): `item` is what it was (its inbox id, kind and line),
+   * `answer` what they decided in a few words, `via` where (the office, or a bot on the API). `agent` is who it was for.
+   */
+  | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: 'office' | 'api' }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 
