@@ -1,13 +1,15 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
+import { shownProjects } from '../shared/hidden';
 import { decideOf } from '../shared/captainsInbox';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
 import { replay } from './agents/runJournal';
 import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
-import { paths } from './config';
+import { botGuard, BotHook, itemWithLinks } from './bot';
+import { config, paths } from './config';
 import { appendFrameStats } from './frameStats';
 import { Inbox } from './captainsInbox';
 import type { Office } from './office';
@@ -29,12 +31,21 @@ const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunctio
 
 const param = (req: Request, name: string) => str(req.params[name]);
 
-export function apiRouter(office: Office, store: Store): express.Router {
+export function apiRouter(office: Office, store: Store, bot: typeof config.bot = config.bot): express.Router {
   const r = express.Router();
   r.use(express.json({ limit: '2mb' }));
   const inbox = new Inbox(store, office);
   // the chief of staff's words go by themselves once due, where the captain lets it (`Inbox.autoSend`)
   setInterval(() => void inbox.autoSend(), 5000).unref();
+  // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook
+  if (bot.token && bot.webhook) {
+    const leads = () => {
+      const shown = new Set(shownProjects(store.projects).map((p) => p.id));
+      return [...store.agents.values()].filter((a) => a.task === 'lead' && shown.has(a.projectId));
+    };
+    const hook = new BotHook(() => ({ ...inbox.view(), leads: leads() }), { token: bot.token, webhook: bot.webhook, publicUrl: bot.publicUrl });
+    setInterval(() => void hook.tick(), 3000).unref();
+  }
 
   r.get('/state', h(() => office.snapshot()));
   // how the 3D view runs in a browser opened with ?stats=1, kept here so a run on another machine can be read where the office is
@@ -119,6 +130,14 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.get('/inbox', h(() => inbox.view()));
   r.post('/inbox/:id/hold', h((req) => inbox.hold(param(req, 'id'))));
   r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), req.body.via === 'office' ? 'office' : 'api', resumeHow(req.body.how))));
+  // the same, for a bot speaking for the captain with the office's bot token (server/bot.ts), its answers recorded via the API
+  r.use('/bot', botGuard(bot.token));
+  r.get('/bot/inbox', h(() => {
+    const view = inbox.view();
+    return { ...view, open: view.open.map((i) => itemWithLinks(i, bot.publicUrl)) };
+  }));
+  r.post('/bot/inbox/:id/hold', h((req) => inbox.hold(param(req, 'id'))));
+  r.post('/bot/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), 'api', resumeHow(req.body.how))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => office.agents.backfill()));

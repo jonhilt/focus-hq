@@ -30,6 +30,11 @@ export const config = {
    * `all` for every one under plugins/. None unless FOCUS_PLUGINS says, except in the demo, which shows them all.
    */
   plugins: (process.env.FOCUS_PLUGINS ?? (demo ? 'all' : '')).split(',').map((name) => name.trim()).filter(Boolean),
+  /**
+   * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the inbox's /api/bot routes to it, and signs
+   * what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (the office as the bot reaches it) makes the links in it whole.
+   */
+  bot: { token: process.env.FOCUS_BOT_TOKEN?.trim() || undefined, webhook: process.env.FOCUS_BOT_WEBHOOK?.trim() || undefined, publicUrl: process.env.FOCUS_PUBLIC_URL?.trim().replace(/\/+$/, '') || undefined },
 };
 
 export const paths = {

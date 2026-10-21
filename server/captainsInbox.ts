@@ -36,7 +36,7 @@ export class Inbox {
   /** What's waiting, each as an item and as the hail it is. */
   private items(): { a: Attention; item: InboxItem }[] {
     const now = Date.now();
-    return this.waiting().map((a) => ({ a, item: inboxItem(a, this.store.reviews, now) }));
+    return this.waiting().map((a) => ({ a, item: inboxItem(a, this.store.reviews, now, 'agent' in a ? this.store.recentLines(a.agent.id, 200) : undefined) }));
   }
 
   view(): InboxView {

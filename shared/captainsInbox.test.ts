@@ -93,6 +93,16 @@ describe('an inbox item', () => {
     });
   });
 
+  it('carries what the lead said last and showed this turn, given their terminal', () => {
+    const lead = agent({ lead: { title: 'Saved items', artifacts: [{ id: 'flow', title: 'How a save travels', at: 40, image: true }] } as never });
+    const lines = [{ kind: 'manager', text: '▶ Captain: go', t: 10 }, { kind: 'text', text: 'Slice 1 is up. Shall I start slice 2?', t: 45 }] as never;
+    expect(inboxItem({ kind: 'turn', agent: lead }, new Map(), 0, lines)).toMatchObject({
+      said: 'Slice 1 is up. Shall I start slice 2?',
+      shown: [{ title: 'How a save travels', html: '/api/artifacts/a1/flow.html?v=40', image: '/api/artifacts/a1/flow.jpg?v=40' }],
+    });
+    expect(inboxItem({ kind: 'turn', agent: lead }, new Map(), 0)).not.toHaveProperty('said');
+  });
+
   it('marks a turn the captain has read, and dates a hand from when it went up', () => {
     const read = agent({ lead: { title: 'Saved items', readTurn: 50 } as never });
     expect(inboxItem({ kind: 'turn', agent: read }, new Map(), 0)).toMatchObject({ read: true, since: 50, goal: 'Saved items' });

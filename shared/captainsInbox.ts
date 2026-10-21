@@ -1,8 +1,9 @@
-import { openQuestion } from './artifacts';
+import { artifactUrl, openQuestion } from './artifacts';
+import { lastWords, shownThisTurn } from './leadWords';
 import type { LedgerEvent } from './ledger';
 import { isRecord } from './records';
 import { type Attention, hails, type Lane, laneOf, needLine, turnRead } from './tricorder';
-import type { Agent, PullRequest, QaReview, CosRead } from './types';
+import type { Agent, PullRequest, QaReview, CosRead, TermLine } from './types';
 
 // The captain's inbox, as the office keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
 // stays the same from look to look, and what they decided lately, from the ledger's `captain-decision` lines. Comms and
@@ -62,9 +63,14 @@ export interface InboxItem {
   lane: Lane;
   /** A lead's turn as the chief of staff judged it: its route, the line on what's decided, why, and its words. */
   cos?: NonNullable<CosRead['judged']>;
+  /** What the agent said last (`lastWords`), to read before deciding. */
+  said?: string;
+  /** What a lead showed on their screen this turn (`shownThisTurn`): its live page and its picture, served by the API. */
+  shown?: { title: string; html: string; image?: string }[];
 }
 
-export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, now: number): InboxItem {
+/** An item as the API serves it; given the agent's terminal `lines`, with what they said and showed. */
+export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, now: number, lines?: readonly TermLine[]): InboxItem {
   const { what } = needLine(a, reviews);
   const lane = laneOf(a, now);
   if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane };
@@ -72,12 +78,16 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
   const { agent } = a;
   const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
   const q = a.kind === 'question' ? openQuestion(agent) : undefined;
+  const said = lines && lastWords(lines);
+  const shown = lines && a.kind !== 'error' ? shownThisTurn(agent.lead?.artifacts, lines) : [];
   return {
     id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what, lane,
     ...(cos && { cos }),
     ...(since !== undefined && { since }),
     ...(a.kind === 'turn' && turnRead(agent) && { read: true }),
     ...(q && { options: q.options.map((o) => ({ id: o.id, label: o.label, ...(o.detail && { detail: o.detail }) })) }),
+    ...(said && { said }),
+    ...(shown.length && { shown: shown.map((s) => ({ title: s.title, html: artifactUrl(agent.id, s, 'html'), ...(s.image && { image: artifactUrl(agent.id, s, 'jpg') }) })) }),
   };
 }
 
