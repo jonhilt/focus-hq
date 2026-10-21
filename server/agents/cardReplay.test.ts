@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { type DecisionFact, itemAgent, landedBy, leadCards, median, missed, senderOf, summarize, type VerdictFact } from './cardReplay';
 import type { JournalEntry, RunFact } from './runJournal';
+import { conflictsResolvedNote } from './lead';
+import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
 
 const lead = { id: 'lead_p_1', projectId: 'p', name: 'Lt. Reyes', goal: 'A goal' };
 
@@ -26,18 +28,29 @@ const none = { verdicts: [], decisions: [] };
 const next = (id: string, t: number): RunFact & { t: number } => ({ kind: 'turn-requested', turn: id, turnKind: 'work', prompt: 'go', t });
 
 describe('senderOf', () => {
-  it('reads who a message is from by how the office opens it', () => {
+  it('reads who a message is from by how Ops opens it, now and before it had its name', () => {
     expect(senderOf('[QA officer Lt. Varga] QA passed jonhilt/focus#1: fine')).toBe('qa');
     expect(senderOf('[Office] Slice 2 has landed: jonhilt/focus#559 merged. Carry on')).toBe('slice-landed');
     expect(senderOf('[Office] jonhilt/focus#588 had merge conflicts with `main`: Ensign X merged')).toBe('conflict');
-    expect(senderOf('[Office] something else')).toBe('office');
+    expect(senderOf('[Ops] Slice 2 has landed: jonhilt/focus#559 merged. Carry on')).toBe('slice-landed');
+    expect(senderOf('[Ops] jonhilt/focus#588 had merge conflicts with `main`: Ensign X merged')).toBe('conflict');
+    expect(senderOf('[Ops] something else')).toBe('ops');
+    expect(senderOf('[Office] something else')).toBe('ops');
     expect(senderOf('[Chief of Staff] Show the captain the mockup first')).toBe('chief-of-staff');
     expect(senderOf('[Quick answerer] While you were busy, the captain asked')).toBe('quick-answerer');
     expect(senderOf('Focus restarted while you were working, so your last turn was cut off')).toBe('restart');
     expect(senderOf('The office paused you mid-turn when its Claude usage limit was reached.')).toBe('plan-limit');
-    expect(senderOf("The office couldn't install the dependencies in your checkout")).toBe('office');
+    expect(senderOf('Ops paused you mid-turn when its Claude usage limit was reached.')).toBe('plan-limit');
+    expect(senderOf("Ops couldn't install the dependencies in your checkout")).toBe('ops');
+    expect(senderOf("The office couldn't install the dependencies in your checkout")).toBe('ops');
     expect(senderOf('[Star chart] The captain spun contact c1 off')).toBe('plugin:Star chart');
     expect(senderOf('yes let’s do A')).toBe('captain');
+  });
+
+  it('reads the notes Ops sends as it words them now', () => {
+    const pr = { repo: 'a/b', number: 2, baseBranch: 'main', branch: 'focus/x' };
+    expect(senderOf(`[Ops] ${conflictsResolvedNote(pr, 'b', 'Ensign X')}`)).toBe('conflict');
+    expect(senderOf(CARRY_ON_AFTER_LIMIT)).toBe('plan-limit');
   });
 });
 
@@ -85,12 +98,12 @@ describe('leadCards', () => {
     expect(leadCards(lead, entries, none)[0]).toMatchObject({ outcome: 'captain', wokeAt: 20_000, closedAt: 25_000 });
   });
 
-  it('a next turn started with nothing sent is the office’s own doing', () => {
+  it('a next turn started with nothing sent is Ops’ own doing', () => {
     const entries = journal(...turn('t1', 10_000), next('t2', 11_000));
     expect(leadCards(lead, entries, none)[0]).toMatchObject({ outcome: 'superseded', by: 'none' });
   });
 
-  it('a compaction the office starts leaves the card open; a message sent into it is what woke the lead', () => {
+  it('a compaction Ops starts leaves the card open; a message sent into it is what woke the lead', () => {
     const entries = journal(
       ...turn('t1', 10_000),
       { kind: 'turn-requested', turn: 'c', turnKind: 'compact', prompt: '/compact', t: 20_000 },
@@ -125,7 +138,7 @@ describe('leadCards', () => {
     expect(open[0].closedAt).toBeUndefined();
   });
 
-  it('no card for a compaction, a turn the office carries on by itself, or a verdict too late or already used', () => {
+  it('no card for a compaction, a turn Ops carries on by itself, or a verdict too late or already used', () => {
     const entries = journal(
       { kind: 'turn-requested', turn: 'c', turnKind: 'compact', prompt: '/compact', t: 1000 },
       { kind: 'turn-ended', turn: 'c', outcome: { ok: true }, t: 2000 },

@@ -1,37 +1,38 @@
 import type { CosRoute } from '../../shared/ledger';
 import type { JournalEntry, TurnKind } from './runJournal';
 
-// The life of every card the captain was owed, replayed from what the office kept (`pnpm run card-replay`): each work
+// The life of every card the captain was owed, replayed from what Focus kept (`pnpm run card-replay`): each work
 // turn a goal lead ends opens one, the chief of staff's verdict on it says how much it needed the captain, and it closes
 // when the lead's next turn starts. What woke the lead says who closed it: the captain, the chief of staff's words, or
 // something else (a QA verdict, a slice landing, a restart) that wiped a card nobody had answered. Cards are never
 // stored (they're worked out from the agent each time), so this is the only record of how they ended. Pure: the tool
 // reads the files.
 
-/** Who a message to a lead is from, by how the office opens it (`Comms.message`'s `[from]`, its carry-on notes). */
+/** Who a message to a lead is from, by how Ops opens it (`Comms.message`'s `[from]`, its carry-on notes). */
 export type Sender =
   | 'captain'
   | 'chief-of-staff'
   | 'qa'
   | 'slice-landed'
   | 'conflict'
-  | 'office'
+  | 'ops'
   | 'restart'
   | 'plan-limit'
   | 'quick-answerer'
   | `plugin:${string}`;
 
+// Ops opened them with [Office] and "The office" before it had its name: old journals still say so.
 const OPENINGS: [RegExp, Sender][] = [
   [/^\[Chief of Staff\]/, 'chief-of-staff'],
   [/^\[QA officer /, 'qa'],
-  [/^\[Office\] Slice \d+ has landed/, 'slice-landed'],
-  [/^\[Office\] \S+ had merge conflicts/, 'conflict'],
-  [/^\[Office\]/, 'office'],
+  [/^\[(?:Ops|Office)\] Slice \d+ has landed/, 'slice-landed'],
+  [/^\[(?:Ops|Office)\] \S+ had merge conflicts/, 'conflict'],
+  [/^\[(?:Ops|Office)\]/, 'ops'],
   // the captain's question on a briefing, relayed while the lead was busy
   [/^\[Quick answerer\]/, 'quick-answerer'],
   [/^Focus restarted (while|part way)/, 'restart'],
-  [/^The office paused you mid-turn/, 'plan-limit'],
-  [/^The office couldn't install/, 'office'],
+  [/^(?:Ops|The office) paused you mid-turn/, 'plan-limit'],
+  [/^(?:Ops|The office) couldn't install/, 'ops'],
 ];
 
 /** Who sent a lead `text`: the captain's own words come plain, everyone else's opened with who they are. */
@@ -96,18 +97,18 @@ export interface Card {
   why?: string;
   verdictAt?: number;
   outcome: CardOutcome;
-  /** What woke the lead (`none`: their next turn started with nothing sent, the office's own doing). */
+  /** What woke the lead (`none`: their next turn started with nothing sent, Ops' own doing). */
   by?: Sender | 'none';
   /** For `cos-sent`: whether the chief of staff sent its words itself, or the captain pressed send. */
   cosSentBy?: 'auto' | 'captain';
   /** The captain said something (a message, or an answer in their inbox) while it was open. */
   captainSpoke: boolean;
-  /** When the lead was woken (the office picking them up), and when their next turn started (or the goal ended). */
+  /** When the lead was woken (Ops picking them up), and when their next turn started (or the goal ended). */
   wokeAt?: number;
   closedAt?: number;
   waitMs?: number;
   waker?: CardMessage;
-  /** For a card a slice landing woke the lead from: who merged it (the captain, the office's auto-merge…). */
+  /** For a card a slice landing woke the lead from: who merged it (the captain, Ops' auto-merge…). */
   mergedBy?: string;
   messages: CardMessage[];
   decisions: DecisionFact[];
@@ -116,7 +117,7 @@ export interface Card {
 /** How long after a turn ends the chief of staff's verdict on it can come. */
 export const VERDICT_WITHIN_MS = 10 * 60_000;
 
-/** Facts that say the office is picking the lead up: whatever was queued last is what woke them. */
+/** Facts that say Ops is picking the lead up: whatever was queued last is what woke them. */
 const WAKES = new Set(['waiting', 'held', 'setting-up', 'taken']);
 
 const clip = (text: string, max = 120) => {
@@ -198,11 +199,11 @@ export function landedBy(text: string, merges: readonly MergeFact[]): string | u
   return ref ? merges.find((m) => m.repo === ref[1] && m.pr === Number(ref[2]))?.by : undefined;
 }
 
-/** A turn that's no card: a compaction, or one the office carried on from by itself. */
+/** A turn that's no card: a compaction, or one Ops carried on from by itself. */
 const noCard = (kind: TurnKind | undefined, limited: boolean | undefined) => kind === 'compact' || !!limited;
 
 /**
- * Every card one goal lead's run journal opened, and how each ended. A compaction the office starts doesn't close one
+ * Every card one goal lead's run journal opened, and how each ended. A compaction Ops starts doesn't close one
  * (the lead's still owed an answer); news held for the turn's end (`later`) is heard as the card opens.
  */
 export function leadCards(lead: LeadInfo, entries: readonly JournalEntry[], { verdicts, decisions, merges = [] }: CardSources): Card[] {

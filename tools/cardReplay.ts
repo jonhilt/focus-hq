@@ -1,4 +1,4 @@
-// Card replay: the life of every card the captain was owed, replayed from the office's own history (the ledger, each
+// Card replay: the life of every card the captain was owed, replayed from Focus's own history (the ledger, each
 // goal lead's run journal, state.json), and how each ended: the captain answered, the chief of staff's words went, or
 // something else woke the lead first and wiped a card nobody had answered. The rules are in
 // server/agents/cardReplay.ts; this reads the files and prints. Read-only, free: no model is called.
@@ -31,7 +31,7 @@ const sinceDays = sinceArg === undefined ? undefined : Number(sinceArg);
 if (sinceDays !== undefined && !(sinceDays > 0)) throw new Error(`--since takes a number of days, not "${sinceArg}"`);
 const since = sinceDays ? Date.now() - sinceDays * 86_400_000 : 0;
 
-/** state.json, or nothing when it's missing or can't be read (the office mid-write): the ledger names the closed goals' leads. */
+/** state.json, or nothing when it's missing or can't be read (Focus mid-write): the ledger names the closed goals' leads. */
 function readState(): unknown {
   try {
     return JSON.parse(readFileSync(paths.state, 'utf8'));
@@ -104,7 +104,7 @@ function printMissed(cards: Card[]): void {
     console.log(`${when(c.openedAt)}  ${c.lead ?? c.agentId} · ${c.goal ?? '?'}  [route ${c.route}]`);
     console.log(`    why: ${(c.why ?? '').slice(0, 140)}`);
     const merged = c.mergedBy ? ` (merged by ${c.mergedBy})` : '';
-    console.log(`    wiped by ${c.by}${merged} after ${mins(c.waitMs)}${c.captainSpoke ? ' (the captain had said something)' : ''}: ${c.waker?.text ?? '(no message: the office started the turn)'}`);
+    console.log(`    wiped by ${c.by}${merged} after ${mins(c.waitMs)}${c.captainSpoke ? ' (the captain had said something)' : ''}: ${c.waker?.text ?? '(no message: Ops started the turn)'}`);
   }
 }
 
