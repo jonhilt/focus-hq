@@ -41,6 +41,12 @@ export interface PluginParts {
   prOpened?(agent: Readonly<Agent>, pr: { number: number; url: string }): void;
   /** A project's settings changed: a plugin switched on or off for it, say (`host.on`). */
   projectChanged?(projectId: string): void;
+  /**
+   * Ops left a goal's lead a note: news (QA's verdict on their pull request, their slice landing) that goes with the
+   * next message they hear and never wakes them by itself, since only the captain starts a lead's next turn in the
+   * core. A plugin that wakes them for it (`host.goals.message`) sends that message: the note goes ahead of it.
+   */
+  leadNoted?(lead: Readonly<Agent>, note: LeadNote): void;
   /** A pull request in any project merged or closed, a goal's too (after the goal has heard). */
   prClosed?(repo: string, number: number, merged: boolean): void;
   /**
@@ -84,6 +90,27 @@ export interface PluginParts {
   /** Tools it adds to the Ops tools of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
+
+/** A note Ops left a goal's lead (`leadNoted`): who it's from and what it says (the lead hears `[from] text`), and what it's about. */
+export interface LeadNote {
+  from: string;
+  text: string;
+  /** The lead was in a turn as it was left. */
+  inTurn: boolean;
+  about: LeadNews;
+}
+
+/** What a lead's note is about. */
+export type LeadNews =
+  /**
+   * QA's verdict on one of their pull requests: `failedRounds` it has failed so far, this one included; `behind`, a
+   * verdict on a commit they've shipped past, with QA on the latest already.
+   */
+  | { kind: 'qa-verdict'; repo: string; number: number; verdict: 'pass' | 'fail'; advisory: boolean; failedRounds: number; behind: boolean }
+  /** Every pull request of slice `slice` merged or closed: their repos move to fresh code as their next turn starts. */
+  | { kind: 'slice-landed'; slice: number }
+  /** Anything else: Ops merged a base into their pull request, the star chart, a restart Ops finished something for. */
+  | { kind: 'other' };
 
 /** A model a lead drew, as the plugins hear of it (`modelShown`). */
 export interface ModelShown {

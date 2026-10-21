@@ -19,7 +19,7 @@ export { ACTIVE_STATUSES, AWAY_DESK, EFFORT_LEVELS, MODEL_KINDS } from '../share
 export { shownProjects } from '../shared/hidden';
 export { columns } from '../shared/board';
 export { type Attention, inFlight, needsYou } from '../shared/tricorder';
-export { prKey, qaBadge } from '../shared/qa';
+export { autoSendBackFor, prKey, qaBadge } from '../shared/qa';
 export { goalTitle } from '../shared/goalTitle';
 /** The ledger as Focus reads it out: a line of it, and lines grouped by day. */
 export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';

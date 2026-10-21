@@ -1,11 +1,14 @@
-import type { Agent, PluginHost, Settings } from '../../plugin-api/server';
+import type { Agent, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
 import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict } from './judge';
 import { atUsageLimit, turnTail } from './turn';
+import { wakeFor } from './wake';
 
 // The chief of staff (README.md): as a goal's lead ends a turn, in a project it's switched on for, it judges where the
 // turn goes, writes its verdict in the ledger and hands it to the captain's inbox, which files the turn by it (a card,
 // an interrupt, or its words ready for the captain to send). It sends nothing itself: the captain does, from the inbox.
+// What it does send is Ops' own carry-ons, which the core leaves to it: a QA fail back to the lead, and a slice that's
+// landed (`noted`).
 
 /** Who judges a turn: a Haiku session (`ClaudeJudge`), the demo's scripted stand-in, or a fake in a test. */
 export interface Judge {
@@ -15,7 +18,7 @@ export interface Judge {
 }
 
 /** What the chief of staff needs of the focus. */
-export type ChiefHost = Pick<PluginHost, 'on' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'judged'> };
+export type ChiefHost = Pick<PluginHost, 'on' | 'projects' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'judged' | 'message'> };
 
 export class ChiefOfStaff {
   /** The turns being judged now, by session and last line: a turn that ends twice is judged once. */
@@ -38,6 +41,17 @@ export class ChiefOfStaff {
     if (phase !== 'end' || !this.judges(agent) || !hasLeadWork(agent) || !agent.sessionId) return undefined;
     const { sessionId } = agent;
     return this.judgeTurn(agent, sessionId, agent.lead.title, Date.now()).catch((err: unknown) => console.warn(`[chief-of-staff] judging ${agent.name}’s turn failed: ${errorMessage(err)}`));
+  }
+
+  /**
+   * Ops left a goal's lead a note, which waits for the next message they get: in a project it's on for, it wakes them
+   * for the ones that need no captain (`wakeFor`), as whoever the note's from, and the note goes ahead of its message.
+   */
+  noted(lead: Agent, note: LeadNote): void {
+    if (!this.judges(lead)) return;
+    const project = this.host.projects().find((p) => p.id === lead.projectId);
+    const text = project && wakeFor(note, project);
+    if (text) this.host.goals.message(lead.id, text, { from: note.from });
   }
 
   private async judgeTurn(agent: Agent, sessionId: string, goal: string, since: number): Promise<void> {

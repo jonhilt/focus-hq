@@ -74,7 +74,8 @@ export class Comms extends Part {
   /**
    * Sends the agent a message: the captain's, or (with `from`) news from someone else aboard. When it would pick their
    * conversation back up on your API key, at a cost worth asking about, the captain's `how` says whether to go ahead or
-   * wait for your plan's limit to reset; without it, the captain is asked first, and anyone else's news waits.
+   * wait for your plan's limit to reset; without it, the captain is asked first, and anyone else's news waits. A
+   * goal lead's notes (`Inbox.note`) go with it, whoever's it is.
    */
   message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {
     const agent = this.store.agent(id);
@@ -104,7 +105,10 @@ export class Comms extends Part {
       this.print(agent, [{ kind: 'system', text: `✻ ${agent.name} will read it once their cloud session has started` }]);
       return SENT;
     }
-    if (rt.session?.send(text)) {
+    // a lead's notes go with it, ahead of it
+    const notes = rt.inbox.notes;
+    if (rt.session && [...notes, text].every((m) => rt.session?.send(m))) {
+      if (rt.turn) rt.inbox.notesSent(rt.turn);
       if (rt.turn) this.store.journal(id, { kind: 'sent', turn: rt.turn, text });
       if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
       return SENT;

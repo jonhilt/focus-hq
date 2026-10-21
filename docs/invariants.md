@@ -30,7 +30,7 @@ What each part caught and found goes in the sections below, with every live bug 
 
 | part | test | rules |
 | --- | --- | --- |
-| a goal's lead (held for the plan's limit, its run, its inbox) | `server/agents/managerInvariants.test.ts` | restart |
+| a goal's lead (held for the plan's limit, its run, its inbox and notes) | `server/agents/managerInvariants.test.ts` | restart |
 | a goal lead's slices | `server/agents/sliceInvariants.test.ts` | both |
 | the cartography plugin's kept diagrams | `plugins/cartography/invariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |

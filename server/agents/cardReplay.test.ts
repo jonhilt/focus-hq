@@ -85,6 +85,22 @@ describe('leadCards', () => {
     expect(card.messages.map((m) => m.sender)).toEqual(['qa', 'slice-landed', 'captain']);
   });
 
+  it('a note wakes nobody: what woke the lead is the message after it, and a landing’s note says who merged', () => {
+    const entries = journal(
+      ...turn('t1', 10_000),
+      { kind: 'queued', text: '[Ops] Slice 1 has landed: jonhilt/focus#1 merged. Your repos move to fresh code', at: 'note', t: 20_000 },
+      { kind: 'queued', text: "[Ops] Slice 1 has landed: carry on with what's next", at: 'end', t: 20_000 },
+      { kind: 'waiting' },
+      next('t2', 25_000),
+    );
+    const [card] = leadCards(lead, entries, { verdicts: [], decisions: [], merges: [{ repo: 'jonhilt/focus', pr: 1, by: 'captain' }] });
+    expect(card).toMatchObject({ outcome: 'superseded', by: 'slice-landed', mergedBy: 'captain' });
+    expect(card.waker?.text).toMatch(/carry on/);
+    // a note alone, then the captain's message: the captain woke them
+    const captain = leadCards(lead, journal(...turn('t1', 10_000), { kind: 'queued', text: '[QA officer Lt. Varga] QA failed jonhilt/focus#1', at: 'note', t: 20_000 }, { kind: 'queued', text: 'fix it', at: 'end', t: 30_000 }, { kind: 'waiting' }, next('t2', 31_000)), none);
+    expect(captain[0]).toMatchObject({ outcome: 'captain', by: 'captain' });
+  });
+
   it('the chief of staff’s words sent tell who pressed send', () => {
     const words = { kind: 'queued' as const, text: '[Chief of Staff] Check legibility first', at: 'end' as const, t: 50_000 };
     const auto = leadCards(lead, journal(...turn('t1', 10_000), words, { kind: 'waiting' }, next('t2', 52_000)), { verdicts: [verdict(4, 11_000)], decisions: [{ kind: 'turn', answer: 'Sent the chief of staff’s words', via: 'chief-of-staff', at: 50_000 }] });

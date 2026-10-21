@@ -71,6 +71,8 @@ export interface Runtime {
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
+  /** A goal's lead's QA fail, noted mid-turn: the note, and the captain's toast if the turn ends with it unheard. */
+  failNoted?: { note: string; toast: string };
   /** The conversation Ops couldn't compact before a lead's turn: it doesn't try again in that one. */
   compactFailed?: string;
   /** Queued to pick its conversation back up (the inbox is what it hears), rather than to start its task. */

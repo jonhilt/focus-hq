@@ -473,6 +473,7 @@ export class AgentSessions extends Part {
           // the lead's turn is over: it's the captain's turn, and their work ships when the lead says so, not now. Their
           // subagents and workflows ended with it; any that just finished linger a moment
           this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
+          this.core.leads.leadWentIdle(agent);
           this.core.seating.schedule();
           return;
         case 'deliver':

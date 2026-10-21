@@ -1,9 +1,13 @@
 import type { RunFact, RunState } from './runJournal';
 
 /**
- * An agent's inbox: what the manager has for them to hear next, and what waits for the end of the turn they're in. It
- * lives in their run journal (`Store.journal`), so a message Ops took is never lost to a restart: each change
- * is a fact on disk before it returns, and what's waiting is what the journal adds up to.
+ * An agent's inbox: what the manager has for them to hear next, what waits for the end of the turn they're in, and (a
+ * goal's lead's) notes, news that goes with the next message they hear. It lives in their run journal (`Store.journal`),
+ * so a message Ops took is never lost to a restart: each change is a fact on disk before it returns, and what's waiting
+ * is what the journal adds up to.
+ *
+ * Only messages count (`length`): a turn that ends with one waiting carries on into another, but notes never start
+ * or carry on a turn by themselves.
  */
 export class Inbox {
   constructor(
@@ -26,6 +30,21 @@ export class Inbox {
     this.record({ kind: 'queued', text, at: 'front' });
   }
 
+  /** News that waits for the next message, whoever's, and goes ahead of it: it never wakes them by itself. */
+  note(text: string): void {
+    this.record({ kind: 'queued', text, at: 'note' });
+  }
+
+  /** The notes waiting, without taking them. */
+  get notes(): readonly string[] {
+    return this.state().notes;
+  }
+
+  /** The notes waiting went into turn `turn`'s session, which was listening, ahead of a message. */
+  notesSent(turn: string): void {
+    if (this.state().notes.length) this.record({ kind: 'notes-sent', turn });
+  }
+
   /** Heard once the turn in hand ends (`release`). */
   later(text: string): void {
     this.record({ kind: 'queued', text, at: 'later' });
@@ -36,16 +55,16 @@ export class Inbox {
     if (this.state().later.length) this.record({ kind: 'released' });
   }
 
-  /** Everything waiting, taken to be heard: into turn `turn`'s prompt, or a session that's listening. */
+  /** Everything waiting, notes first, taken to be heard: into turn `turn`'s prompt, or a session that's listening. */
   take(turn?: string): string[] {
-    const waiting = this.state().inbox;
-    if (waiting.length) this.record({ kind: 'taken', turn });
-    return [...waiting];
+    const { notes, inbox } = this.state();
+    if (notes.length || inbox.length) this.record({ kind: 'taken', turn });
+    return [...notes, ...inbox];
   }
 
   /** Everything waiting, dropped unheard. */
   clear(): void {
-    const { inbox, later } = this.state();
-    if (inbox.length || later.length) this.record({ kind: 'cleared' });
+    const { inbox, later, notes } = this.state();
+    if (inbox.length || later.length || notes.length) this.record({ kind: 'cleared' });
   }
 }

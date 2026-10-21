@@ -33,15 +33,19 @@ interface Said {
   /** The chief of staff's read of the lead's last turn: none, being read, or the route it judged (and `sends` while its words would go by themselves). */
   cos: string;
   held: boolean;
-  /** What's waiting for the lead's next turn, and for the end of the one in hand. */
+  /**
+   * What's waiting for the lead's next turn, and for the end of the one in hand. Not their notes: a turn a restart
+   * picks back up hears them with its note that it was cut off (the next message they hear), so where they are isn't
+   * kept as it was. That none is lost is `told`'s to say; `notesNow` reads them for the reach tests.
+   */
   inbox: string[];
   later: string[];
   /** Every message the lead has been sent, heard (in a turn's prompt, or into a session that ran on) or still waiting: none lost. */
   told: string[];
 }
 
-/** Ops' note for a lead that needn't cost a turn (a QA verdict that passes, the star chart): it waits for the
- *  end of the turn in hand, or for whatever they hear next. Only the manager's own parts send one. */
+/** Ops' note for a lead (a QA verdict, a slice landing, the star chart): it goes with whatever they hear next, and
+ *  never starts or carries on a turn by itself. Only the manager's own parts leave one. */
 const noteForLead = (agents: ReturnType<typeof focus>['agents'], lead: Agent, text: string) =>
   (Reflect.get(agents, 'core') as { leads: { noteForLead(lead: Agent, from: string, text: string): void } }).leads.noteForLead(lead, 'Ops', text);
 
@@ -55,6 +59,9 @@ const judging = (hosts: PluginHost[]): FocusPlugin => ({
 });
 const startJudging = (agents: ReturnType<typeof focus>['agents'], hosts: PluginHost[]) =>
   agents.startPlugins([judging(hosts)], { demo: false, ownRepo: () => undefined });
+
+/** The latest lead's notes waiting now. */
+let notesNow: () => string[] = () => [];
 
 /** A goal's lead; `only`, the actions offered, by name, when a check is after one thing. */
 const leadOf = (only?: RegExp): Subject<Said> => ({
@@ -81,7 +88,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
       // on (a turn stopped as Focus went down may never have read it: the resumed turn hears it again)
       const heard = claudes.flatMap((c) => c.turns.flatMap((t) => [t.req.prompt, ...(t.stopped ? [] : t.sent)]));
       // not what was just taken for a turn that was never asked for: once settled, nothing will hear that
-      const waiting = [...run.inbox, ...run.later];
+      const waiting = [...run.inbox, ...run.later, ...run.notes];
       const cos = first.store.agent(id).lead?.cos;
       return {
         phase: JSON.stringify(run.phase),
@@ -92,6 +99,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
         told: Array.from({ length: sent }, (_, i) => `Message ${i + 1}`).filter((m) => [...heard, ...waiting].some((h) => h.includes(m))),
       };
     };
+    notesNow = () => [...first.store.run(id).notes];
     await steady(said);
     const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>): Running<Said> => {
       // the turns this life's Claude Code has had ended: a turn ends once
@@ -118,7 +126,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
             },
           },
           { name: 'the captain writes', run: () => o.agents.message(id, `And the header: Message ${++sent}`) },
-          // news that waits for the turn in hand to end, or goes with what they hear next
+          // news that goes with what they hear next
           { name: 'Ops leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
           { name: 'the captain stops them', run: () => o.agents.stop(id) },
           // its verdict, whenever it comes: kept only while the turn it's on is still being read
@@ -147,21 +155,39 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
 const lead = leadOf();
 
 describe('a goal’s lead, under Focus’s rule for a restart', () => {
-  // a description that never got a message into a turn, or one waiting for it to end, would prove nothing of the inbox
-  it('reaches messages sent into a turn, waiting for it to end, and waiting for the next, taken one at a time', async () => {
+  // a description that never got a message into a turn, or a note waiting for the next, would prove nothing of the inbox
+  it('reaches messages sent into a turn, notes waiting for the next message and going into a turn with it, and a turn taking them', async () => {
     const l = await lead.start(now);
-    const seen: Said[] = [];
-    for (const name of ['the captain writes', 'Ops leaves a note', 'the turn ends', 'the turn ends', 'Ops leaves a note', 'the captain writes']) {
+    const seen: (Said & { notes: string[] })[] = [];
+    for (const name of ['the captain writes', 'Ops leaves a note', 'the captain writes', 'Ops leaves a note', 'the turn ends', 'the turn ends', 'the captain writes']) {
       await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
       await l.settle();
-      seen.push(l.durable());
+      seen.push({ ...l.durable(), notes: notesNow() });
     }
     l.close?.();
-    // into the turn in hand; waiting for it to end; then, with no turn, waiting for what they hear next, which takes them
-    expect(seen.map((s) => s.told.length)).toEqual([1, 2, 2, 2, 3, 4]);
-    expect(seen[1].later).toEqual([expect.stringContaining('Message 2')]);
-    expect(seen[4]).toMatchObject({ later: [], inbox: [expect.stringContaining('Message 2'), expect.stringContaining('Message 3')] });
-    expect(seen[5].inbox).toEqual([]);
+    // into the turn in hand; a note waiting; into the turn with the next message; a note waiting as the turn ends, and
+    // still waiting with no turn; then taken with the captain's next message
+    expect(seen.map((s) => s.told.length)).toEqual([1, 2, 3, 4, 4, 4, 5]);
+    expect(seen[1]).toMatchObject({ notes: [expect.stringContaining('Message 2')], later: [], inbox: [] });
+    expect(seen[2].notes).toEqual([]);
+    expect(seen[4]).toMatchObject({ notes: [expect.stringContaining('Message 4')], later: [], inbox: [] });
+    expect(seen[6]).toMatchObject({ notes: [], inbox: [] });
+  });
+
+  // docs/goals.md: only the captain starts a goal lead's next turn; Ops' and QA's news is a note heard with their next message
+  it('never starts or carries on a turn for a note', async () => {
+    const l = await lead.start(now);
+    const phases: string[] = [];
+    for (const name of ['Ops leaves a note', 'the turn ends', 'Ops leaves a note', 'Ops leaves a note']) {
+      await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await l.settle();
+      phases.push(l.durable().phase);
+    }
+    l.close?.();
+    // the note left mid-turn doesn't carry it on, and those left after it ends don't start one
+    expect(phases.slice(1)).toEqual(Array(3).fill(phases[1]));
+    expect(JSON.parse(phases[1])).toBe('ended');
+    expect(notesNow()).toHaveLength(3);
   });
 
   // docs/comms.md: a lead's ended turn is the chief of staff's to read until it's judged, and its read ends with the next turn

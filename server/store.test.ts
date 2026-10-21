@@ -65,7 +65,7 @@ describe('Store on disk', () => {
     again.flush();
     const later = new Store(true);
     later.load();
-    expect(later.run('journaled')).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
+    expect(later.run('journaled')).toEqual({ inbox: [], later: [], notes: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
 
   it('lists the journals written to since a time, a review’s by its pull request', () => {

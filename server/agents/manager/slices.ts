@@ -120,10 +120,11 @@ export class Slices extends Part {
         : this.move(agent, next.moving).pipe(Effect.map((said) => `Focus restarted while your repos were moving to fresh code, so Ops finished the move:\n\n${said}`));
       this.print(agent, [{ kind: 'system', text: `✻ Focus restarted part way through ${next.kind === 'ship' ? 'shipping their slice' : 'moving their repos to fresh code'}: finishing that` }]);
       this.background(finish.pipe(
-        Effect.tap((said) => Effect.sync(() => this.rt(agent.id).inbox.push(said))),
+        // news for the lead, heard with the next message they get
+        Effect.tap((said) => Effect.sync(() => this.core.leads.noteForLead(agent, 'Ops', said))),
         Effect.catch((err) => Effect.sync(() => {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't finish it: ${err.message}` }]);
-          this.rt(agent.id).inbox.push(`Focus restarted part way through ${next.kind === 'ship' ? 'shipping your slice' : 'moving your repos to fresh code'}, and Ops couldn't finish it: ${err.message}`);
+          this.core.leads.noteForLead(agent, 'Ops', `Focus restarted part way through ${next.kind === 'ship' ? 'shipping your slice' : 'moving your repos to fresh code'}, and Ops couldn't finish it: ${err.message}`);
         })),
         // the ship marked them at work: they're as the restart left them, for their own run to pick up
         Effect.ensuring(Effect.sync(() => {

@@ -69,8 +69,9 @@ describe('a lead’s slice after Focus restarts', () => {
     expect(picked).toEqual([['c1'], ['c1']]);
     // they hear it with the message that was waiting
     const turn = () => after.claude.turns.find((t) => t.req.agentId === agent.id);
-    await until(() => !!turn() || before.store.run(agent.id).inbox.length > 0);
-    const heard = turn()?.req.prompt ?? before.store.run(agent.id).inbox.join('\n\n');
+    const waiting = () => [...before.store.run(agent.id).notes, ...before.store.run(agent.id).inbox];
+    await until(() => !!turn() || waiting().some((m) => m.includes('so Ops finished')));
+    const heard = turn()?.req.prompt ?? waiting().join('\n\n');
     expect(heard).toMatch(/so Ops finished the move/);
     expect(heard).toContain('On to the next one');
   });

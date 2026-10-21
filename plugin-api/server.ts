@@ -2,7 +2,7 @@
 // it (`PluginHost`), and the helpers it may share with the core. Anything Focus does for a plugin (files,
 // checkouts, GitHub) goes on the host, so the core decides what a plugin can do and a test can lend it a fake.
 export * from './shared';
-export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
+export type { BriefSpec, BriefWork, FocusPlugin, LeadNews, LeadNote, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
 /** Reads a file a lead cites, as the model tool checks a cite: its lines, or undefined if it's missing or outside `roots` (their checkouts). */

@@ -17,9 +17,25 @@ describe('fold', () => {
     expect(fold([{ kind: 'queued', text: 'a', at: 'end' }, { kind: 'queued', text: 'news', at: 'later' }, { kind: 'taken' }, { kind: 'queued', text: 'b', at: 'end' }, { kind: 'cleared' }])).toMatchObject({ inbox: [], later: [], owed: [] });
   });
 
+  it('keeps a lead’s notes apart from their messages, for whatever they hear next, ahead of it', () => {
+    const noted = fold([{ kind: 'queued', text: '[Ops] Slice 1 has landed', at: 'note' }, { kind: 'queued', text: 'b', at: 'later' }, { kind: 'released' }]);
+    // a note isn't a message: a turn ending with only notes waiting doesn't carry on
+    expect(noted).toMatchObject({ notes: ['[Ops] Slice 1 has landed'], inbox: ['b'], later: [] });
+    // taken for a prompt, they're owed ahead of the messages, and back in the inbox after a restart
+    expect(fold([{ kind: 'queued', text: 'Go on', at: 'end' }, { kind: 'queued', text: 'note', at: 'note' }, { kind: 'taken' }])).toMatchObject({ notes: [], inbox: [], owed: ['note', 'Go on'] });
+    expect(fold([{ kind: 'queued', text: 'note', at: 'note' }, { kind: 'taken' }, { kind: 'restored' }])).toMatchObject({ notes: [], inbox: ['note'] });
+    // into a turn's session, ahead of a message sent there
+    const sent = fold([requested('t1'), { kind: 'queued', text: 'note', at: 'note' }, { kind: 'notes-sent', turn: 't1' }, { kind: 'sent', turn: 't1', text: 'Go on' }]);
+    expect(sent).toMatchObject({ notes: [], open: { sent: ['note', 'Go on'] } });
+    // not into a turn that isn't open: they wait on
+    expect(fold([requested('t1'), { kind: 'queued', text: 'note', at: 'note' }, { kind: 'notes-sent', turn: 't0' }]).notes).toEqual(['note']);
+    expect(fold([{ kind: 'queued', text: 'note', at: 'note' }, { kind: 'cleared' }]).notes).toEqual([]);
+    expect(factLine({ kind: 'queued', text: 'QA passed it', at: 'note' })).toBe('Note for them, heard with their next message: QA passed it');
+  });
+
   it('starts from nothing when the agent was sent home, numbering on', () => {
     const run = fold([{ kind: 'queued', text: 'a', at: 'later' }, { kind: 'taken' }, requested('t1'), { kind: 'reset' }]);
-    expect(run).toEqual({ inbox: [], later: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
+    expect(run).toEqual({ inbox: [], later: [], notes: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
 
   it('owes messages taken for a prompt until their turn is requested, and gives them back if it never is', () => {

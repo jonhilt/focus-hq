@@ -592,21 +592,11 @@ export function reviewsToStart<R extends { requestedAt: number }>(queued: R[], r
   return start;
 }
 
-/** How many times QA can fail one of the lead's pull requests before the lead stops being sent back to fix it. */
-export const LEAD_FIX_ROUNDS = 2;
-
 /**
- * What QA's verdict on one of the lead's pull requests does: a fail wakes the lead to fix it, for a couple of rounds, if
- * the project sends fails back; after that, and on a pass, the lead hears it with the captain's next message, and a fail
- * that keeps coming back is the captain's to look at. With send-back off a fail spends no turn: it's the captain's call.
+ * QA's verdict on one of the slice's pull requests, as a note for the lead (`Inbox.note`): heard with the next message
+ * they get, not when it comes, so a fail says what to fix and leaves when to the one who wakes them for it.
  */
-export function afterVerdict(verdict: QaReport['verdict'], failedRounds: number, sendBack: boolean): 'wake' | 'pass-on' | 'needs-you' {
-  if (verdict === 'pass' || !sendBack) return 'pass-on';
-  return failedRounds <= LEAD_FIX_ROUNDS ? 'wake' : 'needs-you';
-}
-
-/** QA's verdict on one of the slice's pull requests, for the lead: a fail with send-back off is the captain's to send back. */
-export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions' | 'advisory' | 'proofs'>, behind?: VerdictBehind, sendBack = true): string {
+export function qaVerdictNote(repo: string, number: number, report: Pick<QaReport, 'verdict' | 'summary' | 'fixInstructions' | 'advisory' | 'proofs'>, behind?: VerdictBehind): string {
   const verdict = report.advisory ? 'passed (with advice: it found problems, but no proof held)' : report.verdict === 'pass' ? 'passed' : 'failed';
   const advice = report.advisory && report.fixInstructions ? `\n\nQA's advice, yours to take or leave: ${report.fixInstructions}` : '';
   const fix = report.verdict === 'fail' ? `${report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : ''}${proofsToKeep(report).map((l) => `\n${l}`).join('')}` : advice;
@@ -614,9 +604,36 @@ export function qaVerdictNote(repo: string, number: number, report: Pick<QaRepor
     const what = `QA ${verdict} ${repo}#${number} at ${behind.tested.slice(0, 7)}, before your last ship (${behind.shipped.slice(0, 7)}): ${report.summary}${fix}`;
     return `${what}\n\nQA is reviewing ${behind.shipped.slice(0, 7)} now, and you'll hear that verdict too. Fix only what your last ship didn't already.`;
   }
-  const fails = sendBack ? 'Fix it and ship again, or tell the captain why not.' : 'Send-back is off for this project, so it waits for the captain: fix it when they ask you to.';
-  const next = report.verdict === 'pass' ? 'It waits for the captain to merge it.' : fails;
-  return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}\n\n${next}`;
+  // a fail says nothing of when: the message it comes with does, the captain's or the one a plugin wakes them with
+  const next = report.verdict === 'pass' ? '\n\nIt waits for the captain to merge it.' : '';
+  return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}${next}`;
+}
+
+/** Where a goal's lead stands once QA's fail is noted for them, for the captain's toast (`verdictToast`). */
+export type VerdictStands = 'idle' | 'working' | 'woken';
+
+/**
+ * Where a goal's lead stands once QA's verdict is noted for them: `woken` when someone's message (a plugin's) has them
+ * hear it, or will (it went into their live session with the note: `heard`; it waits in their inbox for a turn: `queued`;
+ * or it's held for your plan's usage limit, picked up as that resets: `held`), or when it picked them up out of an idle
+ * spell (`wasIdle`, no longer `finished`); otherwise `idle`, waiting on the captain, or `working`, in a turn without it.
+ */
+export function verdictStands(s: { wasIdle: boolean; finished: boolean; heard: boolean; queued: boolean; held: boolean }): VerdictStands {
+  if (s.heard || s.queued || s.held) return 'woken';
+  if (!s.wasIdle) return 'working';
+  return s.finished ? 'idle' : 'woken';
+}
+
+/**
+ * The captain's toast for QA failing one of a goal's pull requests, by where its lead stands now that it's noted
+ * (`verdictStands`): `idle`, waiting on the captain; `working`, in a turn, hearing it with their next message (and if
+ * the turn ends without it, `idle` then); `woken`, which says nothing more. None for a pass, or a verdict they've
+ * shipped past (QA's on their latest commit already).
+ */
+export function verdictToast(v: { repo: string; number: number; verdict: QaReport['verdict']; failedRounds: number; behind: boolean }, lead: string, stands: VerdictStands): { level: 'error' | 'info'; text: string } | undefined {
+  if (v.verdict !== 'fail' || v.behind || stands === 'woken') return undefined;
+  const failed = `QA failed ${v.repo.split('/')[1]}#${v.number}${v.failedRounds > 1 ? ` ${v.failedRounds} times` : ''}`;
+  return stands === 'idle' ? { level: 'error', text: `🙋 ${failed}: ${lead} waits on you` } : { level: 'info', text: `🔧 ${failed}: ${lead} hears it with their next message` };
 }
 
 /** A verdict on the commit QA `tested`, which the lead has `shipped` past while QA was at it. */
@@ -646,22 +663,14 @@ function landedPrs(work: LeadWork): string {
   return work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
 }
 
-/** The slice's pull requests have all merged or closed, for a lead who isn't in a turn: it wakes them. */
+/**
+ * The slice's pull requests have all merged or closed, as a note for the lead: heard with the next message they get,
+ * mid-turn or as a turn starts, so it says what landed and when their repos move rather than what to do next.
+ */
 export function landedNote(work: LeadWork): string {
   return [
     `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
-    `Carry on with what's next, unless it's the captain's call.`,
-  ].join(' ');
-}
-
-/**
- * The slice's pull requests have all merged or closed while the lead is in the middle of a turn. The repos only move at the
- * start of their next turn, so they carry on: a lead that stops to make the move happen leaves the goal waiting on the captain.
- */
-export function landedMidTurnNote(work: LeadWork): string {
-  return [
-    `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
-    `Carry on where you are: your repos move to fresh code at the start of your next turn, bringing your commits along.`,
+    `Your repos move to fresh code at the start of your first turn after it landed, bringing your later commits along.`,
   ].join(' ');
 }
 

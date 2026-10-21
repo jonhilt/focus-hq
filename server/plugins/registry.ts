@@ -2,7 +2,7 @@ import { lend } from './lend';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates, SignIn } from '../../shared/types';
 import { errorMessage } from '../util';
-import type { BriefSpec, FocusPlugin, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
+import type { BriefSpec, FocusPlugin, LeadNote, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
 
 /**
  * The plugins Focus started (docs/plugins.md), and the core's one way to them: it asks here rather than knowing
@@ -94,6 +94,11 @@ export class Plugins {
   prOpened(agent: Agent, pr: { number: number; url: string }): void {
     const parts = agent.brief && this.parts.get(agent.brief.plugin);
     if (parts) this.safely(agent.brief?.plugin ?? '', 'prOpened', () => parts.prOpened?.(lend(agent), pr));
+  }
+
+  /** Ops left a goal's lead a note: each plugin hears of its own copy of both. */
+  leadNoted(lead: Agent, note: LeadNote): void {
+    this.each('leadNoted', (parts) => parts.leadNoted?.(lend(lead), lend(note)));
   }
 
   prClosed(repo: string, number: number, merged: boolean): void {

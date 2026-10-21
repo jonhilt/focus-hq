@@ -19,7 +19,7 @@ export class Conflicts extends Part {
    * in itself, and pushes it when git needs no help (or the repo's rules settle every conflicted file) and it
    * type-checks. Otherwise the developer who opened the PR takes it, if they're still aboard; for anyone else's,
    * a goal's slice included, a new agent sits down on the PR's branch in a worktree of their own. A goal's lead hears
-   * about it once their turn is over.
+   * about it as a note, with the next message they get.
    */
   async resolveConflicts(projectId: string, pr: PullRequest): Promise<ConflictsOutcome> {
     const resolving = [...this.store.agents.values()].find((a) => a.task === 'conflicts' && a.repo === pr.repo && a.pr?.number === pr.number && !FINISHED.includes(a.status));
@@ -37,7 +37,8 @@ export class Conflicts extends Part {
     }
     if (owner) {
       this.update(owner, { baseBranch: pr.baseBranch });
-      this.core.comms.message(owner.id, conflictsPrompt(owner));
+      // Ops' news, never the captain's words
+      this.core.comms.message(owner.id, conflictsPrompt(owner), 'Ops');
       return { kind: 'agent', agent: owner };
     }
     const agent = this.core.seating.seat(projectId, pr.repo, {
@@ -96,7 +97,7 @@ export class Conflicts extends Part {
 
   /**
    * Ops pushed a merge to one of a lead's pull requests: the slice records the PR's new head, and the lead hears
-   * to pull it before touching that repo again, once their turn is over.
+   * to pull it before touching that repo again, as a note with the next message they get.
    */
   mergedForLead(lead: Agent, pr: Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | 'branch'>, sha: string, who: string): void {
     const work = lead.lead;

@@ -24,7 +24,7 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
     start: (host) => {
       const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.');
       chief = c;
-      return { judgesTurns: (agent) => c.judges(agent), turn: (agent, phase) => void c.turn(agent, phase) };
+      return { judgesTurns: (agent) => c.judges(agent), turn: (agent, phase) => void c.turn(agent, phase), leadNoted: (lead, note) => c.noted(lead, note) };
     },
   };
   o.agents.startPlugins([plugin], { demo: false, ownRepo: () => undefined, transcript: () => Promise.resolve(transcript.jsonl) });
@@ -122,5 +122,45 @@ describe('the chief of staff', () => {
     }
     expect(o.verdicts()).toEqual([]);
     expect(warned).toEqual([`[chief-of-staff] judging ${o.lead().name}’s turn failed: the judge gave no verdict: {"route":9}`]);
+  });
+
+  describe('waking a lead for a note Ops left them', () => {
+    /** The lead ships its slice and ends its turn: the captain's to read. */
+    async function shipped() {
+      const o = await aboard();
+      o.project.autoSendBack = true;
+      await o.claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+      o.claude.turns[0].end({ ok: true, summary: 'Shipped' });
+      await until(() => o.lead().status === 'done');
+      return o;
+    }
+
+    it('carries a lead on once their slice has landed, the note ahead of its words', async () => {
+      const o = await shipped();
+      for (const pr of o.lead().lead!.prs) o.agents.prClosed(pr.repo, pr.number, true);
+      await until(() => o.claude.turns.length === 2);
+      expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\n\[Ops\] Slice 1 has landed: carry on with what's next, unless it's the captain's call\.$/s);
+    });
+
+    it('leaves a landing for the captain in a project it’s off for', async () => {
+      const o = await shipped();
+      o.project.plugins = [];
+      for (const pr of o.lead().lead!.prs) o.agents.prClosed(pr.repo, pr.number, true);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
+    });
+
+    it('sends a QA fail back to the lead as the QA officer, a couple of rounds, then leaves it to the captain', async () => {
+      const o = await shipped();
+      const verdict = (failedRounds: number, lead = o.lead()) => o.chief.noted(lead, { from: 'QA officer Ada', text: 'QA failed acme/api#7', inTurn: false, about: { kind: 'qa-verdict', repo: 'acme/api', number: 7, verdict: 'fail', advisory: false, failedRounds, behind: false } });
+      verdict(3);
+      // nor for anyone but a goal's lead
+      verdict(1, { ...o.lead(), task: 'issue' });
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
+      verdict(1);
+      await until(() => o.claude.turns.length === 2);
+      expect(o.claude.turns[1].req.prompt).toBe("[QA officer Ada] Fix acme/api#7 and ship again (QA's verdict is just above), or tell the captain why not.");
+    });
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, afterVerdict, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedMidTurnNote, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipped, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { verdictStands, verdictToast, afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipped, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -234,10 +234,12 @@ describe('what the lead writes and hears', () => {
     );
   });
 
-  it('passes on QA’s verdict, with what to fix on a fail', () => {
+  it('passes on QA’s verdict as a note, with what to fix on a fail, leaving when to whoever wakes them', () => {
     expect(qaVerdictNote('acme/api', 7, { verdict: 'fail', summary: 'Empty list crashes', fixInstructions: 'Guard the empty case' })).toBe(
-      'QA failed acme/api#7: Empty list crashes\n\nWhat to fix: Guard the empty case\n\nFix it and ship again, or tell the captain why not.',
+      'QA failed acme/api#7: Empty list crashes\n\nWhat to fix: Guard the empty case',
     );
+    // nothing on when to fix it, which would contradict the message it comes with (the plugin's: fix it now)
+    expect(qaVerdictNote('acme/api', 7, { verdict: 'fail', summary: 'Broken' })).not.toMatch(/wait|asked/i);
     expect(qaVerdictNote('acme/web', 12, { verdict: 'pass', summary: 'Works' })).toMatch(/^QA passed acme\/web#12: Works\n\nIt waits for the captain to merge it\.$/);
     // a verdict on a commit the lead has shipped past says so, and that QA is on the latest
     expect(qaVerdictNote('acme/web', 12, { verdict: 'fail', summary: 'Broken' }, { tested: '815552ff4dd1', shipped: 'd01f0319aae5' })).toBe(
@@ -253,15 +255,13 @@ describe('what the lead writes and hears', () => {
     expect(proved).toContain('it("x")');
   });
 
-  it('tells the lead when the slice has landed, and where their repos are for the next one', () => {
+  it('tells the lead when the slice has landed, and when their repos move, without telling them to act on it', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
-    const idle = landedNote(landed);
-    // idle, they carry on with what's next, asking first only when it's the captain's call
-    expect(idle).toBe("Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Carry on with what's next, unless it's the captain's call.");
-    // mid-turn, they carry on: the move waits for their next turn
-    expect(landedMidTurnNote(landed)).toBe(
-      'Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Carry on where you are: your repos move to fresh code at the start of your next turn, bringing your commits along.',
+    // a note, heard with the next message they get: mid-turn or as a turn starts
+    expect(landedNote(landed)).toBe(
+      'Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Your repos move to fresh code at the start of your first turn after it landed, bringing your later commits along.',
     );
+    expect(landedNote(landed)).not.toMatch(/Carry on/);
     expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/lead-shop-3-cd')).toContain('Slice 3 starts on fresh code');
     expect(heldBack(work, ['api'])).toMatch(/\.\/api still has uncommitted changes, so your repos stay where they are/);
   });
@@ -282,18 +282,41 @@ describe('shipped', () => {
   });
 });
 
-describe('afterVerdict', () => {
-  it('wakes the lead to fix a fail a couple of times, then hands it to the captain; a pass waits for the next message', () => {
-    expect(afterVerdict('fail', 1, true)).toBe('wake');
-    expect(afterVerdict('fail', 2, true)).toBe('wake');
-    expect(afterVerdict('fail', 3, true)).toBe('needs-you');
-    expect(afterVerdict('pass', 0, true)).toBe('pass-on');
+describe('verdictStands', () => {
+  const idle = { wasIdle: true, finished: true, heard: false, queued: false, held: false };
+
+  it('leaves an idle lead nobody woke waiting on the captain, and one in a turn working', () => {
+    expect(verdictStands(idle)).toBe('idle');
+    expect(verdictStands({ ...idle, wasIdle: false, finished: false })).toBe('working');
   });
 
-  it('spends no turn on a fail when the project doesn’t send fails back: the lead hears it with the captain’s next message', () => {
-    expect(afterVerdict('fail', 1, false)).toBe('pass-on');
-    expect(afterVerdict('fail', 3, false)).toBe('pass-on');
-    expect(qaVerdictNote('acme/api', 7, { verdict: 'fail', summary: 'Broken' }, undefined, false)).toMatch(/Send-back is off for this project, so it waits for the captain: fix it when they ask you to\.$/);
+  it('counts a lead as woken when a message picked them up, is held for the plan limit, waits for a turn, or brought the note into their session', () => {
+    expect(verdictStands({ ...idle, finished: false })).toBe('woken');
+    // held for your plan's usage limit: the status stays finished, but they carry on as it resets
+    expect(verdictStands({ ...idle, held: true })).toBe('woken');
+    expect(verdictStands({ ...idle, queued: true })).toBe('woken');
+    // a message into a session still listening (idle, or mid-turn) took the note with it
+    expect(verdictStands({ ...idle, heard: true })).toBe('woken');
+    expect(verdictStands({ ...idle, wasIdle: false, finished: false, heard: true })).toBe('woken');
+  });
+});
+
+describe('verdictToast', () => {
+  const fail = { repo: 'acme/web', number: 12, verdict: 'fail' as const, failedRounds: 1, behind: false };
+
+  it('tells the captain a lead left waiting on a QA fail waits on them, and how many times it has failed', () => {
+    expect(verdictToast(fail, 'Lt. Okafor', 'idle')).toEqual({ level: 'error', text: '🙋 QA failed web#12: Lt. Okafor waits on you' });
+    expect(verdictToast({ ...fail, failedRounds: 3 }, 'Lt. Okafor', 'idle')?.text).toBe('🙋 QA failed web#12 3 times: Lt. Okafor waits on you');
+  });
+
+  it('says a lead in a turn hears it with their next message, and nothing of one a plugin woke for it', () => {
+    expect(verdictToast(fail, 'Lt. Okafor', 'working')).toEqual({ level: 'info', text: '🔧 QA failed web#12: Lt. Okafor hears it with their next message' });
+    expect(verdictToast(fail, 'Lt. Okafor', 'woken')).toBeUndefined();
+  });
+
+  it('says nothing of a pass, or a verdict on a commit the lead has shipped past', () => {
+    expect(verdictToast({ ...fail, verdict: 'pass' }, 'Lt. Okafor', 'idle')).toBeUndefined();
+    expect(verdictToast({ ...fail, behind: true }, 'Lt. Okafor', 'idle')).toBeUndefined();
   });
 });
 

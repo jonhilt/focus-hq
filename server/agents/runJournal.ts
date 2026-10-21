@@ -8,8 +8,12 @@ import type { Target } from './runMachine';
 // the facts add up to is a state machine's (`journalMachine`): each fact an event, the run's phase its state, so a run
 // is rebuilt by replaying its journal through it (`fold`).
 
-/** Where a message waits in the inbox: heard next (`end`, or `front` before the rest), or once the turn in hand ends (`later`). */
-export type QueuedAt = 'end' | 'front' | 'later';
+/**
+ * Where a message waits in the inbox: heard next (`end`, or `front` before the rest), or once the turn in hand ends
+ * (`later`). A `note` is news for a goal's lead (QA's verdict, a slice landing): it waits for the next message they hear,
+ * whoever's, and goes with it, but never starts a turn or carries one on by itself.
+ */
+export type QueuedAt = 'end' | 'front' | 'later' | 'note';
 
 /** What a turn was for: the agent's work, or Ops compacting their conversation. */
 export type TurnKind = 'work' | 'compact';
@@ -40,6 +44,8 @@ export type RunFact =
   | { kind: 'taken'; turn?: string }
   /** A message went straight into turn `turn`'s session, which was listening. */
   | { kind: 'sent'; turn: string; text: string }
+  /** The notes waiting went into turn `turn`'s session, which was listening, ahead of a message (`sent`, next). */
+  | { kind: 'notes-sent'; turn: string }
   /** The captain stopped turn `turn`: it's not one to pick back up after a restart. */
   | { kind: 'stop-requested'; turn: string }
   /** The agent was sent home: a new run starts from nothing (an id comes back for a reopened goal, QA's next review). */
@@ -124,6 +130,8 @@ export interface JournalContext {
   inbox: string[];
   /** Messages waiting for the turn in hand to end. */
   later: string[];
+  /** Notes for the next message the lead hears, whoever's: they go ahead of it, and never wake the lead by themselves. */
+  notes: string[];
   /** Messages taken for a turn's prompt, until that turn is requested. */
   owed: string[];
   /** The turn Ops started and hasn't seen end. */
@@ -148,11 +156,25 @@ export interface RunState extends JournalContext {
   seq: number;
 }
 
-const START: JournalContext = { inbox: [], later: [], owed: [], turns: 0 };
+const START: JournalContext = { inbox: [], later: [], notes: [], owed: [], turns: 0 };
 export const EMPTY_RUN: RunState = { ...START, phase: 'idle', seq: 0 };
 
 /** A fact as the machine's event: its kind is its type. */
 type JournalEvent = { [K in RunFact['kind']]: Extract<RunFact, { kind: K }> & { type: K } }[RunFact['kind']];
+
+/** The inbox with a message queued `at` where it waits. */
+function queuedAt(context: JournalContext, at: QueuedAt, text: string): Partial<JournalContext> {
+  switch (at) {
+    case 'later':
+      return { later: [...context.later, text] };
+    case 'note':
+      return { notes: [...context.notes, text] };
+    case 'front':
+      return { inbox: [text, ...context.inbox] };
+    case 'end':
+      return { inbox: [...context.inbox, text] };
+  }
+}
 
 /** The open turn, changed. */
 const onOpen = (context: JournalContext, f: (t: JournalTurn) => JournalTurn): Partial<JournalContext> => (context.open ? { open: f(context.open) } : {});
@@ -179,21 +201,19 @@ export const journalMachine = setup({
   context: START,
   initial: 'idle',
   on: {
-    queued: {
-      actions: assign(({ context, event }) =>
-        event.at === 'later' ? { later: [...context.later, event.text] } : { inbox: event.at === 'front' ? [event.text, ...context.inbox] : [...context.inbox, event.text] },
-      ),
-    },
+    queued: { actions: assign(({ context, event }) => queuedAt(context, event.at, event.text)) },
     released: { actions: assign(({ context }) => ({ inbox: [...context.inbox, ...context.later], later: [] })) },
+    // the notes go with what's taken, ahead of it
     taken: [
       // into the session of the turn in hand: heard in it
-      { guard: 'this turn', actions: assign(({ context }) => ({ ...onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), ...context.inbox] })), inbox: [] })) },
+      { guard: 'this turn', actions: assign(({ context }) => ({ ...onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), ...context.notes, ...context.inbox] })), inbox: [], notes: [] })) },
       // into a prompt: owed until its turn is asked for
-      { actions: assign(({ context, event }) => ({ inbox: [], owed: event.turn ? context.owed : [...context.owed, ...context.inbox] })) },
+      { actions: assign(({ context, event }) => ({ inbox: [], notes: [], owed: event.turn ? context.owed : [...context.owed, ...context.notes, ...context.inbox] })) },
     ],
     sent: { guard: 'this turn', actions: assign(({ context, event }) => onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), event.text] }))) },
+    'notes-sent': { guard: 'this turn', actions: assign(({ context }) => ({ ...onOpen(context, (t) => ({ ...t, sent: [...(t.sent ?? []), ...context.notes] })), notes: [] })) },
     restored: { actions: assign(({ context }) => ({ inbox: [...context.owed, ...context.inbox], owed: [] })) },
-    cleared: { actions: assign({ inbox: [], later: [], owed: [] }) },
+    cleared: { actions: assign({ inbox: [], later: [], notes: [], owed: [] }) },
     reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined, delivery: undefined, asking: undefined, heldUntil: undefined })) },
     held: { target: '.held', actions: assign(({ event }) => ({ heldUntil: event.until })) },
     // the last turn's work, onto GitHub (a cloud agent's nudge to push may have come between)
@@ -450,10 +470,11 @@ const ending = (o: TurnEnding): string =>
 
 /** Each fact, in words, for a replay. */
 const FACT_LINES: { [K in RunFact['kind']]: (fact: Extract<RunFact, { kind: K }>) => string } = {
-  queued: (f) => `Message for them${f.at === 'later' ? ', once the turn ends' : f.at === 'front' ? ', first' : ''}: ${brief(f.text)}`,
+  queued: (f) => (f.at === 'note' ? `Note for them, heard with their next message: ${brief(f.text)}` : `Message for them${f.at === 'later' ? ', once the turn ends' : f.at === 'front' ? ', first' : ''}: ${brief(f.text)}`),
   released: () => 'What waited for the turn to end joins the inbox',
   taken: (f) => (f.turn ? 'Messages sent into the turn' : 'Messages taken into the next prompt'),
   sent: (f) => `Sent into the turn: ${brief(f.text)}`,
+  'notes-sent': () => 'Notes sent into the turn, ahead of a message',
   'stop-requested': () => 'The captain stopped the turn',
   reset: () => 'Sent home: a new run starts from nothing',
   restored: () => 'Messages put back in the inbox after a restart',

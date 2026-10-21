@@ -171,11 +171,16 @@ function opened(lead: LeadInfo, turn: string, session: string | undefined, at: n
   };
 }
 
-/** A message while a card is open: noted, and a `sent` one (into a session still listening) is what woke the lead. */
-function heard(open: Open, entry: { kind: 'queued' | 'sent'; text: string; t: number }): void {
+/**
+ * A message while a card is open: noted, and a `sent` one (into a session still listening) is what woke the lead. A
+ * note (`at: 'note'`) wakes nobody: it waits for whatever does.
+ */
+function heard(open: Open, entry: { kind: 'queued' | 'sent'; text: string; t: number; at?: string }): void {
   const message: CardMessage = { sender: senderOf(entry.text), at: entry.t, text: clip(entry.text), how: entry.kind };
   open.card.messages.push(message);
-  if (entry.kind === 'queued') open.lastQueued = message;
+  if (entry.kind === 'queued') {
+    if (entry.at !== 'note') open.lastQueued = message;
+  }
   else if (open.card.wokeAt === undefined) Object.assign(open.card, { wokeAt: entry.t, waker: message });
 }
 
@@ -214,7 +219,8 @@ export function leadCards(lead: LeadInfo, entries: readonly JournalEntry[], { ve
   let later: { text: string; t: number }[] = [];
   let open: Open | undefined;
   const finish = (card: Card) => {
-    const mergedBy = card.by === 'slice-landed' && card.waker ? landedBy(card.waker.text, merges) : undefined;
+    // the landing's note names its pull requests; a plugin's words waking the lead for it may not
+    const mergedBy = card.by === 'slice-landed' ? [card.waker, ...card.messages].map((m) => (m?.sender === 'slice-landed' ? landedBy(m.text, merges) : undefined)).find(Boolean) : undefined;
     cards.push(mergedBy ? { ...card, mergedBy } : card);
   };
   for (const e of entries) {

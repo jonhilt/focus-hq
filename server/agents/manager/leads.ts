@@ -1,4 +1,4 @@
-import { autoSendBackFor, prKey } from '../../../shared/qa';
+import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
 import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
@@ -6,11 +6,12 @@ import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { afterVerdict, closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedMidTurnNote, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
+import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
-import { type ManagerServices, Part, Refused, type WorkError } from './core';
+import type { LeadNews } from '../../plugins/contract';
+import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
 export class Leads extends Part {
@@ -302,7 +303,6 @@ export class Leads extends Part {
     return [...this.store.agents.values()].find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === repo && p.number === number && !p.outcome));
   }
 
-  /** QA's verdict on one of the lead's pull requests: a fail wakes the lead to fix it, a couple of times at most. */
   /**
    * QA's verdict on a lead's pull request goes on its slice's waypoint as its shield, with its spot-checks and how CI
    * stood: the review and the board's entry are both gone by the time the pull request lands.
@@ -371,31 +371,46 @@ export class Leads extends Part {
     return started;
   }
 
+  /**
+   * QA's verdict on one of the lead's pull requests: a note, heard with the next message they get, since only the
+   * captain starts a lead's next turn. A fail tells the captain, unless whoever heard of the note woke the lead for it;
+   * one that comes mid-turn tells them again if the turn ends without the lead hearing it (`leadWentIdle`).
+   */
   leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind): void {
     const lead = this.leadWith(repo, number);
     if (!lead) return;
-    const sendBack = autoSendBackFor(this.store.project(lead.projectId));
-    const text = qaVerdictNote(repo, number, report, behind, sendBack);
-    // a verdict on a commit they've shipped past costs no turn: the one on their latest will
-    const step = behind ? 'pass-on' : afterVerdict(report.verdict, failedRounds, sendBack);
-    if (step === 'wake') {
-      this.core.comms.message(lead.id, text, from);
-      return;
-    }
-    // no turn spent on it: the lead hears it with the captain's next message
-    this.noteForLead(lead, from, text);
-    if (step === 'needs-you') this.hub.toast('error', `🙋 QA failed ${repo.split('/')[1]}#${number} ${failedRounds} times: ${lead.name} needs you to look`, lead.id);
+    const wasIdle = FINISHED.includes(lead.status);
+    const verdict = { repo, number, verdict: report.verdict, failedRounds, behind: !!behind };
+    const note = this.noteForLead(lead, from, qaVerdictNote(repo, number, report, behind), { kind: 'qa-verdict', ...verdict, advisory: !!report.advisory });
+    const now = this.store.agents.get(lead.id) ?? lead;
+    const rt = this.rt(lead.id);
+    const stands = verdictStands({ wasIdle, finished: FINISHED.includes(now.status), heard: !rt.inbox.notes.includes(note), queued: rt.inbox.length > 0, held: !!now.held });
+    const toast = verdictToast(verdict, lead.name, stands);
+    if (toast) this.hub.toast(toast.level, toast.text, lead.id);
+    const waiting = stands === 'working' && verdictToast(verdict, lead.name, 'idle');
+    rt.failNoted = waiting ? { note, toast: waiting.text } : undefined;
+  }
+
+  /** A goal's lead's turn ended with nothing to carry them on: a QA fail noted mid-turn that they haven't heard waits on the captain. */
+  leadWentIdle(lead: Agent): void {
+    const rt = this.rt(lead.id);
+    const waiting = rt.failNoted;
+    rt.failNoted = undefined;
+    if (waiting && rt.inbox.notes.includes(waiting.note)) this.hub.toast('error', waiting.toast, lead.id);
   }
 
   /**
-   * News for a lead that needn't cost them a turn: it waits for the end of the one they're in (an inbox that fills during
-   * a turn carries them on into another), then goes with whatever they hear next.
+   * News for a goal's lead that costs them no turn: a note (`Inbox.note`), which goes with the next message they hear,
+   * mid-turn or as a turn starts, and never wakes them or carries them on by itself. The plugins hear of it (`about`
+   * what), and one may wake the lead for it: its message brings the note along. Returns the note as it's kept.
    */
-  noteForLead(lead: Agent, from: string, text: string): void {
+  noteForLead(lead: Agent, from: string, text: string, about: LeadNews = { kind: 'other' }): string {
     this.print(lead, [{ kind: 'manager', text: `▶ ${from}: ${text}` }]);
     const rt = this.rt(lead.id);
-    if (rt.busy) rt.inbox.later(`[${from}] ${text}`);
-    else rt.inbox.push(`[${from}] ${text}`);
+    const note = `[${from}] ${text}`;
+    rt.inbox.note(note);
+    this.core.plugins.leadNoted(lead, { from, text, inTurn: rt.busy || !!rt.session, about });
+    return note;
   }
 
   /** The lead's pull request was merged or closed. Once the slice's have all landed, the lead hears about it. */
@@ -408,8 +423,8 @@ export class Leads extends Part {
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
     if (sliceLanded(prs)) {
       this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
-      // a lead in the middle of a turn carries on: their repos only move at the start of the next one
-      this.core.comms.message(lead.id, (this.rt(lead.id).busy ? landedMidTurnNote : landedNote)(lead.lead), 'Ops');
+      // their repos move at the start of their next turn, which the captain starts (or a plugin, for this)
+      this.noteForLead(lead, 'Ops', landedNote(lead.lead), { kind: 'slice-landed', slice: lead.lead.slice });
     }
     return true;
   }

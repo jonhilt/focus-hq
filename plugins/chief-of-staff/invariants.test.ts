@@ -24,11 +24,12 @@ const chief: Subject<Kept> = {
     const life = (later: Later): Running<Kept> => {
       const host: ChiefHost = {
         on: () => true,
+        projects: () => [],
         transcript: () => Promise.resolve(transcript.join('\n')),
         record: (projectId, entry) => void ledger.push({ ...entry, projectId, at: ledger.length, seq: ledger.length + 1 }),
         ledger: () => [...ledger],
         settings: () => settings,
-        goals: { judged: () => undefined },
+        goals: { judged: () => undefined, message: () => ({ sent: true }) },
       };
       // the model answering is a step out there: a restart can fall while it does
       const judge: Judge = { model: 'haiku', judge: () => later('haiku', () => Promise.resolve({ structured: { route: 2, why: 'A pick.', message: '' } })) };

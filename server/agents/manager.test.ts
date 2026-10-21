@@ -9,6 +9,7 @@ import { openQuestion } from '../../shared/artifacts';
 import { demoLayer } from '../github/demo';
 import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
+import { Hub } from '../hub';
 import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
 import { focus, restarted, until } from './fakeFocus';
@@ -751,7 +752,7 @@ describe('AgentManager', () => {
     expect(store.reviews.get(prKey(pr.repo, pr.number))).toMatchObject({ status: 'queued', shippedHead: 'merge-sha1234' });
   });
 
-  it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
+  it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull with the captain’s next message', async () => {
     const auto = ['CLAUDE.md', 'client/public/ship/holodeck-deck.glb'];
     const { agents, claude, store, project } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
@@ -778,6 +779,96 @@ describe('AgentManager', () => {
     const heard = [leads()[1].req.prompt, ...leads()[1].sent].join('\n\n');
     expect(heard).toMatch(new RegExp(`^\\[Ops\\] ${pr.repo}#${pr.number} had merge conflicts with \`main\`: Ops merged`));
     expect(heard).toContain('How did it go?');
+  });
+
+  it('sends a developer their PR’s conflicts as Ops’ news, never as the captain’s words', async () => {
+    const { agents, claude, store, project } = focus();
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' });
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].end({ ok: true, summary: 'Dark mode toggle' });
+    await until(() => store.agent(id).status === 'done' && !!store.agent(id).pr);
+    const pr = store.agent(id).pr!;
+    const outcome = await agents.resolveConflicts(project.id, { repo: 'demo/webshop-frontend', number: pr.number, title: 'Dark mode', url: pr.url, branch: store.agent(id).branch, baseBranch: 'main' } as PullRequest);
+    expect(outcome).toMatchObject({ kind: 'agent', agent: { id } });
+    await until(() => claude.turns.filter((t) => t.req.agentId === id).length === 2);
+    expect(claude.turns.filter((t) => t.req.agentId === id)[1].req.prompt).toMatch(/^\[Ops\] Pull request #\d+ \(branch `.*`\) has merge conflicts with `main`/);
+  });
+
+  describe('QA’s verdict on a goal’s pull request', () => {
+    const failed: QaReport = { verdict: 'fail', summary: 'Empty list crashes', fixInstructions: 'Guard the empty case', checks: [], commands: [], captions: [] };
+    /** A lead whose slice is shipped and whose turn has ended, and QA failing its first pull request. */
+    async function shippedAndIdle(plugins: Parameters<AgentManager['startPlugins']>[0] = []) {
+      const o = focus();
+      o.project.autoSendBack = true;
+      if (plugins.length) o.agents.startPlugins(plugins, { demo: false, ownRepo: () => undefined });
+      const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+      const leads = () => o.claude.turns.filter((t) => t.req.agentId === lead.id);
+      await until(() => leads().length === 1);
+      await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+      leads()[0].end({ ok: true, summary: 'Shipped' });
+      await until(() => o.store.agent(lead.id).status === 'done');
+      const [pr] = o.store.agent(lead.id).lead!.prs;
+      const core = Reflect.get(o.agents, 'core') as { leads: { leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number): void } };
+      const toasts = vi.spyOn(Hub.prototype, 'toast');
+      const fail = (rounds = 1) => core.leads.leadHearsVerdict(pr.repo, pr.number, 'QA officer Ada', failed, rounds);
+      return { ...o, lead: lead.id, leads, pr, fail, toasts };
+    }
+
+    it('is a note for the captain’s next message, even with send-back on, and the captain hears the lead waits on them', async () => {
+      const o = await shippedAndIdle();
+      o.fail();
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.leads()).toHaveLength(1);
+      expect(o.store.agent(o.lead).status).toBe('done');
+      expect(o.toasts).toHaveBeenCalledWith('error', `🙋 QA failed ${o.pr.repo.split('/')[1]}#${o.pr.number}: ${o.store.agent(o.lead).name} waits on you`, o.lead);
+      o.toasts.mockRestore();
+
+      o.agents.message(o.lead, 'Fix it, please');
+      await until(() => o.leads().length === 2);
+      expect(o.leads()[1].req.prompt).toBe(`[QA officer Ada] QA failed ${o.pr.repo}#${o.pr.number}: Empty list crashes\n\nWhat to fix: Guard the empty case\n\nFix it, please`);
+    });
+
+    it('tells the captain a lead waits on them when a fail noted mid-turn is still unheard as the turn ends', async () => {
+      const o = await shippedAndIdle();
+      o.agents.message(o.lead, 'Look at the copy');
+      await until(() => o.leads().length === 2);
+      o.fail();
+      const name = o.store.agent(o.lead).name;
+      const failed = `QA failed ${o.pr.repo.split('/')[1]}#${o.pr.number}`;
+      expect(o.toasts).toHaveBeenCalledWith('info', `🔧 ${failed}: ${name} hears it with their next message`, o.lead);
+      expect(o.toasts).not.toHaveBeenCalledWith('error', expect.anything(), o.lead);
+      o.leads()[1].end({ ok: true, summary: 'Fixed the copy' });
+      await until(() => o.store.agent(o.lead).status === 'done');
+      expect(o.toasts).toHaveBeenCalledWith('error', `🙋 ${failed}: ${name} waits on you`, o.lead);
+      o.toasts.mockRestore();
+    });
+
+    it('says nothing more as the turn ends when the lead heard the fail mid-turn', async () => {
+      const o = await shippedAndIdle();
+      o.agents.message(o.lead, 'Look at the copy');
+      await until(() => o.leads().length === 2);
+      o.fail();
+      o.agents.message(o.lead, 'And the fail');
+      await until(() => o.leads()[1].sent.length > 0 || o.leads().length > 2);
+      o.leads().at(-1)!.end({ ok: true, summary: 'Fixed both' });
+      await until(() => o.store.agent(o.lead).status === 'done');
+      expect(o.toasts).not.toHaveBeenCalledWith('error', expect.anything(), o.lead);
+      o.toasts.mockRestore();
+    });
+
+    it('wakes the lead when a plugin sends them a message for it, and then the captain isn’t told they wait', async () => {
+      const o = await shippedAndIdle([{
+        id: 'waker',
+        start: (host) => ({ leadNoted: (lead, note) => void (note.about.kind === 'qa-verdict' && host.goals.message(lead.id, 'Fix it.', { from: note.from })) }),
+      }]);
+      o.fail();
+      await until(() => o.leads().length === 2);
+      expect(o.leads()[1].req.prompt).toMatch(/^\[QA officer Ada\] QA failed .*\n\n\[QA officer Ada\] Fix it\.$/s);
+      // the note leaves when to the message it comes with
+      expect(o.leads()[1].req.prompt).not.toMatch(/waits on the captain/);
+      expect(o.toasts).not.toHaveBeenCalledWith('error', expect.stringContaining('QA failed'), o.lead);
+      o.toasts.mockRestore();
+    });
   });
 
   it('seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead', async () => {
@@ -881,7 +972,7 @@ describe('AgentManager', () => {
     expect(pushes).toBe(1);
   });
 
-  it('carries the goal into the next slice, as the captain put it, once the last one has landed', async () => {
+  it('carries the goal into the next slice, as the captain put it, at the captain’s next message once the last one has landed', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
@@ -891,6 +982,13 @@ describe('AgentManager', () => {
     await until(() => store.agent(lead.id).status === 'done');
 
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    // only the captain starts a goal lead's next turn: the landing is a note for then
+    await new Promise((r) => setTimeout(r, 30));
+    expect(leads()).toHaveLength(1);
+    expect(store.agent(lead.id).status).toBe('done');
+    expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/)]);
+
+    agents.message(lead.id, 'Go on');
     // the conversation carries on as it is: compacting is the captain's call
     await until(() => leads().length === 2);
     const next = leads()[1].req;
@@ -898,10 +996,10 @@ describe('AgentManager', () => {
     expect(next.prompt).toMatch(/^Slice 2 starts on fresh code/);
     expect(next.prompt).not.toContain('summarised');
     expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
-    expect(next.prompt).toMatch(/\[Ops\] Slice 1 has landed/);
+    expect(next.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\nGo on$/);
   });
 
-  it('tells a lead whose slice lands mid-turn to carry on, and moves their repos at the start of the next turn', async () => {
+  it('tells a lead whose slice lands mid-turn nothing until the captain’s next message, and moves their repos at the start of the next turn', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
@@ -909,17 +1007,58 @@ describe('AgentManager', () => {
     await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
     const branch = store.agent(lead.id).branch;
 
-    // still in the turn they shipped from when the pull requests merge
+    // still in the turn they shipped from when the pull requests merge: nothing goes into it
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
-    const sent = leads()[0].sent.join('\n');
-    expect(sent).toMatch(/^\[Ops\] Slice 1 has landed: .* Carry on where you are: your repos move to fresh code at the start of your next turn/);
+    expect(leads()[0].sent).toEqual([]);
     expect(store.agent(lead.id).branch).toBe(branch);
 
+    // and its end doesn't carry them on
     leads()[0].end({ ok: true, summary: 'Finished the next piece' });
     await until(() => store.agent(lead.id).status === 'done');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(leads()).toHaveLength(1);
     agents.message(lead.id, 'Go ahead');
     await until(() => leads().length === 2);
     expect(leads()[1].req.prompt).toMatch(/^Slice 2 starts on fresh code/);
+    expect(leads()[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\nGo ahead$/);
+  });
+
+  it('hands a lead mid-turn their notes with the captain’s message into the turn, ahead of it', async () => {
+    const { agents, claude, store, project } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    agents.message(lead.id, 'And the header');
+    expect(leads()[0].sent).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/), 'And the header']);
+    expect(store.run(lead.id).notes).toEqual([]);
+    expect(store.run(lead.id).open?.sent).toEqual(leads()[0].sent);
+  });
+
+  it('lets a plugin wake a goal’s lead for a note, which goes ahead of its message', async () => {
+    const { agents, claude, store, project } = focus();
+    const heard: { from: string; about: string; inTurn: boolean }[] = [];
+    agents.startPlugins([{
+      id: 'waker',
+      start: (host) => ({
+        leadNoted: (lead, note) => {
+          heard.push({ from: note.from, about: note.about.kind, inTurn: note.inTurn });
+          if (note.about.kind === 'slice-landed') host.goals.message(lead.id, 'Carry on.', { from: note.from });
+        },
+      }),
+    }], { demo: false, ownRepo: () => undefined });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    await until(() => leads().length === 2);
+    expect(heard).toEqual([{ from: 'Ops', about: 'slice-landed', inTurn: false }]);
+    expect(leads()[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\n\[Ops\] Carry on\.$/);
   });
 
   it('finishes the move to a new slice on their next message when its checkout failed', async () => {
@@ -944,6 +1083,7 @@ describe('AgentManager', () => {
 
     failNext = true;
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    agents.message(lead.id, 'Go on');
     await until(() => store.agent(lead.id).status === 'error');
     expect(leads()).toHaveLength(1);
     expect(store.agent(lead.id).lead!.repos).toEqual([]);
@@ -979,6 +1119,7 @@ describe('AgentManager', () => {
     const firstBranch = store.agent(lead.id).branch;
 
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    agents.message(lead.id, 'Go on');
     await until(() => leads().length === 2);
     expect(picked.map((p) => p.commits)).toEqual([['web-next'], ['api-next']]);
     const next = leads()[1].req.prompt;
