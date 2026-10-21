@@ -47,7 +47,12 @@ const answer = (agent: Agent, fn: () => Promise<unknown>) => async () => {
 };
 
 const said = (agent: Agent) => lastWords(state.lines.get(agent.id) ?? []);
-const open = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew', onclick: () => ui.openAgent(agent.id) }, label);
+/** Opens the agent's panel from Comms: Esc comes back to the same item. */
+export const openFromComms = (ui: Ui, id: string) => {
+  ui.openAgent(id);
+  ui.panels.backTo('Comms', () => ui.openComms());
+};
+const open = (ui: Ui, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew (G)', onclick: () => openFromComms(ui, agent.id) }, label);
 
 /** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. */
 function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
@@ -69,12 +74,12 @@ function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
  * by themselves when they're due (`CosRead.sendsAt`), counted down here, unless the captain holds them.
  */
 function sendBox(ui: Ui, a: Attention & { agent: Agent }, words: string): HTMLElement[] {
-  const send = h('button', { class: 'btn small primary', title: 'Send the lead these words, from the chief of staff' }, 'Send the chief of staff’s words');
+  const send = h('button', { class: 'btn small primary', title: 'Send the lead these words, from the chief of staff (Enter)', attrs: { 'data-act': 'send' } }, 'Send the chief of staff’s words');
   send.onclick = () => void busy(send, answer(a.agent, () => api.decide(keyOf(a), { send: true })), ui.error);
   const sendsAt = a.agent.lead?.cos?.sendsAt;
   const row = h('div', { class: 'row' }, send);
   if (sendsAt !== undefined) {
-    const hold = h('button', { class: 'btn small', title: 'Keep these words here until you send them, or reply in your own' }, 'Hold');
+    const hold = h('button', { class: 'btn small', title: 'Keep these words here until you send them, or reply in your own (H)', attrs: { 'data-act': 'hold' } }, 'Hold');
     hold.onclick = () => void busy(hold, () => api.hold(keyOf(a)), ui.error);
     const left = h('small', { class: 'muted cos-countdown' });
     // counts down while it's on screen, and stops once it's gone from it
@@ -116,8 +121,8 @@ function pickBox(ui: Ui, agent: Agent): HTMLElement[] {
   const q = openQuestion(agent);
   if (!q) return [];
   const note = h('input', { class: 'briefing-note', placeholder: 'Add a word with your pick (optional)' });
-  const options = q.options.map((o) => {
-    const pick = h('button', { class: 'btn small primary' }, `Pick ${o.id.toUpperCase()}`);
+  const options = q.options.map((o, i) => {
+    const pick = h('button', { class: 'btn small primary', title: `Pick it (${i + 1})`, attrs: { 'data-act': `pick-${i + 1}` } }, `Pick ${o.id.toUpperCase()}`);
     pick.onclick = () => void busy(pick, answer(agent, () => answerLead(agent.id, q.id, o.id, note.value.trim() || undefined)), ui.error);
     return h('div', { class: 'briefing-option' },
       o.image ? h('img', { src: optionUrl(agent.id, q, o.id, 'jpg'), alt: o.label }) : null,
@@ -138,8 +143,8 @@ function body(ui: Ui, a: Attention): { context: string; answers: HTMLElement[]; 
   switch (a.kind) {
     case 'hand': {
       const req = a.agent.permission;
-      const allow = h('button', { class: 'btn small go' }, 'Approve');
-      const deny = h('button', { class: 'btn small danger' }, 'Decline');
+      const allow = h('button', { class: 'btn small go', title: 'Approve (A)', attrs: { 'data-act': 'allow' } }, 'Approve');
+      const deny = h('button', { class: 'btn small danger', title: 'Decline (D)', attrs: { 'data-act': 'decline' } }, 'Decline');
       if (req) {
         allow.onclick = () => void busy(allow, answer(a.agent, () => api.permission(a.agent.id, req.id, true)), ui.error);
         deny.onclick = () => void busy(deny, answer(a.agent, () => api.permission(a.agent.id, req.id, false)), ui.error);

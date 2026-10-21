@@ -153,6 +153,7 @@ export class Office {
     this.broadcastProjects();
     // a plugin switched on (or off) for the project starts (or stops) its work there
     if (followUps.plugins) this.agents.plugins.projectChanged(id);
+    if (followUps.holdSends) for (const agent of this.store.agentsIn(id)) this.agents.holdSend(agent.id);
     if (followUps.schedule) {
       this.agents.schedule();
       this.boardChanged(id, 0);

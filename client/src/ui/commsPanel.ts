@@ -13,10 +13,22 @@ import { LCARS } from '../world/starship';
 import { focusIndex, keptOrder } from './briefing';
 import type { Ui } from './context';
 import { fill, h, timeAgo } from './dom';
-import { keyOf, needCard, needs, TONE } from './needCard';
+import { COMMS_KEYS, commsKey } from './commsKeys';
+import { keyOf, needCard, needs, openFromComms, TONE } from './needCard';
 
 /** How many of the captain's recent decisions Comms lists. */
 const DECIDED_SHOWN = 8;
+
+/** The item the captain had picked when Comms last closed: it opens on it again, while it's still waiting. */
+let kept: string | null = null;
+
+/** When the chief of staff's words go by themselves, on the queue's line: to the minute, as the line is redrawn every few seconds. */
+const sendsIn = (a: Attention, now: number): string => {
+  const at = a.kind === 'turn' ? a.agent.lead?.cos?.sendsAt : undefined;
+  if (at === undefined) return '';
+  const min = Math.ceil((at - now) / 60_000);
+  return min > 1 ? `⏱ sends itself in ${min} min` : '⏱ sends itself within a minute';
+};
 
 const beam = (ui: Ui, agent: Agent) => h('button', { class: 'btn small', title: 'Teleport to them', onclick: () => ui.goToAgent(agent.id) }, 'Beam there');
 
@@ -30,6 +42,7 @@ function queueRow(a: Attention, pick: () => void): HTMLElement {
     h('div', { class: 'need-what', title: what }, h('span', { class: 'need-icon' }, icon), what),
     h('div', { class: 'inbox-where' }, project ? h('b', { style: `color:${project.color}` }, project.name) : null, project ? ' · ' : null, goal),
     h('small', { class: 'need-from' }, who, ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
+    h('small', { class: 'need-sends' }),
   );
 }
 
@@ -53,7 +66,7 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
       h('div', null, h('strong', null, lead.lead?.title ?? lead.issue.title), project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
       h('small', { class: 'muted' }, `${lead.name} · ${goalState(lead)} · ${statusLine(lead)}`, ...goalTags(lead, 'line').map((tag) => tag.el)),
     ),
-    h('button', { class: 'btn small', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
+    h('button', { class: 'btn small', onclick: () => openFromComms(ui, lead.id) }, 'Talk'),
     beam(ui, lead),
   );
 }
@@ -68,7 +81,7 @@ function underWayRow(ui: Ui, lead: Agent): HTMLElement {
  * as their panel does. The queue keeps its order while it's open (`keptOrder`), so nothing moves under the pointer.
  */
 export function openCommsPanel(ui: Ui): void {
-  let picked: string | null = null;
+  let picked: string | null = kept;
   let shown: string | null = null;
   let at = 0;
   let order: string[] = [];
@@ -83,11 +96,12 @@ export function openCommsPanel(ui: Ui): void {
   const underWayHead = h('h3', null, 'Under way');
   const underWay = h('div', { class: 'under-way-list' });
   const gateways = h('div', { class: 'row' });
-  const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next' }, 'Later ›');
+  const later = h('button', { class: 'btn small', title: 'Leave it in the queue and look at the next (J)' }, 'Later ›');
+  const keysHint = h('small', { class: 'muted comms-keys' }, COMMS_KEYS);
   const detail = h('div', { class: 'inbox-detail' });
   const body = h('div', { class: 'comms inbox' },
     h('div', { class: 'inbox-left' }, queueHead, queue, reading, readyHead, ready, decidedHead, decided, underWayHead, underWay, h('h3', null, 'Goals'), gateways),
-    h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, later), detail),
+    h('div', { class: 'inbox-right' }, h('div', { class: 'inbox-head' }, keysHint, later), detail),
   );
 
   const render = (step = 0) => {
@@ -101,7 +115,7 @@ export function openCommsPanel(ui: Ui): void {
     // what needs the captain first, then what's ready to send, each in the order it's kept
     const items = [...keys.flatMap((k) => byKey.get(k) ?? [])].sort((a, b) => Number(laneOf(a, now) === 'ready') - Number(laneOf(b, now) === 'ready'));
     const keyed = items.map(keyOf);
-    const i = focusIndex(keyed, step ? null : picked, step && keyed.length ? (at + step) % keyed.length : at);
+    const i = focusIndex(keyed, step ? null : picked, step && keyed.length ? (((at + step) % keyed.length) + keyed.length) % keyed.length : at);
     const readyCount = items.filter((a) => laneOf(a, now) === 'ready').length;
     const needCount = items.length - readyCount;
     queueHead.textContent = needCount ? `Needs you (${needCount})` : 'Needs you';
@@ -120,6 +134,8 @@ export function openCommsPanel(ui: Ui): void {
       const row = next.get(`${keyOf(a)}|${laneOf(a, now)}`);
       row?.classList.toggle('read', a.kind === 'turn' && turnRead(a.agent));
       row?.classList.toggle('sel', keyOf(a) === keyed[i]);
+      const sends = row?.querySelector('.need-sends');
+      if (sends) sends.textContent = sendsIn(a, now);
     }
     if ([...next.keys()].join('|') !== [...rows.keys()].join('|') || !queue.childElementCount) {
       const rowsIn = (lane: 'needs-you' | 'ready') => items.filter((a) => (laneOf(a, now) === 'ready') === (lane === 'ready')).flatMap((a) => next.get(`${keyOf(a)}|${laneOf(a, now)}`) ?? []);
@@ -141,7 +157,7 @@ export function openCommsPanel(ui: Ui): void {
     }));
 
     if (i < 0) {
-      picked = shown = null;
+      picked = shown = kept = null;
       fill(detail, h('div', { class: 'briefing-card briefing-clear' },
         h('div', { class: 'briefing-what' }, h('span', null, '✓'), 'Nothing needs you.'),
         h('small', { class: 'muted' }, going.length ? `${going.length} goal${going.length === 1 ? '' : 's'} under way without you.` : 'No goals under way.'),
@@ -149,7 +165,7 @@ export function openCommsPanel(ui: Ui): void {
       return;
     }
     at = i;
-    picked = keyed[i];
+    picked = kept = keyed[i];
     const a = items[i];
     // rebuilt only when it's another item (or the chief of staff has judged it since, or it's held), so a reply being written isn't
     // wiped by the next update
@@ -161,6 +177,23 @@ export function openCommsPanel(ui: Ui): void {
   };
   later.onclick = () => render(1);
 
+  // by keyboard (commsKeys.ts): never while the captain is writing in the pane
+  const onKey = (e: KeyboardEvent) => {
+    const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+    const act = commsKey(e, typing);
+    if (!act) return;
+    e.preventDefault();
+    if ('move' in act) return render(act.move);
+    if ('press' in act) return detail.querySelector<HTMLButtonElement>(`[data-act="${act.press}"]:not(:disabled)`)?.click();
+    if ('reply' in act) return detail.querySelector('textarea')?.focus();
+    const a = needs().find((n) => keyOf(n) === picked);
+    if (a && 'agent' in a) openFromComms(ui, a.agent.id);
+    else if (a) {
+      ui.openBoard(a.projectId);
+      ui.panels.backTo('Comms', () => ui.openComms());
+    }
+  };
+
   // what the captain decided lately is the ledger's, asked for again whenever the ledger grows
   const showDecided = () =>
     void api.inbox().then(({ decided: ds }) => {
@@ -170,6 +203,8 @@ export function openCommsPanel(ui: Ui): void {
     }, () => undefined);
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
+  window.addEventListener('keydown', onKey);
+  ui.panels.own(() => window.removeEventListener('keydown', onKey));
   render();
   // a turn the chief of staff hasn't judged in a minute comes out of hiding by itself
   const tick = setInterval(() => render(), 5000);

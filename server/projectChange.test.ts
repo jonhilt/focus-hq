@@ -164,6 +164,12 @@ describe('projectChangeFollowUps', () => {
     expect(projectChangeFollowUps({ maxAgents: 1 }).schedule).toBe(true);
     expect(projectChangeFollowUps({ autoAssign: false, autoMerge: false }).schedule).toBe(false);
     expect(projectChangeFollowUps({ autoAssign: 'no' }).schedule).toBe(false);
-    expect(projectChangeFollowUps(null)).toEqual({ plugins: false, schedule: false });
+    expect(projectChangeFollowUps(null)).toEqual({ plugins: false, schedule: false, holdSends: false });
+  });
+
+  it('holds the chief of staff’s words counting down to go by themselves once auto-send goes off', () => {
+    expect(projectChangeFollowUps({ cosAutoSend: false }).holdSends).toBe(true);
+    expect(projectChangeFollowUps({ cosAutoSend: true }).holdSends).toBe(false);
+    expect(projectChangeFollowUps({ name: 'x' }).holdSends).toBe(false);
   });
 });

@@ -213,6 +213,7 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 /* buttons on the header bar are segments of it: square, label at the bottom right, a gap from the elbow */
 .panel-head > .btn { border-radius: 0; display: flex; align-items: flex-end; gap: 6px; padding: 0 10px 4px; font-size: 14px; }
 .panel-head > .btn:first-child { margin-left: var(--gap); }
+.panel-head > .panel-back { background: var(--accent-c); color: #000; }
 .panel-close {
   flex: none; border: none; cursor: pointer; background: var(--accent-c); color: var(--ink); border-radius: 0 999px 999px 0;
   padding: 0 20px 4px 12px; display: flex; align-items: flex-end; font-weight: 600; font-size: 15px; text-transform: uppercase; letter-spacing: 0.08em;
@@ -859,6 +860,8 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .need-icon { font-size: 18px; }
 .need-what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .need-from { display: block; color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.need-sends { display: block; color: var(--lcars-lilac); }
+.need-sends:empty { display: none; }
 /* a lead's turn you've read: still waiting for your reply, but quieter */
 .need.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); opacity: 0.75; }
 .under-way-list { display: flex; flex-direction: column; gap: 6px; }
@@ -869,7 +872,8 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 /* Comms' inbox (commsPanel.ts): the queue on the left, the one picked on the right, each scrolling on its own */
 .comms.inbox { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 18px; height: 100%; min-height: 0; }
 .inbox-left, .inbox-right { overflow-y: auto; min-height: 0; padding-right: 6px; }
-.inbox-head { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.inbox-head { display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-bottom: 8px; }
+.comms-keys { flex: 1; font-size: 11px; }
 .inbox-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 0; }
 .inbox-row:hover { background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
 .inbox-row.sel { background: color-mix(in srgb, var(--tone) 22%, var(--surface-2)); outline: 2px solid var(--tone); outline-offset: -2px; }

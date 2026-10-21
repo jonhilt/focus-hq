@@ -30,6 +30,8 @@ export class Panels {
   private overlay: HTMLDivElement | null = null;
   private nav: PanelNav | undefined;
   private cleanups: (() => void)[] = [];
+  /** Where Esc goes from this panel, when it was opened from another (`backTo`). */
+  private back: (() => void) | undefined;
   onOpen: () => void = () => undefined;
   onClose: () => void = () => undefined;
 
@@ -40,7 +42,8 @@ export class Panels {
       if (e.key === 'Escape' && document.fullscreenElement) return;
       if (e.key === 'Escape') {
         e.preventDefault();
-        this.close();
+        if (this.back) this.goBack();
+        else this.close();
       }
       // e.code, since Alt+digit types a symbol on a Mac
       const digit = /^Digit([1-9])$/.exec(e.code);
@@ -94,8 +97,26 @@ export class Panels {
     this.cleanups.push(cleanup);
   }
 
+  /**
+   * The panel just opened was opened from another (`label`): Esc, and a ‹ button on its header bar, go back there
+   * (`go` opens it again) rather than closing. Call it once `open` has run.
+   */
+  backTo(label: string, go: () => void): void {
+    if (!this.overlay) return;
+    this.back = go;
+    const back = h('button', { class: 'btn panel-back', title: `Back to ${label} (Esc)`, onclick: () => this.goBack() }, `‹ ${label}`);
+    this.overlay.querySelector('.panel-head')?.prepend(back);
+  }
+
+  private goBack(): void {
+    const go = this.back;
+    this.close(false);
+    go?.();
+  }
+
   close(notify = true): void {
     if (!this.overlay) return;
+    this.back = undefined;
     for (const fn of this.cleanups.splice(0)) fn();
     this.overlay.remove();
     this.overlay = null;
