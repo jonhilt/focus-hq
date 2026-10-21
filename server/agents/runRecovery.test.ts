@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { demoWorkspace } from './demoRunner';
-import { office, restarted, until } from './fakeOffice';
+import { focus, restarted, until } from './fakeFocus';
 import { RESUMED_NOTE } from './runJournal';
 
 const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 
 describe('a run after Focus restarts', () => {
   it('picks a turn it cut off back up in the same conversation, with the messages sent into it', async () => {
-    const before = office();
+    const before = focus();
     const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
     await until(() => before.claude.turns.length === 1);
     before.agents.message(id, 'Also update the docs');
@@ -33,8 +33,8 @@ describe('a run after Focus restarts', () => {
     expect(before.store.agent(id).run).toMatchObject({ phase: 'delivered', turns: 2, target: 'deliver', pr: before.store.agent(id).pr?.number });
   });
 
-  it('picks it back up after the office shut down on purpose too (Ctrl-C, an update), but not after the captain’s stop', async () => {
-    const before = office();
+  it('picks it back up after Focus shut down on purpose too (Ctrl-C, an update), but not after the captain’s stop', async () => {
+    const before = focus();
     const working = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue).id;
     const stopped = before.agents.hire(before.project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }).id;
     await until(() => before.claude.turns.length === 2);
@@ -55,7 +55,7 @@ describe('a run after Focus restarts', () => {
 
   it('finishes putting their work on GitHub when Focus stopped part way, without another turn', async () => {
     // the push never comes back: Focus stops while it's under way
-    const before = office({ ...demoWorkspace, push: () => new Promise<void>(() => undefined) });
+    const before = focus({ ...demoWorkspace, push: () => new Promise<void>(() => undefined) });
     const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
     await until(() => before.claude.turns.length === 1);
     before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
@@ -72,7 +72,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('keeps a hold for the plan’s limit through a restart, and carries on once it’s passed', async () => {
-    const before = office();
+    const before = focus();
     const held = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue).id;
     const lapsed = before.agents.hire(before.project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }).id;
     await until(() => before.claude.turns.length === 2);
@@ -91,7 +91,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('raises the hand in the journal, and puts it down with the captain’s answer', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     const answer = claude.turns[0].hooks.permission('Bash', 'npm publish', new AbortController().signal);
@@ -102,7 +102,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('asks them to commit what they left before their work goes onto GitHub, and journals the delivery only after', async () => {
-    const before = office({ ...demoWorkspace, hasUncommittedChanges: () => Promise.resolve(true) });
+    const before = focus({ ...demoWorkspace, hasUncommittedChanges: () => Promise.resolve(true) });
     const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
     await until(() => before.claude.turns.length === 1);
     before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
@@ -112,7 +112,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('keeps the demo’s journal in memory, for a replay', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     claude.turns[0].end({ ok: true, summary: 'Dark mode' });
@@ -125,7 +125,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('puts an agent who was waiting for a free slot back in line', async () => {
-    const before = office();
+    const before = focus();
     before.project.maxAgents = 1;
     const first = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue).id;
     const second = before.agents.hire(before.project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }).id;
@@ -146,7 +146,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('keeps messages that were waiting, and hears them with the next', async () => {
-    const before = office();
+    const before = focus();
     const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
     await until(() => before.claude.turns.length === 1);
     before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
@@ -164,7 +164,7 @@ describe('a run after Focus restarts', () => {
   });
 
   it('leaves anyone who wasn’t mid-turn as they were', async () => {
-    const before = office();
+    const before = focus();
     const { id } = before.agents.hire(before.project.id, 'demo/webshop-frontend', issue);
     await until(() => before.claude.turns.length === 1);
     before.claude.turns[0].end({ ok: true, summary: 'Dark mode' });
@@ -178,8 +178,8 @@ describe('a run after Focus restarts', () => {
 });
 
 describe('signing in', () => {
-  it('stops a turn Claude Code signed in with the API key when the office meant your plan, and says where to look', async () => {
-    const { agents, claude, project, store } = office();
+  it('stops a turn Claude Code signed in with the API key when Ops meant your plan, and says where to look', async () => {
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     const { hooks } = claude.turns[0];
@@ -187,12 +187,12 @@ describe('signing in', () => {
     hooks.session('session-1', 'ANTHROPIC_API_KEY');
     await until(() => store.agent(id).status === 'error');
     expect(claude.turns[0].stopped).toBe(true);
-    expect(store.agent(id).error).toMatch(/signed in with ANTHROPIC_API_KEY when the office meant your plan's login.*~\/\.claude\/settings\.json/);
+    expect(store.agent(id).error).toMatch(/signed in with ANTHROPIC_API_KEY when Ops meant your plan's login.*~\/\.claude\/settings\.json/);
     expect(store.run(id).last).toMatchObject({ onKey: false, keySource: 'ANTHROPIC_API_KEY', mismatch: 'ANTHROPIC_API_KEY' });
   });
 
   it('lets a turn on your plan carry on', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     claude.turns[0].hooks.signIn!(false);

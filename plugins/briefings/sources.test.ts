@@ -3,16 +3,16 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Agent, LeadToolContext, PluginHost } from '../../plugin-api/server';
-import { officeSources, prOf, prText } from './sources';
+import { opsSources, prOf, prText } from './sources';
 
-describe('the office’s sources', () => {
+describe('Ops’ sources', () => {
   // a checkout with one file in it (not a git repo, so no commit to cite), and a ledger of one line
   const dir = mkdtempSync(join(tmpdir(), 'receipts-'));
   mkdirSync(join(dir, 'server'));
   writeFileSync(join(dir, 'server', 'ledger.ts'), 'one\nappendFileSync(path, line);\n');
   const lead = { agent: { id: 'lead1' } as Agent, checkouts: [{ repo: 'jonhilt/focus', dir }] } as unknown as LeadToolContext;
   const host = { ledger: () => [{ seq: 7, at: Date.UTC(2026, 9, 20, 8, 44), projectId: 'p', kind: 'qa-verdict', verdict: 'fail', checks: { pass: 3, fail: 1 } }], transcript: () => Promise.resolve(undefined) } as unknown as PluginHost;
-  const sources = officeSources(host);
+  const sources = opsSources(host);
 
   it('reads a file in the lead’s checkout, with or without its folder first, and never one outside it', async () => {
     const folder = dir.split('/').at(-1);

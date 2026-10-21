@@ -1,4 +1,4 @@
-// The map tool against the office's own checkout, as a lead's would be: listing the views, showing one, and a view
+// The map tool against Focus's own checkout, as a lead's would be: listing the views, showing one, and a view
 // that isn't there.
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
@@ -6,14 +6,14 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { type Agent, ARTIFACT_LIMITS, type LeadToolContext } from '../../plugin-api/server';
-import { OFFICE_DIR } from '../../plugin-api/testing';
+import { FOCUS_DIR } from '../../plugin-api/testing';
 import { mapTool } from './leadTool';
 
 // mapping runs real git (ls-files, rev-parse), which takes longer than vitest's 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
-/** A lead with `checkouts`, whose screen refuses a title over the show tool's limit, as the office's does. */
-function lead(checkouts = [{ repo: 'jonhilt/focus', dir: OFFICE_DIR }]): { context: LeadToolContext; shown: { id: string; title: string; html: string }[] } {
+/** A lead with `checkouts`, whose screen refuses a title over the show tool's limit, as Ops' does. */
+function lead(checkouts = [{ repo: 'jonhilt/focus', dir: FOCUS_DIR }]): { context: LeadToolContext; shown: { id: string; title: string; html: string }[] } {
   const shown: { id: string; title: string; html: string }[] = [];
   const context: LeadToolContext = {
     agent: { id: 'lead_p_1' } as Agent,
@@ -46,7 +46,7 @@ describe('the map tool', () => {
     expect(shown).toHaveLength(1);
     expect(shown[0].id).toBe('map-show-to-screen');
     expect(shown[0].html).toContain('<svg');
-    expect(shown[0].html).toContain('Mirror of the office');
+    expect(shown[0].html).toContain('Mirror of Focus');
   });
 
   it('says there\'s no such view, with the ones there are', async () => {

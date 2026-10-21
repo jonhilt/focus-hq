@@ -34,7 +34,7 @@ describe('Plugins', () => {
     expect(heard).toEqual(['p1']);
   });
 
-  it('gathers the tools the plugins add to a lead’s office, with whose they are', () => {
+  it('gathers the tools the plugins add to a lead’s Ops tools, with whose they are', () => {
     const map = { name: 'map', description: 'A map', input: {}, run: () => Promise.resolve('shown') };
     const plugins = started({}, plugin('cartography', { leadTools: [map] }), plugin('quiet', {}));
     expect(plugins.leadTools()).toEqual([{ plugin: 'cartography', tool: map }]);
@@ -105,7 +105,7 @@ describe('Plugins', () => {
     expect(shown.model.question).toBe('Q?');
   });
 
-  it('tells every plugin the office’s sessions moved onto the key or back, each with a copy of its own', () => {
+  it('tells every plugin Focus’s sessions moved onto the key or back, each with a copy of its own', () => {
     const heard: string[] = [];
     const signIn = { mode: 'fallback' as const, onKey: true, keySpentUsd: 0, keyBudgetUsd: 20 };
     const plugins = started({},

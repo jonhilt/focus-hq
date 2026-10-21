@@ -2,7 +2,7 @@ import { artifactUrl } from './artifacts';
 import type { DecisionEvent, InboxItem } from './captainsInbox';
 import type { Agent } from './types';
 
-// What the office tells a bot speaking for the captain (Grok, over its webhook: docs/ledger.md#the-captains-inbox-api),
+// What Focus tells a bot speaking for the captain (Grok, over its webhook: docs/ledger.md#the-captains-inbox-api),
 // worked out by comparing what's waiting, and what the leads have shown, with how it stood before. Pure, so it's
 // tested (botEvents.test.ts); server/bot.ts sends them.
 

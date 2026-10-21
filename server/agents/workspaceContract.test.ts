@@ -13,7 +13,7 @@ import { holdsToWorkspaceContract, type World } from './workspaceContract';
 vi.setConfig({ testTimeout: 30_000 });
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-contract-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
-// the office's own git commands (through run()) commit as someone, whatever the machine's git config says
+// Ops' own git commands (through run()) commit as someone, whatever the machine's git config says
 Object.assign(process.env, { GIT_AUTHOR_NAME: 'Agent', GIT_AUTHOR_EMAIL: 'agent@focus.test', GIT_COMMITTER_NAME: 'Agent', GIT_COMMITTER_EMAIL: 'agent@focus.test', GIT_CONFIG_NOSYSTEM: '1' });
 
 const exec = promisify(execFile);
@@ -42,7 +42,7 @@ const template = (async () => {
 })();
 
 /**
- * Git on throwaway repos: a bare origin (GitHub), the office's clone of it where `gh repo clone` would have put it (main
+ * Git on throwaway repos: a bare origin (GitHub), Ops' clone of it where `gh repo clone` would have put it (main
  * checked out), and a teammate's clone that lands changes on main and pushes to branches as others would.
  */
 async function gitWorld(n: number): Promise<World> {
@@ -80,7 +80,7 @@ async function gitWorld(n: number): Promise<World> {
 holdsToWorkspaceContract('git', gitWorld);
 
 /**
- * The demo office's workspace, as fakeOffice's tests use it: demo agents never touch git, so there's no checkout, and
+ * The demo ship's workspace, as fakeFocus's tests use it: demo agents never touch git, so there's no checkout, and
  * nothing anyone does to one (or to GitHub's branches) shows in what it answers.
  */
 const demoWorld = (n: number): World => ({
@@ -113,6 +113,6 @@ holdsToWorkspaceContract('the demo workspace', demoWorld, {
   'a push still lands after GitHub deleted the branch its last push went to': NO_ORIGIN,
   'someone else’s commits on origin’s branch are noticed, and a pull brings them in': 'nobody else ever pushes to a branch',
   'publishing creates the branch on origin, or takes what a cloud session pushed there without overwriting it': NO_ORIGIN,
-  'merging the base: up to date when it hasn’t moved, merged and pushed when it has': 'the office’s merge always conflicts, so there’s an agent to watch resolving it',
-  'merging the base reports the files that conflict, and pushes nothing': 'the office’s merge always conflicts in src/header.ts, whatever changed',
+  'merging the base: up to date when it hasn’t moved, merged and pushed when it has': 'Ops’ merge always conflicts, so there’s an agent to watch resolving it',
+  'merging the base reports the files that conflict, and pushes nothing': 'Ops’ merge always conflicts in src/header.ts, whatever changed',
 });

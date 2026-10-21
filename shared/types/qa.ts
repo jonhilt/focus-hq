@@ -1,4 +1,4 @@
-// QA reviews of pull requests, and what the office does about the ones that fail.
+// QA reviews of pull requests, and what Ops does about the ones that fail.
 
 import type { Effort } from './agents';
 import type { FailedCheck } from './github';
@@ -17,7 +17,7 @@ export interface QaSpotCheck {
   why: string;
   /**
    * Where it is in the pull request's changed files on GitHub (`diff-` and the SHA-256 of its path, then `R` and the
-   * line): worked out by the office as it reads the report. Missing on ones reported before it was kept.
+   * line): worked out by Ops as it reads the report. Missing on ones reported before it was kept.
    */
   anchor?: string;
 }
@@ -39,12 +39,12 @@ export interface QaReport {
   /** Every file the pull request changes, accounted for: what tests exercise it and what QA checked. Missing on reports from before they were asked for. */
   files?: QaFile[];
   /**
-   * What QA offers as proof of its findings (docs/qa.md#proof), each with what the office saw when it checked it. Missing
+   * What QA offers as proof of its findings (docs/qa.md#proof), each with what Ops saw when it checked it. Missing
    * on reports from before proof was asked for, and when the project doesn't ask for it.
    */
   proofs?: QaProof[];
   /**
-   * QA failed it, but none of its proofs held when the office checked them: the verdict is a pass, and QA's findings (its
+   * QA failed it, but none of its proofs held when Ops checked them: the verdict is a pass, and QA's findings (its
    * failed checks and fix instructions) are posted as advice.
    */
   advisory?: boolean;
@@ -66,8 +66,8 @@ export interface QaProof {
   /** Which screenshot, counting from 1 in the order QA took them (`screenshot`). */
   screenshot?: number;
   /**
-   * What the office saw: `failed`, it holds (a test failed, a check failed, a screenshot of the failure is on the PR);
-   * `passed`, the test or check passed when the office ran it; `broken`, it couldn't be taken as proof (`note` says why).
+   * What Ops saw: `failed`, it holds (a test failed, a check failed, a screenshot of the failure is on the PR);
+   * `passed`, the test or check passed when Ops ran it; `broken`, it couldn't be taken as proof (`note` says why).
    */
   outcome?: 'failed' | 'passed' | 'broken';
   /** Why it's broken, or the first line of what failed. */
@@ -88,8 +88,8 @@ export interface QaFile {
 }
 
 /**
- * What the office knows of how QA covered a pull request's changed files: the files, those its session opened by its
- * own tool calls (missing when the office couldn't read them: the demo, a cloud session), and how many it was sent back to.
+ * What Ops knows of how QA covered a pull request's changed files: the files, those its session opened by its
+ * own tool calls (missing when Ops couldn't read them: the demo, a cloud session), and how many it was sent back to.
  */
 export interface FileAccount {
   changed: string[];
@@ -100,7 +100,7 @@ export interface FileAccount {
 /** A screenshot from a QA review, kept as evidence with the report. */
 export interface QaScreenshot {
   caption: string;
-  /** The image as the office keeps it, served at /api/qa-shots/<file>. */
+  /** The image as Ops keeps it, served at /api/qa-shots/<file>. */
   file: string;
   /** The image on the repo's QA evidence branch. Missing if the upload failed. */
   url?: string;
@@ -112,7 +112,7 @@ export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
 export type FixFor = { kind: 'qa' } | { kind: 'checks'; checks: FailedCheck[] };
 
 /**
- * What the office did about a failed PR it opened: a developer is on it, the room's operations officer is working out
+ * What Ops did about a failed PR it opened: a developer is on it, the room's operations officer is working out
  * why it's stuck, or it gave up and wants you.
  */
 export type QaFollowUp =
@@ -145,7 +145,7 @@ export interface QaReview {
    * head, which can lag a push, and a verdict on an earlier commit sends the PR straight back to QA.
    */
   shippedHead?: string;
-  /** QA passed this commit, the one before a merge of the base branch that the office checked itself and carried the pass over from. */
+  /** QA passed this commit, the one before a merge of the base branch that Ops checked itself and carried the pass over from. */
   carriedFrom?: string;
   report?: QaReport;
   /** The screenshots that go with the report, in the order they were taken. */
@@ -157,7 +157,7 @@ export interface QaReview {
   /** The QA officer's session for this review, while their record is around. */
   agentId?: string;
   error?: string;
-  /** An agent of the office opened the PR, so a failed verdict may go back to a developer. Teammates' PRs never do. */
+  /** One of Focus's agents opened the PR, so a failed verdict may go back to a developer. Teammates' PRs never do. */
   openedByOffice?: boolean;
   /** Rounds of QA this PR has failed so far, this one included once it's in (missing = none). */
   failedRounds?: number;
@@ -182,10 +182,10 @@ export interface QaStep {
   text: string;
 }
 
-/** What QA runs on one of the project's repos, as the office's clone of it says. */
+/** What QA runs on one of the project's repos, as the clone Ops keeps of it says. */
 export interface QaRepoChecks {
   repo: string;
-  /** The office has a clone of it to look in (it makes one the first time an agent works in the repo). */
+  /** Ops has a clone of it to look in (it makes one the first time an agent works in the repo). */
   cloned: boolean;
   /** The clone has a package.json at its root. */
   packageJson: boolean;

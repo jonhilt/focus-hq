@@ -18,8 +18,8 @@ import { qaAgentModel } from '../../shared/qa';
 import { parseQaChat, QA_CHAT_SCHEMA, type QaChatAnswer, qaChatPrompt, type QaChatRequest, qaChatSystemPrompt, type QaChatter } from './qaChat';
 
 // The permanent crew's Claude Code sessions: they read the project's code (and, for some, the web) and change nothing.
-// Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch where they're given them and the
-// office's own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
+// Read-only because they only have Read, Glob and Grep, plus WebSearch and WebFetch where they're given them and
+// Ops' own tools, `dontAsk` denies anything not pre-approved, and none of your settings, hooks or MCP servers load.
 
 /** The built-in tools a crew session may be given: none of them can change anything. */
 export type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
@@ -48,7 +48,7 @@ export interface ReadOnlyRun {
   builtins: ReadOnlyTool[];
   resume?: string;
   schema?: Record<string, unknown>;
-  /** The office's own tools for this session, all pre-approved, and what the activity line says while one runs. */
+  /** Ops' own tools for this session, all pre-approved, and what the activity line says while one runs. */
   tools?: { server: McpSdkServerConfigWithInstance; names: string[]; activity: (name: string) => string };
   /** Folders outside `cwd` the session may read too. */
   readable?: string[];
@@ -78,7 +78,7 @@ export type Ask = (params: { prompt: string; options: Options }) => AsyncIterabl
 
 /**
  * The session's options: only the tools it's given, all pre-approved, `dontAsk` for anything else, none of your
- * settings, hooks or MCP servers, and the office's own tools under `mcp__<server>__`.
+ * settings, hooks or MCP servers, and Ops' own tools under `mcp__<server>__`.
  */
 export function readOnlyOptions(run: ReadOnlyRun, abort: AbortController): Options {
   const tools = run.tools;
@@ -265,7 +265,7 @@ export interface ShipSessionRun extends Omit<ReadOnlyRun, 'cwd' | 'readable' | '
 }
 
 /**
- * A read-only session with the run of the ship, as a crew member's (Number One's): from the office's planning folder,
+ * A read-only session with the run of the ship, as a crew member's (Number One's): from Focus's planning folder,
  * where `open_project` checks out each project, with the agents' worktrees readable and the ship tools
  * (`ship_status`, `open_project`, as `mcp__<name>__…`), neither of which changes anything aboard.
  */

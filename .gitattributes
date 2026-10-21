@@ -1,5 +1,5 @@
 # How merge conflicts in these settle without an agent (docs/agents.md, "Merge conflicts").
 # Git keeps both sides' lines itself, wherever the merge happens.
 CLAUDE.md merge=union
-# Baked by `npm run ship`: the office's merges take main's, and a branch that changes blender/ builds its own again.
+# Baked by `npm run ship`: Ops' merges take main's, and a branch that changes blender/ builds its own again.
 client/public/ship/*.glb focus-merge=theirs

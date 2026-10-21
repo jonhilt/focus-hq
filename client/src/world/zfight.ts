@@ -1,6 +1,6 @@
 // Finds z-fighting in a scene graph: faces from different meshes that lie in (almost) the same plane, face the same
 // way and overlap, so the depth test flips between them as the camera turns. `pnpm run zfight` (tools/zfight.ts)
-// imports this into the running office; it isn't part of the client bundle. The gap scan (gaps.ts) shares its
+// imports this into the running ship; it isn't part of the client bundle. The gap scan (gaps.ts) shares its
 // triangle handling.
 import * as THREE from 'three';
 import { WALL_H } from './layout';

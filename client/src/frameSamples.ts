@@ -2,7 +2,7 @@
 // is summed up, which frames count as hitches, and what a page load's log is called.
 import type { Spread } from '../../shared/types';
 
-/** How often (ms) a sample of the frames is taken, and how often the samples go to the office. */
+/** How often (ms) a sample of the frames is taken, and how often the samples go to Focus. */
 export const SAMPLE_EVERY = 1000;
 export const SEND_EVERY = 5000;
 /** A frame slower than this (ms, under 20 fps) is a hitch, logged with what came with it. */

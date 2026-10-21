@@ -1,4 +1,4 @@
-// How much of your Claude plan the office has used, and what each agent signs in with, for main engineering: the
+// How much of your Claude plan Focus has used, and what each agent signs in with, for main engineering: the
 // plugin's state (its server part's), as the browser reads it.
 import type { SignIn } from '../../plugin-api/shared';
 
@@ -35,7 +35,7 @@ export interface PlanUsage {
   extra?: ExtraUsage;
 }
 
-/** How the office's sessions sign in, and what your API key has spent while the plan's limit is reached. */
+/** How Focus's sessions sign in, and what your API key has spent while the plan's limit is reached. */
 export interface Usage {
   /** Your plan's limits, or null before the first reading, or when there's no plan to read (on the API key). */
   plan: PlanUsage | null;

@@ -13,8 +13,8 @@ const PROGRESS_EVERY_MS = 250;
 const tell = (message: FromSpeechWorker) => process.send?.(message);
 const quit = () => process.kill(process.pid, 'SIGKILL');
 
-// the office ends this process when it closes; if the office goes without doing so (it crashed, or was killed), this
-// one goes too. Ctrl+C reaches the whole process group, but it's the office that decides when Kokoro stops.
+// Focus ends this process when it closes; if Focus goes without doing so (it crashed, or was killed), this
+// one goes too. Ctrl+C reaches the whole process group, but it's Focus that decides when Kokoro stops.
 process.on('disconnect', quit);
 process.on('SIGTERM', quit);
 process.on('SIGINT', () => undefined);

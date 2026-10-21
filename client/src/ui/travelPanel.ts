@@ -2,7 +2,7 @@ import { statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
 import { sound } from '../sound';
-import type { Place } from '../world/office';
+import type { Place } from '../world/ship';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { h } from './dom';

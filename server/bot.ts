@@ -5,8 +5,8 @@ import type { Agent } from '../shared/types';
 import { errorMessage } from './util';
 
 // A bot speaking for the captain (Grok Bot, over Tailscale: docs/ledger.md#the-captains-inbox-api). It answers the
-// inbox on the /api/bot routes with the office's bot token, and hears what changes there on its webhook, each delivery
-// signed with that token, so it can tell the office's from anyone else's.
+// inbox on the /api/bot routes with Focus's bot token, and hears what changes there on its webhook, each delivery
+// signed with that token, so it can tell Focus's from anyone else's.
 
 /** Whether a request's `Authorization` header carries the bot token. */
 export function tokenOk(header: string | undefined, token: string): boolean {
@@ -19,7 +19,7 @@ export function tokenOk(header: string | undefined, token: string): boolean {
 export const botGuard =
   (token: string | undefined) =>
   (req: { headers: { authorization?: string } }, res: { status(code: number): { json(body: unknown): unknown } }, next: () => void): void => {
-    if (!token) return void res.status(404).json({ error: 'No bot token is set: start the office with FOCUS_BOT_TOKEN' });
+    if (!token) return void res.status(404).json({ error: 'No bot token is set: start Focus with FOCUS_BOT_TOKEN' });
     if (!tokenOk(req.headers.authorization, token)) return void res.status(401).json({ error: 'Send the bot token: Authorization: Bearer <token>' });
     next();
   };
@@ -28,7 +28,7 @@ export const botGuard =
 export const signature = (token: string, timestamp: string, body: string): string =>
   `sha256=${crypto.createHmac('sha256', token).update(`${timestamp}.${body}`).digest('hex')}`;
 
-/** An item with the links to what was shown made whole, from the office's address as the bot reaches it (`base`), when it's known. */
+/** An item with the links to what was shown made whole, from Focus's address as the bot reaches it (`base`), when it's known. */
 export function itemWithLinks(item: InboxItem, base: string | undefined): InboxItem {
   if (!base || !item.shown) return item;
   return { ...item, shown: item.shown.map((s) => ({ ...s, html: `${base}${s.html}`, ...(s.image && { image: `${base}${s.image}` }) })) };
@@ -53,7 +53,7 @@ type Post = (url: string, init: { method: 'POST'; headers: Record<string, string
 
 /**
  * Tells the bot's webhook what changed since it last looked (`tick`, every few seconds): what it hears of when the
- * office starts is what's there already, which it reads from the inbox, so nothing is sent for that.
+ * Focus starts is what's there already, which it reads from the inbox, so nothing is sent for that.
  */
 export class BotHook {
   private seen: BotSeen | undefined;

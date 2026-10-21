@@ -59,7 +59,7 @@ describe('checkModel', () => {
     expect(checked.nodes.map((n) => n.found)).toEqual([false, false, false]);
     expect(checked.edges.map((e) => e.backed)).toEqual([false, false]);
     expect(problems).toEqual([
-      'Part page: /r/Gone.razor isn\'t there (or isn\'t one the office can read).',
+      'Part page: /r/Gone.razor isn\'t there (or isn\'t one Ops can read).',
       'Part api: r/Api.cs has only 4 lines.',
       'Part db has no cite.',
       'Connection page → api: r/Db.cs:1 doesn\'t mention SaveProposal.',

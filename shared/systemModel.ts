@@ -1,5 +1,5 @@
 // A system model's pure rules (a lead's `model` tool, docs/goals.md): whether one a lead sends holds together, checking
-// its cites against the code, and where its parts stand. The same in the office (to refuse or
+// its cites against the code, and where its parts stand. The same on the server (to refuse or
 // check a model) and in the browser (to lay it out), so a model always lands the same way.
 
 import { isOneOf } from './records';
@@ -72,7 +72,7 @@ const NEAR = 2;
 
 /**
  * The model with each cite checked against the code, and what didn't check out. `lines` reads a file's lines, or
- * undefined if it can't (missing, or outside what the office may read). A part is found when its file has its line and,
+ * undefined if it can't (missing, or outside what Ops may read). A part is found when its file has its line and,
  * if it names a symbol, the symbol is within two lines of it; a connection is backed when the line it cites (or one
  * within two lines) mentions the part it reaches, by its symbol (or label).
  */
@@ -80,7 +80,7 @@ export function checkModel(m: SystemModel, lines: (file: string) => string[] | u
   const problems: string[] = [];
   const near = (c: ModelCite) => {
     const all = lines(c.file);
-    if (!all) return { text: undefined, line: '', why: `${c.file} isn't there (or isn't one the office can read)` };
+    if (!all) return { text: undefined, line: '', why: `${c.file} isn't there (or isn't one Ops can read)` };
     if (c.line > all.length) return { text: undefined, line: '', why: `${short(c.file)} has only ${all.length} lines` };
     return { text: all.slice(Math.max(0, c.line - 1 - NEAR), c.line + NEAR).join('\n'), line: all[c.line - 1] ?? '', why: '' };
   };
@@ -205,7 +205,7 @@ function order(m: SystemModel): string[] {
 }
 
 /**
- * What the office tells whoever sent a model after checking it: what didn't check out (drawn flagged), where the
+ * What Ops tells whoever sent a model after checking it: what didn't check out (drawn flagged), where the
  * scenario jumps, and whether it's too big to take in, each with what to do about it.
  */
 export function modelReport(m: SystemModel, problems: readonly string[]): string {

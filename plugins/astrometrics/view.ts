@@ -7,7 +7,7 @@ import type { Astrometrics, MachineLayout } from './shared';
 /** The machine picked, by id, or the first there is. */
 export const pickedLayout = (layouts: readonly MachineLayout[], picked: string): MachineLayout | undefined => layouts.find((l) => l.id === picked) ?? layouts[0];
 
-/** A project's runs of `machine`, in the order the office lists them. */
+/** A project's runs of `machine`, in the order Ops lists them. */
 export const runsOf = (runs: readonly MachineRun[], projectId: string, machine: string): MachineRun[] => runs.filter((r) => r.machine === machine && r.projectId === projectId);
 
 /** What the screen shows of project `projectId`: the machine picked with its runs, or why there's none to show yet. */

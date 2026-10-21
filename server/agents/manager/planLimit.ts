@@ -5,11 +5,11 @@ import { afterLimit, keyFallback, rereadUsd, UNKNOWN_RESET_MS } from '../apiKey'
 import { type ManagerServices, Part, type WorkError } from './core';
 
 /** What an agent the plan's limit stopped mid-turn hears when they carry on, on the key or once it resets. */
-export const CARRY_ON_AFTER_LIMIT = 'The office paused you mid-turn when its Claude usage limit was reached. Carry on where you left off.';
+export const CARRY_ON_AFTER_LIMIT = 'Ops paused you mid-turn when its Claude usage limit was reached. Carry on where you left off.';
 
 /**
  * Your plan's usage limit, reached: who carries on with your API key straight away, and who waits for it to reset,
- * because picking their conversation back up on the key would cost more than the office spends without asking.
+ * because picking their conversation back up on the key would cost more than Ops spends without asking.
  */
 export class PlanLimit extends Part {
   /** What picking the agent's conversation back up costs, while new sessions start on the key; undefined on your plan. */

@@ -1,4 +1,4 @@
-// The office's state machines as data (server/agents/machines.ts): each one's states and transitions, read from its
+// Ops' state machines as data (server/agents/machines.ts): each one's states and transitions, read from its
 // XState definition so a drawing of it is never out of date with its code, and where each run of it is now.
 
 /** A state of a machine: its dotted id under the machine (`turn.started`), and the compound state it's in. */

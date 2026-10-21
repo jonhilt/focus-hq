@@ -65,7 +65,7 @@ describe('laidOut', () => {
 });
 
 describe('layOut', () => {
-  it('lays every one of the office’s machines out: each state boxed inside its parent, each arrow drawn', async () => {
+  it('lays every one of Ops’ machines out: each state boxed inside its parent, each arrow drawn', async () => {
     for (const graph of MACHINES) {
       const layout = await layOut(graph);
       const boxes = new Map(layout.states.map((s) => [s.id, s]));

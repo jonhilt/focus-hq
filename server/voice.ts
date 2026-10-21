@@ -85,8 +85,8 @@ export class Voice {
   }
 
   /**
-   * Loads Kokoro as the office starts, if it's downloaded, so the first line anyone says is in a crew voice rather than
-   * waiting on the model. Not in the demo office: there may be many of those at once, and each would load its own.
+   * Loads Kokoro as Focus starts, if it's downloaded, so the first line anyone says is in a crew voice rather than
+   * waiting on the model. Not in the demo ship: there may be many of those at once, and each would load its own.
    */
   warmSpeech(): void {
     if (!this.demo && this.speech.status().downloaded) this.speech.load();
@@ -96,7 +96,7 @@ export class Voice {
     return this.speech.speak(text, voice, urgency, signal);
   }
 
-  /** Stops Kokoro's process, if it's running, as the office closes. */
+  /** Stops Kokoro's process, if it's running, as Focus closes. */
   close(): void {
     this.speech.close();
   }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AWAY_DESK, type FocusPlugin } from '../../plugin-api/server';
-import { demoWorkspace, office, type Store, until, type WorkspaceOps } from '../../plugin-api/testing';
+import { demoWorkspace, focus, type Store, until, type WorkspaceOps } from '../../plugin-api/testing';
 import type { ScorecardService } from '../scorecard/api';
 import climber from './server';
 import { climbingEngineer, type Climb } from './shared';
@@ -14,16 +14,16 @@ const scorecard: FocusPlugin = {
   },
 };
 
-/** The pretend office with the climber switched on, its own repo the shop's frontend unless `ownRepo` says otherwise (null: none). */
+/** The pretend Focus with the climber switched on, its own repo the shop's frontend unless `ownRepo` says otherwise (null: none). */
 function climbing(workspace: WorkspaceOps = demoWorkspace, ownRepo: string | null = 'demo/webshop-frontend') {
-  const o = office(workspace);
+  const o = focus(workspace);
   o.agents.startPlugins([climber, scorecard], { demo: false, ownRepo: () => ownRepo ?? undefined });
   const keep = o.agents.plugins.routes().find((r) => r.plugin === 'climber' && r.route.path === '/keep-climbing');
   return {
     ...o,
     climb: () => o.store.plugins.climber as Climb,
     keepClimbing: (on: boolean) => keep?.route.handle({ body: { on }, query: {} }),
-    // the office looks at the climb each time a board's read again
+    // Ops looks at the climb each time a board's read again
     settle: () => o.agents.plugins.boardRefreshed(o.project.id),
   };
 }
@@ -49,7 +49,7 @@ describe('the climber', () => {
     expect(climb()).toMatchObject({ keepClimbing: true, cycles: 1, pr: { number: pr.number } });
     settle();
     expect(climbers(store)).toHaveLength(1);
-    // the office never merges a climb by itself
+    // Ops never merges a climb by itself
     expect(agents.plugins.captainMerges({ branch })).toBe(true);
 
     agents.prClosed('demo/webshop-frontend', pr.number, true, 'captain');
@@ -98,14 +98,14 @@ describe('the climber', () => {
     expect(climbers(store)).toHaveLength(0);
   });
 
-  it('won’t climb without the office’s own repo in a project', () => {
+  it('won’t climb without Focus’s own repo in a project', () => {
     const { store, keepClimbing } = climbing(demoWorkspace, null);
-    expect(() => keepClimbing(true)).toThrow(/Connect the office’s own repository/);
+    expect(() => keepClimbing(true)).toThrow(/Connect Focus’s own repository/);
     expect(store.plugins.climber).toBeUndefined();
   });
 
   it('stays out without the scorecard switched on, saying why', () => {
-    const o = office();
+    const o = focus();
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     o.agents.startPlugins([climber], { demo: false, ownRepo: () => 'demo/webshop-frontend' });
     expect(o.agents.plugins.ids()).toEqual([]);

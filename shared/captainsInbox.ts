@@ -5,9 +5,9 @@ import { isRecord } from './records';
 import { type Attention, hails, type Lane, laneOf, needLine, turnRead } from './tricorder';
 import type { Agent, PullRequest, QaReview, CosRead, TermLine } from './types';
 
-// The captain's inbox, as the office keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
+// The captain's inbox, as Focus keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
 // stays the same from look to look, and what they decided lately, from the ledger's `captain-decision` lines. Comms and
-// anything outside the office (a bot on the API) read the same list and answer it the same way. Pure, so it's tested
+// anything outside Focus (a bot on the API) read the same list and answer it the same way. Pure, so it's tested
 // (shared/inbox.test.ts).
 
 /** What a hail is about, the same hail from look to look. A lead's turn keeps its key once it's read. */
@@ -157,7 +157,7 @@ export interface Inbox {
 }
 
 /**
- * Whether an answer went through, from what the office replied: not when it came back to ask about the cost of picking
+ * Whether an answer went through, from what Ops replied: not when it came back to ask about the cost of picking
  * a conversation back up (`costly`), or warning before closing a goal (`warn`).
  */
 export const landed = (reply: unknown): boolean => !(isRecord(reply) && ('costly' in reply || 'warn' in reply));

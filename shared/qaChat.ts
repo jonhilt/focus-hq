@@ -3,7 +3,7 @@ import { autoMergeFor } from './mergeGate';
 import { autoQaFor, autoSendBackFor, QA_BRIEF_MAX, qaProofFor } from './qa';
 import { EFFORT_LEVELS, type Effort, type Project, type QaChatTurn, type QaSettingsChange } from './types';
 
-// Talking to the QA officer at the Playbook: the talk the office passes on, the change the officer may propose (only
+// Talking to the QA officer at the Playbook: the talk Ops passes on, the change the officer may propose (only
 // to the settings in QaSettingsChange, checked here whatever the officer said), and how it shows as a diff. Pure, so
 // it's unit tested (shared/qaChat.test.ts); server/agents/qaChat.ts asks the officer, client/src/ui/qaChat.ts shows it.
 

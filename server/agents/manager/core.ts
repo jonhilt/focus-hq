@@ -48,7 +48,7 @@ export class ReportGone extends Data.TaggedError('ReportGone')<{ number: number 
   }
 }
 
-/** The office won't do what was asked, and says why (a taken station, a busy agent, a goal that isn't one). */
+/** Ops won't do what was asked, and says why (a taken station, a busy agent, a goal that isn't one). */
 export class Refused extends Data.TaggedError('Refused')<{ message: string }> {}
 
 /** What can stop an agent's work, each with a message for their terminal. */
@@ -71,7 +71,7 @@ export interface Runtime {
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
   nudged: boolean;
   busy: boolean;
-  /** The conversation the office couldn't compact before a lead's turn: it doesn't try again in that one. */
+  /** The conversation Ops couldn't compact before a lead's turn: it doesn't try again in that one. */
   compactFailed?: string;
   /** Queued to pick its conversation back up (the inbox is what it hears), rather than to start its task. */
   resume?: boolean;
@@ -100,7 +100,7 @@ export function withNotes(prompt: string, notes: string[]): string {
  */
 export class Core {
   readonly runtimes = new Map<string, Runtime>();
-  /** The office is shutting down: turns it stops are left open in their journals, to carry on when it starts again. */
+  /** Focus is shutting down: turns it stops are left open in their journals, to carry on when it starts again. */
   closing = false;
   readonly runtime: ManagedRuntime.ManagedRuntime<ManagerServices, never>;
   readonly scope = Scope.makeUnsafe();

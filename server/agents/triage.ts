@@ -5,7 +5,7 @@ import { truncate } from '../util';
 import { qaFindings } from './qa';
 
 // The operations officer's look at a stuck pull request: their instructions, the decision's schema and parsing. Pure,
-// so they're unit tested (triage.test.ts). When triage happens and what the office does with the decision is in
+// so they're unit tested (triage.test.ts). When triage happens and what Ops does with the decision is in
 // shared/triage.ts; manager.ts does it.
 
 export interface TriageRequest {
@@ -16,7 +16,7 @@ export interface TriageRequest {
   pr: PullRequestDetail;
   /** A read-only checkout of the PR's head. */
   cwd: string;
-  /** Why the PR is stuck, as the office sees it ("it failed QA 3 times"). */
+  /** Why the PR is stuck, as Ops sees it ("it failed QA 3 times"). */
   reason: string;
   review: Pick<QaReview, 'sha' | 'report' | 'lastRound' | 'failedRounds' | 'triage'>;
   /** The PR's failing checks on GitHub. */

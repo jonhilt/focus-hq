@@ -107,7 +107,7 @@ export function qaFor(projectId: string, goalId: string, others: string[] = []):
 
 /**
  * The name of an agent hired to work at one of the room's desks: their rank's title and a surname
- * nobody in the room's posts or `taken` (the names of everyone in the office) has, `roll` (in [0, 1), like
+ * nobody in the room's posts or `taken` (the names of everyone aboard) has, `roll` (in [0, 1), like
  * Math.random) choosing among those free. With every surname taken, they're numbered, so the name is still their own.
  */
 export function hiredName(projectId: string, rank: Rank, taken: string[], roll: number): string {

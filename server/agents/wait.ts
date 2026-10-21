@@ -3,19 +3,19 @@ import { config } from '../config';
 import { withBash } from './agentShell';
 
 /**
- * Where the office's helpers for its agents' shells live (`bin/` in the Focus checkout): `focus-wait`, which polls a
+ * Where Ops' helpers for its agents' shells live (`bin/` in the Focus checkout): `focus-wait`, which polls a
  * condition until it's true or a timeout passes. Claude Code refuses a foreground `sleep N; cmd`, which agents kept
  * writing to wait for a demo, a build or a log, and left them to guess another way.
  */
 export const WAIT_BIN = path.join(config.root, 'bin');
 
-/** `env` with the office's helpers first on its PATH. */
+/** `env` with Ops' helpers first on its PATH. */
 export function withWaitHelper(env: Record<string, string | undefined>, bin = WAIT_BIN): Record<string, string | undefined> {
   return { ...env, PATH: env.PATH ? `${bin}${path.delimiter}${env.PATH}` : bin };
 }
 
 /**
- * A session's environment: a local session's (one with a scratch dir) gets its scratch dir's variables, the office's
+ * A session's environment: a local session's (one with a scratch dir) gets its scratch dir's variables, Ops'
  * helpers on its PATH and bash for its Bash tool; a cloud session works on a machine of its own, so it gets none of them.
  */
 export function sessionEnv(env: Record<string, string | undefined>, scratchEnv?: Record<string, string>): Record<string, string | undefined> {

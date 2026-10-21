@@ -168,7 +168,7 @@ describe('freshBoard', () => {
     expect(board.issues.map((i) => i.number)).toEqual([4]);
   });
 
-  it('marks the issues the office closed a PR for, and only those', () => {
+  it('marks the issues Ops closed a PR for, and only those', () => {
     const board = freshBoard('p1', [{ repo: 'acme/api', issues: [issue('acme/api', 2, '2026-01-02'), issue('acme/api', 6, '2026-01-06')], prs: [] }], [], [note('acme/api', 6), note('acme/web', 2)], 0);
     expect(board.issues.map((i) => i.closedPr?.pr)).toEqual([undefined, 96]);
   });

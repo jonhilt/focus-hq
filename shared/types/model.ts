@@ -1,5 +1,5 @@
 // System models: how real code works, recovered from the code itself (its parts, how they connect, and one scenario
-// along them), each part and connection cited at a file and line the office checks. A goal lead's `model` tool sends one.
+// along them), each part and connection cited at a file and line Ops checks. A goal lead's `model` tool sends one.
 
 /** The kinds of part a system model is drawn with, each in a shape of its own (shared/modelDrawing.ts). */
 export const MODEL_KINDS = ['ui', 'route', 'handler', 'service', 'store', 'queue', 'external', 'job', 'type'] as const;
@@ -28,7 +28,7 @@ export interface ModelNode {
   symbol?: string;
   /** Where it's defined. */
   cite?: ModelCite;
-  /** Whether the office found its cite in the code (set by the check). */
+  /** Whether Ops found its cite in the code (set by the check). */
   found?: boolean;
   /** What the change being shown does to it, if it's a model of a change. */
   change?: ModelChange;
@@ -42,7 +42,7 @@ export interface ModelEdge {
   label?: string;
   /** Where in the code `from` reaches `to`: the line should mention `to`'s symbol. */
   cite?: ModelCite;
-  /** Whether the office found `to`'s symbol at (or within two lines of) the cite (set by the check). */
+  /** Whether Ops found `to`'s symbol at (or within two lines of) the cite (set by the check). */
   backed?: boolean;
   /** What the change being shown does to it, if it's a model of a change. */
   change?: ModelChange;
@@ -66,7 +66,7 @@ export interface ModelCheck {
 
 /**
  * A system model recovered from code (the leads' `model` tool, docs/goals.md): the parts and how they connect, each cited, and one scenario as
- * steps along the connections. The office draws it one fixed way, so every model reads the same.
+ * steps along the connections. Ops draws it one fixed way, so every model reads the same.
  */
 export interface SystemModel {
   /** The question it answers, in a sentence. */

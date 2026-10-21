@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Board, PullRequest } from '../shared/types';
-import { issueRefusal, previewTarget } from './officeRequests';
+import { issueRefusal, previewTarget } from './focusRequests';
 
 const project = { name: 'Shop', repos: ['acme/shop', 'acme/api'] };
 

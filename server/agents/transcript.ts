@@ -6,7 +6,7 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 
 export type Block = { type?: string; text?: string; name?: string; id?: string; tool_use_id?: string; input?: unknown; is_error?: boolean; content?: unknown };
-/** A transcript line: the fields the office reads are checked, and anything else Claude Code writes is there to narrow. */
+/** A transcript line: the fields Focus reads are checked, and anything else Claude Code writes is there to narrow. */
 export type Line = { type?: string; uuid?: string; timestamp?: string; isMeta?: boolean; message?: { id?: string; content?: unknown }; [field: string]: unknown };
 
 /** Whether a JSON value is an object (not null, not an array): the only kind with fields to read. */
@@ -55,11 +55,12 @@ export function* transcriptLines(jsonl: string): Generator<Line> {
 
 export type SessionKind = 'lead' | 'agent' | 'qa';
 
-/** Who a message to the agent came from, as far as its wording tells: the office's own messages have set openings. */
+/** Who a message to the agent came from, as far as its wording tells: Ops' own messages have set openings. */
 export type MessageFrom = 'captain' | 'office' | 'qa' | 'compacted';
 
-/** How the office opens the messages it sends agents, and the harness's own that aren't anyone talking. */
+/** How Ops opens the messages it sends agents (and how it used to, as older transcripts have them), and the harness's own that aren't anyone talking. */
 const OPENINGS: [string, MessageFrom | null][] = [
+  ['[Ops]', 'office'],
   ['[Office]', 'office'],
   ['[QA officer', 'qa'],
   ['Slice ', 'office'],
@@ -71,6 +72,7 @@ const OPENINGS: [string, MessageFrom | null][] = [
   ['Answer with one word', 'office'],
   ['Notes from your manager', 'office'],
   // carrying on after a usage limit (`CARRY_ON_AFTER_LIMIT`) and after a restart (`RESUMED_NOTE`)
+  ['Ops paused you mid-turn', 'office'],
   ['The office paused you mid-turn', 'office'],
   ['Focus restarted while you were working', 'office'],
   ['This session is being continued', 'compacted'],
@@ -97,7 +99,7 @@ export function clip(text: string, max: number): string {
   return t.length <= max ? t : `${t.slice(0, max)} …[+${t.length - max}]`;
 }
 
-/** One session's transcript, as the office found it. */
+/** One session's transcript, as Focus found it. */
 export interface Transcript {
   /** What its digest is called: unique, and readable in a citation. */
   name: string;
@@ -109,7 +111,7 @@ export interface Transcript {
 
 /**
  * Claude Code keeps each session's transcript under <projects>/<its cwd, with every character but letters and digits
- * turned into ->/<session id>.jsonl. The office's agents all work under data/workspaces, so theirs are the folders
+ * turned into ->/<session id>.jsonl. Focus's agents all work under data/workspaces, so theirs are the folders
  * that start with that path's name; the kind of agent is the next word (agent_…, lead_…, qa_…).
  */
 export function transcriptFolders(projectsDir: string, workspacesDir: string): (since: number) => Promise<Transcript[]> {

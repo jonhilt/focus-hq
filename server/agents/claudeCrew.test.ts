@@ -47,7 +47,7 @@ describe('readOnlyOptions', () => {
     expect(options.outputFormat).toBeUndefined();
   });
 
-  it('pre-approves the office’s own tools under their server’s name, and only that server', () => {
+  it('pre-approves Ops’ own tools under their server’s name, and only that server', () => {
     const options = readOnlyOptions(crewRun({ tools }), new AbortController());
     expect(options.allowedTools).toEqual(['Read', 'Glob', 'Grep', 'mcp__office__ship_status']);
     expect(options.mcpServers).toEqual({ office: server });
@@ -69,7 +69,7 @@ describe('readOnlyOptions', () => {
 describe('blockActivity', () => {
   const at = { cwd: '/planning/p1', tools };
 
-  it('says what an office tool is doing in its own words', () => {
+  it('says what an Ops tool is doing in its own words', () => {
     expect(blockActivity({ type: 'tool_use', id: 't1', name: 'mcp__office__ship_status', input: {} } as never, at)).toBe('Running ship_status');
   });
 

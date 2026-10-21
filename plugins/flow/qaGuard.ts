@@ -1,4 +1,4 @@
-// QA's catch rate (docs/qa-catch.md) as one of `pnpm run flow`'s quality guards: the office's latest run, read through
+// QA's catch rate (docs/qa-catch.md) as one of `pnpm run flow`'s quality guards: Focus's latest run, read through
 // the plugin API.
 import { type CatchRun, catchTotals } from '../../plugin-api/server';
 

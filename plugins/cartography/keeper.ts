@@ -1,5 +1,5 @@
 // Keeping the diagrams leads draw (diagrams.ts): each one's page and picture as files in the plugin's data folder, with
-// an index of them by project beside them that outlives the office restarting, unlike the maps, which are made again.
+// an index of them by project beside them that outlives Focus restarting, unlike the maps, which are made again.
 // How each stands against its repos' default branches is worked out again as the project's maps are.
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
@@ -18,7 +18,7 @@ export const hashOf = (file: string): string | undefined => {
 };
 
 /** What a diagram whose page has gone from the plugin's folder opens on. */
-export const MISSING_PAGE = '<!doctype html><body style="background:#0b1020;color:#e8ecf5;font:18px system-ui;padding:32px">Its page is gone from the office\'s files: draw it again, or forget it.</body>';
+export const MISSING_PAGE = '<!doctype html><body style="background:#0b1020;color:#e8ecf5;font:18px system-ui;padding:32px">Its page is gone from Focus\'s files: draw it again, or forget it.</body>';
 
 export class DiagramKeeper {
   private readonly dir: string;
@@ -26,7 +26,7 @@ export class DiagramKeeper {
   constructor(
     private host: PluginHost,
     private state: PluginState<CartographyState>,
-    /** Where a repo's default branch is checked out to be read (the office's own checkout in the demo). */
+    /** Where a repo's default branch is checked out to be read (Focus's own checkout in the demo). */
     private checkout: (repo: string) => Promise<string>,
   ) {
     this.dir = path.join(host.dataDir(), 'diagrams');
@@ -36,7 +36,7 @@ export class DiagramKeeper {
     return path.join(this.dir, 'index.json');
   }
 
-  /** The kept diagrams as the office last saved them. */
+  /** The kept diagrams as Focus last saved them. */
   load(): Record<string, KeptDiagram[]> {
     let saved: Record<string, KeptDiagram[]>;
     try {
@@ -44,7 +44,7 @@ export class DiagramKeeper {
     } catch {
       return {};
     }
-    // no drawing can be under way as the office starts: one the office stopped in the middle of can be drawn again
+    // no drawing can be under way as Focus starts: one Focus stopped in the middle of can be drawn again
     return Object.fromEntries(Object.entries(saved).map(([project, kept]) => [project, kept.map(({ redrawing: _, ...d }) => d)]));
   }
 
@@ -108,7 +108,7 @@ export class DiagramKeeper {
       const drawn = await this.host.drawModel({ question: d.question, title: d.title, dirs: [...new Set(checkouts.map((c) => c.dir))] });
       // forgotten while it was being drawn: it stays forgotten
       if (!this.state.get().diagrams[projectId]?.some((k) => k.id === id)) return;
-      this.store(projectId, { ...d, by: 'the office', at: Date.now(), image: !!drawn.image, files: this.hashed(drawn.model, checkouts), stale: undefined, redrawing: undefined, failed: undefined }, drawn);
+      this.store(projectId, { ...d, by: 'Ops', at: Date.now(), image: !!drawn.image, files: this.hashed(drawn.model, checkouts), stale: undefined, redrawing: undefined, failed: undefined }, drawn);
     } catch (err) {
       this.mark(projectId, id, { redrawing: undefined, failed: errorMessage(err) });
     }

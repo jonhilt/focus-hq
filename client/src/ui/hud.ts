@@ -7,7 +7,7 @@ import { fill, h } from './dom';
 
 export type ToastAction = { label: string; run: () => void };
 
-/** Crosshair, interaction hint, where-am-I label, office counters and toasts. */
+/** Crosshair, interaction hint, where-am-I label, ship counters and toasts. */
 export class Hud {
   private root = h('div', { class: 'hud' });
   private crosshair = h('div', { class: 'crosshair' });

@@ -1,8 +1,8 @@
 // Which plugins a project has switched on (docs/plugins.md): a plugin that works per project does nothing for a project
-// until it's switched on there, in the project's settings. Pure, for the office and the browser alike.
+// until it's switched on there, in the project's settings. Pure, for the server and the browser alike.
 import type { Project } from './types';
 
-/** A plugin's id as the office takes one: lowercase letters, digits and dashes. */
+/** A plugin's id as Focus takes one: lowercase letters, digits and dashes. */
 const ID = /^[a-z][a-z0-9-]{0,40}$/;
 
 /** Whether plugin `id` is switched on for `project` (missing = off). */

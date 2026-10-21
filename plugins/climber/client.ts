@@ -1,4 +1,4 @@
-import { callPlugin, type ClientPlugin, h, office, pluginState, Switch, timeAgo, type Ui } from '../../plugin-api/client';
+import { callPlugin, type ClientPlugin, h, focus, pluginState, Switch, timeAgo, type Ui } from '../../plugin-api/client';
 import { climbCard, type ClimbCard } from './card';
 import { CLIMBER, climbingEngineer, type Climb } from './shared';
 import './climber.css';
@@ -11,9 +11,9 @@ function climberView(ui: Ui): HTMLElement {
   // the plugin's own state, as its server part saves it
   const climb = pluginState<Climb>(CLIMBER);
   const engineer = climbingEngineer().name;
-  const card = climbCard(climb, (id) => office.agent(id), engineer, timeAgo);
+  const card = climbCard(climb, (id) => focus.agent(id), engineer, timeAgo);
   const keep = new Switch('Keep climbing', card.keepClimbing, {
-    title: 'One climb at a time on the office’s own repo: each opens a pull request that waits for you to merge it',
+    title: 'One climb at a time on Focus’s own repo: each opens a pull request that waits for you to merge it',
     changed: (on) => void callPlugin<Climb>(CLIMBER, '/keep-climbing', { on }).catch((err: Error) => {
       keep.on = !on;
       ui.error(err.message);

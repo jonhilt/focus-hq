@@ -8,7 +8,7 @@ const cyl = (rt: number, rb: number, h: number, color: string, segments = 16) =>
 const capsule = (r: number, len: number, color: string) => new THREE.Mesh(new THREE.CapsuleGeometry(r, len, 6, 12), toon(color));
 const ball = (r: number, color: string, segments = 14) => new THREE.Mesh(new THREE.SphereGeometry(r, segments, Math.round(segments * 0.75)), toon(color));
 
-/** Office chair facing +X. */
+/** Swivel chair facing +X. */
 export function chair(color: string): THREE.Group {
   const g = new THREE.Group();
   const seat = cyl(0.26, 0.26, 0.08, color);

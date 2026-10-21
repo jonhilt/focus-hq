@@ -27,7 +27,7 @@ describe('a model drawn afresh', () => {
     await expect(sessionModel({ question: 'How?', dirs: [] }, DEFAULT_SETTINGS, () => Promise.reject(new Error('unasked')))).rejects.toThrow('no code to read');
   });
 
-  it('draws the demo’s one model under the question asked, every cite holding in the office’s own code', () => {
+  it('draws the demo’s one model under the question asked, every cite holding in Focus’s own code', () => {
     const demo = demoModel({ question: 'How is it kept?', dirs: [config.root] });
     expect(demo.question).toBe('How is it kept?');
     const { model: checked, problems } = checkModel(demo, sourceReader([config.root]));

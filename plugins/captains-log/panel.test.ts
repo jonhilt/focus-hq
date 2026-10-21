@@ -10,7 +10,7 @@ let answer: () => Promise<LogLine[]> = () => Promise.resolve([]);
 vi.mock('../../plugin-api/client', async () => ({
   ...(await import('../../plugin-api/shared')),
   LCARS: { peach: '#f90', periwinkle: '#99f', lilac: '#c9f', sky: '#9cf' },
-  office: {
+  focus: {
     agents: [{ name: 'Lt. Reyes', permission: { tool: 'Bash' } }, { name: 'Ens. Park', status: 'error' }, { name: 'Ens. Idle', status: 'idle' }],
     projects: [{ id: 'p', name: 'Shop' }, { id: 'q', name: 'Hidden', hidden: true }],
   },
@@ -40,7 +40,7 @@ const line = (over: Partial<LogLine>): LogLine => ({ t: now - 60_000, who: 'Lt. 
 const LINES = [
   line({}),
   line({ t: now - 50_000, source: 'review', kind: 'testing', who: 'Lt. Quintero', tag: 'QA', text: 'Testing web#4', goal: undefined }),
-  line({ t: now - 40_000, source: 'ledger', kind: 'merged', who: 'Office', tag: 'Merged', text: 'web #4', projectId: 'q' }),
+  line({ t: now - 40_000, source: 'ledger', kind: 'merged', who: 'Ops', tag: 'Merged', text: 'web #4', projectId: 'q' }),
 ];
 
 /** Opens the panel: its body, as the panels have it. */
@@ -79,7 +79,7 @@ describe('the captain’s log panel', () => {
     expect((calls[0].body as { since: number }).since).toBeLessThanOrEqual(now - DAY + 1000);
     expect(body.querySelector('.captains-log-away p')?.textContent).toBe('1 slice shipped · 1 merged');
     expect(body.querySelector('.captains-log-waiting')?.textContent).toBe('Waiting on you: Lt. Reyes (hand up), Ens. Park (hit a problem)');
-    expect(rows(body)).toEqual(['Office', 'Lt. Quintero', 'Lt. Oyelaran']);
+    expect(rows(body)).toEqual(['Ops', 'Lt. Quintero', 'Lt. Oyelaran']);
     // what's new since you last looked is lit
     expect(body.querySelector('.captains-log-row.new')).not.toBeNull();
     // there's no "since you last looked" until you have
@@ -89,7 +89,7 @@ describe('the captain’s log panel', () => {
   it('filters by where a line came from, the room, the goal and who', async () => {
     const body = await open();
     button(body, 'QA')?.click();
-    expect(rows(body)).toEqual(['Office', 'Lt. Oyelaran']);
+    expect(rows(body)).toEqual(['Ops', 'Lt. Oyelaran']);
     button(body, 'QA')?.click();
     expect(rows(body)).toHaveLength(3);
     const [room, goal, who] = [...body.querySelectorAll('select')];

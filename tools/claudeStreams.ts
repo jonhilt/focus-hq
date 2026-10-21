@@ -1,7 +1,7 @@
 // Records what real Claude Code says down the SDK in a few tiny scripted sessions, on the cheapest model, for the
 // facts the Claude Code contract (server/agents/claudeContract.test.ts) couldn't get from the transcripts on disk:
 // what `background_tasks_changed` lists and when, what a turn's `result` counts as queued, what happens to a message
-// sent mid-turn or as a turn ends, and to a tool that needs approval once the office's input has closed.
+// sent mid-turn or as a turn ends, and to a tool that needs approval once Focus's input has closed.
 //
 //   FOCUS_LIVE_CLAUDE=1 pnpm run claude-streams [scenario…]
 //
@@ -17,8 +17,8 @@ const MODEL = 'claude-haiku-4-5-20251001';
 const BUDGET_USD = 0.3;
 const OUT = path.join(process.cwd(), 'data', 'claude-streams');
 
-/** The office's side of a session: what it sends, and when it closes its input. */
-interface Office {
+/** Focus's side of a session: what it sends, and when it closes its input. */
+interface FocusSide {
   send(text: string): void;
   close(): void;
   readonly closed: boolean;
@@ -26,8 +26,8 @@ interface Office {
 
 interface Scenario {
   prompt: string;
-  /** What the office does on each message, given its shape and what came before. */
-  react(shape: Shape, seen: Shape[], office: Office): void;
+  /** What Focus does on each message, given its shape and what came before. */
+  react(shape: Shape, seen: Shape[], focus: FocusSide): void;
   timeoutMs: number;
 }
 
@@ -48,33 +48,33 @@ const SCENARIOS: Record<string, Scenario> = {
   // a message mid-turn, one as the turn ends, and a background command's report
   messages: {
     prompt: 'Use the Bash tool with run_in_background set to true to run: sleep 8; echo ok. Then reply with only the word STARTED. When you later hear it finished, reply with only the word FINISHED.',
-    react(shape, seen, office) {
+    react(shape, seen, focus) {
       const bash = (s: Shape) => s.type === 'assistant' && Array.isArray(s.blocks) && s.blocks.some((b) => b.startsWith('tool_use:Bash'));
-      if (bash(shape) && count(seen, bash) === 1) office.send('Also put the word PING in your reply.');
-      if (shape.type === 'result' && count(seen, (s) => s.type === 'result') === 1) office.send('Reply with only the word ACK.');
-      if (shape.type === 'result' && ended(seen, 'local_bash') && !background(seen).length && !office.closed) office.close();
+      if (bash(shape) && count(seen, bash) === 1) focus.send('Also put the word PING in your reply.');
+      if (shape.type === 'result' && count(seen, (s) => s.type === 'result') === 1) focus.send('Reply with only the word ACK.');
+      if (shape.type === 'result' && ended(seen, 'local_bash') && !background(seen).length && !focus.closed) focus.close();
     },
     timeoutMs: 120_000,
   },
   // a workflow and a background command at once, the command ending first
   workflow: {
     prompt: `Do both of these in one go, then reply with only the word STARTED.\n1. Use the Bash tool with run_in_background set to true to run: sleep 3; echo ok\n2. Use the Workflow tool with exactly this script:\n\n${WORKFLOW}\n\nWhen you later hear each finished, reply with only the word FINISHED.`,
-    react(shape, seen, office) {
-      if (shape.type === 'result' && ended(seen, 'local_workflow') && ended(seen, 'local_bash') && !background(seen).length && !office.closed) office.close();
+    react(shape, seen, focus) {
+      if (shape.type === 'result' && ended(seen, 'local_workflow') && ended(seen, 'local_bash') && !background(seen).length && !focus.closed) focus.close();
     },
     timeoutMs: 180_000,
   },
-  // the office closes its input as the turn ends, with a command still running (879f9ec, put back)
+  // Focus closes its input as the turn ends, with a command still running (879f9ec, put back)
   'closed-input': {
     prompt: 'Use the Bash tool with run_in_background set to true to run: sleep 6; echo ok. Then reply with only the word STARTED. When you later hear it finished, run `touch second.txt` with the Bash tool (not in the background), then reply with only the word DONE.',
-    react(shape, _seen, office) {
-      if (shape.type === 'result' && !office.closed) office.close();
+    react(shape, _seen, focus) {
+      if (shape.type === 'result' && !focus.closed) focus.close();
     },
     timeoutMs: 60_000,
   },
 };
 
-/** The office's input: messages it sends, until it closes. */
+/** Focus's input: messages it sends, until it closes. */
 class Input implements AsyncIterable<SDKUserMessage> {
   private items: SDKUserMessage[] = [];
   private waiting?: (r: IteratorResult<SDKUserMessage>) => void;
@@ -110,7 +110,7 @@ async function record(name: string, scenario: Scenario): Promise<Shape[]> {
   const seen: Shape[] = [];
   const event = (e: Shape) => seen.push({ ...e, ms: Date.now() - started });
   const input = new Input();
-  const office: Office = {
+  const focus: FocusSide = {
     send: (text) => {
       event({ office: 'sends a message', closed: input.closed });
       input.push(text);
@@ -141,7 +141,7 @@ async function record(name: string, scenario: Scenario): Promise<Shape[]> {
     for await (const msg of query({ prompt: input, options: { cwd, model: MODEL, settingSources: [], systemPrompt: { type: 'preset', preset: 'claude_code' }, permissionMode: 'default', canUseTool, env, abortController: abort } })) {
       const shape = { ...shapeOf(msg, tasks, tools), ms: Date.now() - started };
       seen.push(shape);
-      scenario.react(shape, seen, office);
+      scenario.react(shape, seen, focus);
       if (spentOf(seen) > BUDGET_USD) {
         event({ office: 'stops: over budget' });
         abort.abort();

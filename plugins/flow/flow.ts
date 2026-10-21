@@ -39,7 +39,7 @@ export const CAPTAIN_REASONS: Record<CaptainReason, string> = {
 
 /** What a lead's transcript says happened when: a message starting a turn, the lead at work or saying something, or a pull request shipped. */
 export type Moment =
-  | { at: number; kind: 'message'; from: 'captain' | 'office' | 'background'; /** The office saying a slice landed. */ slice?: boolean }
+  | { at: number; kind: 'message'; from: 'captain' | 'office' | 'background'; /** Ops saying a slice landed. */ slice?: boolean }
   | { at: number; kind: 'activity' }
   | { at: number; kind: 'said'; said: Said }
   | { at: number; kind: 'ship'; prs: PrKey[] };

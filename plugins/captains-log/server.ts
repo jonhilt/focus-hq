@@ -1,5 +1,5 @@
-// The captain's log: every journal the office keeps and the ledger on one timeline, served to its panel
-// (J). FOCUS_PLUGINS=captains-log, for the whole office.
+// The captain's log: every journal Ops keeps and the ledger on one timeline, served to its panel
+// (J). FOCUS_PLUGINS=captains-log, for the whole ship.
 import type { FocusPlugin } from '../../plugin-api/server';
 import { captainsLog, logSources } from './log';
 import { CAPTAINS_LOG, logSince } from './shared';

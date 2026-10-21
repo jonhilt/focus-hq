@@ -1,9 +1,9 @@
-// `pnpm run demo:start|stop|status`: a demo office that outlives the shell that started it, on a port of its own, which
+// `pnpm run demo:start|stop|status`: a demo ship that outlives the shell that started it, on a port of its own, which
 // only this checkout's own `stop` ever stops (docs/scripts.md). The decisions are in demoServerRules.ts.
 import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { freePort, root } from './demoOffice';
+import { freePort, root } from './demoShip';
 import { decodeRecord, demoHealth, describeDemo, parseDemoArgs, startPlan, stopTarget, type DemoHealth, type DemoRecord } from './demoServerRules';
 
 /** Everything a demo started from this checkout keeps: its record, log and data folder (gitignored). */
@@ -98,7 +98,7 @@ async function launch(built: boolean): Promise<DemoRecord> {
     detached: true,
   });
   fs.closeSync(out);
-  if (child.pid === undefined) throw new Error(`the demo office didn't start; see ${log}`);
+  if (child.pid === undefined) throw new Error(`the demo ship didn't start; see ${log}`);
   child.unref();
   const { commit, dirty } = head();
   const record: DemoRecord = { v: 1, pid: child.pid, port, url: `http://127.0.0.1:${port}/`, dataDir, log, commit, dirty, built, startedAt: Date.now() };
@@ -131,7 +131,7 @@ async function main(): Promise<number> {
     return state === 'up' ? 0 : 1;
   }
   if (args.command === 'stop') {
-    console.log((await stop(record, state)) ? `Stopped the demo office (pid ${record?.pid}).` : 'No demo office of this checkout\'s was running.');
+    console.log((await stop(record, state)) ? `Stopped the demo ship (pid ${record?.pid}).` : 'No demo ship of this checkout\'s was running.');
     return 0;
   }
 
@@ -144,7 +144,7 @@ async function main(): Promise<number> {
   const started = await launch(args.built);
   if (!(await waitUntilUp(started))) {
     await stop(started, await health(started));
-    console.error(`The demo office didn't answer within ${READY_MS / 1000} s. Its log ends:\n${logTail(started.log)}`);
+    console.error(`The demo ship didn't answer within ${READY_MS / 1000} s. Its log ends:\n${logTail(started.log)}`);
     return 1;
   }
   console.log(describeDemo('up', started, head()));

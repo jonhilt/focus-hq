@@ -108,7 +108,7 @@ describe('installFailedNote', () => {
 
   it('names each folder, the command and why', () => {
     expect(installFailedNote([{ dir: '/w/a/e2e', command: 'npm ci', reason: 'ERESOLVE' }])).toBe(
-      "The office couldn't install the dependencies in your checkout, so the checks will fail until you do:\n- /w/a/e2e: `npm ci` failed: ERESOLVE",
+      "Ops couldn't install the dependencies in your checkout, so the checks will fail until you do:\n- /w/a/e2e: `npm ci` failed: ERESOLVE",
     );
   });
 });

@@ -1,9 +1,9 @@
-// Reading your plan's usage from Claude Code's structured /usage every few minutes, with how the office signs in.
+// Reading your plan's usage from Claude Code's structured /usage every few minutes, with how Focus signs in.
 import { query, type SDKControlGetUsageResponse, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { agentEnv, errorMessage, type PluginState, type SignIn } from '../../plugin-api/server';
 import type { PlanUsage, Usage, UsageWindow } from './shared';
 
-/** How often the office reads your plan's usage: each reading starts a Claude Code process, but sends it nothing. */
+/** How often Focus reads your plan's usage: each reading starts a Claude Code process, but sends it nothing. */
 export const READ_EVERY_MS = 3 * 60_000;
 /** A reading that takes longer than this has failed. */
 const READ_TIMEOUT_MS = 30_000;
@@ -55,12 +55,12 @@ export function planUsage(raw: Pick<SDKControlGetUsageResponse, 'subscription_ty
 }
 
 /**
- * Reads your plan's usage the way the office's sessions sign in, from a Claude Code session that's sent no prompt, so
+ * Reads your plan's usage the way Focus's sessions sign in, from a Claude Code session that's sent no prompt, so
  * it spends nothing and leaves no transcript.
  */
 export async function readPlanUsage(cwd: string): Promise<PlanUsage | null> {
   const abort = new AbortController();
-  // a prompt that never comes: the session only answers the office's control request
+  // a prompt that never comes: the session only answers Focus's control request
   const prompt: AsyncIterable<SDKUserMessage> = {
     [Symbol.asyncIterator]: () => ({
       next: () => new Promise<IteratorResult<SDKUserMessage>>((resolve) => abort.signal.addEventListener('abort', () => resolve({ done: true, value: undefined }))),
@@ -78,7 +78,7 @@ export async function readPlanUsage(cwd: string): Promise<PlanUsage | null> {
 }
 
 /**
- * The readout: a plan's reading (or why there's none) with how the office signs in. `error` is always there, undefined
+ * The readout: a plan's reading (or why there's none) with how Focus signs in. `error` is always there, undefined
  * once a reading works, so setting the plugin's state with it clears an error from before.
  */
 export const usageOf = (plan: PlanUsage | null, error: string | undefined, signIn: SignIn): Usage => ({
@@ -91,7 +91,7 @@ export const usageOf = (plan: PlanUsage | null, error: string | undefined, signI
 });
 
 /**
- * Main engineering's usage readout: your plan's limits, read every few minutes, and how the office's sessions sign in
+ * Main engineering's usage readout: your plan's limits, read every few minutes, and how Focus's sessions sign in
  * (`host.signIn`), in the plugin's state whenever either changes. On the API key alone there's no plan to read.
  */
 export class UsageWatch {
@@ -109,7 +109,7 @@ export class UsageWatch {
     return usageOf(this.plan, this.error, this.signIn());
   }
 
-  /** Says how the office signs in straight away, and reads the plan every few minutes, unless there's none to read. */
+  /** Says how Focus signs in straight away, and reads the plan every few minutes, unless there's none to read. */
   start(): void {
     this.changed();
     if (this.signIn().mode === 'key') return;
@@ -133,7 +133,7 @@ export class UsageWatch {
     this.changed();
   }
 
-  /** Something about how the office signs in changed. */
+  /** Something about how Focus signs in changed. */
   changed(): void {
     this.state.set(this.current());
   }

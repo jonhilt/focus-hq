@@ -5,10 +5,10 @@ import type { Agent } from '../../../shared/types';
 import { api } from './api';
 import { state } from './state';
 
-// What waits on the captain right now, for the 3D office's Comms panel and badge and the Tricorder's Needs you strip,
-// and telling the office when they've read a lead's turn.
+// What waits on the captain right now, for the 3D ship's Comms panel and badge and the Tricorder's Needs you strip,
+// and telling Focus when they've read a lead's turn.
 
-/** Turns already on their way to the office, so a burst of updates to an open panel asks once. */
+/** Turns already on their way to Focus, so a burst of updates to an open panel asks once. */
 const asked = new Set<string>();
 
 /**
@@ -38,6 +38,6 @@ export const attention = (): Attention[] => needsYou(state.shownAgents(), shownP
 
 /**
  * Everything waiting on the captain across the shown projects: the hails, then the leads whose turn they've read but
- * not answered (`waiting`). The office's inbox (`GET /api/inbox`) is the same list.
+ * not answered (`waiting`). Focus's inbox (`GET /api/inbox`) is the same list.
  */
 export const needs = (): Attention[] => waiting(state.shownAgents(), shownPrs(), state.reviews, state.shown.flatMap((p) => state.leadsIn(p.id)), Date.now());

@@ -88,7 +88,7 @@ describe('measureNewCommit', () => {
 });
 
 describe('ScorecardDesk.measureIfNew', () => {
-  it('measures the commit the office started on once, saying why', async () => {
+  it('measures the commit Focus started on once, saying why', async () => {
     const { desk: d, sent } = desk(() => Promise.resolve());
     d.measureIfNew({ commit: 'c2', dirty: false });
     expect(d.current()).toMatchObject({ status: 'measuring', trigger: 'new-commit' });

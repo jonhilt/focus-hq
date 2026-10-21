@@ -40,7 +40,7 @@ import { Deck } from './world/deck';
 import { HolodeckDeck } from './world/holodeckDeck';
 import { COMMAND_DECK, ENGINEERING_DECK, SUN_POSITION } from './world/layout';
 import { setMerging } from './world/merge';
-import { type Ship, World } from './world/office';
+import { type Ship, World } from './world/ship';
 import { SceneRenderer } from './world/sceneRenderer';
 import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
@@ -148,7 +148,7 @@ async function main() {
   const hud = new Hud();
   const panels = new Panels();
   // recording: H (or ?record=1) hides what's only there to drive the ship (the HUD, all but errors' toasts), so a
-  // video shows the office and nothing else
+  // video shows the ship and nothing else
   const record = (on: boolean) => document.body.classList.toggle('recording', on);
   record(params.get('record') === '1');
 
@@ -620,7 +620,7 @@ async function main() {
         return;
       }
     }
-    // in a demo office, - and = slow its agents down and speed them up
+    // in a demo ship, - and = slow its agents down and speed them up
     if ((e.code === 'Minus' || e.code === 'Equal') && state.info?.mode === 'demo') {
       if (!e.repeat) stepDemoPace(e.code === 'Minus' ? -1 : 1, ui);
       return;
@@ -663,7 +663,7 @@ async function main() {
 
   // ---------------------------------------------------------------- loop
   const timer = new THREE.Timer();
-  // ?adapt=0 keeps the picture as it starts; ?stats=1 shows how frames are going, and logs it at the office
+  // ?adapt=0 keeps the picture as it starts; ?stats=1 shows how frames are going, and logs it with Focus
   const adapting = params.get('adapt') !== '0';
   const stats = params.get('stats') === '1' ? new FrameStats(renderer) : null;
   const apply = () => {

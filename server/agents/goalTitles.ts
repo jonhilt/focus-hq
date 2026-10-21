@@ -1,5 +1,5 @@
 /**
- * Titling a new goal: the office starts it under the captain's first words (`goalTitle`), and asks Haiku for a short
+ * Titling a new goal: Ops starts it under the captain's first words (`goalTitle`), and asks Haiku for a short
  * title that says what the work is, which replaces it unless the lead or the captain has retitled it meanwhile.
  */
 

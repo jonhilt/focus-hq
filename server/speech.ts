@@ -13,10 +13,10 @@ interface Line {
   reject: (err: Error) => void;
 }
 
-/** What the office asks the speech worker. */
+/** What Focus asks the speech worker. */
 export type ToSpeechWorker = { type: 'load'; voices?: readonly KokoroVoice[] } | { type: 'speak'; id: number; text: string; voice: KokoroVoice };
 
-/** What the speech worker tells the office. */
+/** What the speech worker tells Focus. */
 export type FromSpeechWorker =
   | { type: 'progress'; bytes: number; total?: number }
   | { type: 'ready' }
@@ -49,7 +49,7 @@ function markLoadedOnGpu(): void {
     mkdirSync(kokoro.gpuDir, { recursive: true });
     writeFileSync(kokoro.gpuMarker, '');
   } catch {
-    // only the office's warm start misses it
+    // only Focus's warm start misses it
   }
 }
 
@@ -59,10 +59,10 @@ function markLoadedOnGpu(): void {
  * up however busy the agents keep the CPU. The model downloads once into the models folder, the first time something
  * asks for it, and stays loaded after that. Lines are spoken one at a time, so a queue of them doesn't fight over it.
  *
- * Kokoro runs in a child process, never in the office's: once onnxruntime-node is loaded, a
+ * Kokoro runs in a child process, never in Focus's: once onnxruntime-node is loaded, a
  * process that exits normally aborts on macOS ("libc++abi: … mutex lock failed: Invalid argument") as onnxruntime's
  * native teardown runs, even after its session is released. Only a process that ends without that teardown is spared,
- * so the worker is ended with SIGKILL (`close`, and the worker itself when the office goes) and the office exits as
+ * so the worker is ended with SIGKILL (`close`, and the worker itself when Focus goes) and Focus exits as
  * any other process does: its exit listeners save the state and drop the lock, and nothing aborts.
  */
 export class Speech {

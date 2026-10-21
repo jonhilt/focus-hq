@@ -1,4 +1,4 @@
-// The demo office's scorecards: a made-up history that climbs a little each time, kept in memory so the demo never
+// The demo ship's scorecards: a made-up history that climbs a little each time, kept in memory so the demo never
 // writes to ~/.focus/scorecards/.
 import { demoPace, sleep } from '../../plugin-api/server';
 import type { Metric, Scorecard } from './types';

@@ -98,7 +98,7 @@ describe('replayLines', () => {
 });
 
 describe('changesCode', () => {
-  it("counts a commit that changed the office's code, not one that only changed tests, docs or assets", () => {
+  it("counts a commit that changed Focus's code, not one that only changed tests, docs or assets", () => {
     expect(changesCode(['docs/x.md', 'server/agents/lead.ts'])).toBe(true);
     expect(changesCode(['client/src/main.ts'])).toBe(true);
     expect(changesCode(['server/agents/lead.test.ts', 'docs/x.md', 'client/public/ship/deck.glb'])).toBe(false);

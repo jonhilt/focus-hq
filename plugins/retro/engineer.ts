@@ -9,7 +9,7 @@ import { parseDrafts, PATTERN_SESSIONS, renderFrictions, renderGoals, renderLedg
 import { freshRetro, type Retro, type RetroDraft, retroAfterRestart, running } from './shared';
 
 export interface RetroRequest {
-  /** The folder the office gathered the evidence in: the engineer's current directory. */
+  /** The folder Ops gathered the evidence in: the engineer's current directory. */
   cwd: string;
   days: number;
   /** Friction groups seen in enough sessions to draft from. */
@@ -41,7 +41,7 @@ const UNSET: Pick<Retro, 'startedAt' | 'finishedAt' | 'summary' | 'error'> = { s
  * and drafts issues for the frictions that keep coming back. First they read the spans no one has read yet (their
  * trimmed text, a batch at a time, with a pause between), finding and quoting the frictions and reusing the signatures
  * already in the ledger, which goes down as `session-frictions` so no span is read twice. Code then groups the
- * frictions by kind and signature and keeps those in three or more sessions; the office writes them, the ledger and closed goals into a folder of its
+ * frictions by kind and signature and keeps those in three or more sessions; Ops writes them, the ledger and closed goals into a folder of its
  * own; the engineer reads only that, drafts, and changes nothing. The captain accepts (it's filed) or rejects each
  * draft. One retro at a time; the latest is kept in the plugin's slot of state.json, and each one's folder (with
  * retro.json) under data/retros.
@@ -53,7 +53,7 @@ export class ChiefEngineer {
 
   /**
    * `retrosDir` is where each retro's evidence goes; `pauseMs` is a breather between batches, so a retro doesn't take
-   * all of the office's Claude usage at once.
+   * all of Focus's Claude usage at once.
    */
   constructor(
     private readonly host: PluginHost,
@@ -217,4 +217,4 @@ export function undecided(retro: Retro, id: string): RetroDraft {
 
 /** An accepted draft's issue as it's filed: its body, signed by the chief engineer. */
 export const filedBody = (draft: RetroDraft): string =>
-  `${draft.body}\n\n_Drafted by ${chiefEngineer().name}, the Focus office's chief engineer, from frictions in ${draft.sessions} agent sessions; accepted by the captain._`;
+  `${draft.body}\n\n_Drafted by ${chiefEngineer().name}, the Focus's chief engineer, from frictions in ${draft.sessions} agent sessions; accepted by the captain._`;

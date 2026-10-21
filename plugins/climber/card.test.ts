@@ -21,7 +21,7 @@ describe('climbCard', () => {
     });
   });
 
-  it('takes the climber for gone once they’ve left the office', () => {
+  it('takes the climber for gone once they’ve left the ship', () => {
     expect(climbCard(climb({ agentId: 'climber' }), away, 'Lt. Rhee', ago)).toMatchObject({ now: null, pr: null });
   });
 

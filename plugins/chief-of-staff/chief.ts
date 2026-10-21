@@ -14,7 +14,7 @@ export interface Judge {
   judge(req: { system: string; prompt: string; settings: Settings }): Promise<{ structured: unknown; costUsd?: number; model?: string }>;
 }
 
-/** What the chief of staff needs of the office. */
+/** What the chief of staff needs of the focus. */
 export type ChiefHost = Pick<PluginHost, 'on' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'judged'> };
 
 export class ChiefOfStaff {
@@ -43,7 +43,7 @@ export class ChiefOfStaff {
   private async judgeTurn(agent: Agent, sessionId: string, goal: string, since: number): Promise<void> {
     const jsonl = await this.host.transcript(sessionId);
     const tail = jsonl === undefined ? undefined : turnTail(jsonl);
-    // a turn the lead said nothing in, or that your plan's limit stopped (the office carries those on), isn't judged
+    // a turn the lead said nothing in, or that your plan's limit stopped (Ops carries those on), isn't judged
     if (!tail || atUsageLimit(tail.text)) return;
     const key = `${sessionId}:${tail.uuid}`;
     if (this.judging.has(key) || this.judged(sessionId, tail.uuid)) return;

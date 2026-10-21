@@ -178,7 +178,7 @@ describe('prove', () => {
 
   it('doesn’t keep the source of a probe that passed', () => {
     const { rig: r } = rig({ 'src/hold.proof.test.ts': 'source' }, {});
-    expect(Effect.runSync(prove(report({ proofs: [test()] }), r)).proofs?.[0]).toEqual({ ...test(), outcome: 'passed', note: 'the test passed when the office ran it' });
+    expect(Effect.runSync(prove(report({ proofs: [test()] }), r)).proofs?.[0]).toEqual({ ...test(), outcome: 'passed', note: 'the test passed when Ops ran it' });
   });
 });
 

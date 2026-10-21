@@ -4,7 +4,7 @@
   "private": true,
   "license": "SEE LICENSE IN LICENSE",
   "type": "module",
-  "description": "A cartoon 3D office where a swarm of Claude Code agents works your GitHub issues.",
+  "description": "A cartoon 3D starship where a swarm of Claude Code agents works your GitHub issues.",
   "scripts": {
     "dev": "tsx server/supervise.ts --dev",
     "demo": "tsx server/index.ts --dev --demo",

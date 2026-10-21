@@ -4,11 +4,11 @@ import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { loadPlugins, ownPlugins, pluginEntry, pluginNames } from './load';
 
-// loading the office's own plugins imports each one's whole graph, a second alone and past 5 s on a busy machine
+// loading Focus's own plugins imports each one's whole graph, a second alone and past 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
 describe('pluginEntry', () => {
-  it('finds a bare name under the office’s plugins/, and a path anywhere', () => {
+  it('finds a bare name under Focus’s plugins/, and a path anywhere', () => {
     expect(pluginEntry('climber', '/focus', '/home/me')).toBe('/focus/plugins/climber/server.ts');
     expect(pluginEntry('../mine/auditor', '/focus', '/home/me/work')).toBe('/home/me/mine/auditor/server.ts');
     expect(pluginEntry('/opt/plugins/auditor', '/focus', '/home/me')).toBe('/opt/plugins/auditor/server.ts');
@@ -16,7 +16,7 @@ describe('pluginEntry', () => {
 });
 
 describe('pluginNames', () => {
-  it('reads all as every plugin of the office’s own, where it’s listed, and loads a plugin named twice once', () => {
+  it('reads all as every plugin of Focus’s own, where it’s listed, and loads a plugin named twice once', () => {
     expect(pluginNames(['all'], ['auditor', 'climber', 'scorecard'])).toEqual(['auditor', 'climber', 'scorecard']);
     expect(pluginNames(['../mine/auditor', 'all', 'climber'], ['climber', 'scorecard'])).toEqual(['../mine/auditor', 'climber', 'scorecard']);
     expect(pluginNames(['scorecard', 'climber'], [])).toEqual(['scorecard', 'climber']);
@@ -35,7 +35,7 @@ describe('ownPlugins', () => {
 });
 
 describe('loadPlugins', () => {
-  it('loads a plugin from a folder outside the office, and leaves out, saying why, one it can’t find or that isn’t one', async () => {
+  it('loads a plugin from a folder outside Focus, and leaves out, saying why, one it can’t find or that isn’t one', async () => {
     const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-plugins-'));
     fs.mkdirSync(path.join(dir, 'auditor'));
@@ -50,8 +50,8 @@ describe('loadPlugins', () => {
     error.mockRestore();
   });
 
-  it('loads a plugin by name from the office’s own plugins/, and every one of them for all', async () => {
-    // an office of its own, so the core's tests pass with any plugins, or none, in the checkout
+  it('loads a plugin by name from Focus’s own plugins/, and every one of them for all', async () => {
+    // a Focus checkout of its own, so the core's tests pass with any plugins, or none, in the checkout
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-root-'));
     for (const id of ['auditor', 'watcher']) {
       fs.mkdirSync(path.join(root, 'plugins', id), { recursive: true });
@@ -61,7 +61,7 @@ describe('loadPlugins', () => {
     expect((await loadPlugins(['all'], root)).map((p) => p.id)).toEqual(['auditor', 'watcher']);
   });
 
-  it('loads every one of this office’s own plugins for all, whichever are in its checkout', async () => {
+  it('loads every one of this checkout’s own plugins for all, whichever are in its checkout', async () => {
     const root = path.resolve(import.meta.dirname, '../..');
     expect((await loadPlugins(['all'], root)).map((p) => p.id)).toEqual(ownPlugins(root));
   });

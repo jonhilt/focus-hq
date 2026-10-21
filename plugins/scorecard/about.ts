@@ -12,7 +12,7 @@ export interface SectionAbout {
 export const SECTION_ABOUT: Record<ScorecardSection, SectionAbout> = {
   gate: {
     question: 'Does every check pass, and how long is the wait?',
-    about: 'Typecheck, lint, the unit tests and the build: what every pull request has to clear. Agents and QA wait on it every round, so its time is the office’s pace.',
+    about: 'Typecheck, lint, the unit tests and the build: what every pull request has to clear. Agents and QA wait on it every round, so its time is the ship’s pace.',
   },
   fence: {
     question: 'Where does the code step around the type checker?',
@@ -50,7 +50,7 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   'gate.seconds': {
     short: 'gate',
     what: 'The four steps’ times added up.',
-    why: 'Every agent runs it before shipping and QA runs it every round, so a slower gate slows the whole office. Timings wobble, so it only counts as a change past 10%.',
+    why: 'Every agent runs it before shipping and QA runs it every round, so a slower gate slows the whole ship. Timings wobble, so it only counts as a change past 10%.',
   },
   'typecheck.seconds': {
     short: 'typecheck',
@@ -166,7 +166,7 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   },
   'office.conflictsForAgent': {
     short: 'conflicts for an agent',
-    what: 'Pull requests whose merge conflicts an agent had to resolve, rather than the office merging them cleanly.',
+    what: 'Pull requests whose merge conflicts an agent had to resolve, rather than Ops merging them cleanly.',
     why: 'Each costs a session, and usually means two pieces of work kept editing the same files.',
   },
   'office.checksSentBack': {
@@ -196,5 +196,5 @@ export const METRIC_ABOUT: Record<string, MetricAbout> = {
   },
 };
 
-/** A number's explanation; one the office doesn't know yet (a scorecard newer than the browser) gets its label alone. */
+/** A number's explanation; one this Focus doesn't know yet (a scorecard newer than the browser) gets its label alone. */
 export const aboutMetric = (key: string, label: string): MetricAbout => METRIC_ABOUT[key] ?? { short: label, what: label, why: '' };

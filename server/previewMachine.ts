@@ -54,7 +54,7 @@ export class PreviewMachine extends Context.Service<PreviewMachine, {
   checkout(repo: string, dir: string, ref: PreviewRef): Effect.Effect<{ sha: string; path: string }, CheckoutFailed>;
 }>()('focus/previews/PreviewMachine') {
   static readonly layer = Layer.sync(PreviewMachine, () => {
-    // Commands run in their own process group, so they'd outlive the office unless we take them down with us. Only
+    // Commands run in their own process group, so they'd outlive Focus unless we take them down with us. Only
     // `exit` handlers run on every way out, and they can't wait: this is the last resort behind each preview's scope.
     const groups = new Set<number>();
     process.on('exit', () => {

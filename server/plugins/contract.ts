@@ -1,4 +1,4 @@
-// What a plugin is to the office (docs/plugins.md): the office's core lends it what it needs, and it adds briefs (work
+// What a plugin is to Focus (docs/plugins.md): Focus's core lends it what it needs, and it adds briefs (work
 // handed to agents in place of issues), routes, and hooks into how pull requests open, close and merge. A plugin is a
 // folder under plugins/ (or anywhere, by path) whose server.ts default-exports a FocusPlugin.
 import type { Effect } from 'effect';
@@ -23,11 +23,11 @@ export interface FocusPlugin {
    * them), and reaches what each provides through `host.uses`; otherwise it's left out, saying why.
    */
   requires?: string[];
-  /** Called once as the office starts, with what the office lends it; returns what it adds. */
+  /** Called once as Focus starts, with what Focus lends it; returns what it adds. */
   start(host: PluginHost): PluginParts;
 }
 
-/** What a plugin adds to the office: every part is optional. */
+/** What a plugin adds to Focus: every part is optional. */
 export interface PluginParts {
   /** What it lends the plugins that require it (`host.uses(id)` gives them this): the scorecard's scorecards, say. */
   provides?: object;
@@ -37,7 +37,7 @@ export interface PluginParts {
   routes?: PluginRoute[];
   /** A project's board was read from GitHub again (about once a minute): a moment to look at how the plugin's work stands. */
   boardRefreshed?(projectId: string): void;
-  /** The office opened, or updated, the pull request of an agent on one of this plugin's briefs. */
+  /** Ops opened, or updated, the pull request of an agent on one of this plugin's briefs. */
   prOpened?(agent: Readonly<Agent>, pr: { number: number; url: string }): void;
   /** A project's settings changed: a plugin switched on or off for it, say (`host.on`). */
   projectChanged?(projectId: string): void;
@@ -47,14 +47,14 @@ export interface PluginParts {
    * An agent's turn started (they're at work) or ended (they're waiting, or stopped), any agent's: filter for the ones
    * the plugin cares about. A turn can start and end more than once in what looks like one (carrying on, a retry, a
    * new session), and a turn that's interrupted still ends, so take each as how they stand now. 'end' is heard as the
-   * turn stops, before the office acts on how it went: the agent's status still says 'working' then (it becomes 'done',
+   * turn stops, before Ops acts on how it went: the agent's status still says 'working' then (it becomes 'done',
    * failed or a review's verdict just after), so judge by the phase, not the status.
    */
   turn?(agent: Readonly<Agent>, phase: 'start' | 'end'): void;
   /**
-   * A line went in the ship's log (any kind: filter for the ones that matter). It's heard as it's written, before the
-   * office has acted on what it says (a goal's pull request merging is logged before the goal knows), so read the
-   * office afresh a moment later rather than straight away.
+   * A line went in the ship's log (any kind: filter for the ones that matter). It's heard as it's written, before
+   * Ops has acted on what it says (a goal's pull request merging is logged before the goal knows), so read
+   * Focus afresh a moment later rather than straight away.
    */
   ledgerRecorded?(event: Readonly<LedgerEvent>): void;
   /**
@@ -63,7 +63,7 @@ export interface PluginParts {
    */
   modelShown?(agent: Readonly<Agent>, shown: ModelShown): void;
   /**
-   * One of the office's state machines stepped (`host.machines`): a journal took a fact, so a run of `machine` (`key`,
+   * One of Ops' state machines stepped (`host.machines`): a journal took a fact, so a run of `machine` (`key`,
    * an agent's id or a pull request's key) may be in another state. Heard as it's written: read `host.machines()` for
    * where it is now.
    */
@@ -71,17 +71,17 @@ export interface PluginParts {
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
   /**
-   * The office's new sessions moved onto your API key (your plan's usage limit was reached), or back onto your plan:
+   * Focus's new sessions moved onto your API key (your plan's usage limit was reached), or back onto your plan:
    * where it stands now, as `host.signIn()` reads it.
    */
   signInChanged?(signIn: SignIn): void;
   /**
    * Whether it judges this goal lead's turns for the captain's inbox (the chief of staff, where it's switched on). As such
-   * a turn ends, the office marks it as being read (`lead.cos`), and the captain's inbox holds it back, unhailing, until
+   * a turn ends, Ops marks it as being read (`lead.cos`), and the captain's inbox holds it back, unhailing, until
    * the plugin says how it judged it (`host.goals.judged`) or `JUDGING_MS` passes (shared/tricorder.ts).
    */
   judgesTurns?(agent: Readonly<Agent>): boolean;
-  /** Tools it adds to the office of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
+  /** Tools it adds to the Ops tools of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
 
@@ -94,9 +94,9 @@ export interface ModelShown {
   image?: Uint8Array;
 }
 
-/** A tool a plugin adds to every goal lead's office (`mcp__office__<name>`), answered in words, and pictures if it likes. */
+/** A tool a plugin adds to every goal lead's Ops tools (`mcp__office__<name>`), answered in words, and pictures if it likes. */
 export interface LeadTool {
-  /** Lowercase letters, digits and underscores; a name the office's own tools have is left out. */
+  /** Lowercase letters, digits and underscores; a name Ops' own tools have is left out. */
   name: string;
   /** What it's for and when to reach for it, as the lead reads it. */
   description: string;
@@ -105,7 +105,7 @@ export interface LeadTool {
   /** Its answer to the lead, in words (with JPEGs for them to look at); a throw is said back to them as the tool failing, in its message. */
   run(lead: LeadToolContext, input: Record<string, unknown>): Promise<string | LeadToolReply>;
   /**
-   * The input the demo office's scripted lead calls it with, for the demo's repos' `folders`; `again` when the captain
+   * The input the demo ship's scripted lead calls it with, for the demo's repos' `folders`; `again` when the captain
    * asked them for more on it. Without one, the scripted lead leaves the tool be.
    */
   demo?(ask: { folders: readonly string[]; again: boolean }): Record<string, unknown>;
@@ -136,14 +136,14 @@ export interface LeadToolContext {
   show(page: { id: string; title: string; html: string }): Promise<string>;
   /**
    * `show`, with a picture of the page at each of `frames` too, and what the page saw in each (`seen`: whatever its
-   * `kitSeen` returned, to narrow; null without one). No frames when the office couldn't take its picture.
+   * `kitSeen` returned, to narrow; null without one). No frames when Ops couldn't take its picture.
    */
   showFrames(page: { id: string; title: string; html: string }, frames: PageFrames): Promise<{ text: string; frames: { at: number; image: Uint8Array; seen: unknown }[] }>;
 }
 
 /**
  * A kind of work a plugin hands an agent in place of an issue (task `brief`). Like an issue's, it starts a new branch
- * from the repo's default one and ends in a pull request the office opens.
+ * from the repo's default one and ends in a pull request Ops opens.
  */
 export interface BriefSpec {
   /** A word for the agent's name tag and panels, like `Climb`. */
@@ -153,13 +153,13 @@ export interface BriefSpec {
   away?: boolean;
   /** Their system prompt's assignment: who they are, and what the work is. */
   assignment: string;
-  /** What their final message must be: the office opens their pull request from it (`pullRequest`). */
+  /** What their final message must be: Ops opens their pull request from it (`pullRequest`). */
   summary: string;
   /** Their first message. GitHub failing should cost the brief some detail, not the work. */
   brief(agent: Agent): Effect.Effect<string, never, GitHub>;
   /** Their pull request's title and body, from their final message. A brief has no issue, so no `Closes #…` is added. */
   pullRequest(summary: string): { title: string; body: string };
-  /** What the demo office's scripted stand-in writes up for it. */
+  /** What the demo ship's scripted stand-in writes up for it. */
   demo?: { title: string; summary: string };
 }
 
@@ -172,21 +172,21 @@ export interface PluginRoute {
 }
 
 /**
- * What the office lends a plugin. What it reads of the office (its agents, projects, settings, ledger, snapshot, and
- * the agents and lines its hooks hear of) is a copy of its own, marked read-only: changing it never changes the office.
+ * What Focus lends a plugin. What it reads of Focus (its agents, projects, settings, ledger, snapshot, and
+ * the agents and lines its hooks hear of) is a copy of its own, marked read-only: changing it never changes Focus.
  */
 export interface PluginHost {
-  /** The demo office: fake GitHub and scripted agents. */
+  /** The demo ship: fake GitHub and scripted agents. */
   readonly demo: boolean;
   /**
    * The plugin's own state, `fresh()` until it's first set: setting it tells every browser. It's saved in state.json
-   * unless `saved` is false (state that's read again as the office starts, like main engineering's scorecards).
+   * unless `saved` is false (state that's read again as Focus starts, like main engineering's scorecards).
    */
   state<S extends object>(fresh: () => S, how?: { saved?: boolean }): PluginState<S>;
   projects(): Readonly<Project>[];
   /**
    * Whether this plugin is switched on for project `projectId`, in its settings (`Project.plugins`). A plugin that works
-   * per project does nothing for a project it's off for; the office already keeps its lead tools and holodeck screens
+   * per project does nothing for a project it's off for; Focus already keeps its lead tools and holodeck screens
    * away from one.
    */
   on(projectId: string): boolean;
@@ -195,7 +195,7 @@ export interface PluginHost {
   recentLines(agentId: string, count: number): readonly Readonly<TermLine>[];
   /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */
   artifact(leadId: string, file: string): Promise<Uint8Array | undefined>;
-  /** Every agent in the office now, of every project. */
+  /** Every agent aboard now, of every project. */
   agents(): Readonly<Agent>[];
   /**
    * An agent session's Claude Code transcript (its JSONL) by session id: undefined when it isn't on this machine (a
@@ -205,19 +205,19 @@ export interface PluginHost {
   /** The ship's log of how work went, oldest first. */
   ledger(): Readonly<LedgerEvent>[];
   /**
-   * The office's state machines (`server/agents/machines.ts`), each as data to draw it from, in the order they're shown,
+   * Ops' state machines (`server/agents/machines.ts`), each as data to draw it from, in the order they're shown,
    * and where every run of each is now: each agent's run and what followed their last turn, each goal's slices, each
    * review on the boards.
    */
   machines(): { graphs: readonly Readonly<MachineGraph>[]; runs: readonly Readonly<MachineRun>[] };
   /**
    * A run's path through one of the machines (`machine`'s id, `key` its run's, as `machines()` gives them), read from
-   * its journal: the state it started in, then each state it moved into and when, its last steps. None for a run the
-   * office has no journal of.
+   * its journal: the state it started in, then each state it moved into and when, its last steps. None for a run Ops
+   * has no journal of.
    */
   machinePath(machine: string, key: string): readonly Readonly<MachineStep>[];
   /**
-   * The office's journals written to since `since` (by their files' times), each with every fact it holds, oldest
+   * Ops' journals written to since `since` (by their files' times), each with every fact it holds, oldest
    * first: each agent's run journal, each pull request's review journal and each goal's slice journal.
    */
   journals(since: number): LentJournals;
@@ -229,13 +229,13 @@ export interface PluginHost {
   /** The captain's settings (the model read-only sessions run on, say), as they are now. */
   settings(): Readonly<Settings>;
   /**
-   * How the office's sessions sign in to Claude now: your plan, your API key, or your plan with the key behind it, and
+   * How Focus's sessions sign in to Claude now: your plan, your API key, or your plan with the key behind it, and
    * whether new sessions are on the key and what it's spent while your plan's limit is reached. `signInChanged` says
    * when they move between the two.
    */
   signIn(): SignIn;
   /**
-   * The whole office as a browser gets it when it connects: projects, every agent with their recent terminal lines,
+   * The whole ship as a browser gets it when it connects: projects, every agent with their recent terminal lines,
    * boards, QA's reviews, the Ops stations' drafts and every plugin's state. It's a lot: ask when it's needed (an
    * answer to the captain), not on a timer, and only read it.
    */
@@ -262,36 +262,36 @@ export interface PluginHost {
    * other), and puts it on the project's board straight away.
    */
   fileIssue(projectId: string, repo: string, title: string, body: string): Promise<Issue>;
-  /** The office's own repo (`owner/repo`, from its checkout's remote): none in the demo. */
+  /** Focus's own repo (`owner/repo`, from its checkout's remote): none in the demo. */
   ownRepo(): string | undefined;
-  /** The office's own checkout (its root folder): a real repo on this machine, in the demo too. */
-  readonly officeDir: string;
+  /** Focus's own checkout (its root folder): a real repo on this machine, in the demo too. */
+  readonly focusDir: string;
   /**
    * The plugin's own folder for files it keeps (`<data dir>/plugins/<id>`), made when it's first asked for. `movedFrom`
-   * is a folder it kept in the office's data dir before it was a plugin: what's in it moves in.
+   * is a folder it kept in Focus's data dir before it was a plugin: what's in it moves in.
    */
   dataDir(how?: { movedFrom?: string }): string;
   /**
-   * A read-only Claude Code session, as the office's own crew run them: only the built-in tools it's given (Read,
+   * A read-only Claude Code session, as Focus's own crew run them: only the built-in tools it's given (Read,
    * Glob, Grep, WebSearch, WebFetch), all pre-approved, none of the captain's settings or hooks, and its answer.
    */
   readOnlySession(run: ReadOnlyRun): Promise<ReadOnlyResult>;
   /**
-   * A read-only session with the run of the ship, as Number One's: from the office's planning folder (where it checks
+   * A read-only session with the run of the ship, as Number One's: from Focus's planning folder (where it checks
    * out a project's code on demand), the agents' worktrees readable, and the ship tools (`ship_status`,
    * `open_project`) as `mcp__<plugin id>__…`. Neither tool changes anything aboard.
    */
   shipSession(run: ShipSessionRun): Promise<ReadOnlyResult>;
   /**
    * A model of how the code answers `question`, drawn afresh by a read-only session reading `dirs` (each a checkout,
-   * as `checkout` gives them), then checked and drawn by the office as a lead's model tool does: the model as the check
+   * as `checkout` gives them), then checked and drawn by Ops as a lead's model tool does: the model as the check
    * left it (and what didn't check out), its page, and its picture. A session costs, so draw only when asked to. The
-   * demo's stand-in draws one model of the office's own code, whatever's asked.
+   * demo's stand-in draws one model of Focus's own code, whatever's asked.
    */
   drawModel(ask: { question: string; title: string; dirs: string[] }): Promise<ModelShown & { problems: string[] }>;
   /**
    * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
-   * `dataDir`), and says where. `repo` has to be one of the office's projects' repos: it throws, in words, for any other.
+   * `dataDir`), and says where. `repo` has to be one of Focus's projects' repos: it throws, in words, for any other.
    */
   checkout(repo: string): Promise<string>;
   /**
@@ -301,9 +301,9 @@ export interface PluginHost {
   leadCheckouts(agentId: string): { repo: string; dir: string; baseBranch: string }[];
   /** Hands one of the plugin's briefs to an agent: `crew` sits down when it's always the same person, else someone's hired. Throws, in words, when it can't. */
   seat(projectId: string, repo: string, work: BriefWork, crew?: Planner): Agent;
-  /** Forgets what the office keeps of an agent's last session (what waited to be said, their notes), so their next brief starts afresh. */
+  /** Forgets what Ops keeps of an agent's last session (what waited to be said, their notes), so their next brief starts afresh. */
   forget(agentId: string): void;
-  /** A line in an agent's terminal, from the office. */
+  /** A line in an agent's terminal, from Ops. */
   print(agent: Pick<Agent, 'id'>, text: string): void;
   toast(level: 'info' | 'success' | 'error', text: string, agentId?: string): void;
   /**
@@ -336,13 +336,13 @@ export interface PluginGoals {
   judged(agentId: string, judged: NonNullable<CosRead['judged']>, since: number): void;
 }
 
-/** A journal the office keeps, as a plugin has it: what it's about and its facts, oldest first. */
+/** A journal Ops keeps, as a plugin has it: what it's about and its facts, oldest first. */
 export interface LentJournal<E> {
   key: string;
   entries: readonly Readonly<E>[];
 }
 
-/** The office's journals (`host.journals`): how each run, review and goal went, fact by fact. */
+/** Ops' journals (`host.journals`): how each run, review and goal went, fact by fact. */
 export interface LentJournals {
   /** Each agent's run journal, by agent id. */
   runs: LentJournal<JournalEntry>[];

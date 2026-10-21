@@ -1,5 +1,5 @@
-// The demo office's pace (shared/demoPace.ts): slower and faster from the ready room's settings, or - and = aboard.
-// The office tells every tab the new pace (`info.demoPace`), so each shows it.
+// The demo ship's pace (shared/demoPace.ts): slower and faster from the ready room's settings, or - and = aboard.
+// Focus tells every tab the new pace (`info.demoPace`), so each shows it.
 import { nextSpeed, paceLabel } from '../../../shared/demoPace';
 import { api } from '../net/api';
 import { state } from '../net/state';

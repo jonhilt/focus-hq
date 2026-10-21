@@ -1,4 +1,4 @@
-// Projects (each a holodeck room) and the office's settings.
+// Projects (each a holodeck room) and Focus's settings.
 
 import type { Effort } from './agents';
 import type { GoalRecord, QueuedGoal } from './goals';
@@ -65,9 +65,9 @@ export interface Project {
   onlyMyPrs?: boolean;
   /** How ▶ Preview runs this project's pull requests. */
   preview?: PreviewConfig;
-  /** The QA officer tests every PR the office opens or updates (missing = on; a new project starts off). */
+  /** The QA officer tests every PR Ops opens or updates (missing = on; a new project starts off). */
   autoQa?: boolean;
-  /** A PR the office opened that fails QA goes back to a developer to fix (missing = on; a new project starts off). */
+  /** A PR Ops opened that fails QA goes back to a developer to fix (missing = on; a new project starts off). */
   autoSendBack?: boolean;
   /**
    * The chief of staff's words for a lead whose turn it would carry on or send back go to them by themselves, after
@@ -77,20 +77,20 @@ export interface Project {
   /** PRs the office opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
   autoMerge?: boolean;
   /**
-   * The package.json scripts the merge check runs on a PR merged onto its base before the office merges it
+   * The package.json scripts the merge check runs on a PR merged onto its base before Ops merges it
    * (docs/merging.md): missing = typecheck, lint and test; empty = none (only conflicts stop a merge). A repo with a
    * `merge-check` script runs that instead.
    */
   mergeChecks?: string[];
   /**
-   * QA blocks a pull request only with proof: a test that fails when the office runs it, a failing check, or a screenshot
+   * QA blocks a pull request only with proof: a test that fails when Ops runs it, a failing check, or a screenshot
    * of a failure in the browser. A fail without one goes up as advice and the verdict is a pass (missing = on).
    */
   qaProof?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   /**
-   * Kept out of sight, say while demoing the office: the holodeck keeps its place behind locked doors with an "in use"
+   * Kept out of sight, say while demoing the ship: the holodeck keeps its place behind locked doors with an "in use"
    * sign, and the project's name, board and crew show nowhere aboard. Its crew keep working. Missing = shown.
    */
   hidden?: boolean;

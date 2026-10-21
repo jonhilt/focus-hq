@@ -4,11 +4,11 @@ import { demoWorkspace } from '../agents/demoRunner';
 import { demoLayer, demoPush } from './demo';
 import { GitHub } from './service';
 
-// What the demo's GitHub must keep of the real one (docs/contracts.md): behaviours real GitHub showed the office, some
+// What the demo's GitHub must keep of the real one (docs/contracts.md): behaviours real GitHub showed Ops, some
 // of them only by breaking it. Real GitHub can't be reached from a test, so these are written as tests of the demo; a
 // live check would run the same against `ghCliLayer` on a sandbox repository (see the doc for what it needs).
 
-/** A fresh demo GitHub, and a pull request the office opened on it from `branch`. */
+/** A fresh demo GitHub, and a pull request Ops opened on it from `branch`. */
 async function opened(branch = 'focus/contract') {
   const gh = Effect.runSync(Effect.provide(GitHub, demoLayer));
   const repo = 'demo/webshop-frontend';
@@ -19,13 +19,13 @@ async function opened(branch = 'focus/contract') {
 const refused = <A, E>(op: Effect.Effect<A, E>) => Effect.runPromise(Effect.flip(op));
 
 describe('the demo GitHub keeps the GitHub contract', () => {
-  it('reports the head GitHub has, which a push from the office doesn’t move at once (57f3d0e)', async () => {
+  it('reports the head GitHub has, which a push from Ops doesn’t move at once (57f3d0e)', async () => {
     const { repo, pr, head } = await opened();
     const before = await head();
-    // the office's ship pushes, and GitHub's head lags: here it never catches up, so code that trusts it shows
+    // Ops' ship pushes, and GitHub's head lags: here it never catches up, so code that trusts it shows
     await demoWorkspace.push(`/demo/lead`, 'focus/contract');
     expect(await head()).toBe(before);
-    // someone else's push (the office's merge of the base, say) is what moves it
+    // someone else's push (Ops' merge of the base, say) is what moves it
     const after = demoPush?.(repo, pr.number, 'change');
     expect(after).toBeDefined();
     expect(await head()).toBe(after);
@@ -71,7 +71,7 @@ describe('the demo GitHub keeps the GitHub contract', () => {
   });
 
   // GitHub says UNKNOWN while it works out whether a PR merges, after every push to it or its base (33dc5c2): the demo
-  // always knows. What the office does with UNKNOWN is tested on its own (shared/board.test.ts).
+  // always knows. What Ops does with UNKNOWN is tested on its own (shared/board.test.ts).
   it.fails('can report a pull request’s mergeability as UNKNOWN just after a push [simplified: the demo always knows]', async () => {
     const { gh, repo, pr } = await opened();
     demoPush?.(repo, pr.number, 'change');

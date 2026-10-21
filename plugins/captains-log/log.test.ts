@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JournalEntry, LedgerEvent, ReviewEntry, RunFact, SliceFact } from '../../plugin-api/server';
-import { demoWorkspace, office, until } from '../../plugin-api/testing';
+import { demoWorkspace, focus, until } from '../../plugin-api/testing';
 import { captainsLog, type LogSources, logSources } from './log';
 import captainsLogPlugin from './server';
 import type { LogLine } from './shared';
@@ -10,7 +10,7 @@ const at = <F>(t: number, fact: F) => ({ v: 1 as const, seq: ++seq, t, ...fact }
 const sources = (s: Partial<LogSources>): LogSources => ({ runs: [], reviews: [], slices: [], ledger: [], nameOf: () => undefined, ...s });
 
 describe('the captain’s log', () => {
-  it('tells a crew member’s run by what a captain would want to hear, not the office’s bookkeeping', () => {
+  it('tells a crew member’s run by what a captain would want to hear, not Ops’ bookkeeping', () => {
     const entries = [
       at<RunFact>(10, { kind: 'queued', text: 'Fix it', at: 'end' }),
       at<RunFact>(11, { kind: 'turn-requested', turn: 't1', turnKind: 'work', prompt: 'Fix it' }),
@@ -93,10 +93,10 @@ describe('who and what each journal is about', () => {
   });
 });
 
-describe('the captain’s log of a real office', () => {
+describe('the captain’s log of a real ship', () => {
   it('has a goal’s ship, by its lead, and QA picking it up, by the reviewer', async () => {
     // QA's checkout is instant, so QA's testing in good time
-    const { store, agents, claude, project } = office({ ...demoWorkspace, checkoutPullRequest: async () => '' });
+    const { store, agents, claude, project } = focus({ ...demoWorkspace, checkoutPullRequest: async () => '' });
     agents.startPlugins([captainsLogPlugin], { demo: false, ownRepo: () => undefined });
     const route = agents.plugins.routes().find((r) => r.plugin === 'captains-log' && r.route.path === '/log')!.route;
     const { agent } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };

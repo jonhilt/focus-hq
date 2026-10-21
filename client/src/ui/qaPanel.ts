@@ -224,7 +224,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       : null,
     review.screenshots?.length ? h('div', { class: 'qa-shots' }, ...review.screenshots.map((s, i) => screenshot(s, i))) : null,
     report?.proofs?.length
-      ? h('div', { class: 'qa-proofs' }, h('strong', null, 'Proof, as the office checked it'), h('ul', null, ...report.proofs.map((p) =>
+      ? h('div', { class: 'qa-proofs' }, h('strong', null, 'Proof, as Ops checked it'), h('ul', null, ...report.proofs.map((p) =>
         h('li', null, h('span', { class: `chip check ${p.outcome === 'failed' ? 'fail' : p.outcome === 'passed' ? 'pass' : 'skip'}` }, p.outcome === 'failed' ? 'holds' : p.outcome === 'passed' ? 'passed' : 'not proof'),
           ` ${p.finding} `, h('code', null, p.kind === 'test' ? p.file ?? '' : p.kind === 'check' ? p.command ?? '' : `screenshot ${p.screenshot ?? '?'}`), p.note ? ` · ${p.note}` : ''))))
       : null,

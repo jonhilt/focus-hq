@@ -39,7 +39,7 @@ describe('the QA officer’s talk with the captain', () => {
     expect(prompt).toContain('How hard you think: default.');
     expect(prompt).toContain('1. Reads every changed file\nGo through every file the diff changes');
     expect(prompt).toContain('- acme/shop: Runs pnpm test, and anything else the repo’s CLAUDE.md asks. It has a CLAUDE.md, which you follow.');
-    expect(prompt).toContain('- acme/docs: QA works out the checks itself (the office hasn’t cloned it yet, so it can’t say).\n');
+    expect(prompt).toContain('- acme/docs: QA works out the checks itself (Ops hasn’t cloned it yet, so it can’t say).\n');
     expect(prompt).toContain('Scripts to run: test');
     expect(prompt).toContain('### The brief\nWorks at phone width');
     expect(prompt).toMatch(/Captain: Why do you read every file\?\nYou: Bugs hide in the ones I skip\.\nCaptain: Run the e2e suite too\n\nAnswer/);

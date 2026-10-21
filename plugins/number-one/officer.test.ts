@@ -3,7 +3,7 @@ import { CODE_TOOLS, type Settings, type ShipSessionRun, type ShipStatus, WEB_TO
 import { ClaudeNumberOne } from './officer';
 
 describe('ClaudeNumberOne', () => {
-  it('talks in the session with the run of the ship that the office lends it, resuming the conversation', async () => {
+  it('talks in the session with the run of the ship that Ops lends it, resuming the conversation', async () => {
     const runs: ShipSessionRun[] = [];
     const officer = new ClaudeNumberOne((run) => {
       runs.push(run);

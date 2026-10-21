@@ -1,7 +1,7 @@
-// Two rules every part of the office that keeps state should hold, checked by running it, not by reading it
+// Two rules every part of Focus that keeps state should hold, checked by running it, not by reading it
 // (docs/invariants.md). They come from the bug corpus: most bugs that got past review here broke one of them.
 //
-// - **A restart is atomic.** Stop the office in the middle of anything (or between things) and start it again from what
+// - **A restart is atomic.** Stop Focus in the middle of anything (or between things) and start it again from what
 //   it kept: what it then settles to is what it would have been had that action never started, or had it finished.
 //   Never a half-done third thing (a diagram left "being drawn again", a hold the shutdown let go).
 // - **At once is one after the other.** Two actions at once end as one of them then the other would have, in either
@@ -27,7 +27,7 @@ export interface Action {
   run: () => unknown;
 }
 
-/** A part of the office, running. */
+/** A part of Focus, running. */
 export interface Running<D> {
   /** What it can do now: picked by position, so the same state offers the same list. */
   actions(): Action[];
@@ -35,7 +35,7 @@ export interface Running<D> {
   durable(): D;
   /** Until nothing it started is still going (beyond what's waiting on `later`). */
   settle(): Promise<void>;
-  /** The office going down (Ctrl-C, an update), maybe in the middle of an action, and starting again on what it kept,
+  /** Focus going down (Ctrl-C, an update), maybe in the middle of an action, and starting again on what it kept,
    *  its async work deferred through `later` in its new life. */
   restart(later: Later): Running<D> | Promise<Running<D>>;
   /** Puts it away once the harness is done with it (its timers, what it listens to), so runs don't hear each other. */
@@ -76,7 +76,7 @@ interface Taken {
 }
 
 /** Takes the action at `pick` (modulo how many there are), if there is one; its refusal is an answer, not a failure.
- *  An action of a life that's over by the time it would run (`alive.now` false) never runs: that office is gone. */
+ *  An action of a life that's over by the time it would run (`alive.now` false) never runs: that Focus is gone. */
 async function take<D>(running: Running<D>, pick: number, alive = { now: true }): Promise<Taken> {
   const actions = running.actions();
   const action = actions[pick % Math.max(actions.length, 1)];
@@ -140,8 +140,8 @@ async function drain<D>(s: fc.Scheduler, running: Running<D>, pending?: Promise<
 
 /**
  * `later` through the scheduler, for one life of the part. When that life ends with work still out (`alive.now` false),
- * what happens to it was settled as the office went down: it landed out there (`alive.landed`: a comment it asked
- * GitHub for went up) or it was lost on the way, and either way the office never hears back. The dangerous case for a
+ * what happens to it was settled as Focus went down: it landed out there (`alive.landed`: a comment it asked
+ * GitHub for went up) or it was lost on the way, and either way Focus never hears back. The dangerous case for a
  * restart is a request that landed with nobody left to record it.
  */
 const deferred =
@@ -160,7 +160,7 @@ const notOneOf = (what: string, got: unknown, allowed: Record<string, unknown>) 
     .join('\n')}`;
 
 /**
- * A restart is atomic: a prefix of actions, then one more started and the office stopped after `cut` of the part's
+ * A restart is atomic: a prefix of actions, then one more started and Focus stopped after `cut` of the part's
  * deferred steps (none, some, or all of them), or between actions, then started again on what it kept, and a few more
  * actions taken: it settles to the state it would have without that action, or with it finished, then those actions.
  */
@@ -170,8 +170,8 @@ export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions
       const life = { now: true, landed: false };
       const running = await subject.start(deferred(s, life));
       for (const p of prefix) await drain(s, running, take(running, p));
-      // the action under test, started and left going: `cut` of its deferred steps finish before the office goes down
-      // (-1: it never starts, the office going down between actions)
+      // the action under test, started and left going: `cut` of its deferred steps finish before Focus goes down
+      // (-1: it never starts, Focus going down between actions)
       const name = cut < 0 ? undefined : running.actions()[pick % Math.max(running.actions().length, 1)]?.name;
       if (cut >= 0) {
         void take(running, pick, life);
@@ -179,7 +179,7 @@ export async function checkRestart<D>(subject: Subject<D>, options: CheckOptions
         for (let i = 0; i < cut && (await deferredSoon(s)); i++) await s.waitOne();
         await tick();
       }
-      // the office goes down: what it had out either lands now, unheard, or is lost; then it starts again
+      // Focus goes down: what it had out either lands now, unheard, or is lost; then it starts again
       life.now = false;
       if (lands) {
         life.landed = true;

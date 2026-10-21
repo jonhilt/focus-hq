@@ -2,14 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import { CONTACT_LIMITS as C } from './contacts';
 import { applyNote } from './lead';
-import { extraTools, noteShape } from './officeTool';
+import { extraTools, noteShape } from './opsTool';
 
 const schema = z.object(noteShape);
 const text = (n: number) => 'x'.repeat(n);
 const fits = (input: unknown) => schema.safeParse(input).success;
 
 describe('the note tool schema', () => {
-  it('puts no limits on the note itself, and the office keeps whatever it takes', () => {
+  it('puts no limits on the note itself, and Ops keeps whatever it takes', () => {
     const json = z.toJSONSchema(schema) as { properties: Record<string, { maxLength?: number; maxItems?: number; items?: { maxLength?: number } }> };
     const p = json.properties;
     expect(Object.keys(p).sort()).toEqual(['allLearned', 'closeContact', 'contact', 'done', 'learned', 'next', 'title']);
@@ -34,7 +34,7 @@ describe('the note tool schema', () => {
 describe('the plugins\' tools', () => {
   const t = (name: string) => ({ name, description: name, input: {}, run: () => Promise.resolve(name) });
 
-  it('takes those well named and clear of the office\'s own and of each other\'s, the first of a name winning', () => {
+  it('takes those well named and clear of Ops\' own and of each other\'s, the first of a name winning', () => {
     const first = t('map');
     const kept = extraTools([first, t('show'), t('Map Tool'), t('map'), t('trace_view')]);
     expect(kept.map((x) => x.name)).toEqual(['map', 'trace_view']);

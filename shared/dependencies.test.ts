@@ -111,7 +111,7 @@ describe('issuesToAssign', () => {
     expect(issuesToAssign(issues, [], room(5, { claimed })).map((i) => `${i.repo}#${i.number}`)).toEqual(['acme/api#1', 'acme/shop#2']);
   });
 
-  it('skips an issue whose office branch is already open as a PR, and the skipped ones leave their slot free', () => {
+  it('skips an issue whose Ops branch is already open as a PR, and the skipped ones leave their slot free', () => {
     const prs = [
       { repo: 'acme/shop', branch: 'focus/1-fix-cart' },
       { repo: 'acme/api', branch: 'focus/2-add-route' },

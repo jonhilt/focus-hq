@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 // voice, and the narrator stands in for itself
 vi.mock('../../plugin-api/client', async () => ({
   ...(await import('../../plugin-api/shared')),
-  office: { agent: () => ({ name: 'Lt. Adeyemi' }) },
+  focus: { agent: () => ({ name: 'Lt. Adeyemi' }) },
   h: (tag: string, props: { class?: string; hidden?: boolean } | null) => Object.assign(document.createElement(tag), { className: props?.class ?? '', hidden: !!props?.hidden }),
 }));
 const narrators: { updated?: (beat: number) => void; ended: boolean; said: unknown[] }[] = [];

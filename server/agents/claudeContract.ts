@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-// The contract Claude Code keeps at the SDK's `query` (docs/contracts.md): what the office relies on its stream doing,
+// The contract Claude Code keeps at the SDK's `query` (docs/contracts.md): what Ops relies on its stream doing,
 // written once and held against streams distilled from real sessions and against each stand-in for Claude Code, so a
 // stand-in can't quietly encode an assumption the real one doesn't keep (eab2be2 was missed because the session's
-// stand-in did). Each expectation reads one of three sessions, as Claude Code and the office played it out, beat by
+// stand-in did). Each expectation reads one of three sessions, as Claude Code and Ops played it out, beat by
 // beat. The real ones (`REAL`) keep the shapes and order of what 2.1.289 said on Haiku (`pnpm run claude-streams`),
 // with the ids and words made up: never a real message's text, path or prompt.
 
 type Msg = Record<string, unknown>;
 
-/** One beat of a session: something Claude Code said, the office sending a message or closing its input, the office asked to approve a tool, or Claude Code's process ending. */
-export type Beat = { claude: Msg } | { office: 'sends' | 'closes' } | { asks: string } | { ends: true };
+/** One beat of a session: something Claude Code said, Ops sending a message or closing its input, Ops asked to approve a tool, or Claude Code's process ending. */
+export type Beat = { claude: Msg } | { ops: 'sends' | 'closes' } | { asks: string } | { ends: true };
 
 /** The three sessions the contract reads. */
 export type Session = 'messages' | 'workflow' | 'closed input';
@@ -22,7 +22,7 @@ export interface Expectation {
   name: string;
   /** The real bug fix it would have caught, when one would have. */
   fix?: string;
-  /** Where else it's seen: the office's transcripts on disk, counted (docs/contracts.md). */
+  /** Where else it's seen: Focus's transcripts on disk, counted (docs/contracts.md). */
   seen?: string;
   session: Session;
   holds(beats: Beat[]): void;
@@ -39,8 +39,8 @@ const isInit = (b: Beat) => is(b, 'system', 'init');
 const isResult = (b: Beat) => is(b, 'result');
 const isList = (b: Beat) => is(b, 'system', 'background_tasks_changed');
 const isBookend = (b: Beat) => is(b, 'system', 'task_started') || is(b, 'system', 'task_notification');
-const isSends = (b: Beat) => 'office' in b && b.office === 'sends';
-const isCloses = (b: Beat) => 'office' in b && b.office === 'closes';
+const isSends = (b: Beat) => 'ops' in b && b.ops === 'sends';
+const isCloses = (b: Beat) => 'ops' in b && b.ops === 'closes';
 const taskOf = (b: Beat) => said(b)?.task_id;
 const listed = (b: Beat): { id: unknown; type: unknown }[] => {
   const tasks = said(b)?.tasks;
@@ -160,9 +160,9 @@ export const CLAUDE_CONTRACT: Expectation[] = [
     },
   },
   {
-    name: 'with the office’s input closed, a report still gets its turn, and a tool needing approval there fails without asking',
+    name: 'with Ops’ input closed, a report still gets its turn, and a tool needing approval there fails without asking',
     fix: '879f9ec',
-    seen: '34 cancelled tools in the office’s transcripts',
+    seen: '34 cancelled tools in Focus’s transcripts',
     session: 'closed input',
     holds: (beats) => {
       const closed = next(beats, -1, isCloses);
@@ -175,7 +175,7 @@ export const CLAUDE_CONTRACT: Expectation[] = [
     },
   },
   {
-    name: 'Claude Code exits once the office’s input has closed, with no turn under way and nothing running',
+    name: 'Claude Code exits once Ops’ input has closed, with no turn under way and nothing running',
     session: 'closed input',
     holds: (beats) => {
       const closed = next(beats, -1, isCloses);
@@ -218,7 +218,7 @@ export function holdsToClaudeContract(name: string, play: Play, simplifies: Reco
 
 // ── the real streams, distilled ──────────────────────────────────────────────
 // Claude Code 2.1.289 on claude-haiku-4-5, recorded by `pnpm run claude-streams` (19 Oct 2026): the beats as they came,
-// leaving out the CLI's own ui_log, thinking_tokens and rate_limit_event, which the office doesn't read. Ids and words
+// leaving out the CLI's own ui_log, thinking_tokens and rate_limit_event, which Ops doesn't read. Ids and words
 // are made up; the shapes, flags, tool names and order are what Claude Code said.
 
 const init = (): Beat => ({ claude: { type: 'system', subtype: 'init', session_id: 'session-1', apiKeySource: 'none', claude_code_version: '2.1.289', model: 'claude-haiku-4-5', permissionMode: 'default' } });
@@ -233,8 +233,8 @@ const patched = (task: string): Beat => ({ claude: { type: 'system', subtype: 't
 const ended = (task: string, tool: string): Beat => ({ claude: { type: 'system', subtype: 'task_notification', task_id: task, tool_use_id: tool, status: 'completed', summary: 'Finished', output_file: `/tmp/tasks/${task}.output` } });
 const progress = (task: string, tool: string): Beat => ({ claude: { type: 'system', subtype: 'task_progress', task_id: task, tool_use_id: tool, description: 'a task', usage: { total_tokens: 10, tool_uses: 0, duration_ms: 10 } } });
 const result = (turns: number): Beat => ({ claude: { type: 'result', subtype: 'success', is_error: false, result: 'Done.', duration_ms: 1000, num_turns: turns, total_cost_usd: 0, queued_turn_count: 0 } });
-const sends: Beat = { office: 'sends' };
-const closes: Beat = { office: 'closes' };
+const sends: Beat = { ops: 'sends' };
+const closes: Beat = { ops: 'closes' };
 const ends: Beat = { ends: true };
 
 export const REAL: Record<Session, Beat[]> = {
@@ -261,7 +261,7 @@ export const REAL: Record<Session, Beat[]> = {
     lists(), patched('t1'), ended('t1', 'u1'),
     thinks(), calls('Read', 'u3'), answers('u3', 'hi'), thinks(), says(), result(2), closes, ends,
   ],
-  // the office closes its input as the turn ends with a command still running (879f9ec put back): the command's
+  // Ops closes its input as the turn ends with a command still running (879f9ec put back): the command's
   // report gets a turn anyway, and each tool that needs approval in it fails
   'closed input': [
     init(), thinks(), calls('Bash', 'u1', true),

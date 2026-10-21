@@ -1,11 +1,11 @@
-import { h, office, timeAgo, type Ui } from '../../plugin-api/client';
+import { h, focus, timeAgo, type Ui } from '../../plugin-api/client';
 import { agentSignIn, signInLine, usageHeadline, usageRows } from './readout';
 import { USAGE, type Usage } from './shared';
 
 const SIGN_IN = { plan: { chip: '', label: 'plan' }, key: { chip: 'warn', label: '🔑 key' }, cloud: { chip: 'off', label: '☁ cloud' } };
 
 /**
- * Your plan's usage at the top of the engineering panel: a bar per limit, how the office signs in, and each agent on
+ * Your plan's usage at the top of the engineering panel: a bar per limit, how Focus signs in, and each agent on
  * board with what they sign in with and what their session has used at API prices.
  */
 export function usageView(ui: Ui, usage: Usage | null): HTMLElement {
@@ -15,7 +15,7 @@ export function usageView(ui: Ui, usage: Usage | null): HTMLElement {
   onMsd.onclick = () => ui.showOnMsd({ plugin: USAGE });
   const read = usage?.plan ? ` · read ${timeAgo(usage.plan.at)}` : '';
 
-  const agents = [...office.agents].sort((a, b) => b.costUsd - a.costUsd);
+  const agents = [...focus.agents].sort((a, b) => b.costUsd - a.costUsd);
   return h('div', { class: 'usage' },
     h('div', { class: 'row' }, h('strong', { class: 'grow' }, `Plan usage · ${usageHeadline(usage)}${read}`), onMsd),
     ...rows.map((r) => h('div', { class: `usage-row ${r.tone}` },

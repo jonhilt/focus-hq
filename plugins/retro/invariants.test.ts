@@ -3,11 +3,11 @@ import os from 'node:os';
 import path from 'node:path';
 import { describe, it } from 'vitest';
 import type { Issue, PluginHost } from '../../plugin-api/server';
-import { checkAtOnce, checkRestart, type Later, office, type Running, type Subject } from '../../plugin-api/testing';
+import { checkAtOnce, checkRestart, type Later, focus, type Running, type Subject } from '../../plugin-api/testing';
 import { ChiefEngineer } from './engineer';
 import { freshRetro, RETRO, type Retro } from './shared';
 
-// The chief engineer under the office's two rules (docs/invariants.md): a restart is atomic, and two decisions at once
+// The chief engineer under Focus's two rules (docs/invariants.md): a restart is atomic, and two decisions at once
 // end as one after the other would. It's described here (what it can do, what must survive), not told what to expect.
 
 const facts = { minutes: 1, turns: 1, toolCalls: 1, failedCalls: 0, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 0, captainMessages: 0, nudges: 0, officeMessages: 0, compactions: 0, qaFails: 0, conflicts: 0 };
@@ -29,7 +29,7 @@ interface Kept {
 const engineer: Subject<Kept> = {
   name: 'retro',
   start: async (later) => {
-    const o = office();
+    const o = focus();
     for (const s of ['a', 'b', 'c']) {
       o.store.record({
         kind: 'session-digest', key: `${s}:u`, sessionId: s, agentId: s, agent: `Ens. ${s}`, task: 'issue', prs: [], toUuid: 'u', facts,
@@ -75,7 +75,7 @@ const engineer: Subject<Kept> = {
   },
 };
 
-describe('the chief engineer, under the office’s two rules', () => {
+describe('the chief engineer, under Focus’s two rules', () => {
   it('ends a restart as if a decision had never started, or had finished', async () => {
     await checkRestart(engineer, { runs: 15 });
   });

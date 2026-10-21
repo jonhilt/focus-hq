@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Sets up a Linux server (Ubuntu 24.04 or Debian 12) to run the office, reached over Tailscale.
-# Run it as the user the office runs as (not root, with sudo), from anywhere: it clones Focus if it isn't there yet.
+# Sets up a Linux server (Ubuntu 24.04 or Debian 12) to run Focus, reached over Tailscale.
+# Run it as the user Focus runs as (not root, with sudo), from anywhere: it clones Focus if it isn't there yet.
 # Safe to run again: each step skips what's already done. From your Mac: `scp deploy/vps/setup.sh <server>:` then
 # `ssh -t <server> ./setup.sh`. Switch on HTTPS certificates for the tailnet first (admin console → DNS, MagicDNS).
 #
-# Size: about 2 GB of memory per agent at once plus a few for the office (16 GB, 4–8 vCPUs is comfortable), 80 GB+ disk.
+# Size: about 2 GB of memory per agent at once plus a few for Focus (16 GB, 4–8 vCPUs is comfortable), 80 GB+ disk.
 # On a server: cloud agents need a claude.ai login (`claude`, /login), not just the token; whisper.cpp and Kokoro run
-# on its CPU; anyone on the tailnet who reaches it controls the office. Don't copy your Mac's ~/.claude/settings.json
+# on its CPU; anyone on the tailnet who reaches it controls Focus. Don't copy your Mac's ~/.claude/settings.json
 # as it is: hooks with Mac paths fail on every tool call. Other settings go in ~/.config/focus/env, then
-# `sudo systemctl restart focus`. Moving your office: migrate.sh. Backups: backup.sh (restore: stop focus, untar over
+# `sudo systemctl restart focus`. Moving Focus: migrate.sh. Backups: backup.sh (restore: stop focus, untar over
 # ~/.focus, start it). Agents' sessions don't move (Claude Code names transcripts by path): they start new ones.
 #
 #   FOCUS_REPO   the repo to clone (default jonhilt/focus)
@@ -26,7 +26,7 @@ skipping() { [[ " $FOCUS_SKIP " == *" $1 "* ]]; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 if [[ $EUID -eq 0 ]]; then
-  echo "Run this as the user the office will run as, not root (it uses sudo where it needs to)." >&2
+  echo "Run this as the user Focus will run as, not root (it uses sudo where it needs to)." >&2
   exit 1
 fi
 
@@ -52,7 +52,7 @@ if ! have gh; then
 fi
 gh --version | head -1
 
-say "Claude Code (for signing in: the office's agents run the SDK's own copy)"
+say "Claude Code (for signing in: Focus's agents run the SDK's own copy)"
 if ! have claude && [[ ! -x $HOME/.local/bin/claude ]]; then
   curl -fsSL https://claude.ai/install.sh | bash
 fi
@@ -65,7 +65,7 @@ if ! skipping tailscale; then
     echo "Sign this machine in to your tailnet:"
     sudo tailscale up
   fi
-  # lets the office's user run `tailscale cert` and `tailscale serve` without sudo
+  # lets Focus's user run `tailscale cert` and `tailscale serve` without sudo
   sudo tailscale set --operator="$USER"
 fi
 
@@ -90,7 +90,7 @@ pnpm build
 say "Chromium for the agents' browser (and its system libraries)"
 pnpm exec playwright install --with-deps chromium
 
-say "The office's environment: $ENV_FILE"
+say "Focus's environment: $ENV_FILE"
 mkdir -p "$(dirname "$ENV_FILE")"
 if [[ ! -f $ENV_FILE ]]; then
   install -m 600 "$FOCUS_DIR/deploy/vps/env.example" "$ENV_FILE"
@@ -103,7 +103,7 @@ if ! skipping login && ! grep -q '^CLAUDE_CODE_OAUTH_TOKEN=.' "$ENV_FILE" && ! g
 fi
 
 if ! skipping systemd; then
-  say "systemd: the office, its preview certificate and its backups"
+  say "systemd: Focus, its preview certificate and its backups"
   render() { sed -e "s|@USER@|$USER|g" -e "s|@HOME@|$HOME|g" -e "s|@FOCUS_DIR@|$FOCUS_DIR|g" "$FOCUS_DIR/deploy/vps/$1" | sudo tee "/etc/systemd/system/$1" >/dev/null; }
   render focus.service
   render focus-cert.service
@@ -119,7 +119,7 @@ if ! skipping systemd; then
 fi
 
 if ! skipping tailscale; then
-  say "Tailscale Serve: https://<this machine>.<tailnet>.ts.net → the office"
+  say "Tailscale Serve: https://<this machine>.<tailnet>.ts.net → Focus"
   tailscale serve --bg 4477
   tailscale serve status
 fi
@@ -128,6 +128,6 @@ say "Done"
 cat <<EOF
 Next (the top of deploy/vps/setup.sh says more):
   - Claude Code settings: write ~/.claude/settings.json for this machine (your Mac's has Mac paths in its hooks).
-  - Moving from your Mac: stop the office there, then from your Mac's checkout: deploy/vps/migrate.sh <this server>.
+  - Moving from your Mac: stop Focus there, then from your Mac's checkout: deploy/vps/migrate.sh <this server>.
   - Logs: journalctl -u focus -f
 EOF

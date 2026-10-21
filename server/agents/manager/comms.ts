@@ -23,7 +23,7 @@ export class Comms extends Part {
   }
 
   /**
-   * What the agent may do without asking, for them alone (the office's setting stays as it is): at once in a local
+   * What the agent may do without asking, for them alone (Focus's own setting stays as it is): at once in a local
    * session that's running, from their next turn in a cloud one, and on every later turn and resume.
    */
   setAutonomy(id: string, autonomy: Autonomy): Agent {
@@ -162,13 +162,13 @@ export class Comms extends Part {
   stop(id: string): void {
     const agent = this.store.agent(id);
     const rt = this.rt(id);
-    // held for your plan's limit: they don't carry on by themselves when it resets. The office shutting down isn't the
+    // held for your plan's limit: they don't carry on by themselves when it resets. Focus shutting down isn't the
     // captain's stop: the hold stays in their journal, to hold them again when it starts
     if (agent.held && !this.core.closing) this.update(agent, { held: undefined, activity: STOPPED_BY_CAPTAIN });
     if (agent.handover) {
       void this.core.cloud.stayLocal(id, false).catch(() => undefined);
     } else if (rt.session) {
-      // the captain's stop, not the office shutting down: a restart doesn't undo it
+      // the captain's stop, not Focus shutting down: a restart doesn't undo it
       if (rt.turn && !this.core.closing) this.store.journal(id, { kind: 'stop-requested', turn: rt.turn });
       rt.session.stop();
     } else if (!FINISHED.includes(agent.status)) {

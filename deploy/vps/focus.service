@@ -1,5 +1,5 @@
 [Unit]
-Description=Focus office
+Description=Focus
 After=network-online.target tailscaled.service
 Wants=network-online.target
 
@@ -10,7 +10,7 @@ EnvironmentFile=-@HOME@/.config/focus/env
 Environment=PATH=@HOME@/.local/bin:/usr/local/bin:/usr/bin:/bin
 Environment=COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 ExecStart=/usr/bin/pnpm start
-# the supervisor restarts the office after an auto update, and exits on a crash: come back either way
+# the supervisor restarts Focus after an auto update, and exits on a crash: come back either way
 Restart=always
 RestartSec=5
 # shutting down stops the previews and their stop commands first

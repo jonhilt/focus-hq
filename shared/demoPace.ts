@@ -1,4 +1,4 @@
-// The demo office's pace: how fast its pretend agents go, 1 being `pnpm run demo`'s.
+// The demo ship's pace: how fast its pretend agents go, 1 being `pnpm run demo`'s.
 // The captain steps it slower or faster along a ladder, from the ready room's settings or with - and = aboard. Pure.
 
 /** The paces it steps through: below 1 is slower than `pnpm run demo`. */

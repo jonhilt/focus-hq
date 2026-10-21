@@ -17,31 +17,31 @@ import { demoModel, sessionModel } from '../modelSession';
 import { MACHINES } from '../machines';
 
 /**
- * What the office lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
- * transcripts, the whole office's snapshot and the ship's status.
+ * What Focus lends a plugin that the manager doesn't have: where it runs, its own repo, filing issues, the demo's
+ * transcripts, the whole ship's snapshot and its status.
  */
 export interface Lent {
   demo: boolean;
   ownRepo: () => string | undefined;
-  /** Files an issue and puts it on the project's board (`Office.fileIssue`): none in a test that doesn't need it. */
+  /** Files an issue and puts it on the project's board (`Focus.fileIssue`): none in a test that doesn't need it. */
   fileIssue?: (projectId: string, repo: string, title: string, body: string) => Promise<Issue>;
   /** Reads a session's transcript in place of the manager's `readTranscript`: the demo's stand-ins for its scripted agents. */
   transcript?: (sessionId: string) => Promise<string | undefined>;
-  /** The office's snapshot (`Office.snapshot`): none in a test that doesn't need it. */
+  /** Focus's snapshot (`Focus.snapshot`): none in a test that doesn't need it. */
   snapshot?: () => Promise<Snapshot>;
   /** The ship's status, with closed goals' pull requests looked up on GitHub (index.ts): none in a test that doesn't need it. */
   shipStatus?: () => Promise<ShipStatus>;
-  /** The captain's personal log (`Office.notePersonal`): none in a test that doesn't need it. */
+  /** The captain's personal log (`Focus.notePersonal`): none in a test that doesn't need it. */
   personalLog?: { entries: () => readonly PersonalEntry[]; note: (text: string, via: string) => PersonalEntry };
-  /** How the office's sessions sign in: the office's own `keyFallback` unless a test lends another. */
+  /** How Focus's sessions sign in: Focus's own `keyFallback` unless a test lends another. */
   signIn?: () => SignIn;
 }
 
-/** What a test office (one without it) answers for something the office lends. */
+/** What a test (one without it) is told of something Focus lends. */
 /** A file's plain name, as a lead's artifacts are named (`ledger.html`, `q1.a.jpg`): no folders, nothing hidden. */
 const PLAIN_FILE = /^[\w-]+(\.[\w-]+)+$/;
 
-const missing = (what: string) => Promise.reject(new Refused({ message: `This office has no ${what}` }));
+const missing = (what: string) => Promise.reject(new Refused({ message: `Focus has no ${what} to lend here` }));
 
 /** A plugin's slot in `saved`, `fresh()` with what was saved on top (a field added since starts fresh). */
 function slot<S extends object>(saved: () => PluginStates, id: string, fresh: () => S, changed: (state: S) => void): PluginState<S> {
@@ -57,14 +57,14 @@ function slot<S extends object>(saved: () => PluginStates, id: string, fresh: ()
   };
 }
 
-/** What the office lends the plugin `id` (docs/plugins.md): the manager's seating, its terminals and toasts, and the store. */
+/** What Focus lends the plugin `id` (docs/plugins.md): the manager's seating, its terminals and toasts, and the store. */
 export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
   const dataDir = (how: { movedFrom?: string } = {}) => {
     const dir = pluginDataDir(id, how);
     fs.mkdirSync(dir, { recursive: true });
     return dir;
   };
-  // what a plugin reads of the office is its own copy: it can't change the office's by changing it
+  // what a plugin reads of Focus is its own copy: it can't change Focus's by changing it
   const ledger = lentLog(() => core.store.ledger);
   return {
     demo: lent.demo,
@@ -85,7 +85,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     recentLines: (agentId, count) => lend(core.store.recentLines(agentId, count)),
     // both become a path: only an agent's own id, and a file's plain name
     artifact: (leadId, file) => (core.store.agents.has(leadId) && PLAIN_FILE.test(file) ? core.store.readArtifact(leadId, file) : Promise.resolve(undefined)),
-    // read as it's asked for: the office sets the manager's reader once the plugins have started
+    // read as it's asked for: Focus sets the manager's reader once the plugins have started
     transcript: (sessionId) => (lent.transcript ?? core.ledger.readTranscript)?.(sessionId) ?? Promise.resolve(undefined),
     ledger,
     machines: () => ({ graphs: MACHINES, runs: lend(core.store.machineRuns()) }),
@@ -99,7 +99,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     personalLog: {
       entries: () => lend([...(lent.personalLog?.entries() ?? [])]),
       note: (text, via) => {
-        if (!lent.personalLog) throw new Refused({ message: 'This office has no personal log' });
+        if (!lent.personalLog) throw new Refused({ message: 'Focus has no personal log to lend here' });
         return lent.personalLog.note(text, via);
       },
     },
@@ -113,11 +113,11 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       // a plugin files only where the captain works: in one of the project's own repos
       const project = core.store.projects.find((p) => p.id === projectId);
       if (!project?.repos.includes(repo)) return Promise.reject(new Refused({ message: `${repo} isn’t one of ${project ? `${project.name}’s` : 'the project’s'} repositories` }));
-      if (!lent.fileIssue) return Promise.reject(new Refused({ message: 'This office can’t file issues' }));
+      if (!lent.fileIssue) return Promise.reject(new Refused({ message: 'Focus can’t file issues here' }));
       return lent.fileIssue(projectId, repo, title, body);
     },
     ownRepo: lent.ownRepo,
-    officeDir: config.root,
+    focusDir: config.root,
     dataDir,
     readOnlySession: (run) => runReadOnly(run),
     drawModel: async ({ question, title, dirs }) => {
@@ -129,7 +129,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     shipSession: (run) => shipSession(id, run),
     checkout: async (repo) => {
       // a plugin checks out only the captain's repos, and only into its own folder
-      if (!core.store.projects.some((p) => p.repos.includes(repo))) throw new Refused({ message: `${repo} isn’t one of the office’s repositories` });
+      if (!core.store.projects.some((p) => p.repos.includes(repo))) throw new Refused({ message: `${repo} isn’t one of the captain’s repositories` });
       const dir = path.join(dataDir(), 'checkouts', repo.replace('/', '__'));
       await checkoutLatest(repo, dir);
       return dir;
@@ -157,7 +157,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       core.runtimes.delete(agentId);
     },
     print: (agent, text) => {
-      // the office's own record of them, not the plugin's copy
+      // Focus's own record of them, not the plugin's copy
       const own = core.store.agents.get(agent.id);
       if (own) core.print(own, [{ kind: 'system', text }]);
     },

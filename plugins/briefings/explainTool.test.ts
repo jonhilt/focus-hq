@@ -6,14 +6,14 @@ import { explainShape, explainTool as tool, WRITTEN } from './explainTool';
 import type { Sources } from './sources';
 import type { Write } from './writer';
 
-// the office's sources, stood in for: one file in the checkout, one thing the lead said, one ledger line
+// Ops' sources, stood in for: one file in the checkout, one thing the lead said, one ledger line
 const sources: Sources = {
   file: (_lead, where) => Promise.resolve(where === 'server/ledger.ts' ? { text: 'const a = 1;\nappendFileSync(path, line); // never rewrites\n', cite: 'server/ledger.ts:{line} @abc1234' } : { error: `there's no file ${where} in your checkout.` }),
   said: () => Promise.resolve([{ text: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns.', at: '20 Oct, 09:44' }]),
   ledger: (seq) => (seq === 7 ? { text: 'qa-verdict\nfail', cite: 'ledger #7 · qa-verdict' } : undefined),
   pr: (repo, number) => Promise.resolve(number === 572 ? { text: 'Briefings carry receipts\n## QA report: Passed\nI found no bug I could prove.', cite: `${repo}#572 · Briefings carry receipts` } : { error: `couldn't read ${repo}#${number} on GitHub: is the number right?` }),
 };
-// the office's writer, stood in for: it writes each brief up as the next explainer it's given, and keeps what it was asked
+// Ops' writer, stood in for: it writes each brief up as the next explainer it's given, and keeps what it was asked
 function writer(...explainers: { beats: unknown[]; stage: unknown }[]) {
   const asked: { brief: string; fix?: { sessionId?: string; problems: string[] } }[] = [];
   const write: Write = (_lead, brief, fix) => {
@@ -42,7 +42,7 @@ describe('the explain tool schema', () => {
     expect(beatShape.label.description).toContain(String(E.label));
   });
 
-  it('takes and refuses the same beats as the office', () => {
+  it('takes and refuses the same beats as Ops', () => {
     const cases = [
       [beat], [beat, beat], Array.from({ length: E.maxBeats }, () => beat), Array.from({ length: E.maxBeats + 1 }, () => beat),
       [beat, { ...beat, title: text(E.beatTitle) }], [beat, { ...beat, title: text(E.beatTitle + 1) }],
@@ -80,7 +80,7 @@ describe('the explain tool', () => {
     stage: { html: '<div id="file"></div>', script },
   });
 
-  it('puts the explainer up in the office’s player, and answers with its stage at the middle of each beat', async () => {
+  it('puts the explainer up in Ops’ player, and answers with its stage at the middle of each beat', async () => {
     const { context, shown } = lead();
     const reply = await explainTool.run(context, input('function render(t) {}'));
     if (typeof reply === 'string') throw new Error('No pictures came back');
@@ -158,7 +158,7 @@ describe('the explain tool', () => {
     const stage = { html: '<div id="a"></div>', script: 'function render(t) {}' };
     const brief = { id: 'judge', title: 'The judge', brief: 'Explain the backtest, and ask v1 or v2.' };
 
-    it('goes to the office’s writer, whose explainer goes up with who wrote it and what it cost', async () => {
+    it('goes to Ops’ writer, whose explainer goes up with who wrote it and what it cost', async () => {
       const { context, shown } = lead();
       const { write, asked } = writer({ beats: [backed, { ...backed, title: 'Pick' }], stage });
       const reply = await tool(sources, write).run(context, brief);

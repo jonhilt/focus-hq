@@ -1,7 +1,7 @@
 // Where a briefing's receipts are looked up: the lead's checkout (each file cited at the commit it's at, and
 // whether it's changed since), the lead's own words in their session's transcript, the ship's log by line, and a pull
 // request on GitHub (its title, description, comments, QA's report among them, and reviews). The
-// office's real sources are `officeSources`; `receiptFor` works on any, so the explain tool is tested on stand-ins.
+// Ops' real sources are `opsSources`; `receiptFor` works on any, so the explain tool is tested on stand-ins.
 import { readFile } from 'node:fs/promises';
 import { z } from 'zod';
 import { isAbsolute, relative, resolve } from 'node:path';
@@ -86,8 +86,8 @@ export function prText(view: z.infer<typeof PR_VIEW>, inline: z.infer<typeof INL
 
 const clock = (iso: string | undefined) => (iso ? new Date(iso).toLocaleString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'earlier');
 
-/** The office's own sources: the lead's checkouts on disk, their session's transcript, and the ledger. */
-export function officeSources(host: PluginHost): Sources {
+/** Ops' own sources: the lead's checkouts on disk, their session's transcript, and the ledger. */
+export function opsSources(host: PluginHost): Sources {
   return {
     async file(lead, where) {
       const path = where.replace(/:\d+(-\d+)?$/, '');

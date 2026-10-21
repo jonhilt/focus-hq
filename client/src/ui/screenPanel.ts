@@ -49,7 +49,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     frame.style.transform = `translateX(${(stage.clientWidth - ARTIFACT_SIZE.w * scale) / 2}px) scale(${scale})`;
   };
   const resized = new ResizeObserver((entries) => entries.forEach((e) => fit(e.target)));
-  // its own origin (no allow-same-origin): its scripts run, but can't reach the office
+  // its own origin (no allow-same-origin): its scripts run, but can't reach Focus
   const stage = (url: string, title: string, cls = '') => {
     const el = h('div', { class: `artifact-stage${cls}` },
       h('iframe', { src: url, title, style: `width:${ARTIFACT_SIZE.w}px;height:${ARTIFACT_SIZE.h}px`, attrs: { sandbox: 'allow-scripts allow-popups' } }));

@@ -2,12 +2,12 @@ import { dataView, sequenceView, structureView, toSvg } from '../../shared/model
 import type { ModelCite, SystemModel } from '../../shared/types';
 
 // A lead's system model as a page for its station's screen (docs/goals.md): the three views of
-// shared/modelDrawing.ts, as SVG, with the code each part cites carried in the page. A screen's page can't reach the
-// office (it runs sandboxed), so everything it needs is in it, and it steps and picks by CSS alone: the drawings mark
+// shared/modelDrawing.ts, as SVG, with the code each part cites carried in the page. A screen's page can't reach
+// Focus (it runs sandboxed), so everything it needs is in it, and it steps and picks by CSS alone: the drawings mark
 // the shapes each step lights (data-steps) and each part's shapes (data-part), and a few lines of script add a class.
 // At rest (the picture on the screen) it shows the whole model, before the scenario starts.
 
-/** The lines round a cite, as the office read them when the page was made. */
+/** The lines round a cite, as Ops read them when the page was made. */
 export interface CitedLines {
   cite: ModelCite;
   from: number;

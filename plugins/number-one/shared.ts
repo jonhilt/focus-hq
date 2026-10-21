@@ -72,7 +72,7 @@ export function chatAfterRestart(saved: NumberOneChat): NumberOneChat {
 /** Where a call's task stands: the machine's state, for the captain to see. */
 export type CallStep = 'listening' | 'routing' | 'confirming' | 'dictating' | 'acting' | 'ended';
 
-/** A line of the call's captions: the captain, the ship's voice, or a note from the office on what it did. */
+/** A line of the call's captions: the captain, the ship's voice, or a note from Ops on what it did. */
 export interface CallLine {
   who: 'captain' | 'ship' | 'office';
   text: string;
@@ -94,7 +94,7 @@ export interface CallState {
   error?: string;
 }
 
-/** Whether the office can take a call (both keys set), and the call under way, if any. */
+/** Whether Ops can take a call (both keys set), and the call under way, if any. */
 export interface CallStatus {
   /** Why it can't, worded for the Call button's tooltip; undefined when it can. */
   missing?: string;

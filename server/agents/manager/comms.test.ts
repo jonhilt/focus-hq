@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { office, until } from '../fakeOffice';
+import { focus, until } from '../fakeFocus';
 
 const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 const running = { id: 'b1', kind: 'shell', description: 'pnpm test', status: 'running', startedAt: 5 } as const;
 
 describe('stopping a background task', () => {
   it('stops it in the session, then tells the agent', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     store.agent(id).background = [running];
@@ -16,7 +16,7 @@ describe('stopping a background task', () => {
   });
 
   it('leaves the session and the agent alone when the task isn’t running', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     store.agent(id).background = [{ ...running, status: 'done' }];
@@ -27,7 +27,7 @@ describe('stopping a background task', () => {
   });
 
   it('doesn’t tell the agent about a stop their session refused', async () => {
-    const { agents, claude, project, store } = office();
+    const { agents, claude, project, store } = focus();
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
     await until(() => claude.turns.length === 1);
     store.agent(id).background = [running];

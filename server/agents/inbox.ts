@@ -2,7 +2,7 @@ import type { RunFact, RunState } from './runJournal';
 
 /**
  * An agent's inbox: what the manager has for them to hear next, and what waits for the end of the turn they're in. It
- * lives in their run journal (`Store.journal`), so a message the office took is never lost to a restart: each change
+ * lives in their run journal (`Store.journal`), so a message Ops took is never lost to a restart: each change
  * is a fact on disk before it returns, and what's waiting is what the journal adds up to.
  */
 export class Inbox {

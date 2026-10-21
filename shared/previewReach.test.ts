@@ -5,12 +5,12 @@ const http = [{ port: 5173, scheme: 'http' as const }];
 const https = [{ port: 5173, scheme: 'https' as const, host: 'vps.tail1234.ts.net' }];
 
 describe('reachableUrl', () => {
-  it('leaves the link alone in a browser on the office’s own machine', () => {
+  it('leaves the link alone in a browser on Focus’s own machine', () => {
     expect(reachableUrl('http://localhost:5173/app', http, { hostname: 'localhost' })).toBe('http://localhost:5173/app');
     expect(reachableUrl('http://localhost:5173/app', http, { hostname: '127.0.0.1' })).toBe('http://localhost:5173/app');
   });
 
-  it('opens the mirror at the name the browser reached the office by', () => {
+  it('opens the mirror at the name the browser reached Focus by', () => {
     expect(reachableUrl('http://localhost:5173/app?x=1', http, { hostname: 'vps' })).toBe('http://vps:5173/app?x=1');
     expect(reachableUrl('http://127.0.0.1:5173/', http, { hostname: '100.64.1.2' })).toBe('http://100.64.1.2:5173/');
   });

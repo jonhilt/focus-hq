@@ -1,5 +1,5 @@
-// State saved before parts of the office became plugins (docs/plugins.md), carried into the plugins' own slots as
-// state.json is read. A step can go once every office has started on a version past it.
+// State saved before parts of Focus became plugins (docs/plugins.md), carried into the plugins' own slots as
+// state.json is read. A step can go once every install of Focus has started on a version past it.
 import type { Brief, PluginStates } from '../../shared/types';
 
 /** What a saved state.json may hold from before: a plugin's state at the top, and agents on a task that's now a brief. */
@@ -16,7 +16,7 @@ const CLIMB: Brief = { plugin: 'climber', kind: 'climb', label: 'Climb', icon: '
 
 /**
  * Whether a retro saved before (the retro plugin, plugins/retro) is worth carrying over: one that ran, or has drafts.
- * The office saved the retro whether one had ever run or not, and carrying an untouched one over would have every office
+ * Focus saved the retro whether one had ever run or not, and carrying an untouched one over would have every install
  * without the retro warn that its saved state is waiting.
  */
 function retroWorthKeeping(retro: unknown): boolean {
@@ -27,7 +27,7 @@ function retroWorthKeeping(retro: unknown): boolean {
 
 /**
  * Whether Number One's chat saved before (the number-one plugin, plugins/number-one) is worth carrying over: one with
- * something said, or a session to resume. The office saved the chat whether anyone had talked to Number One or not.
+ * something said, or a session to resume. Focus saved the chat whether anyone had talked to Number One or not.
  */
 function chatWorthKeeping(chat: unknown): boolean {
   if (!chat || typeof chat !== 'object') return false;
@@ -46,7 +46,7 @@ export function fromBeforePlugins(raw: SavedBeforePlugins): void {
   if (chatWorthKeeping(raw.numberOne) && !('number-one' in raw.plugins)) raw.plugins['number-one'] = { chat: raw.numberOne };
   delete raw.numberOne;
   for (const agent of raw.agents ?? []) {
-    // a goal's flow (the flow plugin, plugins/flow) is worked out again as the office starts, so there's nothing to move
+    // a goal's flow (the flow plugin, plugins/flow) is worked out again as Focus starts, so there's nothing to move
     delete agent.lead?.flow;
     if (agent.task !== 'climb') continue;
     agent.task = 'brief';

@@ -9,14 +9,14 @@ import { autoQaFor, autoSendBackFor, qaProofFor } from '../shared/qa';
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
 const { agentAfterRestart, fileKey, prKeyOf, StateLockedError, Store, stateLocked } = await import('./store');
-const { seedOffice, seedRandom } = await import('./util');
+const { seedShip, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
 // each store opened on disk saves and lets go of its locks on exit: a few of them here, as a few restarts
 process.setMaxListeners(20);
 
 describe('Store on disk', () => {
-  it('won’t open a data folder another live office holds', () => {
+  it('won’t open a data folder another running Focus holds', () => {
     fs.writeFileSync(path.join(dir, 'state.json.lock'), String(process.ppid));
     expect(() => new Store(true).load()).toThrow(stateLocked(process.ppid, dir));
     // index.ts tells this refusal from a crash by its type, and prints just its message
@@ -31,7 +31,7 @@ describe('Store on disk', () => {
     fs.rmSync(path.join(dir, 'state.json.lock'));
   });
 
-  it('takes over a lock left by an office that’s gone, and flushes a waiting save at once', () => {
+  it('takes over a lock left by a Focus that’s gone, and flushes a waiting save at once', () => {
     fs.writeFileSync(path.join(dir, 'state.json.lock'), '999999');
     const store = new Store(true);
     store.load();
@@ -123,7 +123,7 @@ describe('a repo’s merge method', () => {
   const project = store.addProject('Focus');
   project.repos = ['o/a', 'o/b'];
 
-  it('is set for one repo and cleared back to the office-wide setting', () => {
+  it('is set for one repo and cleared back to the ship-wide setting', () => {
     store.updateProject(project.id, { mergeMethod: { repo: 'o/a', method: 'rebase' } });
     store.updateProject(project.id, { mergeMethod: { repo: 'o/b', method: 'merge' } });
     expect(project.mergeMethods).toEqual({ 'o/a': 'rebase', 'o/b': 'merge' });
@@ -137,11 +137,11 @@ describe('a repo’s merge method', () => {
   });
 });
 
-describe('the demo office’s ids', () => {
+describe('the demo ship’s ids', () => {
   const demoIds = (otherDice: number) => {
-    // whatever was rolled before (another test, the office's startup) mustn't matter
+    // whatever was rolled before (another test, Focus's startup) mustn't matter
     seedRandom(otherDice);
-    seedOffice({ demo: true });
+    seedShip({ demo: true });
     const store = new Store(false);
     return [store.addProject('Sock Shop').id, store.addProject('Space Dodger').id];
   };
@@ -195,7 +195,7 @@ describe('agentAfterRestart', () => {
     expect(after.activity).toMatch(/usage limit when Focus shut down/);
   });
 
-  it('forgets a lead’s subagents, workflows and background work, which don’t outlive the office', () => {
+  it('forgets a lead’s subagents, workflows and background work, which don’t outlive Focus', () => {
     const after = agentAfterRestart(agent({ status: 'done', helpers: [], workflows: [], background: [] }), 'Shop');
     expect(after).not.toHaveProperty('helpers', expect.anything());
     expect(after).not.toHaveProperty('workflows', expect.anything());
@@ -227,7 +227,7 @@ describe('agentAfterRestart', () => {
   });
 });
 
-describe('loading a saved office', () => {
+describe('loading a saved ship', () => {
   it('shows each review as its journal has it, whatever state.json last saved, and takes one from before journals in once', () => {
     const project = { id: 'p1', name: 'Shop', color: '#fff', theme: 'beach', repos: ['acme/shop'], maxAgents: 6, autoAssign: false, autoLabel: '', createdAt: 0 };
     const report = { verdict: 'pass', summary: 'Works', checks: [], commands: [] } as unknown as QaReview['report'] & object;
@@ -270,7 +270,7 @@ describe('loading a saved office', () => {
       closedPrs: [{ repo: 'acme/shop', issue: 7, pr: 3, officer: 'Lt. Ops', note: 'Wrong approach', at: 0 }],
       // saved before Number One was a plugin: a chat with something in it moves into the plugin's slot
       numberOne: { status: 'thinking', activity: '', messages: [{ from: 'manager', text: 'Hi', at: 0 }], updatedAt: 0, costUsd: 0 },
-      // saved while the office had a studio holodeck (since gone): left behind
+      // saved while the ship had a studio holodeck (since gone): left behind
       studio: { status: 'thinking', activity: '', messages: [], takes: [], updatedAt: 0, costUsd: 0 },
       // saved before the retro was a plugin: it moves into the plugin's slot, which ends it as the plugin starts
       retro: { status: 'thinking', activity: '', days: 14, sessions: 0, drafts: [], watch: [], costUsd: 0 },

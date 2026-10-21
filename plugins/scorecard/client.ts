@@ -1,4 +1,4 @@
-// The scorecard in the browser (README.md): its overview on the engineering station, the code's numbers and the office's
+// The scorecard in the browser (README.md): its overview on the engineering station, the code's numbers and Ops'
 // in views of their own, and its board on main engineering's MSD.
 import type { ClientPlugin, EngineeringGo } from '../../plugin-api/client';
 import { drawScorecard } from './msd';
@@ -36,10 +36,10 @@ const scorecard: ClientPlugin = {
       },
       {
         key: 'office',
-        label: 'Office',
+        label: 'Ops',
         readout: () => {
-          const office = now()?.tiles.find((t) => t.section === 'office')?.hero.metric;
-          return office ? formatValue(office.value, office.format) : '';
+          const ops = now()?.tiles.find((t) => t.section === 'office')?.hero.metric;
+          return ops ? formatValue(ops.value, ops.format) : '';
         },
         render: (ui, _go, open) => [scorecardHead(ui), ...scorecardSections(['office'], open)],
       },

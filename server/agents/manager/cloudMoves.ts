@@ -18,7 +18,7 @@ export const CARRYING_ON_HERE = "✻ Claude Code won't attach to cloud sessions 
 export class CloudMoves extends Part {
   /**
    * Claude Code has refused to attach to a cloud session from Focus (it won't with the SDK's stream-json output), so a
-   * session the captain starts is no use: from then on, for as long as the office runs, agents carry on here instead of
+   * session the captain starts is no use: from then on, for as long as Focus runs, agents carry on here instead of
    * waiting for one.
    */
   attachRefused = false;
@@ -57,7 +57,7 @@ export class CloudMoves extends Part {
     return agent;
   }
 
-  /** The agent waits for a cloud session, which the captain starts: in a terminal the office opens, or on claude.ai. */
+  /** The agent waits for a cloud session, which the captain starts: in a terminal Focus opens, or on claude.ai. */
   awaitCloud(agent: Agent, handover: CloudHandover): void {
     this.update(agent, {
       cloud: true,
@@ -75,7 +75,7 @@ export class CloudMoves extends Part {
 
   /**
    * Opens a terminal on the captain's screen that starts the agent's cloud session (Claude Code starts one only from a
-   * terminal), and watches it: once the session's id shows up, the office attaches to it.
+   * terminal), and watches it: once the session's id shows up, Ops attaches to it.
    */
   async openCloudTerminal(id: string): Promise<Agent> {
     const agent = this.store.agent(id);
@@ -89,7 +89,7 @@ export class CloudMoves extends Part {
     await this.runtime.runPromise(FiberMap.remove(this.runs, id));
     if (!agent.handover) return agent; // attached meanwhile
     this.update(agent, { handover: { ...agent.handover, terminalAt: Date.now() }, activity: 'Waiting for the terminal to start their cloud session' });
-    this.print(agent, [{ kind: 'system', text: '✻ Opened a terminal that starts their cloud session: once it has, the office attaches and sends the work over' }]);
+    this.print(agent, [{ kind: 'system', text: '✻ Opened a terminal that starts their cloud session: once it has, Ops attaches and sends the work over' }]);
     this.runFor(id, this.watchTerminal(agent, terminal.read));
     return agent;
   }
@@ -97,7 +97,7 @@ export class CloudMoves extends Part {
   /** Looks for the session's id in what the terminal shows, and attaches once it's there. */
   private watchTerminal(agent: Agent, read: Effect.Effect<string | undefined>): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
-      // a terminal the office can't see (Windows): the captain pastes the link
+      // a terminal Focus can't see (Windows): the captain pastes the link
       if ((yield* read) === undefined) return this.update(agent, { activity: 'Waiting for a cloud session: paste its link once the terminal has started it' });
       const found = yield* read.pipe(
         Effect.map((text) => cloudSessionId(text ?? '')),
@@ -122,8 +122,8 @@ export class CloudMoves extends Part {
   }
 
   /**
-   * Attaches to the cloud session the captain started (Claude Code does that without a terminal) and sends it the
-   * office's instructions with the work: their task, or what they'd done so far, which is on their branch.
+   * Attaches to the cloud session the captain started (Claude Code does that without a terminal) and sends it
+   * Ops' instructions with the work: their task, or what they'd done so far, which is on their branch.
    */
   private attach(agent: Agent, sessionId: string): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
@@ -137,7 +137,7 @@ export class CloudMoves extends Part {
         : carryOnPrompt(agent, MOVED_ON);
       rt.nudged = false;
       rt.attaching = { tries: 0, handover };
-      // a session the captain started hasn't had the office's instructions
+      // a session the captain started hasn't had Ops' instructions
       yield* this.core.sessions.runSession(agent, `${yield* this.core.sessions.instructions(agent)}\n\n---\n\n${work}`, sessionId);
     }).pipe(this.orFail(agent));
   }

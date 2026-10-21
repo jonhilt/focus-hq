@@ -9,7 +9,7 @@
 //   pnpm run flow --json                 the report as JSON
 //   pnpm run flow --no-rework            leave out rework after merge (it asks GitHub about each merged pull request)
 
-import { closedGoals, latestQaCatch, officeLedger, officeMirror, officeTranscript } from '../../../plugin-api/server';
+import { closedGoals, latestQaCatch, focusLedger, focusMirror, focusTranscript } from '../../../plugin-api/server';
 import { flowLines, flowReport, goalFlow, transcriptMoments } from '../flow';
 import { catchGuard } from '../qaGuard';
 import { reworkLines, reworkTotals } from '../rework';
@@ -29,7 +29,7 @@ const date = (name: string) => {
 const since = date('since');
 const until = date('until');
 
-const { file, events: ledger } = officeLedger();
+const { file, events: ledger } = focusLedger();
 if (!ledger) {
   console.error(`No ledger at ${file}.`);
   process.exit(1);
@@ -38,7 +38,7 @@ const goals = closedGoals(ledger, opt('project')).filter((g) => (since === undef
 
 const missing: string[] = [];
 const flows = (await Promise.all(goals.map(async (g) => {
-  const transcript = g.sessionId ? await officeTranscript(g.sessionId) : undefined;
+  const transcript = g.sessionId ? await focusTranscript(g.sessionId) : undefined;
   if (!transcript) {
     missing.push(g.title);
     return [];
@@ -48,7 +48,7 @@ const flows = (await Promise.all(goals.map(async (g) => {
 const report = flowReport(flows, goals, ledger);
 
 const merged = flows.flatMap((f) => (goals.find((g) => g.id === f.id)?.prs ?? []).filter((p) => p.outcome === 'merged').map((p) => ({ repo: p.repo, pr: p.number, goal: f.title })));
-const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, officeMirror);
+const rework = args.includes('--no-rework') ? undefined : await measureRework(merged, focusMirror);
 const totals = rework && reworkTotals(rework.measured);
 // the latest of `pnpm run qa-catch`'s runs, if there's been one
 const caught = latestQaCatch();

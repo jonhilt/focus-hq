@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/server';
-import { checkAtOnce, checkRestart, type Later, office, type Running, type Subject } from '../../plugin-api/testing';
+import { checkAtOnce, checkRestart, type Later, focus, type Running, type Subject } from '../../plugin-api/testing';
 import { type ChiefHost, ChiefOfStaff, type Judge } from './chief';
 
-// The chief of staff under the office's two rules (docs/invariants.md): a restart while a turn is being judged ends as
+// The chief of staff under Focus's two rules (docs/invariants.md): a restart while a turn is being judged ends as
 // if it had never been judged or had been, and two ends of turns at once write what one after the other would: each
 // turn's verdict once (README.md: "judged once however often it ends").
 
@@ -15,7 +15,7 @@ type Kept = string[];
 const chief: Subject<Kept> = {
   name: 'chief of staff',
   start: (later) => {
-    const o = office();
+    const o = focus();
     const settings = o.store.settings;
     // what survives a restart: the ledger, and the lead's transcript
     const ledger: LedgerEvent[] = [];
@@ -48,7 +48,7 @@ const chief: Subject<Kept> = {
   },
 };
 
-describe('the chief of staff, under the office’s two rules', () => {
+describe('the chief of staff, under Focus’s two rules', () => {
   it('judges each turn once', async () => {
     const r = await chief.start((_label, work) => work());
     await Promise.all([r.actions()[0].run(), r.actions()[0].run()]);

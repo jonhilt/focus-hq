@@ -45,7 +45,7 @@ interface Saying {
 }
 
 /**
- * An explainer's voice-over, up close. Its player runs in a sandbox of its own and can't reach the office, so it posts
+ * An explainer's voice-over, up close. Its player runs in a sandbox of its own and can't reach Focus, so it posts
  * its beats' lines here and asks for each to be said, paused or hushed; the narrator says them in the lead's voice and
  * tells the player when a line is done, so its beat can move on. The first beats' audio is fetched as soon as the voice
  * is on, and each beat's next as it plays (`LOOKAHEAD`), so the next is there by the time it's needed. A beat whose line isn't ready holds until it is
@@ -130,7 +130,7 @@ export class Narrator {
 
   /**
    * Kokoro's audio for a line, waiting for Kokoro to load if it must (it loads the first time a voice is used, and as
-   * the office starts once it's downloaded); null if it's failed, or failed on this line, so the browser's voice says it.
+   * Focus starts once it's downloaded); null if it's failed, or failed on this line, so the browser's voice says it.
    */
   private fetch(beat: number, urgency: 'now' | 'ahead' = 'now'): Promise<Blob | null> {
     const cached = this.audio.get(beat);

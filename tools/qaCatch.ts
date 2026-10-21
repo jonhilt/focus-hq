@@ -1,7 +1,7 @@
 // QA's catch rate (docs/qa-catch.md): takes recently merged goal pull requests, and for each plants one known bug in
 // a line it added (server/agents/qaCatch.ts), in a throwaway clone of its code, then runs the QA officer's own review
 // on it (its system prompt, prompt, report schema and model) and scores whether QA failed it and pointed at the bug.
-// Nothing goes to GitHub and no real pull request is touched: each clone is made from the office's copy of the repo
+// Nothing goes to GitHub and no real pull request is touched: each clone is made from Focus's copy of the repo
 // (~/.focus/repos), reviewed where it is and deleted. It saves each run in ~/.focus/qa-catch/, which `pnpm run flow`
 // shows among its quality guards. Each review costs what a QA review does (about $0.60 and a few minutes).
 //
@@ -42,7 +42,7 @@ const control = args.includes('--control');
 
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
 const ledger = checkLedger(readFileSync(paths.ledger, 'utf8')).events;
-// the last run's pull requests in its order, or the goals' merged ones, newest first, in repos the office has a copy of
+// the last run's pull requests in its order, or the goals' merged ones, newest first, in repos Focus has a copy of
 const candidates = again
   ? (latestRun()?.results ?? []).map((r) => ({ repo: r.repo, pr: r.pr }))
   : closedGoals(ledger)
@@ -70,7 +70,7 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
   const dir = path.join(root, `${repo.replace('/', '__')}-${number}`);
   const git = async (...a: string[]) => (await run('git', ['-C', dir, ...a], BIG)).stdout;
   await run('git', ['clone', '--quiet', '--shared', '--no-checkout', path.join(paths.mirrors, repo.replace('/', '__')), dir], BIG);
-  // the head and base may never have reached the office's copy: fetch them from GitHub into the clone alone
+  // the head and base may never have reached Focus's copy: fetch them from GitHub into the clone alone
   for (const oid of [info.headRefOid, info.baseRefOid]) {
     if (await git('cat-file', '-e', `${oid}^{commit}`).then(() => true, () => false)) continue;
     await git('fetch', '--quiet', `https://github.com/${repo}`, `pull/${number}/head`, info.baseRefName);

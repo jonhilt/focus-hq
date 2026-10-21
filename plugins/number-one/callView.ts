@@ -1,12 +1,12 @@
 import { type CallLine, type CallStatus, NUMBER_ONE, type NumberOneState } from './shared';
 import { callOver, callStrip, type CallStrip } from './view';
-import { busy, callPlugin, h, office, onPluginState, pluginState } from '../../plugin-api/client';
+import { busy, callPlugin, h, focus, onPluginState, pluginState } from '../../plugin-api/client';
 
-// Calls to Number One: this browser carries the audio, straight to OpenAI over WebRTC; the office joins the
+// Calls to Number One: this browser carries the audio, straight to OpenAI over WebRTC; Ops joins the
 // call on a line of its own, and tells every screen how it's going (the plugin's `call`). The call outlives Number
 // One's panel, so the captain can walk round the ship while they talk.
 
-/** Whether the office can take a call, and the call under way (or the last one): none until the plugin's state arrives. */
+/** Whether Ops can take a call, and the call under way (or the last one): none until the plugin's state arrives. */
 const callStatus = (): CallStatus | undefined => pluginState<NumberOneState>(NUMBER_ONE)?.call;
 const startCall = (sdp: string) => callPlugin<{ id: string; sdp: string | null }>(NUMBER_ONE, '/call', { sdp });
 const hangUp = (id: string) => callPlugin(NUMBER_ONE, '/hang-up', { id });
@@ -19,9 +19,9 @@ class PhoneCall {
     private readonly mic: MediaStream | null,
   ) {}
 
-  /** Opens the mic, offers the call to the office, and plays the ship's voice. The demo's calls have no audio. */
+  /** Opens the mic, offers the call to Ops, and plays the ship's voice. The demo's calls have no audio. */
   static async dial(): Promise<PhoneCall> {
-    if (office.demo) return new PhoneCall((await startCall('demo')).id, null, null);
+    if (focus.demo) return new PhoneCall((await startCall('demo')).id, null, null);
     const mic = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
     const peer = new RTCPeerConnection();
     try {
@@ -29,7 +29,7 @@ class PhoneCall {
       speaker.autoplay = true;
       peer.ontrack = (e) => (speaker.srcObject = e.streams[0]);
       for (const track of mic.getTracks()) peer.addTrack(track, mic);
-      // OpenAI's events channel: the office has its own line, so this one only carries a hang-up
+      // OpenAI's events channel: Ops has its own line, so this one only carries a hang-up
       peer.createDataChannel('oai-events');
       const offer = await peer.createOffer();
       await peer.setLocalDescription(offer);
@@ -43,7 +43,7 @@ class PhoneCall {
     }
   }
 
-  /** Lets go of the mic and the line; the office ends its side. */
+  /** Lets go of the mic and the line; Ops ends its side. */
   hangUp(): Promise<unknown> {
     this.peer?.close();
     for (const track of this.mic?.getTracks() ?? []) track.stop();
@@ -53,7 +53,7 @@ class PhoneCall {
 
 let current: PhoneCall | null = null;
 
-/** Lets go of this browser's mic when the office ends the call (the captain hung up elsewhere, or the line dropped). */
+/** Lets go of this browser's mic when Ops ends the call (the captain hung up elsewhere, or the line dropped). */
 export function followCalls(): void {
   onPluginState(NUMBER_ONE, () => {
     if (current && callOver(current.id, callStatus()?.call)) {
@@ -63,10 +63,10 @@ export function followCalls(): void {
   });
 }
 
-const WHO: Record<CallLine['who'], string> = { captain: 'You', ship: 'Number One', office: 'Office' };
+const WHO: Record<CallLine['who'], string> = { captain: 'You', ship: 'Number One', office: 'Ops' };
 
 /**
- * Number One's call controls (`callStrip`): Call (greyed, with why, when the office can't take one), and while a call is
+ * Number One's call controls (`callStrip`): Call (greyed, with why, when Ops can't take one), and while a call is
  * on, how it's going, what waits on your yes, the captions, and Hang up. `error` shows what went wrong placing it.
  */
 export function callView(error: (message: string) => void, changed: () => void): HTMLElement {

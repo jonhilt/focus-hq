@@ -54,7 +54,7 @@ describe('LedgerLog', () => {
     expect(log.append(entry(4)).seq).toBe(4);
   });
 
-  it('keeps one copy of the same damage, however often the office starts', () => {
+  it('keeps one copy of the same damage, however often Focus starts', () => {
     fs.writeFileSync(file, ledgerLine({ ...entry(1), seq: 1 }) + ledgerLine({ ...entry(3), seq: 3 }));
     const copies = () => fs.readdirSync(dir).filter((f) => f.includes('.damaged-'));
     LedgerLog.open(file);
@@ -66,11 +66,11 @@ describe('LedgerLog', () => {
     expect(again.health.problems[0]).toContain(copies()[0]);
   });
 
-  it('doesn’t write while another office holds the lock', () => {
+  it('doesn’t write while another Focus holds the lock', () => {
     fs.writeFileSync(`${file}.lock`, String(process.ppid));
     const { log, health } = LedgerLog.open(file);
     expect(health.problems).toEqual([]);
-    expect(health.notes[0]).toMatch(/^another Focus office \(pid \d+\) is writing it/);
+    expect(health.notes[0]).toMatch(/^another running Focus \(pid \d+\) is writing it/);
     expect(log.append(entry(1)).seq).toBe(1);
     expect(fs.existsSync(file)).toBe(false);
   });

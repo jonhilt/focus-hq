@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
-import { office, until } from '../../plugin-api/testing';
+import { focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
 import { CHIEF_OF_STAFF } from './shared';
 
@@ -8,9 +8,9 @@ const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n'
 const said = (uuid: string, text: string) => ({ type: 'assistant', uuid, message: { content: [{ type: 'text', text }] } });
 const captain = (uuid: string, text: string) => ({ type: 'user', uuid, message: { content: text } });
 
-/** An office with the chief of staff on for its project, a judge that sends every turn back to the lead, and a lead at work. */
+/** A Focus with the chief of staff on for its project, a judge that sends every turn back to the lead, and a lead at work. */
 async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' }, held: Promise<void> = Promise.resolve()) {
-  const o = office();
+  const o = focus();
   o.project.plugins = [CHIEF_OF_STAFF];
   const asked: { system: string; prompt: string }[] = [];
   const judge: Judge = {

@@ -53,7 +53,7 @@ export function extractionInput(jsonl: string, afterUuid: string | undefined, pr
         if (!from) continue;
         if (from === 'captain') {
           lines.push({ text: `[${at}] CAPTAIN: ${clip(b.text, 1500)}${lastSaid ? `\n  (the agent had just said: “${clip(lastSaid, 300)}”)` : ''}`, spare: false });
-        } else lines.push({ text: `[${at}] ${from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
+        } else lines.push({ text: `[${at}] ${from === 'office' ? 'OPS' : from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
       }
     }
     if (toUuid && line.uuid === toUuid) break;
@@ -75,11 +75,11 @@ const KINDS = keysOf(FRICTION_KINDS);
 
 export function readerSystemPrompt(): string {
   return `
-You read spans of coding agents' sessions in an office of Claude Code agents, and pick out the moments of friction, quoting them. You don't judge the work, rank anything, or say whether it was good: you only find and quote.
+You read spans of coding agents' sessions on a starship crewed by Claude Code agents, and pick out the moments of friction, quoting them. You don't judge the work, rank anything, or say whether it was good: you only find and quote.
 
-Each span shows, in order: messages to the agent (CAPTAIN is the human in charge; OFFICE and QA are the office's own), calls that FAILED with their error, the AGENT's own words, and LEDGER lines on the agent's pull requests.
+Each span shows, in order: messages to the agent (CAPTAIN is the human in charge; OPS and QA are Ops' own), calls that FAILED with their error, the AGENT's own words, and LEDGER lines on the agent's pull requests.
 
-A friction is a moment where the office, its tools, the environment or the way of working got in the agent's way and cost time. Not the work itself: a bug the agent or QA found in the code being changed, or a check in that code doing its job, isn't friction. Give each a kind from this list, and a signature: a few lowercase words naming the trouble. When a signature you've been given fits, use it word for word, so the same trouble groups together across sessions; make a new one only for new trouble. One friction per distinct trouble in a span, however often it repeats.
+A friction is a moment where Ops, its tools, the environment or the way of working got in the agent's way and cost time. Not the work itself: a bug the agent or QA found in the code being changed, or a check in that code doing its job, isn't friction. Give each a kind from this list, and a signature: a few lowercase words naming the trouble. When a signature you've been given fits, use it word for word, so the same trouble groups together across sessions; make a new one only for new trouble. One friction per distinct trouble in a span, however often it repeats.
 ${KINDS.map((k) => `- ${k}: ${FRICTION_KINDS[k]}`).join('\n')}
 
 Every quote must be copied exactly from that span's text, a short stretch of one line (up to about 200 characters). Leave out anything you can't quote. A span with no friction gets none.

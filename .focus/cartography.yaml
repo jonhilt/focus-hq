@@ -1,5 +1,5 @@
 # Focus's architecture model, for the cartography plugin (plugins/cartography/README.md). Each part owns the code under
-# its paths (a folder ends in /; the longest path wins, so a part can claim a file out of another's folder). The office
+# its paths (a folder ends in /; the longest path wins, so a part can claim a file out of another's folder). Ops
 # works out the connections between parts from the imports, so only the parts (and what each does) and views are
 # written here.
 
@@ -24,8 +24,8 @@ parts:
     kind: ui
     paths: [client/src/ui/]
   client-net:
-    label: Mirror of the office
-    does: "Keeps the browser's copy of the office's state, over /ws"
+    label: Mirror of Focus
+    does: "Keeps the browser's copy of Focus's state, over /ws"
     layer: Client
     kind: store
     paths: [client/src/net/]
@@ -62,13 +62,13 @@ parts:
     kind: service
     paths: [shared/]
 
-  # the office
+  # the server
   http:
-    label: Office, routes and hub
-    does: "Starts the office: REST routes and the /ws hub"
+    label: Server, routes and hub
+    does: "Starts Focus: REST routes and the /ws hub"
     layer: Server
     kind: route
-    paths: [server/index.ts, server/routes.ts, server/hub.ts, server/office.ts]
+    paths: [server/index.ts, server/routes.ts, server/hub.ts, server/focus.ts]
   manager:
     label: Agent manager
     does: "Runs every agent: seating, sessions, delivery, QA"
@@ -76,11 +76,11 @@ parts:
     kind: service
     paths: [server/agents/manager/, server/agents/manager.ts, server/agents/services.ts]
   office-tools:
-    label: Lead's office tools
+    label: Lead's Ops tools
     does: "The tools a lead calls: note, show, ship…"
     layer: Server
     kind: handler
-    paths: [server/agents/officeTool.ts, server/agents/manager/goalTools.ts]
+    paths: [server/agents/opsTool.ts, server/agents/manager/goalTools.ts]
   agents:
     label: Agent sessions
     does: "Claude Code sessions, prompts and their output"
@@ -95,7 +95,7 @@ parts:
     paths: [server/github/]
   plugin-host:
     label: Plugin host
-    does: "Loads plugins and lends them the office"
+    does: "Loads plugins and lends them Focus"
     layer: Server
     kind: service
     paths: [server/plugins/]
@@ -114,7 +114,7 @@ parts:
 
   plugin-api:
     label: Plugin API
-    does: "All a plugin may import of the office, and the line its test holds"
+    does: "All a plugin may import of Focus, and the line its test holds"
     layer: Plugins
     kind: service
     paths: [plugin-api/]
@@ -132,5 +132,5 @@ views:
     question: How does a lead's show reach the station's screen?
     parts: [office-tools, manager, client-net, ship, artifacts, panels]
   plugins:
-    question: How do plugins plug into the office?
+    question: How do plugins plug into Focus?
     parts: [plugins, plugin-host, manager, http, client-app, panels]

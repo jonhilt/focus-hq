@@ -1,5 +1,5 @@
 // A system model drawn afresh, not by a lead: a read-only session reads the code in some folders and answers a question
-// about how it works with a model in the model tool's own shape (modelSchema.ts), which the office then checks and draws
+// about how it works with a model in the model tool's own shape (modelSchema.ts), which Ops then checks and draws
 // as it does a lead's (goalTools.ts `drawn`). For the plugins (`PluginHost.drawModel`): cartography draws a kept
 // diagram again once the code it cites has moved on. The demo's stand-in answers without a session.
 import fs from 'node:fs';
@@ -20,10 +20,10 @@ const SCHEMA = z.toJSONSchema(MODEL_SCHEMA) as Record<string, unknown>;
 
 export function modelSystemPrompt(): string {
   return [
-    "You're the office's cartographer. Read the code in the folders you're given and answer the question with a system model of how it works, as it stands now:",
+    "You're Focus's cartographer. Read the code in the folders you're given and answer the question with a system model of how it works, as it stands now:",
     "its parts (8 to 12 on the scenario's path, at one level of detail), how they connect, and one concrete scenario as steps along the connections, in order.",
     'Cite every part where it is defined, and every connection at the line where one part reaches the other: the absolute path of the file, as you read it, and the line.',
-    "The office checks each cite against the code and flags what doesn't hold, so read the lines you cite. It's a model of how the code works: mark nothing added, changed or removed.",
+    "Ops checks each cite against the code and flags what doesn't hold, so read the lines you cite. It's a model of how the code works: mark nothing added, changed or removed.",
   ].join(' ');
 }
 
@@ -52,8 +52,8 @@ export async function sessionModel(ask: ModelAsk, settings: Settings, session: (
 }
 
 /**
- * The demo's stand-in: a model of how the office keeps a lead's diagram, cited in the office's own code (the demo's
- * repos are made up, and its checkouts are the office's), under the question asked.
+ * The demo's stand-in: a model of how Focus keeps a lead's diagram, cited in Focus's own code (the demo's
+ * repos are made up, and its checkouts are Focus's), under the question asked.
  */
 export function demoModel(ask: ModelAsk): SystemModel {
   const root = ask.dirs.find((d) => fs.existsSync(path.join(d, 'server/agents/manager/goalTools.ts'))) ?? ask.dirs[0] ?? '';
@@ -64,8 +64,8 @@ export function demoModel(ask: ModelAsk): SystemModel {
   return {
     question: ask.question,
     nodes: [
-      { id: 'tool', label: "Lead's model tool", kind: 'handler', layer: 'Office', symbol: 'showModel', cite: at('server/agents/manager/goalTools.ts', 'showModel(agent') },
-      { id: 'plugins', label: 'Plugin registry', kind: 'service', layer: 'Office', symbol: 'modelShown', cite: at('server/plugins/registry.ts', 'modelShown(agent') },
+      { id: 'tool', label: "Lead's model tool", kind: 'handler', layer: 'Focus', symbol: 'showModel', cite: at('server/agents/manager/goalTools.ts', 'showModel(agent') },
+      { id: 'plugins', label: 'Plugin registry', kind: 'service', layer: 'Focus', symbol: 'modelShown', cite: at('server/plugins/registry.ts', 'modelShown(agent') },
       { id: 'keeper', label: 'Diagram keeper', kind: 'store', layer: 'Cartography', symbol: 'keep', cite: at('plugins/cartography/keeper.ts', '  keep(agent') },
     ],
     edges: [

@@ -5,12 +5,12 @@ import { BrowserPool } from './browserTool';
 import { type Beat, holdsToClaudeContract, REAL, type Session } from './claudeContract';
 import { ClaudeRunner } from './claudeRunner';
 import { StandInClaude } from './claudeStandIn';
-import { FakeClaude } from './fakeOffice';
+import { FakeClaude } from './fakeFocus';
 import { now } from './invariants';
 import type { RunHooks, RunRequest } from './types';
 
 // The Claude Code contract (docs/contracts.md), held against streams distilled from real sessions, against the
-// session's stand-in for Claude Code (claudeStandIn.ts, which the session's checks run on), and, a level up, the office's
+// session's stand-in for Claude Code (claudeStandIn.ts, which the session's checks run on), and, a level up, Ops'
 // runner on those real streams against the stand-ins for the whole runner.
 
 interface QueryArgs {
@@ -29,7 +29,7 @@ const ticks = async (n = 5) => {
 
 holdsToClaudeContract('Claude Code (2.1.289, recorded)', (session) => Promise.resolve(REAL[session]));
 
-/** The office's input to a stand-in: what it sends, until it closes. */
+/** Ops' input to a stand-in: what it sends, until it closes. */
 class Input implements AsyncIterable<SDKUserMessage> {
   private items: SDKUserMessage[] = [];
   private waiting?: (r: IteratorResult<SDKUserMessage>) => void;
@@ -61,14 +61,14 @@ type Step = ((c: StandInClaude) => void) | 'sends' | 'closes';
 const workflowOf = (c: StandInClaude) => c.tasks.find((t) => t.kind === 'local_workflow')?.id;
 const commandOf = (c: StandInClaude) => c.tasks.find((t) => t.kind === 'local_bash')?.id;
 
-/** Each session as the stand-in plays it: Claude Code's moves and the office's, in the order the real one went. */
+/** Each session as the stand-in plays it: Claude Code's moves and Ops', in the order the real one went. */
 const SCRIPTS: Record<Session, Step[]> = {
   messages: [(c) => c.startTask('local_bash'), 'sends', (c) => c.fold(), (c) => c.endTurn(), 'sends', (c) => c.endTurn(), (c) => c.taskEnds(true), (c) => c.endTurn(), 'closes'],
   workflow: [(c) => c.startTask('local_bash'), (c) => c.startTask('local_workflow'), (c) => c.endTurn(), (c) => c.progress(), (c) => c.taskEnds(true, workflowOf(c)), (c) => c.taskEnds(true, commandOf(c)), (c) => c.fold(), (c) => c.endTurn(), 'closes'],
   'closed input': [(c) => c.startTask('local_bash'), (c) => c.endTurn(), 'closes', (c) => c.taskEnds(true), (c) => c.endTurn()],
 };
 
-/** The session's stand-in for Claude Code playing `session` out, with the office approving whatever it's asked. */
+/** The session's stand-in for Claude Code playing `session` out, with Ops approving whatever it's asked. */
 async function standIn(session: Session, plays?: ConstructorParameters<typeof StandInClaude>[4]): Promise<Beat[]> {
   const beats: Beat[] = [];
   const input = new Input();
@@ -89,10 +89,10 @@ async function standIn(session: Session, plays?: ConstructorParameters<typeof St
   for (const step of SCRIPTS[session]) {
     flush();
     if (step === 'sends') {
-      beats.push({ office: 'sends' });
+      beats.push({ ops: 'sends' });
       input.push('a message');
     } else if (step === 'closes') {
-      beats.push({ office: 'closes' });
+      beats.push({ ops: 'closes' });
       input.close();
     } else step(code);
     await ticks();
@@ -120,14 +120,14 @@ describe('the session’s stand-in, beyond the recorded streams', () => {
   });
 });
 
-// ── a level up: the office's runner on the real streams ──────────────────────
+// ── a level up: Ops' runner on the real streams ──────────────────────
 
 const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high', leadCompactAt: 200_000 };
 const request: RunRequest = { agentId: 'lead_contract', agentName: 'Lt. Lead', cwd: process.cwd(), prompt: 'the brief', systemAppend: '', settings, autonomy: 'ask' };
 const hooks = (): RunHooks => ({ lines: () => undefined, activity: () => undefined, browser: () => undefined, screenshot: () => undefined, session: () => undefined, cost: () => undefined, permission: () => Promise.resolve(true) });
 
 /**
- * `ClaudeRunner` hearing what Claude Code said in a real session, beat by beat (the office's own moves left to the
+ * `ClaudeRunner` hearing what Claude Code said in a real session, beat by beat (Ops' own moves left to the
  * runner): where in it the runner closed its input, by the index of the beat it had just heard, and the session.
  */
 async function replay(session: Session) {
@@ -161,7 +161,7 @@ async function replay(session: Session) {
   return { closedAt, lastResult, outcome, session: s, beats };
 }
 
-describe('the office’s runner on the real streams', () => {
+describe('Ops’ runner on the real streams', () => {
   it('keeps listening until the last turn is over, through the turns Claude Code takes for its background tasks', async () => {
     for (const session of ['messages', 'workflow', 'closed input'] satisfies Session[]) {
       const { closedAt, lastResult, outcome } = await replay(session);

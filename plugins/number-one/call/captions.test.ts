@@ -8,7 +8,7 @@ describe('addCaption', () => {
     expect(lines).toEqual([{ who: 'captain', text: 'What is the crew doing?', at: 400 }]);
   });
 
-  it('starts a new line for the other speaker, after a pause, and for every office note', () => {
+  it('starts a new line for the other speaker, after a pause, and for every note from Ops', () => {
     let lines: CallLine[] = addCaption([], 'captain', 'Status?', 0);
     lines = addCaption(lines, 'ship', ' All quiet.', 100);
     lines = addCaption(lines, 'ship', 'Anything else?', 100 + SAME_LINE_MS);

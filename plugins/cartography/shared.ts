@@ -1,5 +1,5 @@
 // What both halves of the cartography plugin (README.md) share: a project's architecture model, kept in each repo
-// it maps, and the map the office makes of it from the code.
+// it maps, and the map Ops makes of it from the code.
 import type { ModelKind } from '../../plugin-api/shared';
 import type { KeptDiagram } from './diagrams';
 import type { MapHistory } from './history';

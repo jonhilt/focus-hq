@@ -110,7 +110,7 @@ export const api = {
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain's inbox: what needs them, and what they decided lately (docs/ledger.md#the-captains-inbox-api). */
   inbox: () => call<Inbox>('GET', '/inbox'),
-  /** Answers an inbox item by its id, from the office (docs/ledger.md#the-captains-inbox-api). */
+  /** Answers an inbox item by its id, from Focus (docs/ledger.md#the-captains-inbox-api). */
   decide: (id: string, decide: Decide) => call<{ ok: true } | MessageReply>('POST', `/inbox/${encodeURIComponent(id)}/decide`, { ...decide, via: 'office' }),
   /** Holds the chief of staff's words on an inbox item, so they wait for the captain rather than going by themselves. */
   hold: (id: string) => call('POST', `/inbox/${encodeURIComponent(id)}/hold`),
@@ -123,7 +123,7 @@ export const api = {
   stop: (id: string) => call('POST', `/agents/${id}/stop`),
   dismiss: (id: string) => call('DELETE', `/agents/${id}`),
   setEffort: (id: string, effort: Effort) => call<Agent>('POST', `/agents/${id}/effort`, { effort }),
-  /** What this one agent may do without asking, from now on: the office's setting stays as it is. */
+  /** What this one agent may do without asking, from now on: the ship-wide setting stays as it is. */
   setAutonomy: (id: string, autonomy: Autonomy) => call<Agent>('POST', `/agents/${id}/autonomy`, { autonomy }),
   /** Compacts the agent's conversation between turns, keeping what their work needs. */
   compact: (id: string) => call<Agent>('POST', `/agents/${id}/compact`),
@@ -146,7 +146,7 @@ export const api = {
     if (!res.ok) throw new Error(((await res.json().catch(() => ({}))) as { error?: string }).error ?? `${res.status} ${res.statusText}`);
     return res.blob();
   },
-  /** Lines of the frame-stats log (?stats=1), sent even as the page closes (keepalive); the office says where it keeps them. */
+  /** Lines of the frame-stats log (?stats=1), sent even as the page closes (keepalive); Focus says where it keeps them. */
   logFrameStats: (session: string, lines: FrameStatsLine[]) =>
     send<{ file: string }>('POST', '/frame-stats', { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session, lines }), keepalive: true }),
 };

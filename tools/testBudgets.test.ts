@@ -3,7 +3,7 @@ import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-// A test that runs real git, or loads the office's own plugins (each one's whole import graph, transformed), takes a
+// A test that runs real git, or loads Focus's own plugins (each one's whole import graph, transformed), takes a
 // second or two alone, but well past vitest's 5 s on a busy machine (several agents' gates at once), where it fails the
 // gate on nothing but load. Such a file sets a budget fit for it, as mergeBase.test.ts does.
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -18,7 +18,7 @@ const runsGit = (source: string) => /execFileSync\(\s*'git'/.test(source);
 const loadsPlugins = (source: string) => /\bloadPlugins\(/.test(source);
 const hasBudget = (source: string) => /vi\.setConfig\(\{\s*testTimeout:/.test(source);
 
-// A module imported inside a test is loaded, and transformed, on that test's clock: the fake office's import graph alone
+// A module imported inside a test is loaded, and transformed, on that test's clock: fakeFocus's import graph alone
 // took most of a test's 5 s on a busy machine. Import at the top of the file, where loading isn't timed against a test.
 const TEST_CALLS = new Set(['it', 'test']);
 /** The name a call starts from: `it` for `it(…)`, `it.skip(…)` and `it.each([…])(…)`. */
@@ -57,10 +57,10 @@ describe('test budgets', () => {
   });
 
   it('sees a module imported inside a test, and not one imported at the top or in a mock', () => {
-    expect(importsInTests("it('x', async () => { const { office } = await import('./fakeOffice'); });")).toEqual(["'./fakeOffice'"]);
+    expect(importsInTests("it('x', async () => { const { focus } = await import('./fakeFocus'); });")).toEqual(["'./fakeFocus'"]);
     expect(importsInTests("it.each([1])('x', async () => { await import('./a'); });")).toEqual(["'./a'"]);
     expect(importsInTests("test.skip('x', async () => { await import('./a'); });")).toEqual(["'./a'"]);
-    expect(importsInTests("const { office } = await import('./fakeOffice');\nvi.mock('./v', async () => ({ ...(await import('./v')) }));\nit('x', () => {});")).toEqual([]);
+    expect(importsInTests("const { focus } = await import('./fakeFocus');\nvi.mock('./v', async () => ({ ...(await import('./v')) }));\nit('x', () => {});")).toEqual([]);
   });
 
   it('imports no module inside a test, where loading it runs on the test’s clock', () => {

@@ -31,7 +31,7 @@ pnpm run build && pnpm start
 
 In your **ready room** (<kbd>M</kbd>), make a **New project** from your repos, then walk into its holodeck.
 
-> If `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login; `FOCUS_USE_API_KEY=1` puts them on the key. Several agents at once use your plan's limits faster: **Settings → Agents working at once** caps that (default 4). To run the office on a Linux server, see `deploy/vps/setup.sh`.
+> If `ANTHROPIC_API_KEY` is set, agents ignore it and use your Claude login; `FOCUS_USE_API_KEY=1` puts them on the key. Several agents at once use your plan's limits faster: **Settings → Agents working at once** caps that (default 4). To run Focus on a Linux server, see `deploy/vps/setup.sh`.
 
 ## Working on Focus
 

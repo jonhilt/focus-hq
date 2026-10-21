@@ -1,5 +1,5 @@
 // The ship as the read-only crew read it through their ship_status tool (claudeCrew's shipTools): who's on what, the
-// open pull requests, what needs the captain and the goals closed, per project, trimmed hard. The office builds it
+// open pull requests, what needs the captain and the goals closed, per project, trimmed hard. Ops builds it
 // (index.ts) and lends it to whoever asks: Number One, and plugins through `PluginHost.shipStatus`.
 import { statusLine } from '../../shared/agentStatus';
 import { shownProjects } from '../../shared/hidden';

@@ -121,7 +121,7 @@ describe('filesCovered', () => {
     expect(c).toMatchObject({ evidence: true, code: 3, opened: 1, untested: 2, missing: 1, sentBack: 1 });
   });
 
-  it('says opened is unknown without the evidence, takes the report’s files when the office has none, and is undefined with no files', () => {
+  it('says opened is unknown without the evidence, takes the report’s files when Ops has none, and is undefined with no files', () => {
     const c = filesCovered(report(files), undefined);
     expect(c?.evidence).toBe(false);
     expect(c?.rows.map((r) => r.opened)).toEqual(['unknown', 'unknown', 'na']);
@@ -133,7 +133,7 @@ describe('verdictBehindHead', () => {
   const ctx = { ours: true, autoQa: true };
   const moved = { headSha: 'fff0000aaa111' };
 
-  it('sends the office’s PR back to QA when its head moved past either verdict', () => {
+  it('sends Ops’ PR back to QA when its head moved past either verdict', () => {
     expect(verdictBehindHead(review(), moved, ctx)).toBe(true);
     expect(verdictBehindHead(review({ status: 'failed', followUp: { kind: 'needs-you', reason: 'stuck' } }), moved, ctx)).toBe(true);
   });

@@ -32,7 +32,7 @@ export const config = {
   plugins: (process.env.FOCUS_PLUGINS ?? (demo ? 'all' : '')).split(',').map((name) => name.trim()).filter(Boolean),
   /**
    * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the inbox's /api/bot routes to it, and signs
-   * what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (the office as the bot reaches it) makes the links in it whole.
+   * what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (Focus as the bot reaches it) makes the links in it whole.
    */
   bot: { token: process.env.FOCUS_BOT_TOKEN?.trim() || undefined, webhook: process.env.FOCUS_BOT_WEBHOOK?.trim() || undefined, publicUrl: process.env.FOCUS_PUBLIC_URL?.trim().replace(/\/+$/, '') || undefined },
 };
@@ -50,10 +50,10 @@ export const paths = {
   frameStats: path.join(config.dataDir, 'frame-stats'),
   mirrors: path.join(config.dataDir, 'repos'),
   workspaces: path.join(config.dataDir, 'workspaces'),
-  /** Scratch worktrees where the office merges a pull request's base branch into it (outside workspaces, so the sweep leaves them be). */
+  /** Scratch worktrees where Ops merges a pull request's base branch into it (outside workspaces, so the sweep leaves them be). */
   merges: path.join(config.dataDir, 'merges'),
   previews: path.join(config.dataDir, 'previews'),
-  /** One reusable checkout per repo where the office runs a PR's checks itself, after a merge of its base branch (outside workspaces, so the sweep leaves them be). */
+  /** One reusable checkout per repo where Ops runs a PR's checks itself, after a merge of its base branch (outside workspaces, so the sweep leaves them be). */
   checks: path.join(config.dataDir, 'checks'),
   /** The screenshots that go with QA reports, for the QA station. */
   qaShots: path.join(config.dataDir, 'qa-shots'),
@@ -63,9 +63,9 @@ export const paths = {
   planning: path.join(config.dataDir, 'planning'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */
   transcripts: path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects'),
-  /** The terminals the office opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */
+  /** The terminals Ops opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */
   cloudTerminals: path.join(config.dataDir, 'cloud-terminals'),
-  /** The office's layer of dcg configuration for its agents' sessions (server/agents/scratch.ts). */
+  /** Ops' layer of dcg configuration for its agents' sessions (server/agents/scratch.ts). */
   dcgConfig: path.join(config.dataDir, 'dcg.toml'),
   /** Speech models: whisper for dictation, Kokoro for the crew's voices. */
   models: path.join(config.dataDir, 'models'),
@@ -99,6 +99,6 @@ export const kokoro = {
   marker: path.join(paths.models, 'kokoro', 'complete'),
   /** Hugging Face's cache for Kokoro on the Apple GPU (mlx-audio, server/speechMlx.py): its model downloads there once. */
   gpuDir: path.join(paths.models, 'kokoro-mlx'),
-  /** Written once Kokoro has loaded on the GPU, so the office knows the voices are there to load as it starts. */
+  /** Written once Kokoro has loaded on the GPU, so Focus knows the voices are there to load as it starts. */
   gpuMarker: path.join(paths.models, 'kokoro-mlx', 'complete'),
 } as const;

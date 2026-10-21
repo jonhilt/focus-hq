@@ -8,7 +8,7 @@ import { errorMessage, sleep, truncate } from '../util';
 import { keyFallback } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
-import { officeMcpServer } from './officeTool';
+import { opsMcpServer } from './opsTool';
 import { openScratch } from './scratch';
 import { sessionEnv } from './wait';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
@@ -60,8 +60,8 @@ export function holdsInput(background: string[]): boolean {
 }
 
 /**
- * What runs in the background, by kind: what Claude Code last listed, and any workflow the office has seen start and
- * not end. A workflow's agents ask the office for approval as the lead's own tools do, so the input mustn't close
+ * What runs in the background, by kind: what Claude Code last listed, and any workflow Ops has seen start and
+ * not end. A workflow's agents ask Ops for approval as the lead's own tools do, so the input mustn't close
  * under them even if a list leaves the workflow out (a run's agents were all refused at once, a minute after their own
  * background commands ended).
  */
@@ -70,7 +70,7 @@ export function runningInBackground(listed: string[], workflows: number): string
 }
 
 /**
- * Whether a message from Claude Code shows it has read what the office sent before it: something it says in a turn.
+ * Whether a message from Claude Code shows it has read what Ops sent before it: something it says in a turn.
  * What it reports whatever it has read (the background list, a task's start, end or progress, `init`) doesn't, nor
  * does a turn's result (a message sent as the turn ends isn't in its count).
  */
@@ -82,7 +82,7 @@ export const REPORT_TURN_GRACE_MS = 60_000;
 /**
  * When the session's done listening (its input closes): once its turn is over with nothing queued and nothing running
  * in the background. When the last background task ends, Claude Code takes its result in a turn of its own, and that
- * turn needs the office as much as any other (to approve a tool, or for the office's own tools): closing the input as
+ * turn needs Ops as much as any other (to approve a tool, or for Ops' own tools): closing the input as
  * the task ended left it no one to ask, and Claude Code cancelled each such tool with "The user doesn't want to take
  * this action right now". So the input stays open for that turn, and closes when it's over; if no turn comes, it
  * closes after `graceMs`, saying so (`waited`), since a session still at work would lose its approvals from then on.
@@ -105,7 +105,7 @@ export class Listening {
     this.cancelGrace();
   }
 
-  /** The office sent the session a message. */
+  /** Ops sent the session a message. */
   messageSent(): void {
     this.unheard = true;
   }
@@ -168,7 +168,7 @@ const ASK_MODE_COMMANDS = [
     .map((cmd) => `Bash(${cmd}:*)`),
 ];
 
-/** Claude Code's permission mode for each of the office's. */
+/** Claude Code's permission mode for each of Focus's. */
 export const PERMISSION_MODE: Record<Autonomy, PermissionMode> = { ask: 'acceptEdits', auto: 'auto', full: 'bypassPermissions' };
 
 /** A tool the session may use without asking in a mode, before Claude Code's own rules or the captain are asked. */
@@ -229,12 +229,12 @@ export function toolPermission(
 
 /**
  * The environment every Claude Code session gets. Agents run on your Claude login, not on an API key that happens to
- * be in the environment, unless the office says the key's in use (`keyFallback`): always, or while your plan's usage
+ * be in the environment, unless Focus says the key's in use (`keyFallback`): always, or while your plan's usage
  * limit is reached.
  */
 export function agentEnv(onKey = keyFallback.onKey()): Record<string, string | undefined> {
   // Claude Code's task tools (TaskCreate, TaskUpdate, TaskList): on newer models a session only has them when asked
-  // for, which the SDK's docs advise when the app reads them, as the office does: it follows each agent's task list
+  // for, which the SDK's docs advise when the app reads them, as Focus does: it follows each agent's task list
   // (`tasks.ts`), and draws a lead's on its goal's chart
   const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
   if (!onKey) delete env.ANTHROPIC_API_KEY;
@@ -342,7 +342,7 @@ export class ClaudeRunner implements AgentRunner {
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();
     hooks.signIn?.(onKey);
-    // a local session's scratch dir for throwaway files, deleted when the run ends, and the office's focus-wait on its
+    // a local session's scratch dir for throwaway files, deleted when the run ends, and Focus's focus-wait on its
     // PATH; a cloud session has its own machine
     const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
     const env = sessionEnv(agentEnv(onKey), scratch?.env);
@@ -364,7 +364,7 @@ export class ClaudeRunner implements AgentRunner {
             // recorded on the first request and reused on every resume (the SDK's default, spelled out): instructions
             // that change mid-session would be ignored, so whatever changes goes in messages instead
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
-            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: officeMcpServer(req.tools) }) },
+            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: opsMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
             // the scratch dir's guard on Bash, before it runs
             hooks: scratch?.hook && { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] },

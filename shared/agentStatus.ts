@@ -1,7 +1,7 @@
 import { clock } from './clock';
 import type { Agent, AgentStatus, RunView } from './types';
 
-// How an agent's status reads, wherever it's shown: the 3D office, its panels and the Tricorder.
+// How an agent's status reads, wherever it's shown: the 3D ship, its panels and the Tricorder.
 
 export const STATUS_ICON: Record<AgentStatus, string> = {
   queued: '⏳',

@@ -18,7 +18,7 @@ import type { LogKind, LogLine, LogTone } from './shared';
 
 // The captain's log, pure: every journal (each agent's run, each pull request's review, each goal's slices) and the
 // ledger, on one timeline, oldest first. Each journal is told by its own machine's facts, so a line is only as good as
-// the fact behind it; most facts are the office's bookkeeping (a message queued, a turn asked for), so only the ones a
+// the fact behind it; most facts are Ops' bookkeeping (a message queued, a turn asked for), so only the ones a
 // captain coming back would want to hear make a line. QA's verdicts and merges come from the ledger, which has them all.
 
 /** A journal, with who and what it's about. */
@@ -41,8 +41,8 @@ export interface LogSources {
   nameOf: (agentId: string) => string | undefined;
 }
 
-/** What the office lends the log: its journals written to in the window, its agents, its projects and the ledger. */
-export interface LogOffice {
+/** What Ops lends the log: its journals written to in the window, its agents, its projects and the ledger. */
+export interface LogHost {
   journals: LentJournals;
   agents: readonly Agent[];
   projects: readonly Project[];
@@ -53,10 +53,10 @@ export interface LogOffice {
 const about = (o: { projectId?: string; goal?: string; agentId?: string }) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined));
 
 /**
- * The office's journals, with who and what each is about: a crew member who's gone home is named from the ledger,
+ * Ops' journals, with who and what each is about: a crew member who's gone home is named from the ledger,
  * where their sessions and goals were kept.
  */
-export function logSources({ journals, agents, projects, ledger }: LogOffice): LogSources {
+export function logSources({ journals, agents, projects, ledger }: LogHost): LogSources {
   const names = new Map<string, string>();
   const goals = new Map<string, { title: string; projectId: string }>();
   for (const e of ledger) {
@@ -178,7 +178,7 @@ function ledgerLines(events: readonly LedgerEvent[], since: number): LogLine[] {
   return events.filter((e) => e.at > since).map((e) => {
     const row = ledgerRow(e);
     const kind = e.kind === 'qa-verdict' ? (e.verdict === 'pass' ? 'pass' : 'fail') : (LEDGER_KINDS[e.kind] ?? 'other');
-    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : e.kind === 'cos-verdict' ? 'Chief of Staff' : 'Office';
+    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : e.kind === 'cos-verdict' ? 'Chief of Staff' : 'Ops';
     // the detail names who and the goal, which the line has on its own
     const detail = row.detail?.split(' · ').filter((d) => d !== who && d !== row.goal).join(' · ');
     return { t: e.at, who, source: 'ledger', kind, tag: row.tag, tone: row.tone, text: [row.title, detail].filter(Boolean).join(' · '), ...(row.quotes && { quotes: row.quotes }), projectId: e.projectId, ...(row.goal && { goal: row.goal }) };

@@ -1,5 +1,5 @@
 // The briefings plugin's lead tool: mcp__office__explain, an animated explainer of a concept on the lead's
-// station's screen, in the office's LCARS player, with a picture of its stage at the middle of each beat for the lead
+// station's screen, in Ops' LCARS player, with a picture of its stage at the middle of each beat for the lead
 // to look at and what the checks found there. Each beat's receipts are looked up in their sources first: an explainer
 // whose quotes aren't there, or whose caption or narration says what its quotes don't, goes back to the lead to fix.
 import { z } from 'zod';
@@ -11,7 +11,7 @@ import { writtenHow } from './shared';
 import { receiptFor, type Sources } from './sources';
 import type { Brief, Write } from './writer';
 
-// The explain tool's input, with the limits `explainerPage` enforces, so the lead sees them up front. The office still
+// The explain tool's input, with the limits `explainerPage` enforces, so the lead sees them up front. Ops still
 // checks it all (and refuses a script that would close its own element).
 const beats = z.array(z.object({
   title: z.string().max(E.beatTitle).describe(`The beat's point, in a few words (at most ${E.beatTitle} characters): shown in gold over its caption.`),
@@ -22,7 +22,7 @@ const beats = z.array(z.object({
     kind: z.enum(['file', 'said', 'ledger', 'pr']).describe('file: a file in your checkout; said: your own words earlier in this session; ledger: a line of the ship\'s log; pr: a pull request (its title, description, comments, QA\'s report and reviews).'),
     where: z.string().optional().describe('For file, its path (its repo\'s folder first when the goal has more than one); for ledger, the line\'s seq; for pr, owner/repo#number. Nothing for said.'),
     quote: z.string().max(R.quote).describe(`The source's words that back this beat, exactly as the source has them (at most ${R.quote} characters).`),
-  })).max(R.refs).optional().describe(`Receipts: where this beat's facts come from, ${R.refs} at most. Every number and name its caption and narration say must be in one of their quotes, or the office sends the explainer back. A beat with none shows as your interpretation. Explaining how Focus itself works, cite the code as it is (file), not the design you meant.`),
+  })).max(R.refs).optional().describe(`Receipts: where this beat's facts come from, ${R.refs} at most. Every number and name its caption and narration say must be in one of their quotes, or Ops sends the explainer back. A beat with none shows as your interpretation. Explaining how Focus itself works, cite the code as it is (file), not the design you meant.`),
   narration: z.string().max(E.narration).optional().describe(`What a voice says over this beat when the captain plays it with the voice on (at most ${E.narration} characters): talk them through what they're looking at, as if sitting beside them pointing at the stage ("on the left is the queue; watch what happens when the worker goes down"), in plain spoken words with no code or file paths. The beat holds on its last frame until it's said. Its title and caption are read out if left out.`),
 })).min(E.minBeats).max(E.maxBeats).describe(`The beats in order (${E.minBeats} to ${E.maxBeats}), each one step of the explanation: they play one after another, and the captain can step through them one at a time.`);
 const stage = z.object({
@@ -31,14 +31,14 @@ const stage = z.object({
   script: z.string().describe('Defines render(t), which sets the whole scene for t seconds from the start, and can build elements first.'),
 }).describe('What plays above the captions.');
 
-/** An explainer's beats and stage: what the lead writes, or the office's writer does from their brief. */
+/** An explainer's beats and stage: what the lead writes, or Ops' writer does from their brief. */
 export const WRITTEN = z.object({ beats, stage });
 
-/** The tool's input: a lead's explainer, or their brief for the office's writer. */
+/** The tool's input: a lead's explainer, or their brief for Ops' writer. */
 export const explainShape = {
   id: z.string().describe('A short name for it, lowercase with dashes (like "ledger-crash"): it shares ids with show\'s visuals, and explaining the same id again replaces it.'),
   title: z.string().describe('What it explains, in a few words (at most 80 characters): it heads the player.'),
-  brief: z.string().max(4000).optional().describe('Instead of beats and stage: what to explain and to whom, the decision you need if there is one, and where its facts are (files, your own messages, pull requests). The office\'s writer writes the explainer from it, on the model the captain picked for briefings, and checks its receipts.'),
+  brief: z.string().max(4000).optional().describe('Instead of beats and stage: what to explain and to whom, the decision you need if there is one, and where its facts are (files, your own messages, pull requests). Ops\' writer writes the explainer from it, on the model the captain picked for briefings, and checks its receipts.'),
   beats: beats.optional(),
   stage: stage.optional(),
 };
@@ -61,7 +61,7 @@ async function beatReceipts(input: ExplainerInput, lead: LeadToolContext, source
 /** How to write an explainer's stage, beats and receipts: the lead reads it in the tool's description, and the writer in its prompt. */
 export const EXPLAIN_CRAFT = `The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your elements in html, style them in css, and in script define render(t): it sets the whole scene for t seconds from the start (0 to the beats' seconds added up), and is called every frame and for jumps back and forth, so work everything out from t, never from the frame before. Build repeated elements once in the script, before render. Helpers: p(t, a, b) eases from 0 to 1 between a and b seconds; clamp(x, lo, hi); B[i] is when beat i starts (B[0] = 0) and DUR when it ends; $(selector) and $$(selector) find things in the stage; tag(text, colour) is the HTML for a status capsule. Colours are CSS variables: --orange, --gold, --peach, --lilac, --peri, --sky, --green, --red (for alerts), --text, --muted, --line. Classes: .panel (style="--c:var(--sky)") with a .hd header and a .bd body, .pill (a capsule, coloured by --c), .lbl (a column label), .mono (code). The font is Antonio; JetBrains Mono for code.
 
-Plan the beats first: one change per beat. Give each beat its receipts (refs): where its facts come from, quoted exactly. They show as chips under the caption, never read aloud, and the office checks them before the captain sees it.`;
+Plan the beats first: one change per beat. Give each beat its receipts (refs): where its facts come from, quoted exactly. They show as chips under the caption, never read aloud, and Ops checks them before the captain sees it.`;
 
 /** Checks an explainer's receipts, and refuses it with what doesn't hold up. */
 async function receiptsOrRefuse(input: ExplainerInput, lead: LeadToolContext, sources: Sources, whose: string): Promise<Receipt[][]> {
@@ -73,7 +73,7 @@ async function receiptsOrRefuse(input: ExplainerInput, lead: LeadToolContext, so
 /** How many times the writer is sent back with what didn't hold up, before the lead hears of it. */
 const FIXES = 2;
 
-/** A brief written up by the office's writer, its receipts checked; sent back to the writer with what didn't hold up, up to `FIXES` times. */
+/** A brief written up by Ops' writer, its receipts checked; sent back to the writer with what didn't hold up, up to `FIXES` times. */
 async function writeUp(brief: Brief, lead: LeadToolContext, sources: Sources, write: Write): Promise<{ input: ExplainerInput; receipts: Receipt[][]; note: string }> {
   let written = await write(lead, brief);
   for (let fixes = 0; ; fixes++) {
@@ -92,14 +92,14 @@ async function explainerOf(ask: z.infer<z.ZodObject<typeof explainShape>>, lead:
   throw new Error('Send a brief, or the beats and the stage.');
 }
 
-/** The lead's explain tool: their beats and stage, or the writer's from their brief, go in the office's player, which goes up like any of show's visuals. */
+/** The lead's explain tool: their beats and stage, or the writer's from their brief, go in Ops' player, which goes up like any of show's visuals. */
 export const explainTool = (sources: Sources, write: Write): LeadTool => ({
   name: 'explain',
-  description: `Walk the captain through a concept with an animated explainer on your station's screen: how a mechanism behaves, what happens when something fails, how data moves, why one design beats another. Text is hard to take in; an explainer plays it out a beat at a time, each with a caption, and the captain steps through at their own pace. The office wraps your stage in the ship's LCARS player (frame, beats down the left, captions, play and step), so you write only the stage, and shows it like show's visuals: a picture on the screen, live up close. Before the captain presses play it rests, dimmed, on its last frame, so make that frame sum it up. Up close the captain can switch a voice on, which reads each beat's narration while it plays: write one for every beat.
+  description: `Walk the captain through a concept with an animated explainer on your station's screen: how a mechanism behaves, what happens when something fails, how data moves, why one design beats another. Text is hard to take in; an explainer plays it out a beat at a time, each with a caption, and the captain steps through at their own pace. Ops wraps your stage in the ship's LCARS player (frame, beats down the left, captions, play and step), so you write only the stage, and shows it like show's visuals: a picture on the screen, live up close. Before the captain presses play it rests, dimmed, on its last frame, so make that frame sum it up. Up close the captain can switch a voice on, which reads each beat's narration while it plays: write one for every beat.
 
-Send a brief and the office's writer writes it for you (on the model the captain picked for briefings), or write the beats and stage yourself:
+Send a brief and Ops' writer writes it for you (on the model the captain picked for briefings), or write the beats and stage yourself:
 
-${EXPLAIN_CRAFT} The office replies with a picture of the stage at the middle of each beat and what its check found (an empty stage): look at them, and fix what doesn't read.`,
+${EXPLAIN_CRAFT} Ops replies with a picture of the stage at the middle of each beat and what its check found (an empty stage): look at them, and fix what doesn't read.`,
   input: explainShape,
   async run(lead, raw) {
     const { input, receipts, note } = await explainerOf(z.object(explainShape).parse(raw), lead, sources, write);

@@ -1,5 +1,5 @@
-// Records a run's flows between the browser and the office (shared/flows.ts) into .focus/cartography-flows.json, for
-// the cartography plugin to draw: a demo office on a free port with FOCUS_FLOWS set, the captain coming aboard with
+// Records a run's flows between the browser and Focus (shared/flows.ts) into .focus/cartography-flows.json, for
+// the cartography plugin to draw: a demo ship on a free port with FOCUS_FLOWS set, the captain coming aboard with
 // ?flows and opening what they use, while the demo's crew work. `--seconds 90` runs longer (120 by default).
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
@@ -7,15 +7,15 @@ import os from 'node:os';
 import path from 'node:path';
 import type { Browser, Page } from 'playwright';
 import { FLOWS_FILE, FLOWS_PARAM, type FlowRecording } from '../shared/flows';
-import { CheckFailed, freePort, launchBrowser, openScene, root, startDemo, stopDemo, waitForServer } from './demoOffice';
+import { CheckFailed, freePort, launchBrowser, openScene, root, startDemo, stopDemo, waitForServer } from './demoShip';
 
 const seconds = Number(process.argv[process.argv.indexOf('--seconds') + 1]) || 120;
 const SPEED = 3;
-const RUN = `the demo office at speed ${SPEED} for ${seconds} s, the captain opening the engineering station, its Maps, the ledger and comms`;
+const RUN = `the demo ship at speed ${SPEED} for ${seconds} s, the captain opening the engineering station, its Maps, the ledger and comms`;
 
 type Hq = { ui: Record<string, (...args: unknown[]) => void> & { panels: { close(): void } }; state: { projects: { id: string }[] } };
 
-/** What the captain does, through the office's own panels, so each request is made by the file that makes it for real. */
+/** What the captain does, through Focus's own panels, so each request is made by the file that makes it for real. */
 async function captain(page: Page): Promise<void> {
   const step = async (what: string, act: () => Promise<unknown>) => {
     console.log(`  · ${what}`);
@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     const left = seconds * 1000 - (Date.now() - started);
     if (left > 0) await page.waitForTimeout(left);
     const res = await fetch(`http://127.0.0.1:${port}/api/flows`);
-    if (!res.ok) throw new CheckFailed(`the office hands over its recording (${res.status})`);
+    if (!res.ok) throw new CheckFailed(`Focus hands over its recording (${res.status})`);
     const { unattributed, ...recording } = (await res.json()) as FlowRecording & { unattributed: { ws: number; http: number } };
     recording.commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
     writeFileSync(path.join(root, FLOWS_FILE), `${JSON.stringify(recording, null, 2)}\n`);

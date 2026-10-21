@@ -1,16 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { prKey } from '../../shared/qa';
 import { demoWorkspace } from './demoRunner';
-import { office, until } from './fakeOffice';
+import { focus, until } from './fakeFocus';
 import type { CommandRun } from './qaProof';
 import type { Triager } from './triage';
 import type { WorkspaceOps } from './types';
 
-// What the office does about a pull request QA fails: back to the developer who opened it, or a fixer of its own; and
-// once it's stuck, the room's operations officer looks at it and does one thing. Driven through the office, from a
+// What Ops does about a pull request QA fails: back to the developer who opened it, or a fixer of its own; and
+// once it's stuck, the room's operations officer looks at it and does one thing. Driven through Ops, from a
 // developer's delivered PR to QA's verdict.
 
-/** The demo's checkouts, where QA's proof test fails on an assertion when the office runs it (`runs` says what it ran, and where). */
+/** The demo's checkouts, where QA's proof test fails on an assertion when Ops runs it (`runs` says what it ran, and where). */
 const proving = (run: CommandRun = { code: 1, output: 'AssertionError: expected "light" to be "dark"\n Tests  1 failed (1)' }, runs: { dir: string; args: string[] }[] = []): WorkspaceOps => ({
   ...demoWorkspace,
   changedFiles: () => Promise.resolve([]),
@@ -30,9 +30,9 @@ const fail = {
 };
 const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 
-/** A developer's PR, delivered, and QA failing it: the office, the developer and the PR's key. */
-async function failedPr(triager?: Triager, before?: (o: ReturnType<typeof office>, dev: string) => Promise<void>, ops = workspace, report: object = fail, verdict = 'failed') {
-  const o = office(ops, undefined, triager);
+/** A developer's PR, delivered, and QA failing it: Ops, the developer and the PR's key. */
+async function failedPr(triager?: Triager, before?: (o: ReturnType<typeof focus>, dev: string) => Promise<void>, ops = workspace, report: object = fail, verdict = 'failed') {
+  const o = focus(ops, undefined, triager);
   // a new project leaves a failed PR with the captain: these are about sending it back
   o.project.autoSendBack = true;
   const { id: dev } = o.agents.hire(o.project.id, 'demo/webshop-frontend', issue);
@@ -71,11 +71,11 @@ describe('a PR QA failed', () => {
 });
 
 describe('QA’s proof', () => {
-  /** The verdict's comment, as the office posted it. */
+  /** The verdict's comment, as Ops posted it. */
   const comment = (o: { store: { reviewEntries: (key: string) => { kind: string }[] } }, key: string) =>
     o.store.reviewEntries(key).flatMap((e) => (e.kind === 'reported' && 'body' in e && typeof e.body === 'string' ? [e.body] : [])).at(-1) ?? '';
 
-  it('blocks a PR only when the office runs QA’s proof test in QA’s checkout and it fails, and hands the test to the developer to keep', async () => {
+  it('blocks a PR only when Ops runs QA’s proof test in QA’s checkout and it fails, and hands the test to the developer to keep', async () => {
     const runs: { dir: string; args: string[] }[] = [];
     const o = await failedPr(undefined, undefined, proving(undefined, runs));
     expect(runs).toEqual([{ dir: expect.stringContaining('qa_'), args: ['npx', 'vitest', 'run', PROOF] }]);
@@ -88,7 +88,7 @@ describe('QA’s proof', () => {
     expect(fixTurn().req.prompt).toContain('drop the `.proof`');
   });
 
-  it('posts a fail whose proof passes when the office runs it as advice: a pass, not sent back', async () => {
+  it('posts a fail whose proof passes when Ops runs it as advice: a pass, not sent back', async () => {
     const o = await failedPr(undefined, undefined, proving({ code: 0, output: ' Tests  1 passed (1)' }), fail, 'passed');
     expect(o.store.reviews.get(o.key)?.report).toMatchObject({ verdict: 'pass', advisory: true, fixInstructions: 'Wire the toggle to the theme.', proofs: [{ outcome: 'passed' }] });
     expect(comment(o, o.key)).toContain('QA report: ✅ Passed with advice');

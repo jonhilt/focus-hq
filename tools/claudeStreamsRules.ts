@@ -2,7 +2,7 @@
 // Pure: the script feeds it each message as it comes.
 import { isRecord } from '../server/agents/transcript';
 
-/** One SDK message, as the office's code reads it: kinds, flags, tool names and counts, with ids made up in order. */
+/** One SDK message, as Focus's code reads it: kinds, flags, tool names and counts, with ids made up in order. */
 export type Shape = Record<string, string | number | boolean | string[] | null>;
 
 const asRecord = (v: unknown): Record<string, unknown> => (isRecord(v) ? v : {});
@@ -24,8 +24,8 @@ export class Ids {
 }
 
 /**
- * What a tool result says, as the office reads it: a command gone to the background, a tool cancelled because nobody
- * was there to approve it (in the words the office's transcripts show, or those 2.1.289 used once the office's input had
+ * What a tool result says, as Focus reads it: a command gone to the background, a tool cancelled because nobody
+ * was there to approve it (in the words Focus's transcripts show, or those 2.1.289 used once Focus's input had
  * closed), or neither.
  */
 export function resultKind(content: unknown): 'background' | 'cancelled' | 'other' {
@@ -35,7 +35,7 @@ export function resultKind(content: unknown): 'background' | 'cancelled' | 'othe
   return 'other';
 }
 
-/** The shape of one SDK message: what the office's code depends on, with no text, paths or prompts. */
+/** The shape of one SDK message: what Focus's code depends on, with no text, paths or prompts. */
 export function shapeOf(msg: unknown, tasks: Ids, tools: Ids): Shape {
   const m = asRecord(msg);
   const type = String(m.type ?? '');

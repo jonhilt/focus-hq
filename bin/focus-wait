@@ -2,7 +2,7 @@
 # focus-wait --until '<check>' [--timeout SECONDS] [--every SECONDS]
 #
 # Runs <check> in sh every --every seconds (2) until it exits 0, then prints its output and exits 0. After --timeout
-# seconds (120) it gives up: exit 1, with the check's last output on stderr. The Focus office puts this on its agents'
+# seconds (120) it gives up: exit 1, with the check's last output on stderr. Focus puts this on its agents'
 # PATH (server/agents/wait.ts), because Claude Code refuses a foreground `sleep N; <check>`.
 
 usage() {

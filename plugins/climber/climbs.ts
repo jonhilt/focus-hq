@@ -9,8 +9,8 @@ const SCORECARDS_READ = 30;
 
 /**
  * Main engineering's climber (README.md): while the captain keeps climbing switched on, one climb at a time on the
- * office's own repo, all of them by one engineer (`climbingEngineer`, at `CLIMBER_ID`), in a fresh session each time. A
- * climb is the plugin's `climb` brief: they measure, fix the worst gap and the office opens their pull request like any
+ * Focus's own repo, all of them by one engineer (`climbingEngineer`, at `CLIMBER_ID`), in a fresh session each time. A
+ * climb is the plugin's `climb` brief: they measure, fix the worst gap and Ops opens their pull request like any
  * developer's, but it never merges by itself. The next climb starts once it's merged or closed; a climb that ends
  * without a pull request switches climbing off, saying why.
  */
@@ -26,7 +26,7 @@ export class Climbs {
   }
 
   /**
-   * The climb's first message: the brief, with every climb before it as GitHub and the office remember them (the
+   * The climb's first message: the brief, with every climb before it as GitHub and Ops remember them (the
    * captain's own words on each, and whether a merged gain has held on main). GitHub failing costs the log, not the climb.
    */
   brief(agent: Agent): Effect.Effect<string, never, GitHub> {
@@ -54,10 +54,10 @@ export class Climbs {
     return this.climb.get();
   }
 
-  /** The captain's switch: climbs on the project with the office's own repo (the demo's first project's). */
+  /** The captain's switch: climbs on the project with Focus's own repo (the demo's first project's). */
   keepClimbing(on: boolean): Climb {
     const home = climbHome(this.host.projects(), this.host.ownRepo(), this.host.demo);
-    if (on && !home) throw new Error('Connect the office’s own repository to a project first: that’s what the climber works on');
+    if (on && !home) throw new Error('Connect Focus’s own repository to a project first: that’s what the climber works on');
     this.climb.set({ keepClimbing: on, stoppedWhy: undefined, ...(on && home) });
     this.settle();
     return this.current();
@@ -82,7 +82,7 @@ export class Climbs {
     }
   }
 
-  /** The office opened (or updated) a climber's pull request: the climb holds on to it, whatever happens to the climber next. */
+  /** Ops opened (or updated) a climber's pull request: the climb holds on to it, whatever happens to the climber next. */
   opened(agentId: string, pr: { number: number; url: string }): void {
     const climb = this.climb.get();
     if (climb.agentId !== agentId || climb.pr?.number === pr.number) return;

@@ -43,7 +43,7 @@ describe('claimBranch', () => {
     expect(claimBranch(worktrees, 'focus/99-new', '/data/workspaces', nobody)).toEqual({ kind: 'free' });
   });
 
-  it('reclaims a workspace whose agent has left the office', () => {
+  it('reclaims a workspace whose agent has left the ship', () => {
     expect(claimBranch(worktrees, 'focus/70-replace-desks-eeb5', '/data/workspaces', nobody)).toEqual({
       kind: 'reclaim',
       path: '/data/workspaces/agent_d86247eeb5',
@@ -51,8 +51,8 @@ describe('claimBranch', () => {
   });
 
   it("leaves a colleague's workspace alone", () => {
-    const inOffice = (id: string) => id === 'agent_d86247eeb5';
-    expect(claimBranch(worktrees, 'focus/70-replace-desks-eeb5', '/data/workspaces', inOffice)).toEqual({
+    const aboard = (id: string) => id === 'agent_d86247eeb5';
+    expect(claimBranch(worktrees, 'focus/70-replace-desks-eeb5', '/data/workspaces', aboard)).toEqual({
       kind: 'held',
       path: '/data/workspaces/agent_d86247eeb5',
       agentId: 'agent_d86247eeb5',
@@ -87,7 +87,7 @@ describe('claimBranch', () => {
 describe('heldMessage', () => {
   it("names the colleague's workspace", () => {
     expect(heldMessage('focus/70-x', { path: '/data/workspaces/agent_a', agentId: 'agent_a' })).toBe(
-      "Branch focus/70-x is checked out in /data/workspaces/agent_a, the workspace of agent_a, who's still in the office.",
+      "Branch focus/70-x is checked out in /data/workspaces/agent_a, the workspace of agent_a, who's still aboard.",
     );
   });
 });
@@ -139,7 +139,7 @@ describe('retryLockRace', () => {
 });
 
 describe('orphanedWorkspaces', () => {
-  it("picks the folders that belong to no agent in the office and no project's triage", () => {
+  it("picks the folders that belong to no agent aboard and no project's triage", () => {
     const folders = ['agent_786fa4665d', 'agent_d86247eeb5', 'qa_p1', 'triage_p1', 'triage_p_gone'];
     const agents = ['agent_d86247eeb5', 'qa_p1'];
     expect(orphanedWorkspaces(folders, agents, ['p1'])).toEqual(['agent_786fa4665d', 'triage_p_gone']);

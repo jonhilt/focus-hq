@@ -21,7 +21,7 @@ describe('extractionInput', () => {
     const qa: LedgerEvent = { projectId: 'p', seq: 3, at: 1, kind: 'qa-verdict', repo: 'o/r', pr: 12, verdict: 'fail', reviewer: 'B', checks: { pass: 0, fail: 1, skip: 0 }, failedRounds: 1 };
     expect(extractionInput(transcript(), undefined, [qa])).toBe(
       [
-        '[12:00] OFFICE: Please resolve GitHub issue #12 in o/r',
+        '[12:00] OPS: Please resolve GitHub issue #12 in o/r',
         '[12:01] AGENT: Shall I ship it?',
         '[12:02] FAILED Bash: ls *.md → zsh: no matches found: *.md',
         '[12:03] CAPTAIN: go\n  (the agent had just said: “Shall I ship it?”)',
@@ -112,6 +112,6 @@ describe('the reader’s batches and prompt', () => {
   });
 
   it('stops a span at its last line', () => {
-    expect(extractionInput(transcript(), undefined, [], 'u3')).toBe('[12:00] OFFICE: Please resolve GitHub issue #12 in o/r\n[12:01] AGENT: Shall I ship it?\n[12:02] FAILED Bash: ls *.md → zsh: no matches found: *.md');
+    expect(extractionInput(transcript(), undefined, [], 'u3')).toBe('[12:00] OPS: Please resolve GitHub issue #12 in o/r\n[12:01] AGENT: Shall I ship it?\n[12:02] FAILED Bash: ls *.md → zsh: no matches found: *.md');
   });
 });

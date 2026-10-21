@@ -153,7 +153,7 @@ describe('changeProject: merge checks', () => {
 });
 
 describe('projectChangeFollowUps', () => {
-  it('tells the office’s plugins when one is switched', () => {
+  it('tells Focus’s plugins when one is switched', () => {
     expect(projectChangeFollowUps({ plugin: { id: 'flow', on: true } }).plugins).toBe(true);
     expect(projectChangeFollowUps({ name: 'x' }).plugins).toBe(false);
   });

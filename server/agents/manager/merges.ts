@@ -21,7 +21,7 @@ export type MergeTarget = Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | '
 type CheckFields = Pick<Extract<LedgerEntry, { kind: 'merge-check' }>, 'outcome' | 'base' | 'head' | 'failed'>;
 
 /**
- * Every merge the office makes (docs/merging.md): the merge check first (the PR's head merged onto its base as it is
+ * Every merge Ops makes (docs/merging.md): the merge check first (the PR's head merged onto its base as it is
  * now, and the repo's checks run on it), then GitHub's merge of exactly the commit it checked. One merge at a time in
  * each repo, so the next one is checked against a base that has the last one in it. A trial is kept by its base and
  * head, so trying again runs nothing until one of them moves.
@@ -41,7 +41,7 @@ export class Merges extends Part {
     const key = prKey(pr.repo, pr.number);
     const going = this.inFlight.get(key);
     if (going) {
-      if (how.override) return Promise.reject(new Refused({ message: `the office is still checking its merge` }));
+      if (how.override) return Promise.reject(new Refused({ message: `Ops is still checking its merge` }));
       return going;
     }
     const ahead = this.join(pr);
@@ -89,7 +89,7 @@ export class Merges extends Part {
       this.show(projectId, pr, { state: 'overridden', head });
       return this.land(projectId, pr, how, head || undefined);
     }
-    // its turn: off the queue, while the office fetches what it checks
+    // its turn: off the queue, while Ops fetches what it checks
     if (this.checks.get(prKey(pr.repo, pr.number))?.state === 'queued') this.show(projectId, pr, { state: 'checking', head: how.want ?? pr.headSha ?? '' });
     let heads: MergeHeads;
     try {
@@ -97,7 +97,7 @@ export class Merges extends Part {
       // no real clone (the demo): the PR's head as GitHub reports it
       heads = { base: fetched.base, head: fetched.head || pr.headSha || '' };
     } catch (err) {
-      return this.refuse(projectId, pr, pr.headSha ?? '', `the office couldn’t fetch it: ${errorMessage(err)}`);
+      return this.refuse(projectId, pr, pr.headSha ?? '', `Ops couldn’t fetch it: ${errorMessage(err)}`);
     }
     const step = gateStep(heads, { want: how.want, cached: this.trials.get(prKey(pr.repo, pr.number)) });
     if (step.kind === 'refuse') return this.refuse(projectId, pr, heads.head, step.reason);
@@ -127,7 +127,7 @@ export class Merges extends Part {
     throw new Refused({ message: reason });
   }
 
-  /** GitHub's merge of exactly `head`, and the office hearing the PR landed. */
+  /** GitHub's merge of exactly `head`, and Ops hearing the PR landed. */
   private async land(projectId: string, pr: MergeTarget, how: MergeHow, head: string | undefined): Promise<string> {
     try {
       await this.runtime.runPromise(GitHub.use((gh) => gh.mergePullRequest(pr.repo, pr.number, how.method, head)));

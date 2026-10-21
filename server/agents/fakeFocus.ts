@@ -1,4 +1,4 @@
-// A pretend office for the manager's tests, and plugins' (plugins/*/…test.ts): demo GitHub and checkouts, and a
+// A pretend Focus for the manager's tests, and plugins' (plugins/*/…test.ts): demo GitHub and checkouts, and a
 // Claude Code stand-in whose turns the test ends. Only tests import it.
 import { Layer, Schedule } from 'effect';
 import { expect } from 'vitest';
@@ -54,20 +54,20 @@ export class FakeClaude implements AgentRunner {
 /** The room's operations officer, when nobody's said what they decide: they can't work it out. */
 const noOfficer: Triager = { triage: () => Promise.reject(new Error('no officer here')) };
 
-/** Takes a page's picture; the office's own stand-in answers at once unless a test hands it one of its own. */
+/** Takes a page's picture; Focus's own stand-in answers at once unless a test hands it one of its own. */
 export type Render = (html: string, frames?: Frames) => Promise<Picture>;
 
-export function office(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer, render?: Render) {
+export function focus(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer, render?: Render) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
-  // a new project waits for the captain to send a PR to QA: the office's tests follow QA by itself, as a project from before does
+  // a new project waits for the captain to send a PR to QA: Focus's tests follow QA by itself, as a project from before does
   project.autoQa = true;
   return { store, project, ...crew(store, workspace, github, triager, render) };
 }
 
 /**
- * The office after Focus restarts: its store as it loads again (whoever was at work stopped, their run journals as they
+ * Focus after it restarts: its store as it loads again (whoever was at work stopped, their run journals as they
  * were), and a new manager and Claude Code, which haven't recovered anyone yet (`agents.recover()`).
  */
 export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, render?: Render) {
@@ -75,7 +75,7 @@ export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace,
   return crew(store, workspace, github, noOfficer, render);
 }
 
-/** The office's stand-in for the headless browser: a page with "unrenderable" in it can't be pictured, one with "throws" reports an error. */
+/** Focus's stand-in for the headless browser: a page with "unrenderable" in it can't be pictured, one with "throws" reports an error. */
 const pictured: Render = (html, frames) => (html.includes('unrenderable') ? Promise.reject(new Error('no browser')) : Promise.resolve({
   image: Buffer.from('jpeg'),
   errors: html.includes('throws') ? ['ReferenceError: nope is not defined'] : [],
@@ -99,7 +99,7 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
   return { claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
 }
 
-/** Waits (a few seconds at most) for the office to get there. */
+/** Waits (a few seconds at most) for Focus to get there. */
 export async function until(check: () => boolean): Promise<void> {
   for (let i = 0; i < 300 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
   expect(check()).toBe(true);

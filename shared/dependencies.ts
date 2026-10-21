@@ -82,7 +82,7 @@ export function startOrder(issues: Issue[]): Issue[] {
 
 /**
  * The issues auto-assign hires an agent for, in the order to hire them, as many as there are free slots: those that can
- * start now (`startOrder`), carry the project's auto label if it has one, no agent has claimed and have no office branch
+ * start now (`startOrder`), carry the project's auto label if it has one, no agent has claimed and have no Ops branch
  * (`focus/<number>-…`) open as a PR yet.
  */
 export function issuesToAssign(

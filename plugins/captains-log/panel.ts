@@ -1,4 +1,4 @@
-import { byDay, callPlugin, fill, h, keysOf, LCARS, office, shownProjects, type Ui } from '../../plugin-api/client';
+import { byDay, callPlugin, fill, h, keysOf, LCARS, focus, shownProjects, type Ui } from '../../plugin-api/client';
 import { awayPhrases, awaySummary, CAPTAINS_LOG, type LogLine, type LogSource } from './shared';
 
 /** When the captain last looked at the log, in this browser: "while you were away" counts from there. */
@@ -74,14 +74,14 @@ export function openCaptainsLogPanel(ui: Ui): void {
   const render = () => {
     // what happened since you last looked, and what's waiting on you now
     const phrases = awayPhrases(awaySummary(lines, seen));
-    const waiting = office.agents.filter((a) => a.permission || a.status === 'error');
+    const waiting = focus.agents.filter((a) => a.permission || a.status === 'error');
     fill(away,
       h('h3', null, `While you were away (since ${when(seen)})`),
       h('p', null, phrases.length ? phrases.join(' · ') : 'Nothing worth a line.'),
       waiting.length ? h('p', { class: 'captains-log-waiting' }, `Waiting on you: ${waiting.map((a) => `${a.name} (${a.permission ? 'hand up' : 'hit a problem'})`).join(', ')}`) : null,
     );
 
-    const rooms = shownProjects([...office.projects]).filter((p) => lines.some((l) => l.projectId === p.id));
+    const rooms = shownProjects([...focus.projects]).filter((p) => lines.some((l) => l.projectId === p.id));
     const goals = [...new Set(lines.map((l) => l.goal).filter((g): g is string => !!g))];
     const crew = [...new Set(lines.map((l) => l.who))].sort();
     fill(row,

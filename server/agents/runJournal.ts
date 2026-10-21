@@ -2,16 +2,16 @@ import { assign, setup, type StateValue, transition } from 'xstate';
 import type { ReplayStep, RunView } from '../../shared/types';
 import type { Target } from './runMachine';
 
-// An agent's run journal, pure: the facts the office records about a run (data/runs/<agent>.jsonl), what they add up
-// to, and what the office does with them after a restart. The journal is the truth for the run's turns and its inbox:
-// each fact is on disk before the office acts on it (`Store.journal`), so a crash loses nothing it had decided. What
+// An agent's run journal, pure: the facts Ops records about a run (data/runs/<agent>.jsonl), what they add up
+// to, and what Ops does with them after a restart. The journal is the truth for the run's turns and its inbox:
+// each fact is on disk before Ops acts on it (`Store.journal`), so a crash loses nothing it had decided. What
 // the facts add up to is a state machine's (`journalMachine`): each fact an event, the run's phase its state, so a run
 // is rebuilt by replaying its journal through it (`fold`).
 
 /** Where a message waits in the inbox: heard next (`end`, or `front` before the rest), or once the turn in hand ends (`later`). */
 export type QueuedAt = 'end' | 'front' | 'later';
 
-/** What a turn was for: the agent's work, or the office compacting their conversation. */
+/** What a turn was for: the agent's work, or Ops compacting their conversation. */
 export type TurnKind = 'work' | 'compact';
 
 /** How a turn ended, as much of `RunOutcome` as decides what follows. */
@@ -48,16 +48,16 @@ export type RunFact =
   | { kind: 'restored' }
   /** Every message waiting was dropped, unheard. */
   | { kind: 'cleared' }
-  /** The office is about to start a turn: written before Claude Code starts, so a crash finds it. */
+  /** Ops is about to start a turn: written before Claude Code starts, so a crash finds it. */
   | { kind: 'turn-requested'; turn: string; turnKind: TurnKind; prompt: string; resumes?: string }
-  /** How the office signed the turn's session in: your API key, or your plan's login. */
+  /** How Ops signed the turn's session in: your API key, or your plan's login. */
   | { kind: 'signed-in'; turn: string; onKey: boolean }
   /** Claude Code has the turn: its session, and where it says its credential came from (`apiKeySource`). */
   | { kind: 'turn-started'; turn: string; session: string; keySource?: string }
   | { kind: 'turn-ended'; turn: string; outcome: TurnEnding }
-  /** Claude Code signed in some other way than the office meant, at a cost: the turn is stopped. */
+  /** Claude Code signed in some other way than Ops meant, at a cost: the turn is stopped. */
   | { kind: 'sign-in-mismatch'; turn: string; observed: string }
-  /** Found at startup: a turn the office started and never saw end. */
+  /** Found at startup: a turn Ops started and never saw end. */
   | { kind: 'interrupted'; turn: string }
   /** Waiting for a free slot to start (or pick their conversation back up). */
   | { kind: 'waiting' }
@@ -126,7 +126,7 @@ export interface JournalContext {
   later: string[];
   /** Messages taken for a turn's prompt, until that turn is requested. */
   owed: string[];
-  /** The turn the office started and hasn't seen end. */
+  /** The turn Ops started and hasn't seen end. */
   open?: JournalTurn;
   /** The last turn that ended, how, and what followed it (`target`, once decided). */
   last?: JournalTurn & { outcome: TurnEnding; target?: Target; summary?: string };
@@ -308,8 +308,8 @@ export function fold(entries: readonly (RunFact & { seq?: number })[]): RunState
 export const INTERRUPTED_ERROR = 'Focus shut down during this turn';
 
 /**
- * Claude Code signed a turn in with a key that costs when the office meant your plan's login: an `env` or
- * `apiKeyHelper` in Claude Code's own settings can do that behind the office's back. The other way round (the office
+ * Claude Code signed a turn in with a key that costs when Ops meant your plan's login: an `env` or
+ * `apiKeyHelper` in Claude Code's own settings can do that behind Ops' back. The other way round (Ops
  * meant the key, Claude Code used the login) costs nothing, so it isn't one.
  */
 export function signInMismatch(onKey: boolean | undefined, keySource: string | undefined): boolean {
@@ -319,10 +319,10 @@ export function signInMismatch(onKey: boolean | undefined, keySource: string | u
 /** What the agent is told when its turn stopped for signing in with the key. */
 export function mismatchError(observed: string): string {
   const how = observed === 'apiKeyHelper' ? 'an apiKeyHelper' : 'ANTHROPIC_API_KEY';
-  return `Claude Code signed in with ${how} when the office meant your plan's login, so the turn was stopped before it spent anything more. Look for an env or apiKeyHelper in ~/.claude/settings.json (or the project's .claude/settings.json).`;
+  return `Claude Code signed in with ${how} when Ops meant your plan's login, so the turn was stopped before it spent anything more. Look for an env or apiKeyHelper in ~/.claude/settings.json (or the project's .claude/settings.json).`;
 }
 
-/** What the office does at startup with a turn it never saw end. */
+/** What Ops does at startup with a turn it never saw end. */
 export type Recovery =
   /** Nothing was in flight. */
   | { kind: 'none' }
@@ -330,7 +330,7 @@ export type Recovery =
   | { kind: 'resume'; turn: string; prompt: string; session: string }
   /** The turn's gone and the agent waits for the captain: `why` is their activity. */
   | { kind: 'wait'; turn: string; why: string }
-  /** Their work was going onto GitHub: the office finishes it (pushing again, finding or opening the pull request), no Claude turn needed. */
+  /** Their work was going onto GitHub: Ops finishes it (pushing again, finding or opening the pull request), no Claude turn needed. */
   | { kind: 'deliver'; turn: string; summary: string; unasked?: true }
   /** On hold for your plan's limit: held again till `until`, or picked back up now if that's passed. */
   | { kind: 'hold-again'; until: number }
@@ -355,7 +355,7 @@ export const RESUMED_NOTE =
 /**
  * What to do with a turn the journal says was in flight when Focus stopped. It carries on in the same conversation
  * when there's one to go back to, on this machine, for work that carries on (not a compaction); and on
- * your plan's login only: on the API key (`onKey`, as the office signs in now) the captain says whether it's worth it.
+ * your plan's login only: on the API key (`onKey`, as Ops signs in now) the captain says whether it's worth it.
  * A turn Claude Code had (it reported the session) is told it was interrupted; one it never got is asked again.
  */
 export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean): Recovery {
@@ -379,7 +379,7 @@ const DELIVERS: ReadonlySet<string> = new Set(['issue', 'fix', 'conflicts', 'bri
 
 /**
  * Their work was going onto GitHub (`delivering`), or about to: the turn ended and it was decided to deliver it, but
- * the office hadn't got as far as asking them to commit what they left (`unasked`), so that goes first.
+ * Ops hadn't got as far as asking them to commit what they left (`unasked`), so that goes first.
  */
 function delivers(state: RunState, agent: RecoveryAgent): Recovery | undefined {
   if (state.open || !DELIVERS.has(agent.task)) return undefined;
@@ -462,7 +462,7 @@ const FACT_LINES: { [K in RunFact['kind']]: (fact: Extract<RunFact, { kind: K }>
   'signed-in': (f) => `Signs in with ${f.onKey ? 'your API key' : 'your plan'}`,
   'turn-started': (f) => `Claude Code has it: session ${f.session.slice(0, 8)}${f.keySource ? `, credential from ${f.keySource}` : ''}`,
   'turn-ended': (f) => ending(f.outcome),
-  'sign-in-mismatch': (f) => `Claude Code signed in with ${f.observed} when the office meant your plan: stopped`,
+  'sign-in-mismatch': (f) => `Claude Code signed in with ${f.observed} when Ops meant your plan: stopped`,
   interrupted: () => 'Found cut off when Focus started again',
   waiting: () => 'Waiting for a free slot',
   'setting-up': () => 'Setting up',

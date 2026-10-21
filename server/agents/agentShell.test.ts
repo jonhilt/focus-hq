@@ -8,7 +8,7 @@ import { BASH, withBash } from './agentShell';
 const has = (...paths: string[]) => (p: string) => paths.includes(p);
 
 describe('withBash', () => {
-  it('runs a session’s Bash tool in bash, whatever the office’s own shell is', () => {
+  it('runs a session’s Bash tool in bash, whatever Focus’s own shell is', () => {
     expect(withBash({ SHELL: '/bin/zsh', PATH: '/usr/bin' }, 'darwin', has(BASH))).toEqual({ SHELL: '/bin/zsh', PATH: '/usr/bin', CLAUDE_CODE_SHELL: BASH });
     expect(withBash({ SHELL: '/bin/bash' }, 'linux', has(BASH)).CLAUDE_CODE_SHELL).toBe(BASH);
   });

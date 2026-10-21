@@ -2,14 +2,14 @@
 import { callView } from './callView';
 import { chatNow, NUMBER_ONE, NUMBER_ONE_VOICE, numberOne, type NumberOneChat, type NumberOneMessage, type NumberOneState, type WorkSuggestion } from './shared';
 import { chatPanel, type ChatPanel } from './view';
-import { busy, callPlugin, confirmDialog, fill, h, handOffControl, LCARS, linesToSpeak, type MicMode, office, onPluginState, plannerFor, pluginState, type Ui, voicePrefs, VoiceSession, voiceToggle, withMic } from '../../plugin-api/client';
+import { busy, callPlugin, confirmDialog, fill, h, handOffControl, LCARS, linesToSpeak, type MicMode, focus, onPluginState, plannerFor, pluginState, type Ui, voicePrefs, VoiceSession, voiceToggle, withMic } from '../../plugin-api/client';
 
 /** The chat as it stands this moment: none until the plugin's state arrives. */
 export const currentChat = (): NumberOneChat | null => chatNow(pluginState<NumberOneState>(NUMBER_ONE));
 const say = (text: string) => callPlugin<NumberOneChat>(NUMBER_ONE, '/say', { text });
 
 let open = false;
-/** Whether the Number One panel is showing (so the office doesn't toast a reply you can already see). */
+/** Whether the Number One panel is showing (so Focus doesn't toast a reply you can already see). */
 export const numberOnePanelOpen = () => open;
 
 /**
@@ -99,7 +99,7 @@ export function openNumberOnePanel(ui: Ui): void {
   ui.panels.own(() => voice?.end());
   // the chat and the call are both the plugin's state
   ui.panels.own(onPluginState(NUMBER_ONE, render));
-  ui.panels.own(office.onProjects(render));
+  ui.panels.own(focus.onProjects(render));
   render();
 }
 
@@ -134,14 +134,14 @@ function replyExtras(ui: Ui, m: NumberOneMessage): (HTMLElement | null)[] {
 
 /** What a reply suggests doing: a draft at the project's Ops station, or a goal with a lead of its own. */
 function suggestion(ui: Ui, { projectId, idea }: WorkSuggestion): HTMLElement {
-  const name = office.project(projectId)?.name ?? 'the project';
+  const name = focus.project(projectId)?.name ?? 'the project';
   const officer = plannerFor(projectId).name;
   const draft = h('button', { class: 'btn small', title: `${officer} writes it up as one issue at ${name}’s Ops station` }, 'Draft at Ops');
   draft.onclick = async () => {
-    const waiting = office.draft(projectId);
+    const waiting = focus.draft(projectId);
     if (waiting?.status === 'ready' && !await confirmDialog({ title: 'Replace draft', message: `${officer} has a draft waiting at ${name}’s Ops station${waiting.title ? ` (“${waiting.title}”)` : ''}. Replace it?`, confirmLabel: 'Replace it' })) return;
     void busy(draft, async () => {
-      await office.draftIssue(projectId, idea);
+      await focus.draftIssue(projectId, idea);
       ui.openNewIssue(projectId);
     }, ui.error);
   };

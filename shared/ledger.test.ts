@@ -37,8 +37,8 @@ describe('reportCard spend', () => {
   });
 
   it('puts ledger damage first, and notes that aren’t damage after it', () => {
-    const lines = reportLines({ ...reportCard([merged(1, 'passed')], NOW), warnings: ['line 3 is missing'], notes: ['another office is writing it'] }).lines;
-    expect(lines.slice(0, 2)).toEqual(['⚠ Ledger damaged: line 3 is missing', 'Ledger: another office is writing it']);
+    const lines = reportLines({ ...reportCard([merged(1, 'passed')], NOW), warnings: ['line 3 is missing'], notes: ['another Focus is writing it'] }).lines;
+    expect(lines.slice(0, 2)).toEqual(['⚠ Ledger damaged: line 3 is missing', 'Ledger: another Focus is writing it']);
     expect(reportLines({ ...reportCard([merged(1, 'passed')], NOW), notes: ['x'] }).lines[0]).toBe('Ledger: x');
   });
 });

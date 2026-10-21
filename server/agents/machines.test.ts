@@ -39,7 +39,7 @@ describe('machineGraph', () => {
     ]);
   });
 
-  it('draws every one of the office’s machines with each transition between states it has', () => {
+  it('draws every one of Focus’s machines with each transition between states it has', () => {
     for (const graph of MACHINES) {
       const ids = new Set(['', ...graph.states.map((s) => s.id)]);
       expect(graph.states.length, graph.id).toBeGreaterThan(3);

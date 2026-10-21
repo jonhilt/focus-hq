@@ -37,7 +37,7 @@ export class Flows {
     private readonly state: PluginState<FlowPluginState>,
   ) {}
 
-  /** Every open goal's flow, worked out afresh: as the office starts, one transcript at a time (they can be tens of MB). */
+  /** Every open goal's flow, worked out afresh: as Focus starts, one transcript at a time (they can be tens of MB). */
   async all(): Promise<void> {
     for (const agent of this.host.agents()) if (agent.task === 'lead' && hasLeadWork(agent)) await this.refresh(agent.id);
   }
@@ -56,7 +56,7 @@ export class Flows {
     if (lead) void this.refresh(lead);
   }
 
-  /** Whether `id`'s goal is still open: its lead is still in the office, at work on it. */
+  /** Whether `id`'s goal is still open: its lead is still aboard, at work on it. */
   private readonly open = (id: string): boolean => !!this.host.agent(id)?.lead;
 
   /** Drops the flows of goals that have closed since, so browsers stop being sent them. */
@@ -67,7 +67,7 @@ export class Flows {
 
   /**
    * Works out where an open goal's time has gone so far, and what it's waiting on now. One at a time per goal; asked
-   * again meanwhile, it runs once more after. The goal is read again once its transcript has been, so what the office
+   * again meanwhile, it runs once more after. The goal is read again once its transcript has been, so what Ops
    * did about the line in the ledger that asked (a pull request landing) is in it. Settles once this run is done.
    */
   refresh(agentId: string): Promise<void> {

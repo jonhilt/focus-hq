@@ -11,7 +11,7 @@ Main engineering's climber, Lt. Rhee, takes the [scorecard](../scorecard/README.
 5. ship it;
 6. go again.
 
-The climber requires the [scorecard](../scorecard/README.md) plugin: switch both on with `FOCUS_PLUGINS=scorecard,climber`. Without the scorecard the climber is left out, saying why in the office's log, since its whole job is moving the scorecard's numbers and main's history only grows while the scorecard measures each merge.
+The climber requires the [scorecard](../scorecard/README.md) plugin: switch both on with `FOCUS_PLUGINS=scorecard,climber`. Without the scorecard the climber is left out, saying why in Focus's log, since its whole job is moving the scorecard's numbers and main's history only grows while the scorecard measures each merge.
 
 ## Keep climbing
 
@@ -32,15 +32,15 @@ They're not the chief engineer, Lt. Brennan: Brennan's retros (the retro plugin)
 - **Shortlist.** Before choosing, the strongest gaps as a scored table. Writing the scores down makes the pick a rule the next climb can check, rather than one session's feel (three fresh sessions on one brief once picked three different gaps).
 - **Sweeps.** A kind of fix with several places goes on the shortlist as one row, a sweep, never one place at a time, since each pull request carries the same fixed cost (two scorecards, QA, your merge) and a sweep spreads it over several places.
 - **Hypothesis.** Before changing anything: which gap, the number it will move and by how much, and what would show them wrong, ending in a `Target: <metric key> <before> → <after>` line.
-- **Sign-off.** Anything that needs your sign-off (a dependency version, how the office merges or deploys) is listed, not done.
+- **Sign-off.** Anything that needs your sign-off (a dependency version, how Ops merges or deploys) is listed, not done.
 - **Fix.** A check first when the bad pattern can come back, then the smallest change. A planted bug proves each new test can fail.
 - **Prove.** The [ratchets](../scorecard/README.md#the-ratchets)' baselines lowered to the gain, then the scorecard again; those numbers are the After. It runs the whole gate itself, so the climber doesn't run the gate first and pay for it twice.
 - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request (a sweep is one reason: the same fix in each place).
-- **QA and merging.** QA reviews it like any pull request the office opened, and a fail goes back to the climber. It **never merges by itself**, whatever auto-merge says: the merge gate blocks any `focus/climb-` branch with "only the captain merges it" (`captainMerges` in `shared/mergeGate.ts`). The branch prefix keeps that true after the climber has gone home and after a restart. **Merge when QA passes** still works, since that's you saying so.
+- **QA and merging.** QA reviews it like any pull request Ops opened, and a fail goes back to the climber. It **never merges by itself**, whatever auto-merge says: the merge gate blocks any `focus/climb-` branch with "only the captain merges it" (`captainMerges` in `shared/mergeGate.ts`). The branch prefix keeps that true after the climber has gone home and after a restart. **Merge when QA passes** still works, since that's you saying so.
 
 ## Memory
 
-Each climb starts a fresh session, so what Lt. Rhee knows of the climbs before comes from the brief, built from the raw record each time rather than from a summary the office keeps: the `focus/climb-` pull requests on GitHub, the climbs that ended without one, and whether main has held each merged climb's gain.
+Each climb starts a fresh session, so what Lt. Rhee knows of the climbs before comes from the brief, built from the raw record each time rather than from a summary Ops keeps: the `focus/climb-` pull requests on GitHub, the climbs that ended without one, and whether main has held each merged climb's gain.
 
 To turn a climb down so the next one learns from it, close its pull request with a comment saying why. GitHub failing costs the climb its log, not the climb.
 

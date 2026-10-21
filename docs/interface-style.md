@@ -34,7 +34,7 @@ Whatever the look, text to read (a lead's words, goal notes, reports, chat, toas
 
 ## The designs
 
-Each look is a prototype stylesheet laid over the office's real panels (`docs/interface-style/prototypes/`): `common.css` swaps the frame for a plain card driven by `--t-*` tokens, and a look sets the tokens and adds its own touches on top. The screenshots are the demo office with the stylesheets laid over it.
+Each look is a prototype stylesheet laid over Focus's real panels (`docs/interface-style/prototypes/`): `common.css` swaps the frame for a plain card driven by `--t-*` tokens, and a look sets the tokens and adds its own touches on top. The screenshots are the demo ship with the stylesheets laid over it.
 
 ### Today
 
@@ -73,12 +73,12 @@ The pause dialog and the splash in each look are in `docs/interface-style/shots/
 
 ## Trying a look out
 
-`tools/themeShots.ts` takes the same screenshots of a running demo office (the splash, the HUD, a dozen panels and the screens round the ship), with any stylesheets laid over the page in order:
+`tools/themeShots.ts` takes the same screenshots of a running demo ship (the splash, the HUD, a dozen panels and the screens round the ship), with any stylesheets laid over the page in order:
 
 ```sh
-pnpm run demo:start                     # prints the demo office's URL
+pnpm run demo:start                     # prints the demo ship's URL
 P=docs/interface-style/prototypes
 npx tsx tools/themeShots.ts <url> smoke-shots/b2 $P/common.css,$P/flight.css,$P/plus1.css,$P/plus2.css
 ```
 
-Leave the stylesheets off for the office as it is.
+Leave the stylesheets off for Focus as it is.

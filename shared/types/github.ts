@@ -1,4 +1,4 @@
-// Issues, pull requests and the board, as the office sees them on GitHub.
+// Issues, pull requests and the board, as Focus sees them on GitHub.
 
 export interface Issue {
   repo: string;
@@ -9,7 +9,7 @@ export interface Issue {
   labels: string[];
   author?: string;
   createdAt: string;
-  /** The office closed a PR for it because the approach was wrong, so it's open for another go. */
+  /** Ops closed a PR for it because the approach was wrong, so it's open for another go. */
   closedPr?: ClosedPr;
 }
 
@@ -55,7 +55,7 @@ export interface PullRequest {
   createdAt: string;
   /** Last activity on GitHub. Missing when the provider can't tell. */
   updatedAt?: string;
-  /** Where the office's merge check on its head stands (docs/merging.md): the office stamps it on, GitHub never says. */
+  /** Where Ops' merge check on its head stands (docs/merging.md): Ops stamps it on, GitHub never says. */
   mergeCheck?: MergeCheck;
 }
 

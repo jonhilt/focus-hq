@@ -54,7 +54,7 @@ export default tseslint.config(
     },
   },
   {
-    // A wrong `x!` in the office's server is a crash mid-run; say what's missing instead (tests may still assert).
+    // A wrong `x!` in Focus's server is a crash mid-run; say what's missing instead (tests may still assert).
     files: ['shared/**/*.ts', 'server/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts'],
     ignores: ['**/*.test.ts'],
     rules: {

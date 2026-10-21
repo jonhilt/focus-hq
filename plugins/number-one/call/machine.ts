@@ -153,7 +153,7 @@ export const callMachine = setup({
       entry: {
         type: 'instruct',
         params: ({ context }) =>
-          `The office is waiting for the captain's yes or no to: ${context.pending ? askFor(context.pending) : ''} Hand their answer to the office as soon as they give it. Never say it's done until the office says so.`,
+          `Ops is waiting for the captain's yes or no to: ${context.pending ? askFor(context.pending) : ''} Hand their answer to Ops as soon as they give it. Never say it's done until Ops says so.`,
       },
       always: { guard: 'deferred', target: 'routing', actions: assign({ delegation: ({ context }) => context.deferred, deferred: null }) },
       after: {
@@ -165,7 +165,7 @@ export const callMachine = setup({
       on: { delegated: { target: 'routing', actions: assign({ delegation: ({ event }) => event.id }) } },
     },
     dictating: {
-      entry: { type: 'instruct', params: () => 'The office is waiting for what the captain wants passed on. Hand over what they say next, as they say it.' },
+      entry: { type: 'instruct', params: () => 'Ops is waiting for what the captain wants passed on. Hand over what they say next, as they say it.' },
       always: { guard: 'deferred', target: 'routing', actions: assign({ delegation: ({ context }) => context.deferred, deferred: null }) },
       after: {
         expiry: {
@@ -198,7 +198,7 @@ export const callMachine = setup({
 
 /** How the voice model talks a topic through: from the briefing, with the captain, owning up to what it doesn't hold. */
 export const talkThrough = (topic: Topic) =>
-  `You're talking through ${topic.title} with the captain. Think it through with them yourself, from the briefing the office just gave you: ask questions, suggest, push back. It's the record of the work, not the code: when something isn't in it, say so rather than guess. Hand over to the office only when the captain wants something done (make it a goal, tell the lead), the status, or a different topic.`;
+  `You're talking through ${topic.title} with the captain. Think it through with them yourself, from the briefing Ops just gave you: ask questions, suggest, push back. It's the record of the work, not the code: when something isn't in it, say so rather than guess. Hand over to Ops only when the captain wants something done (make it a goal, tell the lead), the status, or a different topic.`;
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : String(err);

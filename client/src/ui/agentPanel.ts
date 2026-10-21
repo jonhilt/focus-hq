@@ -57,7 +57,7 @@ function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
 
 /** Full-size view of an agent's laptop: terminal on the left, their browser (or a lead's goal, tasks, crew) on the right. */
 let shown: string | null = null;
-/** Whether this agent's panel is showing (so the office doesn't toast what you can already see). */
+/** Whether this agent's panel is showing (so Focus doesn't toast what you can already see). */
 export const agentPanelOpen = (id: string) => shown === id;
 
 /** Opens an agent's panel, on `view` if given. */
@@ -354,15 +354,15 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
 
   /**
    * What the agent may do without asking, changeable any time for them alone: at once if they're working on this
-   * machine, else from their next turn. Shows the office's setting until the captain picks one for them.
+   * machine, else from their next turn. Shows the ship-wide setting until the captain picks one for them.
    */
   const autonomyPicker = (a: Agent) => {
-    const office = state.info?.settings.autonomy ?? 'ask';
-    const mode = effectiveAutonomy(a, { autonomy: office });
+    const shipWide = state.info?.settings.autonomy ?? 'ask';
+    const mode = effectiveAutonomy(a, { autonomy: shipWide });
     const select = h('select', {
       class: 'effort',
       style: mode === 'full' ? 'color:var(--lcars-red)' : undefined,
-      title: `${AUTONOMY_HINT[mode]}\n\n${a.autonomy ? `Chosen for ${a.name} alone` : 'The office setting'}: a change applies to ${a.name} only, at once if they're working on this machine.`,
+      title: `${AUTONOMY_HINT[mode]}\n\n${a.autonomy ? `Chosen for ${a.name} alone` : 'The ship-wide setting'}: a change applies to ${a.name} only, at once if they're working on this machine.`,
     },
       ...AUTONOMY_MODES.map((m) => h('option', { value: m, selected: m === mode, title: AUTONOMY_HINT[m] }, AUTONOMY_LABEL[m])),
     );
@@ -415,7 +415,7 @@ export function effortPicker(value?: Effort): HTMLSelectElement {
 
 export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => EFFORT_LEVELS.find((e) => e === picker.value);
 
-/** A local agent the captain can move to the cloud (the office says why not, if it won't). */
+/** A local agent the captain can move to the cloud (Ops says why not, if it won't). */
 const movable = (a: Agent) => (a.task === 'issue' || a.task === 'fix') && !a.cloud && !a.handover;
 
 /** Picks where an agent works: on this machine, or in a Claude Code cloud session. */

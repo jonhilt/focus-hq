@@ -1,4 +1,4 @@
-// The QA officer's own review of a throwaway clone, as the office runs one (its system prompt, prompt, report schema,
+// The QA officer's own review of a throwaway clone, as Ops runs one (its system prompt, prompt, report schema,
 // model and Claude Code settings), for the scripts that replay QA on code it has seen or should have: QA's catch rate
 // (tools/qaCatch.ts, planted bugs) and the bug replay (tools/bugReplay.ts, real ones). The clone is the caller's.
 
@@ -16,10 +16,10 @@ import { qaProofFor } from '../shared/qa';
 import type { Project, QaReport, Settings } from '../shared/types';
 import { PROOF_MS, prove, type ProofRig } from '../server/agents/qaProof';
 import { readIn, runIn } from '../server/agents/workspace';
-import { freePort } from './demoOffice';
+import { freePort } from './demoShip';
 import { processesIn, reviewEnv } from './replayRules';
 
-/** QA's proofs checked in the clone, as the office checks them in its checkout: with this checkout's packages when the clone has none. No browser, so no screenshots. */
+/** QA's proofs checked in the clone, as Ops checks them in its checkout: with this checkout's packages when the clone has none. No browser, so no screenshots. */
 function proofRig(dir: string, changed: string[]): ProofRig {
   if (!existsSync(path.join(dir, 'node_modules')) && existsSync(path.join(process.cwd(), 'node_modules'))) symlinkSync(path.join(process.cwd(), 'node_modules'), path.join(dir, 'node_modules'));
   return {
@@ -34,7 +34,7 @@ const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
 const REVIEW_MS = 25 * 60 * 1000;
 
-/** Stops what QA left running in the clone (an old build's demo office, a dev server): asked first, then made to. */
+/** Stops what QA left running in the clone (an old build's demo ship, a dev server): asked first, then made to. */
 export async function stopLeftovers(dir: string): Promise<void> {
   // a clone already gone has nothing left running in it
   if (!existsSync(dir)) return;
@@ -57,7 +57,7 @@ export interface Reviewed {
   error?: string;
 }
 
-/** The QA officer's review of a clone, as the office runs one: a report that leaves changed files out goes back once, naming
+/** The QA officer's review of a clone, as Ops runs one: a report that leaves changed files out goes back once, naming
  *  them, and a fail stands only with proof that holds when it's checked in the clone. */
 export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }): Promise<Reviewed> {
   const project: Pick<Project, 'name' | 'qaBrief' | 'qaProof'> = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
@@ -65,11 +65,11 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
   const started = Date.now();
   const minutes = () => Math.round((Date.now() - started) / 60_000);
-  // the old build runs on a port and data folder of its own, never the live office's 4477 and ~/.focus
+  // the old build runs on a port and data folder of its own, never the live Focus's 4477 and ~/.focus
   const env = reviewEnv(process.env, await freePort(), path.join(dir, '.replay-data'));
   let costUsd = 0;
   let sessionId: string | undefined;
-  // what QA's session did: which files it actually opened, as the office reads from its transcript
+  // what QA's session did: which files it actually opened, as Ops reads from its transcript
   const calls: ToolCall[] = [];
   const turn = async (prompt: string) => {
     let structured: unknown;
@@ -110,7 +110,7 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
       console.log(`  ${repo}#${pr.number}: of ${changed.length} changed files the report left out ${revisit.missing.length}, only skimmed ${revisit.unread.length}, never opened ${revisit.unopened.length}: sent back once`);
       report = (await turn(filesPrompt(revisit))) ?? report;
     }
-    // as the office does: the verdict blocks only with proof that holds when it's checked here (docs/qa.md#proof)
+    // as Ops does: the verdict blocks only with proof that holds when it's checked here (docs/qa.md#proof)
     if (report && qaProofFor(project)) report = await Effect.runPromise(prove(report, proofRig(dir, changed)));
     return { report, costUsd, minutes: minutes() };
   } catch (err) {

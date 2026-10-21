@@ -3,9 +3,9 @@ import type { PreviewMirror } from './types';
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
 
 /**
- * Where this browser opens a preview's link. The links are local to the office's machine: a browser elsewhere (on the
- * tailnet, say) opens the office's mirror of the link's port instead, at the mirror's scheme and certificate name, or
- * else at the name it reached the office by.
+ * Where this browser opens a preview's link. The links are local to Focus's machine: a browser elsewhere (on the
+ * tailnet, say) opens Focus's mirror of the link's port instead, at the mirror's scheme and certificate name, or
+ * else at the name it reached Focus by.
  */
 export function reachableUrl(url: string, mirrors: readonly PreviewMirror[] | undefined, page: { hostname: string }): string {
   let link: URL;

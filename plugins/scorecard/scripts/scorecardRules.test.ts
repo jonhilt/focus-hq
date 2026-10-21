@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, propertyTestFiles, render, resolveImport, scanSource, typecheckErrors, type GateResults, type Scorecard,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, opsMetrics, propertyTestFiles, render, resolveImport, scanSource, typecheckErrors, type GateResults, type Scorecard,
   type VitestReport,
 } from './scorecardRules';
 
@@ -180,9 +180,9 @@ describe('failedTests', () => {
   });
 });
 
-describe('officeMetrics', () => {
+describe('opsMetrics', () => {
   it('reads an empty ledger as zeros with no frictions', () => {
-    const { metrics, frictions } = officeMetrics([], Date.now());
+    const { metrics, frictions } = opsMetrics([], Date.now());
     expect(metrics.every((x) => x.value === 0)).toBe(true);
     expect(frictions).toEqual([]);
   });

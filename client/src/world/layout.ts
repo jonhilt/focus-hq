@@ -26,7 +26,7 @@ export const EYE_HEIGHT = 1.6;
 export const COMMAND_DECK = new THREE.Vector3(0, 0, 80);
 /** Where main engineering (deck 5, built in Blender) sits: beyond the command deck, where nothing else stands. */
 export const ENGINEERING_DECK = new THREE.Vector3(0, 0, 140);
-/** Where the office's sun light comes from (painted suns in the room landscapes line up with it). */
+/** Where the ship's sun light comes from (painted suns in the room landscapes line up with it). */
 export const SUN_POSITION = new THREE.Vector3(6, 10, 4);
 
 export interface RoomSlot {

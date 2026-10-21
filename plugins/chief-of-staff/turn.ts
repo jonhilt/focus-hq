@@ -10,7 +10,7 @@ export interface TurnTail {
 }
 
 /**
- * What the lead said since the last message to it (anyone's: the captain's, the office's), clipped to its end, and the
+ * What the lead said since the last message to it (anyone's: the captain's, Ops'), clipped to its end, and the
  * uuid of the transcript's last line. Undefined when the lead said nothing since, or the transcript has no lines.
  */
 export function turnTail(jsonl: string): TurnTail | undefined {
@@ -28,5 +28,5 @@ export function turnTail(jsonl: string): TurnTail | undefined {
 /** Claude Code's own words, as the turn's last line, when your plan's limit stops it: "You've hit your session limit · resets 2pm". */
 const LIMIT = /(?:^|\n)You['’]ve hit your [^\n·]*limit(?: · [^\n]*)?$/;
 
-/** Whether the turn ended at your plan's usage limit: the office carries those on itself, so there's nothing to judge. */
+/** Whether the turn ended at your plan's usage limit: Ops carries those on itself, so there's nothing to judge. */
 export const atUsageLimit = (text: string): boolean => LIMIT.test(text.trim());

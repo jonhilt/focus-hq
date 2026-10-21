@@ -5,7 +5,7 @@ import { Actions, morph } from './actions';
 import { agentView, type View } from './agentView';
 import { home, type HomeContext, prCardId, projectKey } from './home';
 
-// The Tricorder: the office on a phone, at /tricorder. No three.js and nothing from world/, so it stays small.
+// The Tricorder: Focus on a phone, at /tricorder. No three.js and nothing from world/, so it stays small.
 
 const app = document.getElementById('app')!;
 

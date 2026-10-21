@@ -18,7 +18,7 @@ const checksLock = new KeyedLock();
 
 const git = (cwd: string, args: string[], timeoutMs?: number) => run('git', args, { cwd, timeoutMs });
 
-/** The office's own clone of `repo` on this machine (made the first time an agent works in it). */
+/** Ops' own clone of `repo` on this machine (made the first time an agent works in it). */
 export function mirrorDir(repo: string): string {
   return path.join(paths.mirrors, repo.replace('/', '__'));
 }
@@ -61,7 +61,7 @@ async function followDefault(mirror: string): Promise<void> {
 /**
  * One clone per repository lives in data/repos; every agent gets its own git worktree of it in
  * data/workspaces/<agent id> so agents on the same repo never trip over each other. A worktree left behind by an agent
- * who isn't `inOffice` any more gives up its branch to the new one. `local` names the branch in the worktree, when it
+ * who isn't `aboard` any more gives up its branch to the new one. `local` names the branch in the worktree, when it
  * can't be `branch` itself (checked out in someone else's).
  */
 export async function createWorktree(
@@ -69,7 +69,7 @@ export async function createWorktree(
   agentId: string,
   branch: string,
   startPoint: string,
-  inOffice: (agentId: string) => boolean,
+  aboard: (agentId: string) => boolean,
   local = branch,
 ): Promise<string> {
   const mirror = mirrorDir(repo);
@@ -85,7 +85,7 @@ export async function createWorktree(
     await git(mirror, ['worktree', 'prune']);
     fs.mkdirSync(paths.workspaces, { recursive: true });
     const worktrees = parseWorktrees(await git(mirror, ['worktree', 'list', '--porcelain']));
-    const claim = claimBranch(worktrees, local, fs.realpathSync(paths.workspaces), inOffice);
+    const claim = claimBranch(worktrees, local, fs.realpathSync(paths.workspaces), aboard);
     if (claim.kind === 'held') throw new Error(heldMessage(local, claim));
     if (claim.kind === 'reclaim') {
       await removeDir(mirror, claim.path);
@@ -98,11 +98,11 @@ export async function createWorktree(
 }
 
 /**
- * A worktree on `branch` as it was left (a closed goal's, with its WIP snapshot): the office's own branch if it still has
- * it, brought up to GitHub's when that's only ahead of it (the office pushed a merge), else GitHub's. Nothing is reset.
+ * A worktree on `branch` as it was left (a closed goal's, with its WIP snapshot): Ops' own branch if it still has
+ * it, brought up to GitHub's when that's only ahead of it (Ops pushed a merge), else GitHub's. Nothing is reset.
  * Fails when neither has the branch, or a colleague's workspace has it checked out.
  */
-export async function reopenWorktree(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Promise<string> {
+export async function reopenWorktree(repo: string, agentId: string, branch: string, aboard: (agentId: string) => boolean): Promise<string> {
   const mirror = mirrorDir(repo);
   const dir = path.join(paths.workspaces, agentId);
   await lock.with(repo, async () => {
@@ -115,9 +115,9 @@ export async function reopenWorktree(repo: string, agentId: string, branch: stri
     const has = (ref: string) => git(mirror, ['rev-parse', '--verify', '--quiet', ref]).then(() => true, () => false);
     const local = await has(`refs/heads/${branch}`);
     const remote = await has(`refs/remotes/origin/${branch}`);
-    if (!local && !remote) throw new Error(`${branch} is gone: neither the office’s clone of ${repo} nor GitHub has it`);
+    if (!local && !remote) throw new Error(`${branch} is gone: neither Ops’ clone of ${repo} nor GitHub has it`);
     const worktrees = parseWorktrees(await git(mirror, ['worktree', 'list', '--porcelain']));
-    const claim = claimBranch(worktrees, branch, fs.realpathSync(paths.workspaces), inOffice);
+    const claim = claimBranch(worktrees, branch, fs.realpathSync(paths.workspaces), aboard);
     if (claim.kind === 'held') throw new Error(heldMessage(branch, claim));
     if (claim.kind === 'reclaim') {
       await removeDir(mirror, claim.path);
@@ -164,7 +164,7 @@ export async function removeWorktree(repo: string, agentId: string): Promise<voi
 }
 
 /**
- * Deletes the folders in data/workspaces that no agent in the office or project owns (a removal that failed, or a
+ * Deletes the folders in data/workspaces that no agent aboard or project owns (a removal that failed, or a
  * dismissal the server never got round to), then prunes every mirror so it stops listing them. A folder that can't be
  * deleted is logged and the sweep carries on.
  */
@@ -286,7 +286,7 @@ export function sinceVerdict(repo: string, number: number, baseBranch: string, s
 
 /**
  * Checks pull request `number` out in its repo's checks folder (reused, so installed dependencies survive) and runs the
- * project's checks there, stopping at the first that fails. Null when the project has none the office knows.
+ * project's checks there, stopping at the first that fails. Null when the project has none Ops knows.
  */
 export function runChecks(repo: string, number: number, head: string): Promise<ChecksRun | null> {
   const dir = path.join(paths.checks, repo.replace('/', '__'));
@@ -353,7 +353,7 @@ export async function installDependencies(dir: string, exec: typeof run = run): 
 }
 
 /**
- * The office's merge of a PR's base, at `sha` in the mirror (not pushed yet), type-checked in the repo's checks folder:
+ * Ops' merge of a PR's base, at `sha` in the mirror (not pushed yet), type-checked in the repo's checks folder:
  * the command that failed, if one did, with the end of its output. Git can merge two branches cleanly and still break
  * the tree. Nothing when the project has no typecheck script.
  */
@@ -366,7 +366,7 @@ function typecheckMerge(repo: string, sha: string): Promise<{ command: string; o
   });
 }
 
-/** The base branch's head and pull request `number`'s, fetched fresh into the office's clone: what a merge check is about. */
+/** The base branch's head and pull request `number`'s, fetched fresh into Ops' clone: what a merge check is about. */
 export function mergeHeads(repo: string, number: number, baseBranch: string): Promise<MergeHeads> {
   const mirror = mirrorDir(repo);
   const base = `refs/remotes/origin/${baseBranch}`;
@@ -379,7 +379,7 @@ export function mergeHeads(repo: string, number: number, baseBranch: string): Pr
 }
 
 /**
- * The merge check (docs/merging.md): `head` merged onto `base` in the office's clone, with `git merge-tree` (no
+ * The merge check (docs/merging.md): `head` merged onto `base` in Ops' clone, with `git merge-tree` (no
  * checkout, nothing pushed), and the merge commit checked out in the repo's checks folder (reused, so installed
  * dependencies survive) to run the repo's checks on, stopping at the first that fails.
  */
@@ -578,7 +578,7 @@ export async function mergeBase(repo: string, branch: string, baseBranch: string
     if (after === before) return { kind: 'up-to-date' };
     const broke = await typecheckMerge(repo, after);
     if (broke) {
-      console.warn(`The office's merge of ${baseBranch} into ${repo}'s ${branch} failed \`${broke.command}\`: ${broke.output ?? ''}`);
+      console.warn(`Ops' merge of ${baseBranch} into ${repo}'s ${branch} failed \`${broke.command}\`: ${broke.output ?? ''}`);
       return { kind: 'conflicts', files: auto, broke: broke.command };
     }
     await git(dir, ['push', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
@@ -623,7 +623,7 @@ export async function commitLog(dir: string, baseBranch: string): Promise<string
   return (await git(dir, ['log', '--format=- %s', `origin/${baseBranch}..HEAD`])).trim();
 }
 
-/** The office's git, as the manager is handed it outside the demo (held to the same contract as the demo's: workspaceContract.test.ts). */
+/** Ops' git, as the manager is handed it outside the demo (held to the same contract as the demo's: workspaceContract.test.ts). */
 export const liveWorkspace: WorkspaceOps = {
   create: createWorktree,
   remove: removeWorktree,

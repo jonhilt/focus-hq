@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspaceOps } from './types';
 
-// The contract every `WorkspaceOps` keeps (docs/contracts.md): what the office relies on git doing, written once and
+// The contract every `WorkspaceOps` keeps (docs/contracts.md): what Ops relies on git doing, written once and
 // run against the real thing (workspace.ts, on throwaway repos) and against each fake that stands in for it, so a fake
 // can't quietly encode an assumption git doesn't keep. Each expectation is one scenario, told through a `World`: the
 // workspace under test, and what happens around it (the agent committing, the base moving on GitHub, a cloud session
@@ -21,7 +21,7 @@ export interface World {
   read(dir: string, file: string): Promise<string | undefined>;
   /** Someone else's change to `file` lands on origin's `main` (a pull request merged, squashed into one commit). */
   land(file: string, text: string): Promise<void>;
-  /** Someone else (a cloud session, the office's merge) pushes a change to `file` onto origin's `branch`, creating it from `main` if need be. */
+  /** Someone else (a cloud session, Ops' merge) pushes a change to `file` onto origin's `branch`, creating it from `main` if need be. */
   pushElsewhere(branch: string, file: string, text: string): Promise<void>;
   /** GitHub deletes `branch` (`gh pr merge --delete-branch`, after its pull request merged). */
   deleteOnOrigin(branch: string): Promise<void>;

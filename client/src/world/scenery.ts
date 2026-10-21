@@ -9,13 +9,13 @@ import { isMesh } from './isMesh';
 
 // A themed holodeck's training hall (hall.ts) has its walls and ceiling lined with an invisible "skin", and a landscape
 // is built around the hall (in its frame, overlapping whatever else stands there). Each frame:
-//   1. the office renders as usual, real walls included;
+//   1. the ship renders as usual, real walls included;
 //   2. the skin stamps this room's stencil value wherever it is visible and pushes the depth there to the far plane;
 //   3. the landscape renders only where the stencil matches, so it shows through this room's walls and nowhere else;
-//   4. the skin writes its own depth back, so outlines and transparent office things sort against the wall as before;
+//   4. the skin writes its own depth back, so outlines and transparent ship things sort against the wall as before;
 //   5. a faint grid is drawn on the skin, brighter as you get close, so you can still tell where the wall is.
 
-/** Render order: office (0) → stamp (10) → clear (11) → landscape (12) | landscape glass (-20) → restore (-10) → office glass (0). */
+/** Render order: ship (0) → stamp (10) → clear (11) → landscape (12) | landscape glass (-20) → restore (-10) → ship glass (0). */
 const ORDER = { stamp: 10, clear: 11, landscape: 12, glass: -20, restore: -10 };
 
 const OUTLINE = new THREE.Color().setRGB(0.1, 0.1, 0.12); // the outlines' colour (linear), as outline.ts's
@@ -62,7 +62,7 @@ function masked<T extends THREE.Material>(mat: T, ref: number): T {
   mat.stencilRef = ref;
   mat.stencilFunc = THREE.EqualStencilFunc;
   mat.stencilFail = mat.stencilZFail = mat.stencilZPass = THREE.KeepStencilOp;
-  // drawn only through its room's skin, so it can't fight with the office around it (see zfight.ts)
+  // drawn only through its room's skin, so it can't fight with the ship around it (see zfight.ts)
   mat.userData.landscape = true;
   return mat;
 }
@@ -222,7 +222,7 @@ type Animate = (obj: THREE.Object3D, t: number) => void;
  */
 export class Kit {
   readonly random: () => number;
-  /** Direction towards the office's sun light, in room-local coordinates (so painted suns match the shading). */
+  /** Direction towards the ship's sun light, in room-local coordinates (so painted suns match the shading). */
   readonly sunDir: THREE.Vector3;
   /** Its materials, cached per kind and per key, so each is handed back as the kind it was made. */
   private readonly toons = new Map<string, THREE.MeshToonMaterial>();

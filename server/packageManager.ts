@@ -43,13 +43,13 @@ export function installCommand(pm: PackageManager, files: Iterable<string>): str
   return [pm, 'install', '--frozen-lockfile'];
 }
 
-/** Whether the office installs a folder's dependencies: it has a package.json and a lockfile to install exactly from. */
+/** Whether Ops installs a folder's dependencies: it has a package.json and a lockfile to install exactly from. */
 export function installable(files: Iterable<string>): boolean {
   const names = new Set(files);
   return names.has('package.json') && LOCKFILES.some(([lockfile]) => names.has(lockfile));
 }
 
-/** Where the office notes what it last installed in a folder: inside node_modules, so deleting them forgets it too. */
+/** Where Ops notes what it last installed in a folder: inside node_modules, so deleting them forgets it too. */
 export const INSTALL_STAMP = path.join('node_modules', '.focus-install');
 
 /**
@@ -62,11 +62,11 @@ export function installStamp(pm: PackageManager, files: Record<string, string>):
   return hash.digest('hex');
 }
 
-/** What the agent hears when the office couldn't install the dependencies in a folder of their checkout. */
+/** What the agent hears when Ops couldn't install the dependencies in a folder of their checkout. */
 export function installFailedNote(failures: { dir: string; command: string; reason: string }[]): string | undefined {
   if (!failures.length) return undefined;
   const each = failures.map((f) => `- ${f.dir}: \`${f.command}\` failed: ${f.reason}`);
-  return `The office couldn't install the dependencies in your checkout, so the checks will fail until you do:\n${each.join('\n')}`;
+  return `Ops couldn't install the dependencies in your checkout, so the checks will fail until you do:\n${each.join('\n')}`;
 }
 
 /** Whether a change to the files `changed` (paths from the project's root) needs the dependencies installed again. */

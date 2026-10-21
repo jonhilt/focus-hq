@@ -213,7 +213,7 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
-  const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the office: its holodeck stays in place behind locked doors, and its crew keep working' }, 'Hide');
+  const hide = h('button', { class: 'btn small', title: 'Keep it out of sight, say while you demo the ship: its holodeck stays in place behind locked doors, and its crew keep working' }, 'Hide');
   hide.onclick = () => void busy(hide, () => api.updateProject(p.id, { hidden: true }), ui.error);
   const remove = h('button', { class: 'btn small danger' }, 'Close project');
   remove.onclick = async () => {
@@ -252,12 +252,12 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
   );
 }
 
-/** How a repo's pull requests merge: its own choice, or the office's (Settings) when left on default. */
+/** How a repo's pull requests merge: its own choice, or the ship-wide one (Settings) when left on default. */
 function repoMergePicker(ui: Ui, p: Project, repo: string): HTMLSelectElement {
   const own = p.mergeMethods?.[repo];
-  const office = state.info?.settings.mergeMethod ?? 'squash';
+  const shipWide = state.info?.settings.mergeMethod ?? 'squash';
   const select = h('select', { class: 'merge-method', title: `How ${repo}’s pull requests merge` },
-    h('option', { value: '', selected: !own }, `default (${office})`),
+    h('option', { value: '', selected: !own }, `default (${shipWide})`),
     ...MERGE_METHODS.map((m) => h('option', { value: m, selected: own === m }, m)),
   );
   select.addEventListener('change', () => void api.setMergeMethod(p.id, repo, select.value as MergeMethod | '').catch((e: Error) => ui.error(e.message)));
@@ -399,12 +399,12 @@ function settingsTab(ui: Ui): HTMLElement {
   max.addEventListener('change', () => save({ maxConcurrent: Number(max.value) }));
   const model = h('input', { type: 'text', value: s.model, placeholder: "Claude Code's default" });
   model.addEventListener('change', () => save({ model: model.value }));
-  const conflictsModel = h('input', { type: 'text', value: s.conflictsModel, placeholder: 'Use the office model', style: 'flex:1' });
+  const conflictsModel = h('input', { type: 'text', value: s.conflictsModel, placeholder: 'Use the model above', style: 'flex:1' });
   conflictsModel.addEventListener('change', () => save({ conflictsModel: conflictsModel.value }));
   const conflictsEffort = effortPicker(s.conflictsEffort);
   // an empty choice clears it on the server (undefined wouldn't survive JSON)
   conflictsEffort.addEventListener('change', () => save({ conflictsEffort: (pickedEffort(conflictsEffort) ?? '') as Effort }));
-  const qaModel = h('input', { type: 'text', value: s.qaModel, placeholder: 'Use the office model' });
+  const qaModel = h('input', { type: 'text', value: s.qaModel, placeholder: 'Use the model above' });
   qaModel.addEventListener('change', () => save({ qaModel: qaModel.value }));
   const merge = h('select', null, ...MERGE_METHODS.map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as MergeMethod }));
@@ -428,9 +428,9 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Model and effort for resolving merge conflicts'), h('div', { class: 'row' }, conflictsModel, conflictsEffort), h('small', null, 'For a new agent seated on a pull request to resolve its conflicts, which is usually mechanical work: e.g. claude-sonnet-5-5. Leave empty for the model above. The developer who opened the PR, if still aboard, resolves them in their own session instead.')),
     h('div', { class: 'field' }, h('label', null, 'Model for QA'), qaModel, h('small', null, 'For every room’s QA officer and every goal’s reviewer, from their next review: e.g. claude-sonnet-5-5. Leave empty for the model above. How hard they think is set at each room’s QA station.')),
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
-    h('div', { class: 'field' }, h('label', null, 'Compact a lead’s conversation from (thousand tokens)'), leadCompactAt, h('small', null, 'Before a lead’s next turn, the office compacts their conversation once it holds this much, keeping the goal, the decisions and what the captain prefers. Every step re-reads the whole conversation, so a big one is the costliest part of a goal. 0 = only when you ask.')),
+    h('div', { class: 'field' }, h('label', null, 'Compact a lead’s conversation from (thousand tokens)'), leadCompactAt, h('small', null, 'Before a lead’s next turn, Ops compacts their conversation once it holds this much, keeping the goal, the decisions and what the captain prefers. Every step re-reads the whole conversation, so a big one is the costliest part of a goal. 0 = only when you ask.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),
-    h('div', { class: 'field' }, attribution.el, h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what the office posts on GitHub.')),
+    h('div', { class: 'field' }, attribution.el, h('small', null, 'Names the agent or QA officer who did the work, and mentions Focus, in what Ops posts on GitHub.')),
     h('div', { class: 'field' }, userClaudeMd.el, h('small', null, 'Your ~/.claude/CLAUDE.md and ~/.claude/rules, written for your own Claude Code. Turn off so agents follow only Focus and the repo’s CLAUDE.md; your ~/.claude/settings.json still loads. Applies to agents started from now on.')),
     h('div', { class: 'card', style: 'margin-top:8px' },
       h('div', { class: 'row' },
@@ -496,7 +496,7 @@ function voiceSection(ui: Ui): HTMLElement {
         h('span', { class: 'grow' }),
         recheck,
       ),
-      h('p', { class: 'muted' }, 'Dictate into the office’s text boxes with Mic or Ctrl+M. whisper.cpp transcribes on this machine: your audio never leaves it.'),
+      h('p', { class: 'muted' }, 'Dictate into Focus’s text boxes with Mic or Ctrl+M. whisper.cpp transcribes on this machine: your audio never leaves it.'),
       h('div', { class: 'voice-row' },
         h('span', null, 'whisper-cli'),
         voice.whisper.found

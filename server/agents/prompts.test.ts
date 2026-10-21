@@ -21,7 +21,7 @@ const agent = (a: Partial<Agent> = {}): Agent => ({
 });
 
 describe('systemAppend', () => {
-  it('keeps a local agent from pushing and points them at the office browser', () => {
+  it('keeps a local agent from pushing and points them at Focus’s browser tools', () => {
     const text = systemAppend(agent());
     expect(text).toContain('Do NOT push');
     expect(text).toContain('mcp__browser__');
@@ -57,7 +57,7 @@ describe('cloud follow-ups', () => {
     expect(conflictsPrompt(agent({ task: 'conflicts' }))).not.toContain('git push');
   });
 
-  it('nudges for the branch and the reply the office still needs', () => {
+  it('nudges for the branch and the reply Ops still needs', () => {
     expect(pushNudge(agent({ cloud: true }))).toContain('pull request description');
     expect(pushNudge(agent({ cloud: true, task: 'fix' }))).toContain('summary for the manager');
   });
@@ -74,7 +74,7 @@ describe('pullRequestBody', () => {
   it('closes the issue and signs the work by default', () => {
     const body = pullRequestBody(agent(), 'Adds a cart.', true);
     expect(body).toContain('Adds a cart.\n\nCloses #7');
-    expect(body).toContain('_Built by **Ada** in the Focus office with Claude Code._');
+    expect(body).toContain('_Built by **Ada** aboard the Focus with Claude Code._');
   });
 
   it('leaves out the agent and Focus when attribution is off', () => {

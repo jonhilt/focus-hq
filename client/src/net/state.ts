@@ -35,8 +35,8 @@ type Listener<T> = (payload: T) => void;
 
 const MAX_LINES = 600;
 
-/** Mirror of the server's office state, kept live over the WebSocket. */
-export class OfficeState {
+/** Mirror of the server's state, kept live over the WebSocket. */
+export class ShipState {
   info: ServerInfo | null = null;
   projects: Project[] = [];
   agents = new Map<string, Agent>();
@@ -254,4 +254,4 @@ export class OfficeState {
   }
 }
 
-export const state = new OfficeState();
+export const state = new ShipState();

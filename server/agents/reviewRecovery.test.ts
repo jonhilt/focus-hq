@@ -4,10 +4,10 @@ import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
 import { GitHub, GitHubRejected } from '../github/service';
 import { demoWorkspace } from './demoRunner';
-import { office, restarted, until } from './fakeOffice';
+import { focus, restarted, until } from './fakeFocus';
 import { RESUMED_NOTE } from './runJournal';
 
-// QA reviews after Focus restarts, from their journals (reviewJournal.ts): each starts with the office shutting down on
+// QA reviews after Focus restarts, from their journals (reviewJournal.ts): each starts with Focus shutting down on
 // purpose, the path a crash and an update both end up on.
 
 /** QA's report, accounting for every changed file (there are none here), so it isn't sent back to look again. */
@@ -24,7 +24,7 @@ const commenting = (comment: (body: string) => Effect.Effect<string>, comments: 
 
 describe('a QA review after Focus restarts', () => {
   it('picks the review it cut off back up in QA’s conversation, and keeps the one waiting in line', async () => {
-    const before = office(workspace);
+    const before = focus(workspace);
     const [first, second] = await pullRequests();
     before.agents.requestReview(before.project.id, first.repo, first.number, first.title);
     before.agents.requestReview(before.project.id, second.repo, second.number, second.title);
@@ -52,7 +52,7 @@ describe('a QA review after Focus restarts', () => {
 
   it('posts a verdict it had before it was on the pull request, without another turn, and says it once', async () => {
     // the comment never goes up: Focus shuts down while it's on its way
-    const before = office(workspace, commenting(() => Effect.never));
+    const before = focus(workspace, commenting(() => Effect.never));
     const [pr] = await pullRequests();
     const key = prKey(pr.repo, pr.number);
     before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);
@@ -75,7 +75,7 @@ describe('a QA review after Focus restarts', () => {
   });
 
   it('hands a PR the operations officer was looking at to the captain', async () => {
-    const before = office(workspace);
+    const before = focus(workspace);
     const [pr] = await pullRequests();
     const key = prKey(pr.repo, pr.number);
     before.store.reviewJournal(key, { kind: 'imported', review: { projectId: before.project.id, repo: pr.repo, number: pr.number, title: pr.title, status: 'failed', requestedAt: 1, finishedAt: 2 } });
@@ -90,7 +90,7 @@ describe('a QA review after Focus restarts', () => {
 
   it('starts a review again when its reviewer was still checking it out', async () => {
     // the checkout never finishes: no Claude turn has started
-    const before = office({ ...workspace, checkoutPullRequest: () => new Promise<string>(() => undefined) });
+    const before = focus({ ...workspace, checkoutPullRequest: () => new Promise<string>(() => undefined) });
     const [pr] = await pullRequests();
     const key = prKey(pr.repo, pr.number);
     before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);
@@ -106,11 +106,11 @@ describe('a QA review after Focus restarts', () => {
     await until(() => before.store.reviews.get(key)?.status === 'passed');
   });
 
-  it('doesn’t post a verdict again that reached the pull request just before the office went down', async () => {
-    // the comment goes up, and the office goes down before it hears so (found by checkRestart, docs/invariants.md):
-    // the restarted office finds the verdict's mark among the pull request's comments
+  it('doesn’t post a verdict again that reached the pull request just before Focus went down', async () => {
+    // the comment goes up, and Focus goes down before it hears so (found by checkRestart, docs/invariants.md):
+    // the restarted Focus finds the verdict's mark among the pull request's comments
     const posted: string[] = [];
-    const before = office(workspace, commenting((body) => Effect.sync(() => posted.push(body)).pipe(Effect.andThen(Effect.never))));
+    const before = focus(workspace, commenting((body) => Effect.sync(() => posted.push(body)).pipe(Effect.andThen(Effect.never))));
     const [pr] = await pullRequests();
     const key = prKey(pr.repo, pr.number);
     before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);
@@ -127,7 +127,7 @@ describe('a QA review after Focus restarts', () => {
 
   it('posts a verdict after a restart when GitHub can’t say whether it went up: twice beats never', async () => {
     const posted: string[] = [];
-    const before = office(workspace, commenting(() => Effect.never));
+    const before = focus(workspace, commenting(() => Effect.never));
     const [pr] = await pullRequests();
     const key = prKey(pr.repo, pr.number);
     before.agents.requestReview(before.project.id, pr.repo, pr.number, pr.title);

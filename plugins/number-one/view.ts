@@ -45,14 +45,14 @@ export function stepLabel(call: Pick<CallState, 'step' | 'pending'>): string {
 const DIAL_TITLE = 'Talk to Number One hands-free: ask how things stand, start the next queued goal, or talk a goal or a project through and make it a goal';
 
 /**
- * Number One's call strip: the Call button (greyed, with why, until the office can take one) and the last call's
+ * Number One's call strip: the Call button (greyed, with why, until Ops can take one) and the last call's
  * captions; or, while a call is on (placed here or on another screen), how it's going and what waits on the captain.
  */
 export type CallStrip =
   | { kind: 'idle'; canDial: boolean; dialTitle: string; ended: { note: string; error: boolean; lines: CallLine[] } | null }
   | { kind: 'live'; id: string; step: CallStep; label: string; topic: string | null; pending: string | null; capture: string | null; lines: CallLine[] };
 
-/** What the call strip shows, from whether the office can take a call and the call under way (or the last one). */
+/** What the call strip shows, from whether Ops can take a call and the call under way (or the last one). */
 export function callStrip(status: CallStatus | undefined): CallStrip {
   const call = status?.call;
   if (call && call.step !== 'ended') {
@@ -67,7 +67,7 @@ export function callStrip(status: CallStatus | undefined): CallStrip {
   return { kind: 'idle', canDial: !!status && !status.missing, dialTitle: status?.missing ?? DIAL_TITLE, ended };
 }
 
-/** Whether the call this browser is on (`mine`, by id) is over: the office has no call, a different one, or this one ended. */
+/** Whether the call this browser is on (`mine`, by id) is over: Ops has no call, a different one, or this one ended. */
 export function callOver(mine: string, call: CallState | null | undefined): boolean {
   return !call || call.id !== mine || call.step === 'ended';
 }

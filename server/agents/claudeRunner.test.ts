@@ -133,7 +133,7 @@ describe('runningInBackground', () => {
     expect(runningInBackground(['local_workflow'], 1)).toEqual(['local_workflow']);
   });
 
-  it('counts a workflow the office has seen start and not end, even when the list leaves it out', () => {
+  it('counts a workflow Ops has seen start and not end, even when the list leaves it out', () => {
     expect(runningInBackground([], 1)).toEqual(['local_workflow']);
     expect(holdsInput(runningInBackground([], 2))).toBe(true);
   });
@@ -286,7 +286,7 @@ describe('permissionAsk', () => {
     expect(permissionAsk('Workflow', { script: "export const meta = { name: 'review-changes' }" }, 'Run a workflow')).toBe('Run workflow review-changes: its agents run their commands without asking, for this run');
   });
 
-  it("takes Claude Code's own title over the office's summary", () => {
+  it("takes Claude Code's own title over Ops' summary", () => {
     expect(permissionAsk('Bash', { command: 'git clean -fdx' }, 'Clean the checkout')).toBe('Clean the checkout');
   });
 

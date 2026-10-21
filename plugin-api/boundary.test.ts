@@ -6,7 +6,7 @@ import { crossings, importsOf, pluginOf, project, refusal } from './boundary';
 const root = path.resolve(import.meta.dirname, '..');
 
 describe('the line between the core and its plugins', () => {
-  it('lets a plugin import its own files, plugin-api/ and another plugin’s api.ts, and nothing else of the office', () => {
+  it('lets a plugin import its own files, plugin-api/ and another plugin’s api.ts, and nothing else of Focus', () => {
     expect(refusal('plugins/maps/server.ts', 'plugins/maps/shared.ts')).toBeUndefined();
     expect(refusal('plugins/maps/server.ts', 'plugin-api/server.ts')).toBeUndefined();
     expect(refusal('plugins/maps/server.ts', 'plugins/scores/api.ts')).toBeUndefined();

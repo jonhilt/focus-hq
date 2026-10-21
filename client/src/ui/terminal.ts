@@ -8,7 +8,7 @@ import './terminal.css';
 /** How many lines (or replies) a terminal keeps before dropping the oldest. */
 const KEEP = 3000;
 
-// links in a reply open in a new tab rather than taking the office with them
+// links in a reply open in a new tab rather than taking the ship with them
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.tagName === 'A') {
     node.setAttribute('target', '_blank');

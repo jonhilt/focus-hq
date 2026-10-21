@@ -5,26 +5,26 @@ import { errorMessage } from '../util';
 import type { FocusPlugin } from './contract';
 
 /**
- * Where a plugin named in FOCUS_PLUGINS lives: a bare name is a folder under the office's own plugins/, a path (with a
- * slash, relative to where the office was started) is a plugin folder anywhere; either way, its server.ts.
+ * Where a plugin named in FOCUS_PLUGINS lives: a bare name is a folder under Focus's own plugins/, a path (with a
+ * slash, relative to where Focus was started) is a plugin folder anywhere; either way, its server.ts.
  */
 export function pluginEntry(name: string, root: string, cwd = process.cwd()): string {
   const dir = name.includes('/') || name.includes(path.sep) ? path.resolve(cwd, name) : path.join(root, 'plugins', name);
   return path.join(dir, 'server.ts');
 }
 
-/** What `FOCUS_PLUGINS=all` stands for: every folder under the office's own plugins/ that has a server.ts, by name. */
+/** What `FOCUS_PLUGINS=all` stands for: every folder under Focus's own plugins/ that has a server.ts, by name. */
 export const ALL = 'all';
 
 /**
- * The plugins FOCUS_PLUGINS names, with `all` standing for every one of `folders` (the office's own plugins/, in
+ * The plugins FOCUS_PLUGINS names, with `all` standing for every one of `folders` (Focus's own plugins/, in
  * order) where it's listed; a plugin named twice is loaded once, where it's first named.
  */
 export function pluginNames(names: string[], folders: string[]): string[] {
   return [...new Set(names.flatMap((name) => (name === ALL ? folders : [name])))];
 }
 
-/** The plugin folders under the office's own plugins/: each with a server.ts. */
+/** The plugin folders under Focus's own plugins/: each with a server.ts. */
 export function ownPlugins(root: string): string[] {
   const dir = path.join(root, 'plugins');
   const names = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
@@ -35,8 +35,8 @@ const isPlugin = (value: unknown): value is FocusPlugin =>
   typeof value === 'object' && value !== null && 'id' in value && typeof value.id === 'string' && 'start' in value && typeof value.start === 'function';
 
 /**
- * Loads the plugins FOCUS_PLUGINS names, in its order (`all`: every one under the office's own plugins/). One that
- * can't be found or loaded is left out, saying why, so a typo in the list never keeps the office from starting.
+ * Loads the plugins FOCUS_PLUGINS names, in its order (`all`: every one under Focus's own plugins/). One that
+ * can't be found or loaded is left out, saying why, so a typo in the list never keeps Focus from starting.
  */
 export async function loadPlugins(names: string[], root: string): Promise<FocusPlugin[]> {
   const plugins: FocusPlugin[] = [];

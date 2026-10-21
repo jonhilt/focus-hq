@@ -96,7 +96,7 @@ describe('evaluateHint', () => {
     }
   });
 
-  it('says to check each step of the path on a page without the office hooks', () => {
+  it('says to check each step of the path on a page without Focus’s hooks', () => {
     const hint = evaluateHint("page.evaluate: TypeError: Cannot read properties of undefined (reading 'id')", null);
     expect(hint).toMatch(/one step at a time/);
   });

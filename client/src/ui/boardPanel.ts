@@ -124,13 +124,13 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       const action = mergeAction(review, pr);
       const method = mergeMethodFor(state.project(projectId), pr.repo, state.info?.settings.mergeMethod ?? 'squash');
       const merge = action.kind === 'merge'
-        ? h('button', { class: 'btn small go', title: action.override ? 'Merge past its merge check, on purpose' : 'The office checks the PR merged onto its base first' }, action.override ? 'Merge anyway' : `${method} & merge`)
+        ? h('button', { class: 'btn small go', title: action.override ? 'Merge past its merge check, on purpose' : 'Ops checks the PR merged onto its base first' }, action.override ? 'Merge anyway' : `${method} & merge`)
         : action.kind === 'queued'
-          ? h('button', { class: 'btn small primary', title: 'Another merge in this repo goes first: the office checks this one once that’s done' }, action.behind ? `Queued behind #${action.behind}` : 'Queued to merge')
+          ? h('button', { class: 'btn small primary', title: 'Another merge in this repo goes first: Ops checks this one once that’s done' }, action.behind ? `Queued behind #${action.behind}` : 'Queued to merge')
           : action.kind === 'checking'
-            ? h('button', { class: 'btn small primary', title: 'The office is running the checks on the PR merged onto its base' }, 'Checking the merge…')
+            ? h('button', { class: 'btn small primary', title: 'Ops is running the checks on the PR merged onto its base' }, 'Checking the merge…')
             : action.kind === 'when-passed'
-              ? h('button', { class: 'btn small go', title: 'The office merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
+              ? h('button', { class: 'btn small go', title: 'Ops merges the commit QA passes, or tells you if QA fails it' }, 'Merge when QA passes')
               : h('button', { class: 'btn small primary', title: 'Merges once QA passes it. Click to cancel' }, 'Merging when QA passes ✕');
       merge.disabled = pr.mergeable === 'CONFLICTING' || pr.isDraft || action.kind === 'checking' || action.kind === 'queued';
       merge.onclick = async () => {
@@ -147,7 +147,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
           ? `${action.confirm}.\n\nMerge ${pr.repo}#${pr.number} "${pr.title}" anyway?`
           : `Merge ${pr.repo}#${pr.number} "${pr.title}"?`;
         if (!await confirmDialog({ title: 'Merge', message: ask, confirmLabel: action.override ? 'Merge anyway' : 'Merge' })) return;
-        // the office checks the merge first, the card saying so, and a toast says how it went
+        // Ops checks the merge first, the card saying so, and a toast says how it went
         void busy(merge, () => api.mergePr(projectId, pr.repo, pr.number, action.override === true), ui.error);
       };
       const resolver = pr.resolver;

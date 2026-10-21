@@ -141,7 +141,7 @@ export class DemoRunner implements AgentRunner {
     const files = FILES[kind];
     const accent = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff'][issueNumber % 4];
 
-    // a cloud agent pushes its own branch: that's how its work reaches the office
+    // a cloud agent pushes its own branch: that's how its work reaches Ops
     const push = async () => {
       if (req.cloud) await tool('Bash', { command: `git push origin HEAD:${req.cloud.branch}` }, [`To github.com:${repo}.git`, `   4f2a91c..9e1d0b7  HEAD -> ${req.cloud.branch}`]);
     };
@@ -391,7 +391,7 @@ export class DemoRunner implements AgentRunner {
       const known = this.leads.get(sessionId);
       const repos = listed.length ? listed : (known?.repos ?? []);
       const kindOf = repoKind;
-      // the captain's words, without the office's note about the workspace in front of them
+      // the captain's words, without Ops' note about the workspace in front of them
       const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
       const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
@@ -588,7 +588,7 @@ export class DemoRunner implements AgentRunner {
       return { ok: true, summary: 'Shipped the slice.' };
     };
 
-    // the office compacting a conversation: what Claude Code's /compact does, in brief
+    // Ops compacting a conversation: what Claude Code's /compact does, in brief
     const compactScript = async (): Promise<RunOutcome> => {
       hooks.session(req.resumeSessionId ?? `demo-${randomHex(4)}`);
       hooks.activity('working', 'Compacting the conversation');
@@ -667,7 +667,7 @@ export class DemoRunner implements AgentRunner {
         for (let step = 0; step < 3; step++) {
           const url = `http://localhost:5173${pages[step]}`;
           if (req.cloud) {
-            // in the cloud there's no office browser: a Playwright script saves a screenshot, and reading it puts it on the laptop
+            // in the cloud there's no Focus browser: a Playwright script saves a screenshot, and reading it puts it on the laptop
             const file = `/tmp/shots/${step + 1}.png`;
             await tool('Bash', { command: `node shot.mjs ${url} ${file}` }, [`Saved ${file}`]);
             await tool('Read', { file_path: file }, ['[screenshot]']);
@@ -788,7 +788,7 @@ export const demoWorkspace: WorkspaceOps = {
     await sleep(1500);
     return { kind: 'checked', ...heads, merge: `${heads.head}m`, results: ['npm ci', 'npm run typecheck', 'npm run lint', 'npm test'].map((command) => ({ command, ok: true })) };
   },
-  // the demo QA's proof tests fail on an assertion when the office runs them
+  // the demo QA's proof tests fail on an assertion when Ops runs them
   runIn: async (_dir, args) => {
     await sleep(400);
     const file = args.at(-1) ?? 'the proof';
@@ -940,7 +940,7 @@ const said = (type: 'user' | 'assistant', minutesAgo: number, content: unknown) 
 const toolError = (minutesAgo: number, text: string) => said('user', minutesAgo, [{ type: 'tool_result', is_error: true, content: text }]);
 const toolCall = (minutesAgo: number, name = 'Bash', input: unknown = {}) => said('assistant', minutesAgo, [{ type: 'tool_use', name, input }]);
 
-/** A few scripted older sessions, for the demo's backfill to digest and plugins to read: the office's real transcripts stay out of the demo. */
+/** A few scripted older sessions, for the demo's backfill to digest and plugins to read: Focus's real transcripts stay out of the demo. */
 export async function demoTranscripts(): Promise<Transcript[]> {
   const sessions: (Omit<Transcript, 'read'> & { lines: string[] })[] = [];
   const add = (name: string, kind: Transcript['kind'], lines: string[]) => sessions.push({ name, kind, sessionId: `${name.slice(-8)}-demo`, lines });
@@ -964,8 +964,8 @@ export async function demoTranscripts(): Promise<Transcript[]> {
     said('user', 100, 'Please QA pull request #8 in demo/webshop-frontend: Wishlist page'),
     toolCall(95),
     toolError(94, 'Error: listen EADDRINUSE: address already in use :::4591'),
-    said('assistant', 93, [{ type: 'text', text: 'Another office already had the demo’s port, so I started this one on a free port and carried on: the wishlist page loads, and hearts toggle and survive a reload.' }]),
-    toolCall(90, 'StructuredOutput', { verdict: 'pass', summary: 'The wishlist page works; the demo office was on a taken port at first.' }),
+    said('assistant', 93, [{ type: 'text', text: 'Another Focus already had the demo’s port, so I started this one on a free port and carried on: the wishlist page loads, and hearts toggle and survive a reload.' }]),
+    toolCall(90, 'StructuredOutput', { verdict: 'pass', summary: 'The wishlist page works; the demo ship was on a taken port at first.' }),
   ]);
   return sessions.map(({ lines, ...t }) => ({ ...t, read: () => Promise.resolve(lines.join('\n')) }));
 }

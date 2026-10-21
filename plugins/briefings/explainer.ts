@@ -9,10 +9,10 @@ export interface ExplainerPage {
 }
 
 /**
- * Explainers: an animated walk-through a lead builds with the office's explain tool, for a concept that's hard to take
+ * Explainers: an animated walk-through a lead builds with Ops' explain tool, for a concept that's hard to take
  * in from text. The lead gives the beats (each a caption and how long it plays) and a stage that draws the whole scene
  * from the time t; `explainerPage` wraps them in the ship's LCARS player (an elbow frame, the beats down the left, the
- * caption under the stage, step and play along the bottom) as a page the office shows like any of show's.
+ * caption under the stage, step and play along the bottom) as a page Ops shows like any of show's.
  */
 export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle: 60, text: 320, narration: 600, minSeconds: 1, maxSeconds: 30, stageBytes: 1_500_000 } as const;
 
@@ -71,7 +71,7 @@ export function beatNarration(beat: ExplainerBeat): string {
   return `${title}${/[.!?]$/.test(title) ? '' : '.'} ${clean(beat.text)}`;
 }
 
-/** The moments the office takes a picture of the stage at, for the lead to check: the middle of each beat. */
+/** The moments Ops takes a picture of the stage at, for the lead to check: the middle of each beat. */
 export function beatMoments(beats: readonly Pick<ExplainerBeat, 'seconds'>[]): number[] {
   let at = 0;
   return beats.map((b) => {
@@ -81,7 +81,7 @@ export function beatMoments(beats: readonly Pick<ExplainerBeat, 'seconds'>[]): n
   });
 }
 
-/** What the office saw on the stage at one moment: how much of it is one flat colour. */
+/** What Ops saw on the stage at one moment: how much of it is one flat colour. */
 export interface StageMoment {
   at: number;
   /** The share (0 to 1) of the stage's pixels that are its commonest colour. */
@@ -105,15 +105,15 @@ export function momentNotes(moments: readonly StageMoment[]): string[] {
   return moments.flatMap((m, i) => (m.flat >= EMPTY ? [`Beat ${i + 1} looks empty (one flat colour across the stage): check that render(t) draws it.`] : []));
 }
 
-/** What the lead hears with the pictures of their explainer's beats: what the office's checks found, and to look. */
+/** What the lead hears with the pictures of their explainer's beats: what Ops' checks found, and to look. */
 export function explainerCheck(notes: readonly string[]): string {
   const look = "Here's the stage at the middle of each beat, in order: look at each, and if one doesn't show what its caption says, fix it and explain it again under the same id.";
-  return notes.length ? `${look} The office's checks found: ${notes.join(' ')}` : `${look} The office's check for an empty stage found nothing.`;
+  return notes.length ? `${look} Ops' checks found: ${notes.join(' ')}` : `${look} Ops' check for an empty stage found nothing.`;
 }
 
 /**
  * The player page for an explainer, ready to show under its id and title. Or why it was refused. `receipts`: each beat's,
- * as the office found them in their sources; a beat with none shows as the lead's interpretation.
+ * as Ops found them in their sources; a beat with none shows as the lead's interpretation.
  */
 export function explainerPage(input: ExplainerInput, receipts: readonly (readonly Receipt[])[] = []): ExplainerPage | { error: string } {
   const L = EXPLAINER_LIMITS;
@@ -277,7 +277,7 @@ const KIT_HELPERS = String.raw`
   window.$$ = function (sel) { return Array.prototype.slice.call(window.stage.querySelectorAll(sel)); };
   window.tag = function (text, colour) { return '<span class="tag" style="background:var(--' + colour + ')">' + text + '</span>'; };
   window.addEventListener('error', function (e) { window.kitFault(e.message || String(e.error)); });
-  // false until the player has drawn its resting frame: the office waits for it before taking the screen's picture
+  // false until the player has drawn its resting frame: Ops waits for it before taking the screen's picture
   window.kitReady = false;
   window.kitFault = function (message) {
     window.kitReady = true;
@@ -290,7 +290,7 @@ const KIT_HELPERS = String.raw`
 
 // Playback: play runs to the end; step plays one beat and stops; a beat's block or its part of the timeline jumps there.
 // It rests, dimmed, on the last frame until the captain presses play, so the screen's picture sums it up.
-// Up close, the office's screen offers a voice-over: the page can't reach the office itself (it runs in a sandbox of its
+// Up close, the ship's screen offers a voice-over: the page can't reach Focus itself (it runs in a sandbox of its
 // own), so it asks the screen around it to say each beat's line, and the screen says when the line is done. While the
 // voice is on it sets the pace: a beat holds on its last frame until its line is finished. When a new version changed a
 // beat, the screen has it show that beat, waiting at its start.
@@ -395,7 +395,7 @@ const KIT_PLAYER = String.raw`
   function beatAt(at) { var bi = 0; BEATS.forEach(function (b, i) { if (at >= b.at) bi = i; }); return bi; }
   function beatIndexAt(at) { var bi = 0; BEATS.forEach(function (b, i) { if (at >= b.at - .01) bi = i; }); return bi; }
   var beatIndex = function () { return beatIndexAt(t); };
-  // the office records the screen's video by playing it once from the top
+  // Ops records the screen's video by playing it once from the top
   window.kitPlay = function () { window.kitDone = false; run(0, DUR); };
   el('kit-run').onclick = function () { run(0, DUR); };
   el('kit-pp').onclick = function () { if (playing) pause(); else run(t >= DUR ? 0 : t, DUR, true); };
@@ -431,9 +431,9 @@ const KIT_PLAYER = String.raw`
   frame(); stop();
   // for a stage whose things arrive later (a texture, a font): draw the frame it's on again
   window.kitRedraw = frame;
-  // the office's pictures of each beat jump straight to a moment, lit as when playing
+  // Ops' pictures of each beat jump straight to a moment, lit as when playing
   window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = at; frame(); };
-  // and what the office's checks see in each: how much of the stage is its commonest colour (counted in coarse steps,
+  // and what Ops' checks see in each: how much of the stage is its commonest colour (counted in coarse steps,
   // so a JPEG's noise doesn't split one colour into many)
   window.kitSeen = function (jpeg) {
     var img = new Image();

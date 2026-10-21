@@ -30,21 +30,21 @@ export function systemAppend(agent: Agent, brief?: Pick<BriefSpec, 'assignment' 
     ? [
         `- You work in a Claude Code cloud session, in a clone of ${agent.repo}. Work on branch \`${agent.branch}\` (created from \`${agent.baseBranch}\`): if you're on any other branch, run \`git fetch origin ${agent.branch}\` and \`git checkout ${agent.branch}\` first. This overrides any other branch you were told to develop on.`,
         '- Commit your work as you go with clear messages. Never commit secrets, build output or dependency folders.',
-        `- Push your commits with \`git push origin HEAD:${agent.branch}\`, and always before your final message: your work only reaches the office through that branch. Never push to any other branch, and do NOT open a pull request: the office opens it from your branch.`,
+        `- Push your commits with \`git push origin HEAD:${agent.branch}\`, and always before your final message: your work only reaches Ops through that branch. Never push to any other branch, and do NOT open a pull request: Ops opens it from your branch.`,
         '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
         '- If the change touches a web UI, start the dev server in the background and check your work in a headless browser (e.g. a Playwright script). Save screenshots of what you check as PNG files and look at each one with the Read tool: that\'s how the manager sees them on your laptop screen.',
       ]
     : [
         `- Your current directory is a dedicated git worktree on branch \`${agent.branch}\`, created from \`${agent.baseBranch}\`. Stay inside it.`,
         '- Commit your work as you go with clear messages. Never commit secrets, build output or dependency folders.',
-        '- Do NOT push and do NOT open a pull request: when you finish, the office pushes your branch and opens the PR for you.',
+        '- Do NOT push and do NOT open a pull request: when you finish, Ops pushes your branch and opens the PR for you.',
         '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
         '- If the change touches a web UI, start the dev server in the background and check your work with the mcp__browser__ tools (open, click, type, screenshot, console).',
         `- ${SCRATCH_RULE}`,
         `- ${WAIT_RULE}`,
       ];
   return `
-# You are ${agent.name}, an agent in the Focus office
+# You are ${agent.name}, an agent aboard the Focus
 
 ${assignment} You work autonomously; the manager watches your terminal and browser on your laptop screen and may send you messages.
 
@@ -88,14 +88,14 @@ export function conflictsPrompt(agent: Agent): string {
 /** For a cloud agent whose session ended without anything new on its branch: the work may still be in the cloud. */
 export function pushNudge(agent: Agent): string {
   return (
-    `Nothing new has reached \`${agent.branch}\` on GitHub, and the office can only see what's pushed there. If you changed ` +
+    `Nothing new has reached \`${agent.branch}\` on GitHub, and Ops can only see what's pushed there. If you changed ` +
     `anything, commit it (leave out build output, dependencies and secrets) and push it with \`git push origin HEAD:${agent.branch}\` now. ` +
     `If there was nothing to change, say why. Then reply with your ${agent.task === 'issue' ? 'pull request description' : 'summary for the manager'} again.`
   );
 }
 
 /**
- * A new cloud session picking up where one the office couldn't reattach to left off: everything it did is on the
+ * A new cloud session picking up where one Ops couldn't reattach to left off: everything it did is on the
  * branch, but the conversation is gone. `message` is what the manager meant for the old session.
  */
 export function carryOnPrompt(agent: Agent, message: string): string {
@@ -118,5 +118,5 @@ export function pullRequestBody(agent: Pick<Agent, 'name'> & Partial<Pick<Agent,
   const body = agent.task === 'brief' ? summary.trim() : `${summary.trim() || `Resolves the issue below.`}
 
 Closes #${agent.issue.number}`;
-  return attribution ? `${body}\n\n---\n_Built by **${agent.name}** in the Focus office with Claude Code._` : body;
+  return attribution ? `${body}\n\n---\n_Built by **${agent.name}** aboard the Focus with Claude Code._` : body;
 }

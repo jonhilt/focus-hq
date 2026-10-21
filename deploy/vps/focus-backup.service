@@ -1,5 +1,5 @@
 [Unit]
-Description=Focus: back up the office's state
+Description=Focus: back up its state
 
 [Service]
 Type=oneshot

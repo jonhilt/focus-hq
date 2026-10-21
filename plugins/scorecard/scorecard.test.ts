@@ -114,9 +114,9 @@ describe('scorecardHeadOf', () => {
 
   it('says what a measurement under way is measuring, and since when', () => {
     expect(scorecardHeadOf(desk({ status: 'measuring', trigger: 'new-commit', startedAt: 2 }), ago)).toMatchObject({
-      measuring: true, status: { tone: 'muted', text: 'Measuring the new commit the office started on, started 2m ago: about a minute and a half' },
+      measuring: true, status: { tone: 'muted', text: 'Measuring the new commit Focus started on, started 2m ago: about a minute and a half' },
     });
-    expect(scorecardHeadOf(desk({ status: 'measuring', trigger: 'captain' }), ago).status?.text).toBe('Running the gate on the office’s own checkout: about a minute and a half');
+    expect(scorecardHeadOf(desk({ status: 'measuring', trigger: 'captain' }), ago).status?.text).toBe('Running the gate on Focus’s own checkout: about a minute and a half');
   });
 
   it('says why the last measurement failed', () => {
@@ -271,7 +271,7 @@ describe('what the MSD and the overview list of what moved', () => {
     expect(overviewOf(desk(card(1), card(2))).moved).toHaveLength(7);
     const eight = { metrics: keys.slice(0, 8).map((k) => metric(k, 2)) };
     expect(overviewOf(desk(card(1, eight), card(2, eight)))).toMatchObject({ more: null });
-    expect(overviewOf(desk(card(1, { notes: ['office (no ledger)', 'build'] })))).toMatchObject({ notMeasured: 'Not measured: office (no ledger) · build', more: null });
+    expect(overviewOf(desk(card(1, { notes: ['ops (no ledger)', 'build'] })))).toMatchObject({ notMeasured: 'Not measured: ops (no ledger) · build', more: null });
     expect(overviewOf(desk(card(1, { notes: ['build'] }))).notMeasured).toBe('Not measured: build');
     expect(overviewOf(null)).toEqual({ glance: undefined, moved: [], more: null, notMeasured: null });
   });

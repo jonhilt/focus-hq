@@ -31,7 +31,7 @@ describe('the bot token', () => {
 });
 
 describe('withLinks', () => {
-  it('makes the links whole from the office’s address, when it’s known', () => {
+  it('makes the links whole from Focus’s address, when it’s known', () => {
     const shown = { event: 'shown' as const, projectId: 'p', agentId: 'a', who: 'R', goal: 'G', title: 'T', html: '/api/artifacts/a/t.html?v=1', image: '/api/artifacts/a/t.jpg?v=1' };
     expect(withLinks(shown, 'https://mac.ts.net:4477')).toMatchObject({ html: 'https://mac.ts.net:4477/api/artifacts/a/t.html?v=1', image: 'https://mac.ts.net:4477/api/artifacts/a/t.jpg?v=1' });
     expect(withLinks(shown, undefined)).toBe(shown);
@@ -41,7 +41,7 @@ describe('withLinks', () => {
 });
 
 describe('BotHook', () => {
-  it('sends nothing for what was there when the office started, then each change, signed', async () => {
+  it('sends nothing for what was there when Focus started, then each change, signed', async () => {
     let look: BotLook = { open: [item('t1')], decided: [], leads: [] };
     const posts: { url: string; headers: Record<string, string>; body: string }[] = [];
     const hook = new BotHook(() => look, { token: 'k', webhook: 'https://grok/hook' }, async (url, init) => {

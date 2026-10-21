@@ -1,4 +1,4 @@
-/** Dice that roll the same each run from `seed` (mulberry32): the demo office and the unit tests stand them in for Math.random. */
+/** Dice that roll the same each run from `seed` (mulberry32): the demo ship and the unit tests stand them in for Math.random. */
 export function seededRandom(seed: number): () => number {
   let a = seed >>> 0;
   return () => {

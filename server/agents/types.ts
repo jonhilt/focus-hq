@@ -39,7 +39,7 @@ export type WorkflowEvent =
    * script it runs.
    */
   | { kind: 'transcripts'; id: string; dir: string; scriptPath?: string }
-  /** The phases the script's meta declares, once the office has read a script it only had the path of. */
+  /** The phases the script's meta declares, once Ops has read a script it only had the path of. */
   | { kind: 'plan'; id: string; plan: NonNullable<Workflow['plan']> };
 
 /** What a workflow has used so far, as a task's progress and its ending count it. */
@@ -91,7 +91,7 @@ export interface RunRequest {
   systemAppend: string;
   resumeSessionId?: string;
   settings: Settings;
-  /** What the session may do without asking: the agent's own mode, else the office's (`effectiveAutonomy`). */
+  /** What the session may do without asking: the agent's own mode, else Focus's (`effectiveAutonomy`). */
   autonomy: Autonomy;
   /** Missing = the model's default effort. */
   effort?: Effort;
@@ -99,14 +99,14 @@ export interface RunRequest {
   model?: string;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
-  /** The office's own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */
-  tools?: OfficeTools;
+  /** Ops' own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */
+  tools?: OpsTools;
   /**
    * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud
    * session's id, and `systemAppend` goes into the first message.
    */
   cloud?: { branch: string };
-  /** What the demo office's scripted stand-in writes up, for a plugin's brief (`BriefSpec.demo`): a real session ignores it. */
+  /** What the demo ship's scripted stand-in writes up, for a plugin's brief (`BriefSpec.demo`): a real session ignores it. */
   scripted?: { title: string; summary: string };
 }
 
@@ -116,8 +116,8 @@ export interface ToolReply {
   images: Uint8Array[];
 }
 
-/** Tools the office lends a session. Each returns what happened, in words, for Claude to read. */
-export interface OfficeTools {
+/** Tools Ops lends a session. Each returns what happened, in words, for Claude to read. */
+export interface OpsTools {
   /** Ships the slice: pushes every repo with new commits, and opens or updates its pull request. */
   ship(input: { title: string; summary: string }): Promise<string>;
   /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
@@ -134,7 +134,7 @@ export interface OfficeTools {
   extra?: ExtraTool[];
 }
 
-/** A plugin's tool in a lead's office, bound to that lead. */
+/** A plugin's tool at a lead's station, bound to that lead. */
 export interface ExtraTool {
   name: string;
   description: string;
@@ -187,13 +187,13 @@ export interface CloudTerminalRequest {
   agentId: string;
   agentName: string;
   cwd: string;
-  /** The new session's first message: what it's for, while the office gets ready to send the work. */
+  /** The new session's first message: what it's for, while Ops gets ready to send the work. */
   description: string;
 }
 
-/** A terminal the office opened to start a cloud session. */
+/** A terminal Ops opened to start a cloud session. */
 export interface CloudTerminal {
-  /** What it has shown so far ('' until anything), where the session's id turns up; undefined when the office can't see it. */
+  /** What it has shown so far ('' until anything), where the session's id turns up; undefined when Ops can't see it. */
   read(): Promise<string | undefined>;
 }
 
@@ -204,9 +204,9 @@ export interface BranchState {
 }
 
 /** Git operations on an agent's checkout. Faked in demo mode. */
-/** What came of merging a pull request's base branch into it on the office's side: pushed, nothing to do, or a job for an agent. */
+/** What came of merging a pull request's base branch into it on Ops' side: pushed, nothing to do, or a job for an agent. */
 /**
- * The office's own merge of a PR's base branch: pushed (`auto` lists the conflicted files it settled by rule, see
+ * Ops' own merge of a PR's base branch: pushed (`auto` lists the conflicted files it settled by rule, see
  * `MergeRule`), nothing to merge, or left for an agent: `files` are the paths that conflicted, and `broke` the check
  * that failed on a merge that went through (`npm run typecheck`, say).
  */
@@ -218,9 +218,9 @@ export type BaseMerge =
 export interface WorkspaceOps {
   /**
    * A worktree on `branch`, starting from the remote branch `startPoint`. If a workspace of an agent who isn't
-   * `inOffice` still has the branch, it's removed; if a colleague's has it, this fails.
+   * `aboard` still has the branch, it's removed; if a colleague's has it, this fails.
    */
-  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Promise<string>;
+  create(repo: string, agentId: string, branch: string, startPoint: string, aboard: (agentId: string) => boolean, local?: string): Promise<string>;
   remove(repo: string, agentId: string): Promise<void>;
   /**
    * Installs the dependencies in a checkout, from its lockfiles, unless they haven't changed since the last install there.
@@ -250,12 +250,12 @@ export interface WorkspaceOps {
   publish(dir: string, branch: string): Promise<void>;
   /** Brings `dir` up to the remote `branch`, where a cloud agent pushed its work. */
   pull(dir: string, branch: string): Promise<void>;
-  /** Merges origin's `baseBranch` into origin's `branch` on the office's side, and pushes it if git needed no help. */
+  /** Merges origin's `baseBranch` into origin's `branch` on Ops' side, and pushes it if git needed no help. */
   mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;
   /** Whether origin's `branch` has commits `dir`'s HEAD doesn't. */
   missingRemoteCommits(dir: string, branch: string): Promise<boolean>;
-  /** A worktree on `branch` as it was left, nothing reset: the office's own branch (brought up to GitHub's), else GitHub's. */
-  reopen(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Promise<string>;
+  /** A worktree on `branch` as it was left, nothing reset: Ops' own branch (brought up to GitHub's), else GitHub's. */
+  reopen(repo: string, agentId: string, branch: string, aboard: (agentId: string) => boolean): Promise<string>;
   /** Commits everything uncommitted in `dir` as `message`, skipping hooks; false when there was nothing to commit. */
   snapshot(dir: string, message: string): Promise<boolean>;
   /** Whether origin has `branch`, and how many of `dir`'s commits it hasn't got (counting from `baseBranch` while it hasn't). */
@@ -264,9 +264,9 @@ export interface WorkspaceOps {
   checkoutPullRequest(repo: string, id: string, number: number): Promise<string>;
   /** What came onto a pull request since QA's verdict on `sha`; null when git can't tell (`sha` is gone, say). */
   sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Promise<SinceVerdict | null>;
-  /** Runs the project's checks on the pull request at `head`: null when it has none the office knows how to run. */
+  /** Runs the project's checks on the pull request at `head`: null when it has none Ops knows how to run. */
   runChecks(repo: string, number: number, head: string): Promise<ChecksRun | null>;
-  /** The base branch's head and pull request `number`'s, freshly fetched into the office's clone: what a merge check is about. */
+  /** The base branch's head and pull request `number`'s, freshly fetched into Ops' clone: what a merge check is about. */
   mergeHeads(repo: string, number: number, baseBranch: string): Promise<MergeHeads>;
   /**
    * The merge check: `head` merged onto `base` (both already fetched), and the repo's checks run on the merge commit
@@ -279,11 +279,11 @@ export interface WorkspaceOps {
   readIn?(dir: string, file: string): Promise<string | undefined>;
   /** What a checkout's root says about its checks (package.json, lockfiles, CLAUDE.md); undefined when there's no such folder. Missing where there are no real checkouts. */
   packageFacts?(dir: string): Promise<PackageFacts | undefined>;
-  /** The same of the office's own clone of `repo`; undefined until it has one. Missing where there are no real checkouts. */
+  /** The same of Ops' own clone of `repo`; undefined until it has one. Missing where there are no real checkouts. */
   cloneFacts?(repo: string): Promise<PackageFacts | undefined>;
 }
 
-/** The office's own run of a PR's checks: each command, and the end of its output when it failed. */
+/** Ops' own run of a PR's checks: each command, and the end of its output when it failed. */
 export interface ChecksRun {
   sha: string;
   results: { command: string; ok: boolean; output?: string }[];

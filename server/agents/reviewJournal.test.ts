@@ -65,7 +65,7 @@ describe('the board’s review, from the journal', () => {
     expect(carried).toMatchObject({ status: 'passed', sha: 'def', carriedFrom: 'abc', commentUrl: 'c', finishedAt: 90 });
   });
 
-  it('follows what the office does about a failed PR, and the operations officer’s look', () => {
+  it('follows what Ops does about a failed PR, and the operations officer’s look', () => {
     const failed: ReviewFact[] = [...tested, reported('fail'), { kind: 'posted' }, { kind: 'announced' }];
     const fixing = { kind: 'fixing', agentId: 'a1', agentName: 'Ens. Park', fixes: { kind: 'qa' } } as const;
     expect(view([...failed, { kind: 'follow-up', followUp: fixing }])?.followUp).toEqual(fixing);
@@ -124,7 +124,7 @@ describe('a review whose reviewer the captain picks back up', () => {
 });
 
 describe('a review after a restart', () => {
-  it('waits for a reviewer again, or QA tests it when the office was still looking at it', () => {
+  it('waits for a reviewer again, or QA tests it when Ops was still looking at it', () => {
     expect(reviewRecovery(foldReview([asked]), undefined)).toEqual({ kind: 'queue' });
     expect(reviewRecovery(foldReview([asked, { kind: 'prechecking' }]), undefined)).toEqual({ kind: 'retest' });
   });

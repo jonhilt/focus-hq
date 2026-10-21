@@ -68,7 +68,7 @@ describe('describeDemo', () => {
 
   it('leads with the URL and says how the client is served', () => {
     const text = describeDemo('up', record, head);
-    expect(text.split('\n')[0]).toBe('Demo office up at http://127.0.0.1:51234/');
+    expect(text.split('\n')[0]).toBe('Demo ship up at http://127.0.0.1:51234/');
     expect(text).toContain('hot reload');
     expect(text).not.toContain('now');
   });

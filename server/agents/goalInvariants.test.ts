@@ -7,11 +7,11 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
 import { everyPr, leadWorktreeId } from './lead';
-import { office, type Render, restarted } from './fakeOffice';
+import { focus, type Render, restarted } from './fakeFocus';
 import { type Action, checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
-import type { OfficeTools, WorkspaceOps } from './types';
+import type { OpsTools, WorkspaceOps } from './types';
 
-// A goal's life to its close, under the office's two rules (docs/invariants.md): a restart is atomic, and two things at
+// A goal's life to its close, under Focus's two rules (docs/invariants.md): a restart is atomic, and two things at
 // once end as one after the other would. A goal's lead shows the captain things (artifacts) and asks them questions,
 // which they answer by picking an option or in chat; the lead leaves work uncommitted in its checkouts and ships slices;
 // the captain closes the goal, and may reopen it. Closing keeps what should outlive the goal (docs/goals.md, "Ending a
@@ -35,7 +35,7 @@ const steady = async (read: () => unknown) => {
 
 /**
  * The disk, as it's kept across lives: each checkout's uncommitted work (gone with the checkout), the work committed on
- * each branch in the office's clone (kept), and each checkout's commits, counted, for what a ship pushes.
+ * each branch in Ops' clone (kept), and each checkout's commits, counted, for what a ship pushes.
  */
 interface Disk {
   checkouts: Map<string, { branch: string; uncommitted: string[] }>;
@@ -87,7 +87,7 @@ interface Kept {
   artifacts: string[];
   questions: string[];
   prs: string[];
-  /** The pages of what the goal has (each artifact's and each option's, and their pictures) that the office has lost.
+  /** The pages of what the goal has (each artifact's and each option's, and their pictures) that Focus has lost.
    *  A page written for something that never went up is left over, not lost: it isn't counted. */
   lost: string[];
   /** The pull requests open on GitHub. */
@@ -104,7 +104,7 @@ const pr = (p: Pick<LeadPr, 'repo' | 'number' | 'outcome'>) => `${p.repo}#${p.nu
 const goal = (only?: RegExp): Subject<Kept> => ({
   name: 'goal',
   start: async (start) => {
-    // GitHub, kept across lives as GitHub keeps it: the pull requests the office opens asked for through `later`
+    // GitHub, kept across lives as GitHub keeps it: the pull requests Ops opens asked for through `later`
     const gh = Effect.runSync(Effect.provide(GitHub, demoLayer));
     const opened: { repo: string; number: number; branch: string }[] = [];
     const github = (later: Later) =>
@@ -126,14 +126,14 @@ const goal = (only?: RegExp): Subject<Kept> => ({
     // the goal's own setting up (its first checkouts) isn't what's under test: it's done before the first action
     let setUp = false;
     const later: Later = (label, work) => (setUp ? start(label, work) : work());
-    const first = office(workspace(later, disk), github(later), undefined, pictures(later));
+    const first = focus(workspace(later, disk), github(later), undefined, pictures(later));
     // QA's reviews are held to the rules on their own (reviewInvariants.test.ts)
     first.project.autoQa = false;
     const { store, project } = first;
     const started = first.agents.startGoal(project.id, 'Saved items');
     if (!('agent' in started)) throw new Error('the goal was queued');
     const id = started.agent.id;
-    // the goal's pages, as the office keeps them (on disk, outside the test)
+    // the goal's pages, as Focus keeps them (on disk, outside the test)
     const files = new Set<string>();
     const save = store.saveArtifact.bind(store);
     const drop = store.deleteArtifact.bind(store);
@@ -160,7 +160,7 @@ const goal = (only?: RegExp): Subject<Kept> => ({
         work: [...[...disk.checkouts.values()].flatMap((c) => c.uncommitted.map((w) => `${w}, uncommitted`)), ...[...disk.branches.values()].flat().map((w) => `${w}, committed`)].sort(),
       };
     };
-    const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude'>): Running<Kept> => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>): Running<Kept> => {
       const ended = new Set<number>();
       // Claude Code calls a tool that changes things one at a time: never two of the lead's at once
       let busy = false;
@@ -169,10 +169,10 @@ const goal = (only?: RegExp): Subject<Kept> => ({
         if (!t?.req.tools) throw new Error('no turn under way');
         return t;
       };
-      const tool = <T,>(use: (tools: OfficeTools) => Promise<T>) => {
+      const tool = <T,>(use: (tools: OpsTools) => Promise<T>) => {
         if (busy) throw new Error('the lead is using another tool');
         const tools = turn().req.tools;
-        if (!tools) throw new Error('no office tools');
+        if (!tools) throw new Error('no Ops tools');
         busy = true;
         return use(tools).finally(() => (busy = false));
       };
@@ -244,7 +244,7 @@ const goal = (only?: RegExp): Subject<Kept> => ({
   },
 });
 
-describe('a goal’s life to its close, under the office’s two rules', () => {
+describe('a goal’s life to its close, under Focus’s two rules', () => {
   // a description that never got a goal closed with something on it would pass both rules and prove nothing
   it('reaches a goal closed with what it showed, asked, shipped and left uncommitted, and reopened, taken one at a time', async () => {
     const g = await goal().start(now);

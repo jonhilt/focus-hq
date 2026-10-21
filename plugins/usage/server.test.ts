@@ -1,19 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { SignIn } from '../../plugin-api/shared';
-import { office, until } from '../../plugin-api/testing';
+import { focus, until } from '../../plugin-api/testing';
 import usagePlugin from './server';
 import { USAGE, type Usage } from './shared';
 
-/** The office with the readout switched on, signing in as `signIn` says. */
+/** Focus with the readout switched on, signing in as `signIn` says. */
 function aboard(signIn: SignIn) {
-  const o = office();
+  const o = focus();
   o.agents.startPlugins([usagePlugin], { demo: true, ownRepo: () => undefined, signIn: () => signIn });
   const state = () => o.agents.plugins.stateOf(USAGE) as Usage | undefined;
   return { ...o, state };
 }
 
 describe('the usage plugin', () => {
-  it('says how the office signs in at once, reads the demo’s made-up plan, and keeps none of it in state.json', async () => {
+  it('says how Focus signs in at once, reads the demo’s made-up plan, and keeps none of it in state.json', async () => {
     const signIn: SignIn = { mode: 'fallback', onKey: false, keySpentUsd: 0, keyBudgetUsd: 20 };
     const o = aboard(signIn);
     expect(o.state()).toMatchObject({ signIn: 'fallback', onKey: false, keyBudgetUsd: 20 });

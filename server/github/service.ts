@@ -13,7 +13,7 @@ export type GitHubError = GhCommandError | GhBadOutput | GitHubNotFound | GitHub
 
 type Op<A> = Effect.Effect<A, GitHubError>;
 
-/** Everything the office needs from GitHub, as Effects. Provided by the gh CLI (`ghCliLayer`) or in memory (`demoLayer`). */
+/** Everything Focus needs from GitHub, as Effects. Provided by the gh CLI (`ghCliLayer`) or in memory (`demoLayer`). */
 export class GitHub extends Context.Service<GitHub, {
   /** Never fails: a missing or logged-out gh is a status, not an error. */
   readonly status: Effect.Effect<GitHubStatus>;

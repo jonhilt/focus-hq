@@ -1,5 +1,5 @@
-// Whether the office takes up what the captain asks of it from a room's board: filing an issue, previewing a PR. Pure, so
-// each is tested next to it; the Office only does the I/O.
+// Whether Ops takes up what the captain asks of it from a room's board: filing an issue, previewing a PR. Pure, so
+// each is tested next to it; the Focus class only does the I/O.
 import type { Board, Project, PullRequest } from '../shared/types';
 
 /** Why the captain can't file this issue in the project, or undefined when they can. */

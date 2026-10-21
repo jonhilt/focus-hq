@@ -30,7 +30,7 @@ const ScorecardFile = Schema.Struct({
 
 const decode = Schema.decodeUnknownOption(Schema.fromJsonString(ScorecardFile));
 
-/** A saved scorecard, or nothing for a file that isn't one (cut short, or from a format this office doesn't know). */
+/** A saved scorecard, or nothing for a file that isn't one (cut short, or from a format this Focus doesn't know). */
 export function readScorecard(text: string): Scorecard | undefined {
   return Option.getOrUndefined(Option.map(decode(text), (card) => ({
     ...card,
@@ -55,19 +55,19 @@ export function readNoise(text: string): ScorecardNoise | undefined {
 
 /**
  * Where `pnpm run scorecard` saves each scorecard (and, under noise/, each noise floor), to compare over time: the
- * plugin's own folder, with what the office kept in `~/.focus/scorecards/` before it was a plugin moved in.
+ * plugin's own folder, with what Focus kept in `~/.focus/scorecards/` before it was a plugin moved in.
  */
 export const scorecardsDir = (): string => pluginDataDir(SCORECARD, { movedFrom: 'scorecards' });
 
-/** The commit the office runs from, and whether it has uncommitted changes. */
+/** The commit Focus runs from, and whether it has uncommitted changes. */
 export interface Head {
   commit: string;
   dirty: boolean;
 }
 
 /**
- * Whether the office should measure the commit it runs from by itself: it's clean (a captain's work in progress isn't
- * measured behind their back) and has no scorecard yet. Auto update restarts the office on each merge to main, so
+ * Whether Focus should measure the commit it runs from by itself: it's clean (a captain's work in progress isn't
+ * measured behind their back) and has no scorecard yet. Auto update restarts Focus on each merge to main, so
  * this puts a scorecard on every one.
  */
 export const measureNewCommit = (history: Pick<Scorecard, 'commit'>[], head: Head) => !head.dirty && history.at(-1)?.commit !== head.commit;
@@ -80,7 +80,7 @@ export interface ScorecardSource {
   measure(): Promise<void>;
 }
 
-/** The scorecards `pnpm run scorecard` saves in `dir`, measured on the office's own checkout at `root`. */
+/** The scorecards `pnpm run scorecard` saves in `dir`, measured on Focus's own checkout at `root`. */
 export class SavedScorecards implements ScorecardSource {
   constructor(private readonly dir: string, private readonly root: string) {}
 
@@ -106,11 +106,11 @@ export class SavedScorecards implements ScorecardSource {
 let source: ScorecardSource | undefined;
 
 /**
- * The office's scorecards, one source for the desk and for what the plugin provides (the climber's briefs read them):
+ * Focus's scorecards, one source for the desk and for what the plugin provides (the climber's briefs read them):
  * the saved ones, or the demo's, made up and kept in memory.
  */
-export function officeScorecards(demo: boolean, officeDir: string): ScorecardSource {
-  source ??= demo ? new DemoScorecards() : new SavedScorecards(scorecardsDir(), officeDir);
+export function focusScorecards(demo: boolean, focusDir: string): ScorecardSource {
+  source ??= demo ? new DemoScorecards() : new SavedScorecards(scorecardsDir(), focusDir);
   return source;
 }
 
@@ -136,7 +136,7 @@ export class ScorecardDesk {
     return this.state;
   }
 
-  /** Measures the commit the office runs from, unless it has a scorecard already or has uncommitted changes. */
+  /** Measures the commit Focus runs from, unless it has a scorecard already or has uncommitted changes. */
   measureIfNew(head: Head): void {
     if (this.state.status !== 'measuring' && measureNewCommit(this.state.history, head)) this.measure('new-commit');
   }

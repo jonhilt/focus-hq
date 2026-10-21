@@ -127,7 +127,7 @@ describe('a reviewer’s checkout of a pull request', () => {
     paths.workspaces = path.join(tmp, 'qa-workspaces');
     paths.mirrors = path.join(tmp, 'qa-mirrors');
     try {
-      // an origin with pull request 7, and the office's clone of it
+      // an origin with pull request 7, and Ops' clone of it
       const origin = path.join(tmp, 'qa-origin.git');
       git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
       const dev = path.join(tmp, 'qa-dev');
@@ -168,7 +168,7 @@ describe('the local base branch', () => {
     paths.workspaces = path.join(tmp, 'base-workspaces');
     paths.mirrors = path.join(tmp, 'base-mirrors');
     try {
-      // an origin, and the office's clone of it, whose own checkout has main, as `gh repo clone` leaves it
+      // an origin, and Ops' clone of it, whose own checkout has main, as `gh repo clone` leaves it
       const origin = path.join(tmp, 'base-origin.git');
       git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
       const dev = path.join(tmp, 'base-dev');
@@ -187,7 +187,7 @@ describe('the local base branch', () => {
         return sha;
       };
 
-      // main moved on GitHub since the office cloned it
+      // main moved on GitHub since Ops cloned it
       let tip = merged();
       const dir = await createWorktree('acme/base', 'agent_base', 'focus/base', 'main', () => false);
       expect(git(mirror, 'rev-parse', 'refs/heads/main')).toBe(tip);

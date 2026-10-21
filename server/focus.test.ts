@@ -4,22 +4,22 @@ import type { MergeHeads, MergeTrial } from '../shared/mergeCheck';
 import { prKey } from '../shared/qa';
 import type { PullRequest, QaReview } from '../shared/types';
 import { DemoDrafter, demoWorkspace } from './agents/demoRunner';
-import { office as fakeOffice } from './agents/fakeOffice';
+import { focus as fakeFocus } from './agents/fakeFocus';
 import { IssuePlanner } from './agents/planner';
 import type { WorkspaceOps } from './agents/types';
 import { demoLayer } from './github/demo';
 import { GitHub, toProvider } from './github/service';
 import { Hub } from './hub';
-import { Office } from './office';
+import { Focus } from './focus';
 import { Previews } from './previews';
 import { Voice } from './voice';
 
 // What a board refresh does with each PR on its way to merged (docs/merging.md, docs/qa.md): auto-merge following
 // `mergeStep`, and the captain's "Merge when QA passes" following `requestedMerge`. The decisions are tested in
-// shared/mergeGate.test.ts; these hold the office to carrying them out, on the demo GitHub and the fake office's crew.
+// shared/mergeGate.test.ts; these hold Ops to carrying them out, on the demo GitHub and the fake crew.
 
 const REPO = 'demo/webshop-frontend';
-/** The demo's PR of the office's in REPO, open and passing. */
+/** One of Ops' demo PRs in REPO, open and passing. */
 const NUMBER = 8;
 const RUN = 9001;
 
@@ -32,7 +32,7 @@ const lintFails = (heads: MergeHeads): MergeTrial => ({
 });
 
 /**
- * A real Office on the demo GitHub, whose PR #8 in REPO GitHub lists as `listed` says, and whose merge checks come out
+ * A real Focus on the demo GitHub, whose PR #8 in REPO GitHub lists as `listed` says, and whose merge checks come out
  * as `trial` says. Its toasts, merge trials and checks re-run are kept for the test to read.
  */
 async function room(listed: Partial<PullRequest> = {}, trial: (heads: MergeHeads) => MergeTrial = allPass) {
@@ -53,12 +53,12 @@ async function room(listed: Partial<PullRequest> = {}, trial: (heads: MergeHeads
       return trial(heads);
     },
   };
-  const o = fakeOffice(workspace, github);
+  const o = fakeFocus(workspace, github);
   const hub = new Hub();
   const toasts = vi.spyOn(hub, 'toast');
   const provider = toProvider(github);
-  const office = new Office(o.store, hub, provider, new Previews(hub, provider, true), new IssuePlanner(o.store, hub, new DemoDrafter()), new Voice(hub, true), 'test');
-  office.agents = o.agents;
+  const focus = new Focus(o.store, hub, provider, new Previews(hub, provider, true), new IssuePlanner(o.store, hub, new DemoDrafter()), new Voice(hub, true), 'test');
+  focus.agents = o.agents;
   const head = (await Effect.runPromise(gh.getPullRequest(REPO, NUMBER))).headSha ?? '';
   /** QA's review of #8, as if it had finished: passed at its head unless `at` another commit. */
   const reviewed = (review: Partial<QaReview> = {}) =>
@@ -72,11 +72,11 @@ async function room(listed: Partial<PullRequest> = {}, trial: (heads: MergeHeads
   const failRerun = (why: string) => {
     rerun = Effect.die(new Error(why));
   };
-  return { ...o, office, head, reviewed, said, state, trials, reruns, failRerun, refresh: () => office.refreshBoard(o.project.id) };
+  return { ...o, focus, head, reviewed, said, state, trials, reruns, failRerun, refresh: () => focus.refreshBoard(o.project.id) };
 }
 
 describe('auto-merge on a board refresh', () => {
-  /** A room with auto-merge on (docs/qa.md: "on each board refresh the office takes every PR it opened one step closer to merged"). */
+  /** A room with auto-merge on (docs/qa.md: "on each board refresh Ops takes every PR it opened one step closer to merged"). */
   async function auto(...args: Parameters<typeof room>) {
     const r = await room(...args);
     r.project.autoMerge = true;
@@ -208,16 +208,16 @@ describe('Merge when QA passes, on a board refresh', () => {
 
 describe('a board refresh', () => {
   it('puts each repo’s open issues and PRs on the board, and tells the browsers', async () => {
-    const { office, store, project, refresh } = await room();
+    const { focus, store, project, refresh } = await room();
     await refresh();
     const board = store.boards.get(project.id);
     expect(board?.prs.map((p) => `${p.repo}#${p.number}`)).toEqual(expect.arrayContaining([`${REPO}#${NUMBER}`, 'demo/webshop-api#7']));
-    expect((await office.snapshot()).boards).toEqual([board]);
+    expect((await focus.snapshot()).boards).toEqual([board]);
   });
 
   it('does nothing for a project that isn’t there', async () => {
-    const { office, store } = await room();
-    await office.refreshBoard('no-such-project');
+    const { focus, store } = await room();
+    await focus.refreshBoard('no-such-project');
     expect(store.boards.size).toBe(0);
   });
 });

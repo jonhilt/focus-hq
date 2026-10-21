@@ -52,7 +52,7 @@ export interface CreatePullRequest {
   body: string;
 }
 
-/** Everything the office needs from GitHub. Implemented by the gh CLI (live) and an in-memory fake (demo). */
+/** Everything Focus needs from GitHub. Implemented by the gh CLI (live) and an in-memory fake (demo). */
 export interface GitHubProvider {
   status(): Promise<GitHubStatus>;
   listRepos(): Promise<string[]>;

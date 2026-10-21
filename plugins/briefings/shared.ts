@@ -22,7 +22,7 @@ export function firstChangedBeat(before: BriefingBeats | undefined, after: Brief
   return -1;
 }
 
-/** The models the office's writer can write a briefing on; '' is the leads' own (the captain's model setting). */
+/** The models Ops' writer can write a briefing on; '' is the leads' own (the captain's model setting). */
 export const WRITER_MODELS = [
   { id: '', label: 'As the leads' },
   { id: 'claude-opus-5-5', label: 'Opus 5.5' },

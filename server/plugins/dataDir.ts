@@ -1,5 +1,5 @@
-// Where each plugin keeps its files (docs/plugins.md): a folder of its own in the office's data dir, the same one for
-// its server part (`host.dataDir()`) and its scripts (`pluginDataDir` from plugin-api/server). A part of the office
+// Where each plugin keeps its files (docs/plugins.md): a folder of its own in Focus's data dir, the same one for
+// its server part (`host.dataDir()`) and its scripts (`pluginDataDir` from plugin-api/server). A part of Focus
 // that became a plugin names the folder it kept in the data dir before (`movedFrom`), and what's in it moves in.
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,7 +9,7 @@ const moved = new Set<string>();
 
 /**
  * Plugin `id`'s own folder in `dataDir` (not made until it's written to). `movedFrom` is a folder in the data dir it
- * kept before it was a plugin: what's in it moves in, once a run, so a step can go once every office has run past it.
+ * kept before it was a plugin: what's in it moves in, once a run, so a step can go once every install of Focus has run past it.
  */
 export function pluginDataDir(id: string, how: { movedFrom?: string; dataDir?: string } = {}): string {
   const dataDir = how.dataDir ?? config.dataDir;

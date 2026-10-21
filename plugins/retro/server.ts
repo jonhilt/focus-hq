@@ -17,7 +17,7 @@ const retro: FocusPlugin = {
       host,
       host.state<Retro>(freshRetro),
       host.demo ? new DemoEngineer() : new ClaudeEngineer((run) => host.readOnlySession(run)),
-      // what each retro gathered, in the plugin's own folder (kept in the office's retros/ before it was a plugin)
+      // what each retro gathered, in the plugin's own folder (kept in Focus's retros/ before it was a plugin)
       host.dataDir({ movedFrom: 'retros' }),
       host.demo ? 500 : 20_000,
     );

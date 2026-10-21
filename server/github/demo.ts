@@ -55,7 +55,7 @@ const CHECKS_TAKE_MS = 20_000;
 /** The demo's pretend GitHub Actions run for a PR: one per PR, so a re-run finds its PR from the run id. */
 const RUN_IDS = 4000;
 
-/** In-memory GitHub used by `pnpm run demo`: the seed repos above, changed by whatever the office does to them. */
+/** In-memory GitHub used by `pnpm run demo`: the seed repos above, changed by whatever Ops does to them. */
 /** Pushes to an open demo PR: a merge of its base branch, or a change of its own. Set while a demo GitHub is around. */
 export let demoPush: ((repo: string, number: number, kind: 'merge-base' | 'change') => string) | undefined;
 

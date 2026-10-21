@@ -9,7 +9,7 @@ export interface Task {
   kind: Kind;
 }
 
-/** What Claude Code says when a tool needs approval and the office's input has closed (2.1.289; earlier ones said "The user doesn't want to take this action right now"). */
+/** What Claude Code says when a tool needs approval and Ops' input has closed (2.1.289; earlier ones said "The user doesn't want to take this action right now"). */
 export const NOBODY_TO_ASK = 'Tool permission request failed: AbortError: Stream closed';
 
 /** How the stand-in plays the things real Claude Code leaves open. */
@@ -21,12 +21,12 @@ export interface Plays {
 const textOf = (m: SDKUserMessage): string => (typeof m.message.content === 'string' ? m.message.content : '');
 
 /**
- * Claude Code, as the runner meets it through the SDK: it reads what the office sends, one turn at a time (a message
+ * Claude Code, as the runner meets it through the SDK: it reads what Ops sends, one turn at a time (a message
  * that comes during a turn waits for the next, and the turn's result says how many wait, unless Claude Code folds it
  * into the turn under way, as it mostly does); each turn opens with `init`. A turn can leave a command or a workflow
  * running in the background, which runs on after the turn and, when it ends, is taken in a turn of Claude Code's own;
- * the background list (`background_tasks_changed`) comes before each one's start and end. Each turn asks the office to
- * approve a tool, which only an office still listening can answer: once the office's input has ended, and Claude Code
+ * the background list (`background_tasks_changed`) comes before each one's start and end. Each turn asks Ops to
+ * approve a tool, which only Ops, still listening, can answer: once Ops' input has ended, and Claude Code
  * is idle (the SDK waits for that before closing its stdin), each tool that needs approval fails without asking. It
  * exits once its input has closed with nothing left to do.
  */
@@ -48,7 +48,7 @@ export class StandInClaude {
   private ids = 0;
 
   constructor(
-    /** What it took into its turns: its transcript, kept across the office's lives as Claude Code keeps it on disk. */
+    /** What it took into its turns: its transcript, kept across Focus's lives as Claude Code keeps it on disk. */
     readonly taken: string[],
     private readonly options: Options,
     prompt: AsyncIterable<SDKUserMessage>,
@@ -78,7 +78,7 @@ export class StandInClaude {
   private async read(prompt: AsyncIterable<SDKUserMessage>): Promise<void> {
     let first = true;
     for await (const m of prompt) {
-      // the brief is in hand as the session starts; what the office sends later is on its way down the pipe
+      // the brief is in hand as the session starts; what Ops sends later is on its way down the pipe
       if (!first) await this.later('Claude Code reads a message', () => Promise.resolve());
       first = false;
       if (this.dead) return;
@@ -163,7 +163,7 @@ export class StandInClaude {
     this.list(this.tasks.filter((t) => t.kind !== 'local_workflow'));
   }
 
-  /** A stop from the office goes over Claude Code's stdin: a command that's ended meanwhile isn't there to stop. */
+  /** A stop from Ops goes over Claude Code's stdin: a command that's ended meanwhile isn't there to stop. */
   stopTask(id: string): Promise<void> {
     if (this.stdinClosed) return Promise.reject(new Error('stdin closed'));
     return this.later('Claude Code stops a command', () => {

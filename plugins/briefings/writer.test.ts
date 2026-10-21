@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, LeadToolContext, PluginHost, PluginState, ReadOnlyRun } from '../../plugin-api/server';
 import { type BriefingsState, freshBriefings } from './shared';
 import type { Sources } from './sources';
-import { officeWriter, spentSoFar, writerAsk, writerPrompt } from './writer';
+import { opsWriter, spentSoFar, writerAsk, writerPrompt } from './writer';
 
 describe('the writer’s prompt', () => {
   const lead = (dirs: string[]) => ({ agent: { id: 'l1', name: 'Lt. Castellanos' } as Agent, checkouts: dirs.map((dir) => ({ repo: `jonhilt/${dir.split('/').at(-1)}`, dir })) }) as unknown as LeadToolContext;
@@ -42,13 +42,13 @@ describe('what a brief has taken so far', () => {
   });
 });
 
-describe('the office’s writer', () => {
+describe('Ops’ writer', () => {
   const lead = { agent: { id: 'l1', name: 'Lt. Castellanos' } as Agent, checkouts: [{ repo: 'jonhilt/focus', dir: '/w/focus' }, { repo: 'jonhilt/site', dir: '/w/site' }] } as unknown as LeadToolContext;
   const brief = { id: 'judge', title: 'The judge', brief: 'Explain the backtest.' };
   const written = { beats: [{ title: 'One', text: 'It runs.', seconds: 4 }, { title: 'Two', text: 'It stops.', seconds: 4 }], stage: { html: '<div></div>', script: 'function render(t) {}' } };
   const sources = { said: () => Promise.resolve([{ text: 'We backtested it.', at: '09:44' }]) } as unknown as Sources;
 
-  function office(replies: { structured: unknown; costUsd?: number }[], writer = freshBriefings().writer) {
+  function ops(replies: { structured: unknown; costUsd?: number }[], writer = freshBriefings().writer) {
     const runs: ReadOnlyRun[] = [];
     let saved: BriefingsState = { ...freshBriefings(), writer };
     const state: PluginState<BriefingsState> = { get: () => saved, set: (patch) => (saved = { ...saved, ...patch }) };
@@ -60,11 +60,11 @@ describe('the office’s writer', () => {
         return Promise.resolve({ text: '', sessionId: `s${runs.length}`, ...replies[runs.length - 1] });
       },
     } as unknown as PluginHost;
-    return { write: officeWriter(host, state, sources), runs, last: () => saved.last };
+    return { write: opsWriter(host, state, sources), runs, last: () => saved.last };
   }
 
   it('writes the brief up in a session on the captain’s setting, reading the lead’s code, and notes what it cost', async () => {
-    const { write, runs, last } = office([{ structured: written, costUsd: 0.3 }], { model: '', effort: 'low', fast: true });
+    const { write, runs, last } = ops([{ structured: written, costUsd: 0.3 }], { model: '', effort: 'low', fast: true });
     const got = await write(lead, brief);
     expect(runs[0]).toMatchObject({ cwd: '/w/focus', readable: ['/w/site'], model: 'claude-opus-5-5', effort: 'low', fast: true, resume: undefined });
     expect(runs[0]?.prompt).toContain('[09:44]\nWe backtested it.');
@@ -74,24 +74,24 @@ describe('the office’s writer', () => {
   });
 
   it('sends the same session back with what to fix, adding to what the brief has taken', async () => {
-    const { write, runs, last } = office([{ structured: written, costUsd: 0.2 }]);
+    const { write, runs, last } = ops([{ structured: written, costUsd: 0.2 }]);
     const got = await write(lead, brief, { sessionId: 's0', problems: ['beat 1: 36 isn’t in its quotes'], spent: { seconds: 60, costUsd: 0.3 } });
     expect(runs[0]).toMatchObject({ resume: 's0', effort: 'high', fast: false });
-    expect(runs[0]?.prompt).toMatch(/^The office checked your explainer/);
+    expect(runs[0]?.prompt).toMatch(/^Ops checked your explainer/);
     expect(got.seconds).toBeGreaterThanOrEqual(60);
     expect(got.costUsd).toBeCloseTo(0.5);
     expect(last()?.costUsd).toBeCloseTo(0.5);
   });
 
   it('runs in its own folder when the lead has no checkout, and leaves the cost out when the session doesn’t say', async () => {
-    const { write, runs } = office([{ structured: written }]);
+    const { write, runs } = ops([{ structured: written }]);
     const got = await write({ ...lead, checkouts: [] }, brief);
     expect(runs[0]).toMatchObject({ cwd: '/data', readable: [] });
     expect(got.costUsd).toBeUndefined();
   });
 
   it('refuses a reply that isn’t an explainer', async () => {
-    const { write } = office([{ structured: { beats: [] } }]);
+    const { write } = ops([{ structured: { beats: [] } }]);
     await expect(write(lead, brief)).rejects.toThrow();
   });
 });

@@ -32,8 +32,8 @@ export interface NumberOneOfficer {
   turn(req: NumberOneTurn, activity: (text: string) => void): Promise<NumberOneReply>;
 }
 
-/** What the chat needs from the office: its projects and settings, the ship's status, and its own state. */
-export interface ChatOffice {
+/** What the chat needs from Focus: its projects and settings, the ship's status, and its own state. */
+export interface ChatHost {
   projects(): Project[];
   settings(): Settings;
   shipStatus(): Promise<ShipStatus>;
@@ -54,12 +54,12 @@ export class NumberOne {
   private running: AbortController | null = null;
 
   constructor(
-    private readonly office: ChatOffice,
+    private readonly focus: ChatHost,
     private readonly officer: NumberOneOfficer,
   ) {}
 
   current(): NumberOneChat {
-    return this.office.saved.get().chat;
+    return this.focus.saved.get().chat;
   }
 
   say(text: string): NumberOneChat {
@@ -89,14 +89,14 @@ export class NumberOne {
 
   /** Saves the chat, and what Number One is doing now goes back to what it says (sent only when it changes). */
   private save(chat: NumberOneChat): void {
-    if (this.office.live.get().activity) this.office.live.set({ activity: '' });
-    this.office.saved.set({ chat });
+    if (this.focus.live.get().activity) this.focus.live.set({ activity: '' });
+    this.focus.saved.set({ chat });
   }
 
   /** Jots `text` down in the captain's personal log: what was jotted down, or nothing if the log refused it. */
   private jot(text: string): string | undefined {
     try {
-      this.office.personalLog.note(text);
+      this.focus.personalLog.note(text);
       return text;
     } catch {
       return undefined;
@@ -109,21 +109,21 @@ export class NumberOne {
     this.running = abort;
     const current = () => this.running === abort;
     // hidden projects stay out of the chat, so a demo can't turn them up
-    const projects = shownProjects(this.office.projects()).map(({ id, name, repos }) => ({ id, name, repos: [...repos] }));
+    const projects = shownProjects(this.focus.projects()).map(({ id, name, repos }) => ({ id, name, repos: [...repos] }));
     void this.officer
       .turn(
         {
           projects,
           messages: [...chat.messages],
           resumeSessionId: chat.sessionId,
-          shipStatus: () => this.office.shipStatus(),
-          personalLog: personalLogLines(this.office.personalLog.entries(), Date.now()),
-          settings: this.office.settings(),
+          shipStatus: () => this.focus.shipStatus(),
+          personalLog: personalLogLines(this.focus.personalLog.entries(), Date.now()),
+          settings: this.focus.settings(),
           signal: abort.signal,
         },
         // what they're doing goes to every screen, but isn't saved: a turn reads a lot
         (text) => {
-          if (current() && text) this.office.live.set({ activity: truncate(text, 120) });
+          if (current() && text) this.focus.live.set({ activity: truncate(text, 120) });
         },
       )
       .then((reply) => {
@@ -157,7 +157,7 @@ export function numberOneSystemPrompt(req: { projects: ChatProject[]; workspaces
   return `
 # You are ${numberOne().name}, Number One: first officer of the Focus, in the ready room with the captain
 
-The Focus is an office of Claude Code agents. Each project is a room: agents at its desks build GitHub issues into pull requests, a QA officer tests every pull request, the room's operations officer drafts issues at the Ops station, and at its team stations the captain's goals are built a slice at a time, each by a lead of its own (the captain's own Claude Code session for that goal, across the project's repos). The captain (the person you're talking to) runs the ship.
+The Focus is a starship crewed by Claude Code agents. Each project is a room: agents at its desks build GitHub issues into pull requests, a QA officer tests every pull request, the room's operations officer drafts issues at the Ops station, and at its team stations the captain's goals are built a slice at a time, each by a lead of its own (the captain's own Claude Code session for that goal, across the project's repos). The captain (the person you're talking to) runs the ship.
 
 You are the one the captain just talks to: questions about any project's code, what's going on aboard, or thinking something through. Answer plainly and briefly, like a trusted first officer. No headings or essays.
 

@@ -1,4 +1,4 @@
-// How much of each part that keeps state the office's state rules reach (docs/invariants.md#describing-a-part): the
+// How much of each part that keeps state Focus's state rules reach (docs/invariants.md#describing-a-part): the
 // share of a file's lines the descriptions' checks (`*Invariants.test.ts`, plugins' `invariants.test.ts`) run, on a fixed
 // seed. Pure, so it's unit tested (rulesCoverage.test.ts); scripts/rules.ts runs the checks and holds the ratchet.
 

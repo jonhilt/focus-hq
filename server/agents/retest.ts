@@ -3,7 +3,7 @@ import type { QaReview } from '../../shared/types';
 import { type PackageManager, scriptCommand } from '../packageManager';
 
 // Whether a PR that's back for QA needs the QA officer at all. A head QA already gave a verdict on doesn't; one that only
-// merged the base branch in, cleanly, on top of a pass gets the project's checks run by the office instead. Pure, so
+// merged the base branch in, cleanly, on top of a pass gets the project's checks run by Ops instead. Pure, so
 // it's unit tested (retest.test.ts); manager.ts gathers the git facts and runs the checks.
 
 /** What git says about the commits on a PR since QA's verdict. */
@@ -21,7 +21,7 @@ export interface SinceVerdict {
 export type RetestStep =
   /** QA already has a verdict on the head: nothing to do. */
   | { kind: 'skip'; reason: string }
-  /** Only the base branch came in since QA passed `passed`: the office runs the checks and carries the pass over if they're green. */
+  /** Only the base branch came in since QA passed `passed`: Ops runs the checks and carries the pass over if they're green. */
   | { kind: 'checks-only'; head: string; passed: string }
   | { kind: 'retest'; reason: string };
 
@@ -40,7 +40,7 @@ export function retestStep(review: QaReview | undefined, head: string, since: Si
 }
 
 /**
- * The commit QA owes a review of once they've given a verdict: one the office shipped while they were testing an
+ * The commit QA owes a review of once they've given a verdict: one Ops shipped while they were testing an
  * earlier one. Undefined when the verdict is on the latest ship (or nothing shipped).
  */
 export function shippedSinceTested(review: Pick<QaReview, 'sha' | 'shippedHead'>): string | undefined {
@@ -71,7 +71,7 @@ export function rangeDiffUnchanged(output: string): boolean {
   return lines.length > 0 && lines.every((l) => /^\s*\d+:\s+[0-9a-f]+\s+=\s+\d+:\s+[0-9a-f]+/.test(l));
 }
 
-/** The PR comment when the office carries a pass over a merge of the base branch. */
+/** The PR comment when Ops carries a pass over a merge of the base branch. */
 export function carriedComment(baseBranch: string, head: string, passed: string, commands: string[]): string {
   const ran = commands.length ? ` (${commands.map((c) => `\`${c}\``).join(', ')})` : '';
   return `## 🔍 QA: ✅ Passed\n\nMerge of ${baseBranch} only; checks green at \`${head.slice(0, 7)}\`${ran}. QA's pass at \`${passed.slice(0, 7)}\` carries over.`;

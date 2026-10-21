@@ -3,7 +3,7 @@ import { prKey, qaBadge } from './qa';
 import type { Agent, PullRequest, QaReview } from './types';
 import { ACTIVE_STATUSES } from './types';
 
-// What the Tricorder (the phone view at /tricorder) and the 3D office's Comms panel put in front of the manager. Pure,
+// What the Tricorder (the phone view at /tricorder) and the 3D ship's Comms panel put in front of the manager. Pure,
 // so it's unit tested (shared/tricorder.test.ts).
 
 /** Something that waits on the manager: nothing moves until they act on it. */

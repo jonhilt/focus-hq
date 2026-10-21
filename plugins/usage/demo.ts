@@ -1,4 +1,4 @@
-// The demo office's plan, made up: there's no Claude Code to ask.
+// The demo ship's plan, made up: there's no Claude Code to ask.
 import type { PlanUsage } from './shared';
 
 /**

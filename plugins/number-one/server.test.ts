@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import numberOnePlugin from './server';
 import { freshChat, NUMBER_ONE, type NumberOneChat, type NumberOneState } from './shared';
-import { office, until } from '../../plugin-api/testing';
+import { focus, until } from '../../plugin-api/testing';
 
-/** The office with Number One switched on: its routes, and its state as the browser has it. */
+/** Focus with Number One switched on: its routes, and its state as the browser has it. */
 function aboard(opts: { demo?: boolean; saved?: NumberOneChat } = {}) {
-  const o = office();
+  const o = focus();
   if (opts.saved) o.store.plugins[NUMBER_ONE] = { chat: opts.saved };
   o.agents.startPlugins([numberOnePlugin], { demo: opts.demo ?? false, ownRepo: () => undefined, shipStatus: () => Promise.resolve({ projects: [] }) });
   const route = (path: string) => {
@@ -24,7 +24,7 @@ describe('the number-one plugin', () => {
     vi.stubEnv('FOCUS_DEMO_SPEED', '1000');
     const o = aboard({ demo: true });
     expect(o.agents.plugins.routes().map((r) => `${r.route.method} ${r.route.path}`)).toEqual(['post /say', 'post /new', 'post /call', 'post /hang-up']);
-    // nothing's saved until the captain says something, so an office that never talks to Number One has nothing waiting
+    // nothing's saved until the captain says something, so a Focus that never talks to Number One has nothing waiting
     expect(o.store.plugins).toEqual({});
     expect(o.state()).toEqual({ activity: '', call: { call: null } });
     o.route('/say')({ text: 'Hello' });
@@ -32,7 +32,7 @@ describe('the number-one plugin', () => {
     expect(o.state()).toMatchObject({ chat: { status: 'thinking' }, call: { call: null } });
   });
 
-  it('ends a turn that was under way when the office shut down, keeping the session', () => {
+  it('ends a turn that was under way when Focus shut down, keeping the session', () => {
     const saved: NumberOneChat = { ...freshChat(), status: 'thinking', activity: 'Reading', messages: [{ from: 'manager', text: 'Hi', at: 0 }], sessionId: 's1' };
     const o = aboard({ saved });
     expect(o.state().chat).toMatchObject({ status: 'failed', activity: 'Interrupted', sessionId: 's1' });

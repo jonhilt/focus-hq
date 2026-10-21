@@ -119,7 +119,7 @@ describe('screenshotActivity', () => {
 });
 
 describe('your plan’s usage limit', () => {
-  it('moves a local session on your plan to the key, once the office says so', () => {
+  it('moves a local session on your plan to the key, once Ops says so', () => {
     expect(switchesToKey({ onKey: false, cloud: false }, () => true)).toBe(true);
     expect(switchesToKey({ onKey: false, cloud: false }, () => false)).toBe(false);
   });

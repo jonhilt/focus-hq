@@ -1,6 +1,6 @@
 import type { Project } from './types';
 
-// Hidden projects (Project.hidden): out of sight while you demo the office, without closing them or moving any other
+// Hidden projects (Project.hidden): out of sight while you demo the ship, without closing them or moving any other
 // holodeck. Pure, so it's unit tested (shared/hidden.test.ts).
 
 export const isHidden = (project: Pick<Project, 'hidden'> | undefined): boolean => project?.hidden === true;

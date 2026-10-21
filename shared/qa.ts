@@ -11,7 +11,7 @@ export interface QaBadge {
 
 /**
  * What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. A fail says who it went back
- * to, that the room's operations officer is looking into why it's stuck, or that the office gave up on it.
+ * to, that the room's operations officer is looking into why it's stuck, or that Ops gave up on it.
  */
 export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): QaBadge {
   if (!review) return { state: 'none', label: 'not tested' };
@@ -47,9 +47,9 @@ export function sameCommit(a: string, b: string): boolean {
 }
 
 /**
- * Whether a PR goes back to QA because its head moved past QA's verdict without the office pushing it (CI committing
- * to the branch, the captain pushing by hand): only the office's own PRs, with auto-QA on, and not while someone the
- * office sent is fixing it or the operations officer is looking, since they hand it back to QA themselves.
+ * Whether a PR goes back to QA because its head moved past QA's verdict without Ops pushing it (CI committing
+ * to the branch, the captain pushing by hand): only Ops' own PRs, with auto-QA on, and not while someone
+ * Ops sent is fixing it or the operations officer is looking, since they hand it back to QA themselves.
  */
 export function verdictBehindHead(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>, ctx: { ours: boolean; autoQa: boolean }): boolean {
   if (!review?.sha || !pr.headSha || !ctx.ours || !ctx.autoQa) return false;
@@ -60,7 +60,7 @@ export function verdictBehindHead(review: QaReview | undefined, pr: Pick<PullReq
 
 /**
  * The model a QA officer or goal reviewer works on, stamped on them each time they sit down to a review, so a change to
- * the setting applies from the next review: the office's QA model, else its `model` setting. Missing = Claude Code's default.
+ * the setting applies from the next review: Focus's QA model, else its `model` setting. Missing = Claude Code's default.
  */
 export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): string | undefined {
   return settings.qaModel.trim() || settings.model.trim() || undefined;
@@ -69,12 +69,12 @@ export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): str
 /** The longest QA brief a project keeps, in characters. */
 export const QA_BRIEF_MAX = 4000;
 
-/** Whether QA should pick up a PR the office just opened or pushed to: on unless the project switched it off. */
+/** Whether QA should pick up a PR Ops just opened or pushed to: on unless the project switched it off. */
 export function autoQaFor(project: { autoQa?: boolean }): boolean {
   return project.autoQa !== false;
 }
 
-/** Whether a failed PR the office opened goes back to a developer: on unless the project switched it off. */
+/** Whether a failed PR Ops opened goes back to a developer: on unless the project switched it off. */
 /** Whether QA blocks this project's pull requests only with proof (missing = on). */
 export function qaProofFor(project: { qaProof?: boolean }): boolean {
   return project.qaProof !== false;
@@ -90,7 +90,7 @@ export const prKey = (repo: string, number: number) => `${repo}#${number}`;
 /** A pull request on GitHub. */
 export const pullUrl = (repo: string, number: number) => `https://github.com/${repo}/pull/${number}`;
 
-/** A spot-check in its pull request's changed files: at its file and line when the office knows where (`anchor`). */
+/** A spot-check in its pull request's changed files: at its file and line when Ops knows where (`anchor`). */
 export const spotCheckUrl = (prUrl: string, check: Pick<QaSpotCheck, 'anchor'>) => `${prUrl}/files${check.anchor ? `#${check.anchor}` : ''}`;
 
 /** Code a reviewer has to open to have checked it: not tests (running them checks them), docs, lock files or pictures. */
@@ -112,7 +112,7 @@ export interface FileRow {
 
 export interface FilesCovered {
   rows: FileRow[];
-  /** Whether the office read which files QA opened. */
+  /** Whether Ops read which files QA opened. */
   evidence: boolean;
   code: number;
   opened: number;
@@ -123,7 +123,7 @@ export interface FilesCovered {
 
 /**
  * How QA covered each changed file, for its PR comment and the QA panel: code no test exercises and QA never opened
- * first, since that's where a bug gets through; docs, tests and config last. The changed files come from the office
+ * first, since that's where a bug gets through; docs, tests and config last. The changed files come from Ops
  * when it knows them, else from the report. Undefined when there are none.
  */
 export function filesCovered(report: QaReport, account: FileAccount | undefined): FilesCovered | undefined {

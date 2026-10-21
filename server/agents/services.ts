@@ -34,17 +34,17 @@ export class QaChatFailed extends Data.TaggedError('QaChatFailed')<{ reason: str
   }
 }
 
-/** The office couldn't open a terminal to start a cloud session in. */
+/** Ops couldn't open a terminal to start a cloud session in. */
 export class TerminalFailed extends Data.TaggedError('TerminalFailed')<{ reason: string }> {
   override get message() {
     return this.reason;
   }
 }
 
-/** The agents' checkouts: worktrees of the office's clones, one per agent (a lead's holds one per repo). */
+/** The agents' checkouts: worktrees of Ops' clones, one per agent (a lead's holds one per repo). */
 export class Workspace extends Context.Service<Workspace, {
-  /** A worktree on `branch` from the remote `startPoint`, reclaiming it from an agent who isn't `inOffice`. */
-  create(repo: string, agentId: string, branch: string, startPoint: string, inOffice: (agentId: string) => boolean, local?: string): Effect.Effect<string, GitFailed>;
+  /** A worktree on `branch` from the remote `startPoint`, reclaiming it from an agent who isn't `aboard`. */
+  create(repo: string, agentId: string, branch: string, startPoint: string, aboard: (agentId: string) => boolean, local?: string): Effect.Effect<string, GitFailed>;
   /** Never fails: a checkout that won't go is left for the sweep. */
   remove(repo: string, agentId: string): Effect.Effect<void>;
   /** Installs a checkout's dependencies. Never fails: what went wrong is a note for the agent working there. */
@@ -65,8 +65,8 @@ export class Workspace extends Context.Service<Workspace, {
   checkoutPullRequest(repo: string, id: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
   missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
-  /** A worktree on `branch` as it was left (a closed goal's), from the office's clone or else GitHub, never reset. */
-  reopen(repo: string, agentId: string, branch: string, inOffice: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
+  /** A worktree on `branch` as it was left (a closed goal's), from Ops' clone or else GitHub, never reset. */
+  reopen(repo: string, agentId: string, branch: string, aboard: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
   snapshot(dir: string, message: string): Effect.Effect<boolean, GitFailed>;
   branchState(dir: string, branch: string, baseBranch: string): Effect.Effect<BranchState, GitFailed>;
   sinceVerdict(repo: string, number: number, baseBranch: string, sha: string): Effect.Effect<SinceVerdict | null, GitFailed>;
@@ -80,7 +80,7 @@ export class Workspace extends Context.Service<Workspace, {
   readIn(dir: string, file: string): Effect.Effect<string | undefined>;
   /** What a checkout's root says about its checks; undefined when there's no such folder, or it can't be read. */
   packageFacts(dir: string): Effect.Effect<PackageFacts | undefined>;
-  /** The same of the office's own clone of `repo`; undefined until it has one. */
+  /** The same of Ops' own clone of `repo`; undefined until it has one. */
   cloneFacts(repo: string): Effect.Effect<PackageFacts | undefined>;
 }>()('focus/agents/Workspace') {
   /** The workspace on its Promise-based operations: the live git ones, or the demo's pretend ones. */
@@ -88,7 +88,7 @@ export class Workspace extends Context.Service<Workspace, {
     const git = <A>(what: string, run: () => Promise<A>): Effect.Effect<A, GitFailed> =>
       Effect.tryPromise({ try: run, catch: (err) => new GitFailed({ what, reason: errorMessage(err), serverError: serverStatus(errorMessage(err)) }) });
     return Layer.succeed(Workspace, Workspace.of({
-      create: (repo, agentId, branch, startPoint, inOffice, local) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, inOffice, local)),
+      create: (repo, agentId, branch, startPoint, aboard, local) => git(`check out ${branch}`, () => ops.create(repo, agentId, branch, startPoint, aboard, local)),
       remove: (repo, agentId) => Effect.ignore(git('remove a checkout', () => ops.remove(repo, agentId))),
       install: (dir) => Effect.promise(() => ops.install(dir)),
       dir: (agentId) => ops.dir(agentId),
@@ -106,7 +106,7 @@ export class Workspace extends Context.Service<Workspace, {
       checkoutPullRequest: (repo, id, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, id, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
       missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
-      reopen: (repo, agentId, branch, inOffice) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, inOffice)),
+      reopen: (repo, agentId, branch, aboard) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, aboard)),
       snapshot: (dir, message) => git('commit a WIP snapshot', () => ops.snapshot(dir, message)),
       branchState: (dir, branch, baseBranch) => git(`compare with origin's ${branch}`, () => ops.branchState(dir, branch, baseBranch)),
       sinceVerdict: (repo, number, baseBranch, sha) => git(`compare PR #${number} with ${sha.slice(0, 7)}`, () => ops.sinceVerdict(repo, number, baseBranch, sha)),
@@ -168,7 +168,7 @@ export class Sessions extends Context.Service<Sessions, {
   start(req: RunRequest, hooks: RunHooks): Effect.Effect<AgentSession, never, Scope.Scope>;
   /**
    * Opens a terminal on the captain's screen that starts a cloud session (`AgentRunner.cloudTerminal`). `read` is what
-   * it has shown so far; undefined when the office can't see it.
+   * it has shown so far; undefined when Ops can't see it.
    */
   cloudTerminal(req: CloudTerminalRequest): Effect.Effect<{ read: Effect.Effect<string | undefined> }, TerminalFailed>;
 }>()('focus/agents/Sessions') {
@@ -177,7 +177,7 @@ export class Sessions extends Context.Service<Sessions, {
     return Layer.succeed(Sessions, Sessions.of({
       cloudTerminal: (req) =>
         Effect.tryPromise({
-          try: () => (runner.cloudTerminal ? runner.cloudTerminal(req) : Promise.reject(new Error('This office has no terminal to open'))),
+          try: () => (runner.cloudTerminal ? runner.cloudTerminal(req) : Promise.reject(new Error('This Focus has no terminal to open'))),
           catch: (err) => new TerminalFailed({ reason: errorMessage(err) }),
         }).pipe(Effect.map((terminal) => ({ read: Effect.promise(() => terminal.read().catch(() => '')) }))),
       start: (req, hooks) =>
@@ -194,7 +194,7 @@ export class Sessions extends Context.Service<Sessions, {
   }
 }
 
-/** The office couldn't take a picture of an HTML page. */
+/** Ops couldn't take a picture of an HTML page. */
 export class RenderFailed extends Data.TaggedError('RenderFailed')<{ reason: string }> {
   override get message() {
     return this.reason;

@@ -1,6 +1,6 @@
 // Scorecard: measures Focus against its own standard, every number from a command run here, never from reading code by
 // eye: the gate (typecheck, lint, tests with coverage, build) and how long it takes, the fence (type assertions, `any`,
-// suppressions), how far the server is along the Effect path, the tests and CRAP, and the office's own health from the
+// suppressions), how far the server is along the Effect path, the tests and CRAP, and Ops' own health from the
 // ledger. It saves each one in the plugin's folder (~/.focus/plugins/scorecard/) and prints it with what changed since the one before
 // (scripts/scorecardRules.ts has the rules). It measures; it exits 0 whatever the numbers unless it couldn't measure.
 //
@@ -13,13 +13,13 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { officeLedger } from '../../../plugin-api/server';
+import { focusLedger } from '../../../plugin-api/server';
 import { scorecardsDir } from '../desk';
 import { noiseOf } from '../scorecard';
 import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, officeMetrics, promiseIo, propertyTestFiles, render, renderNoise, scanSource, testMetrics, typecheckErrors,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, opsMetrics, promiseIo, propertyTestFiles, render, renderNoise, scanSource, testMetrics, typecheckErrors,
   type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
@@ -59,7 +59,7 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
   // each failure by name, with the command that runs it again on its seed (vitest.setup.ts)
   for (const failure of vitest ? failedTests(vitest, ROOT, Number(process.env.FOCUS_TEST_SEED ?? 1)) : []) process.stderr.write(`    failed: ${failure.replaceAll('\n', '\n    ')}\n`);
   step('build');
-  // into a folder of its own: the office measures its own checkout, and may be serving dist/ from it
+  // into a folder of its own: Focus measures its own checkout, and may be serving dist/ from it
   const build = timed(bin('vite'), ['build', '--outDir', path.join(tmp, 'dist'), '--emptyOutDir']);
   const coverageFile = path.join(coverageDir, 'coverage-final.json');
   return {
@@ -119,9 +119,9 @@ function measure(): Scorecard {
   if (outside.length) process.stderr.write(`\nServer files doing I/O outside Effect (${outside.length}):\n  ${outside.join('\n  ')}\n`);
 
   const now = Date.now();
-  const { file: ledgerFile, events: ledger } = officeLedger();
-  if (!ledger) notes.push(`no ledger at ${ledgerFile}, so the office's numbers are missing`);
-  const office = ledger ? officeMetrics(ledger, now) : undefined;
+  const { file: ledgerFile, events: ledger } = focusLedger();
+  if (!ledger) notes.push(`no ledger at ${ledgerFile}, so Ops' numbers are missing`);
+  const ops = ledger ? opsMetrics(ledger, now) : undefined;
 
   return {
     v: 1,
@@ -138,9 +138,9 @@ function measure(): Scorecard {
         { total: gate.test.tests, files: tests.length, propertyFiles: propertyTestFiles(tests, code).length },
         coverageFile ? crapOf(coverageFile) : undefined,
       ),
-      ...(office?.metrics ?? []),
+      ...(ops?.metrics ?? []),
     ],
-    frictions: office?.frictions ?? [],
+    frictions: ops?.frictions ?? [],
     notes,
   };
 }

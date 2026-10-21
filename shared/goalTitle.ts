@@ -1,5 +1,5 @@
 /**
- * A goal's title from the captain's first words: their first line, cut at a word to about 60 characters. The office
+ * A goal's title from the captain's first words: their first line, cut at a word to about 60 characters. Ops
  * titles a goal with it as it starts, and the browser shows a goal waiting in line by it.
  */
 export function goalTitle(text: string): string {

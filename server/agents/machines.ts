@@ -7,7 +7,7 @@ import { EMPTY_RUN, evolve, journalMachine, type RunFact, type RunState } from '
 import { runMachine } from './runMachine';
 import { EMPTY_SLICE, evolveSlice, sliceMachine, type SliceFact, type SliceState } from './sliceJournal';
 
-// The office's state machines (docs/agents.md), each as data a drawing is made from (`machineGraph`), and where each
+// Focus's state machines (docs/agents.md), each as data a drawing is made from (`machineGraph`), and where each
 // run of one is now (`machineRuns`): an agent's run, what followed their last turn, a goal's slices, a pull request's
 // review, each read from its journal. The plugins get both (`PluginHost.machines`), and hear as a journal steps
 // (`machineStepped`).
@@ -56,15 +56,15 @@ export function leafOf(value: StateValue): string {
   return inner ? `${key}.${leafOf(inner)}` : key;
 }
 
-/** The office's machines, drawn: the order they're shown in. */
+/** Focus's machines, drawn: the order they're shown in. */
 export const MACHINES: readonly MachineGraph[] = [
   machineGraph(journalMachine, { id: 'run', title: 'A crew member’s run', about: 'Where an agent’s run is, from its journal: waiting, setting up, in a turn, delivering, held.', runs: 'crew member' }),
-  machineGraph(runMachine, { id: 'turn', title: 'What follows a turn', about: 'What the office does once a turn ends, by where it ran and how it ended.', runs: 'crew member' }),
+  machineGraph(runMachine, { id: 'turn', title: 'What follows a turn', about: 'What Ops does once a turn ends, by where it ran and how it ended.', runs: 'crew member' }),
   machineGraph(sliceMachine, { id: 'slice', title: 'A goal’s slices', about: 'A goal’s slice of work: shipped, reviewed, landed, and on to the next.', runs: 'goal' }),
   machineGraph(reviewMachine, { id: 'review', title: 'QA’s review', about: 'A pull request’s review by QA: queued, checked, tested, reported.', runs: 'pull request' }),
 ];
 
-/** What the office has that the machines' runs are read from (`Store.machineRuns`). */
+/** What Focus has that the machines' runs are read from (`Store.machineRuns`). */
 export interface RunSources {
   agents: readonly Agent[];
   projects: readonly Project[];

@@ -1,4 +1,4 @@
-// The office's briefing writer: a lead sends a brief (what to explain, and where its facts are) and a
+// Ops' briefing writer: a lead sends a brief (what to explain, and where its facts are) and a
 // read-only session writes the explainer from it, on the model, effort and speed the captain set for briefings
 // (`writerRun`), reading the lead's code and what they've said. The explain tool checks its receipts as it does a
 // lead's, and hands the session back what didn't hold up, once.
@@ -53,7 +53,7 @@ const WRITER_SYSTEM = `You write briefings for the captain of Focus: animated ex
 
 /** What the writer is asked: the brief written up, or, sent back, what to put right in what it wrote. */
 export function writerAsk(prompt: () => Promise<string>, fix?: Parameters<Write>[2]): Promise<string> | string {
-  return fix ? `The office checked your explainer, and these don't hold up yet:\n${fix.problems.join('\n')}\n\nFix them and send the whole explainer again.` : prompt();
+  return fix ? `Ops checked your explainer, and these don't hold up yet:\n${fix.problems.join('\n')}\n\nFix them and send the whole explainer again.` : prompt();
 }
 
 /** What a brief has taken so far: this run's seconds and cost, added to what the runs before it spent. */
@@ -62,8 +62,8 @@ export function spentSoFar(seconds: number, costUsd: number | undefined, before?
   return { seconds: seconds + spent.seconds, costUsd: costUsd === undefined ? spent.costUsd : costUsd + (spent.costUsd ?? 0) };
 }
 
-/** The office's writer: a read-only session on the captain's briefing setting, which notes what each brief cost. */
-export function officeWriter(host: PluginHost, state: PluginState<BriefingsState>, sources: Sources): Write {
+/** Ops' writer: a read-only session on the captain's briefing setting, which notes what each brief cost. */
+export function opsWriter(host: PluginHost, state: PluginState<BriefingsState>, sources: Sources): Write {
   // without its $schema line, which Claude Code's schema check doesn't know
   const { $schema: _, ...schema } = z.toJSONSchema(WRITTEN);
   return async (lead, brief, fix) => {

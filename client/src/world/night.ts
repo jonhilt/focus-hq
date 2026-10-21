@@ -12,7 +12,7 @@ export const FADE = 2.5;
 /** What a surface dimmed is multiplied by at full night (linear): about a seventh as bright, and bluer. */
 export const NIGHT = new THREE.Color().setRGB(0.12, 0.14, 0.22);
 /**
- * What a light is: darker still, since by day the office's lights add up to far more than a toon surface shows (its
+ * What a light is: darker still, since by day the ship's lights add up to far more than a toon surface shows (its
  * brightest band clips), so a light only a quarter as bright would still leave the walls nearly white.
  */
 export const NIGHT_LIGHT = new THREE.Color().setRGB(0.05, 0.06, 0.1);

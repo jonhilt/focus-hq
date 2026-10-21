@@ -1,7 +1,7 @@
 import type { GoalRecord } from './types';
 
 /**
- * Where a closed goal's repos were left, as the log says it: the branch each repo was on (its own, when the office
+ * Where a closed goal's repos were left, as the log says it: the branch each repo was on (its own, when Ops
  * renamed or moved it, or else the goal's), in one line. Undefined for a goal closed before branches were kept.
  */
 export function leftOn(goal: Pick<GoalRecord, 'branch' | 'repos'>): string | undefined {

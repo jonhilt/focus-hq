@@ -6,7 +6,7 @@ import type { Store } from './store';
 import { errorMessage, run } from './util';
 
 /**
- * What the office sends server/supervise.ts, before it starts closing, to be started again. A message rather than an
+ * What Focus sends server/supervise.ts, before it starts closing, to be started again. A message rather than an
  * exit code because how the process ends isn't entirely ours to decide: a native module can abort it on exit (onnxruntime
  * did on macOS, "mutex lock failed", before the crew's voices moved to a process of their own), and the restart must
  * survive that.
@@ -15,7 +15,7 @@ export const RESTART_MESSAGE = 'restart';
 
 const git = (args: string[]) => run('git', args, { cwd: config.root }).then((out) => out.trim());
 
-/** The commit this office is running, shown to browsers so they reload when it changes. */
+/** The commit this Focus is running, shown to browsers so they reload when it changes. */
 export async function currentVersion(): Promise<string> {
   return git(['rev-parse', '--short', 'HEAD']).catch(() => 'unknown');
 }
@@ -35,7 +35,7 @@ export function updateBlocked(s: { ahead: number; behind: number; dirty: boolean
 }
 
 /**
- * Keeps a running office on the latest code: when the Focus checkout's upstream branch (usually origin/main) moves,
+ * Keeps a running Focus on the latest code: when the Focus checkout's upstream branch (usually origin/main) moves,
  * fast-forward to it, reinstall and rebuild as needed, and restart. Waits until no agent is busy, because a restart
  * interrupts every running Claude session.
  */
@@ -102,11 +102,11 @@ export class Updater {
       return;
     }
 
-    // The package manager the update's lockfile asks for, found before merging, so an office without it stays as it is.
+    // The package manager the update's lockfile asks for, found before merging, so a Focus without it stays as it is.
     const lockfiles = (await git(['ls-tree', '--name-only', target])).split('\n');
     const pm = packageManagerFor(lockfiles);
     const install = dependenciesChanged((await git(['diff', '--name-only', 'HEAD', target])).split('\n'));
-    // In dev mode Vite serves the client from source, so only a production office needs a fresh build.
+    // In dev mode Vite serves the client from source, so only a production Focus needs a fresh build.
     const build = !config.dev;
     if ((install || build) && !(await run(pm, ['--version'], { cwd: config.root }).then(() => true, () => false))) {
       if (this.missingToldAt === target) return;

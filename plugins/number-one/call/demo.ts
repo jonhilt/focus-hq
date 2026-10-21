@@ -3,12 +3,12 @@ import { Jev, type JevAnswer, type JevAnswers, type JevQuestion } from './jev';
 import { Live, type LiveEvent, type Sideband, type SidebandListener } from './live';
 
 // The demo's calls: no OpenAI, no Jev. The captain's side is scripted, each line said once the ship has answered the
-// one before, and Jev's answers come from keywords, so the call's machine runs for real against the demo office.
+// one before, and Jev's answers come from keywords, so the call's machine runs for real against the demo ship.
 
-/** A line of the demo's captain: handed over to the office, or answered by the ship itself from its briefing. */
+/** A line of the demo's captain: handed over to Ops, or answered by the ship itself from its briefing. */
 export interface DemoLine {
   said: string;
-  /** What the ship says back without the office, while talking something through. */
+  /** What the ship says back without Ops, while talking something through. */
   ship?: string;
 }
 
@@ -81,7 +81,7 @@ function scriptedCaptain(listener: SidebandListener): Sideband {
     if (line === undefined) return;
     for (const word of line.said.split(/(?=\s)/)) emit({ type: 'session.input_transcript.delta', delta: word });
     if (line.ship === undefined) return later(200, () => emit({ type: 'session.delegation.created', delegation: { id: `demo_delegation_${next}`, target: 'client' } }));
-    // talking it through: the ship answers from its briefing, without the office
+    // talking it through: the ship answers from its briefing, without Ops
     const reply = line.ship;
     later(PAUSE_MS, () => emit({ type: 'session.output_transcript.delta', delta: reply }));
     later(PAUSE_MS * 2, say);
@@ -97,7 +97,7 @@ function scriptedCaptain(listener: SidebandListener): Sideband {
         return;
       }
       if (event.type !== 'session.commentary.append') return;
-      // the ship says what the office gave it, then the captain answers
+      // the ship says what Ops gave it, then the captain answers
       later(300, () => emit({ type: 'session.output_transcript.delta', delta: event.content.replace(/^Ask the captain: /, '') }));
       later(PAUSE_MS, say);
     },

@@ -1,5 +1,5 @@
-// The line between the core and its plugins (docs/plugins.md), as TypeScript resolves imports: a plugin reaches the
-// office only through plugin-api/ (testing.ts from its tests alone), another plugin only through that plugin's api.ts
+// The line between the core and its plugins (docs/plugins.md), as TypeScript resolves imports: a plugin reaches
+// Focus only through plugin-api/ (testing.ts from its tests alone), another plugin only through that plugin's api.ts
 // (what it lends the plugins that require it), and the core never reaches a plugin. boundary.test.ts holds the repo to it.
 import path from 'node:path';
 import ts from 'typescript';

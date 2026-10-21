@@ -1,11 +1,11 @@
-// The office's side of recording a run's flows (shared/flows.ts, `pnpm run record-flows`): with FOCUS_FLOWS set, each event
+// Focus's side of recording a run's flows (shared/flows.ts, `pnpm run record-flows`): with FOCUS_FLOWS set, each event
 // the hub sends is counted against the file that sent it, and each /api request against the browser's file that made
 // it (its FLOW_FROM_HEADER), and GET /api/flows hands over what's been counted. Off, it costs nothing.
 import type { NextFunction, Request, Response } from 'express';
 import { callerOf, FLOW_FROM_HEADER, FlowCounter, type FlowRecording, handlerOf } from '../shared/flows';
 import { config } from './config';
 
-/** Every event over /ws lands in the browser's mirror of the office. */
+/** Every event over /ws lands in the browser's mirror of the ship. */
 const WS_RECEIVER = 'client/src/net/state.ts';
 /** The recorder's own frames, and the hub's, which only pass an event on. */
 const PASSING_ON = ['server/flows.ts', 'server/hub.ts'];
@@ -45,5 +45,5 @@ export class FlowRecorder {
   }
 }
 
-/** The office's recorder, while FOCUS_FLOWS is set. */
+/** Focus's recorder, while FOCUS_FLOWS is set. */
 export const flowRecorder = process.env.FOCUS_FLOWS ? new FlowRecorder(config.root) : undefined;

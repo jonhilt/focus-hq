@@ -1,8 +1,8 @@
 // The astrometrics plugin in the browser: a screen in the holodeck of each project it's on for, showing one
-// of the office's state machines with where that project's runs of it are now, lit; E on it opens it up close, with a
+// of Ops' state machines with where that project's runs of it are now, lit; E on it opens it up close, with a
 // tab for each machine to toggle through, and the screen follows the one picked.
 import * as THREE from 'three';
-import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, type MachineRun, type MachineStep, makeCanvas, office, onPluginState, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, timeAgo, type Ui } from '../../plugin-api/client';
+import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, type MachineRun, type MachineStep, makeCanvas, focus, onPluginState, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, timeAgo, type Ui } from '../../plugin-api/client';
 import { INK, machineSvg } from './draw';
 import { ASTROMETRICS, type Astrometrics, type MachineLayout } from './shared';
 import { HALL_MACHINES, hallMachines } from './spot';
@@ -88,7 +88,7 @@ function closeUp(ui: Ui, projectId: string): void {
     body.replaceChildren(h('div', { class: 'am-tabs' }, ...buttons), h('p', { class: 'muted' }, view.layout.about), runButtons(view.layout, view.runs, view.run?.key, follow), drawing, ...(view.run ? [timeline(view.run, view.trail)] : []));
   };
   render();
-  const project = office.project(projectId);
+  const project = focus.project(projectId);
   ui.panels.open({ title: `State machines${project ? ` · ${project.name}` : ''}`, full: true, body });
   // it follows the runs while it's open
   ui.panels.own(onPluginState(ASTROMETRICS, () => void load()));
@@ -99,7 +99,7 @@ const SCREEN_PX = { w: 1280, h: 800 } as const;
 
 /** A screen in the holodeck of each project it's on for, over the pull request rack: built with the ship. */
 function ship(host: ShipHost): ShipPart | null {
-  const on = office.projects.filter((p) => pluginOn(p, ASTROMETRICS));
+  const on = focus.projects.filter((p) => pluginOn(p, ASTROMETRICS));
   if (!on.length) return null;
   const spot = hallMachines();
   const screens = on.flatMap((project) => {
@@ -157,7 +157,7 @@ const astrometrics: ClientPlugin = {
   id: ASTROMETRICS,
   project: {
     label: 'State machines',
-    about: 'Draws the office’s state machines (a crew member’s run, what follows a turn, a goal’s slices, QA’s review) on a screen in the project’s holodeck, with where its runs of each are now',
+    about: 'Draws Ops’ state machines (a crew member’s run, what follows a turn, a goal’s slices, QA’s review) on a screen in the project’s holodeck, with where its runs of each are now',
   },
   ship,
 };

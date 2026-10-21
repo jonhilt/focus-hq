@@ -2,12 +2,12 @@ import { describe, expect, it } from 'vitest';
 import { autonomyChangeLine, effectiveAutonomy, isAutonomy } from './autonomy';
 
 describe('effectiveAutonomy', () => {
-  it('follows the office setting when the agent has no mode of its own', () => {
+  it('follows the Focus-wide setting when the agent has no mode of its own', () => {
     expect(effectiveAutonomy({}, { autonomy: 'ask' })).toBe('ask');
     expect(effectiveAutonomy({ autonomy: undefined }, { autonomy: 'auto' })).toBe('auto');
   });
 
-  it("uses the captain's choice for the agent over the office setting", () => {
+  it("uses the captain's choice for the agent over the Focus-wide setting", () => {
     expect(effectiveAutonomy({ autonomy: 'full' }, { autonomy: 'ask' })).toBe('full');
     expect(effectiveAutonomy({ autonomy: 'ask' }, { autonomy: 'full' })).toBe('ask');
   });

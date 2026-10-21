@@ -3,7 +3,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import type { ServerEvent, Snapshot } from '../shared/types';
 import { flowRecorder } from './flows';
 
-/** Pushes office events to every open browser tab over a WebSocket at /ws. */
+/** Pushes the ship's events to every open browser tab over a WebSocket at /ws. */
 export class Hub {
   private wss: WebSocketServer | null = null;
 

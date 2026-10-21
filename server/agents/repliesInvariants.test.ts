@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { SessionFacts } from '../../shared/ledger';
 import type { Store } from '../store';
-import { office, restarted } from './fakeOffice';
+import { focus, restarted } from './fakeFocus';
 import { checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 
-// The captain's replies to leads kept in the ledger (docs/ledger.md), under the office's two rules (docs/invariants.md):
-// the leads' spans digested before replies were kept get theirs from the transcripts on disk as the office starts, each
-// span once, whether the office goes down part way through or two backfills run at once.
+// The captain's replies to leads kept in the ledger (docs/ledger.md), under Focus's two rules (docs/invariants.md):
+// the leads' spans digested before replies were kept get theirs from the transcripts on disk as Focus starts, each
+// span once, whether Focus goes down part way through or two backfills run at once.
 
 const facts: SessionFacts = { minutes: 1, turns: 1, toolCalls: 0, failedCalls: 0, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 0, captainMessages: 1, nudges: 0, officeMessages: 0, compactions: 0, qaFails: 0, conflicts: 0 };
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
@@ -35,7 +35,7 @@ type Kept = string[];
 const replies: Subject<Kept> = {
   name: 'captain replies',
   start: (later) => {
-    const first = office();
+    const first = focus();
     seed(first.store);
     const store = first.store;
     const kept = (): Kept => store.ledger.flatMap((e) => (e.kind === 'captain-replies' ? [`${e.key} ${e.replies.map((r) => `${r.lead} → ${r.captain}`).join(' | ')}`] : [])).sort();
@@ -44,10 +44,10 @@ const replies: Subject<Kept> = {
       agents.transcripts = () => Promise.resolve(Object.entries(transcripts).map(([sessionId, text]) => ({
         name: sessionId, kind: sessionId === 'dev' ? 'agent' as const : 'lead' as const, sessionId, read: () => later('read', () => Promise.resolve(text)),
       })));
-      // as the office starts again, it keeps what a backfill cut off left (server/index.ts)
+      // as Focus starts again, it keeps what a backfill cut off left (server/index.ts)
       let going: Promise<unknown> = starting ? agents.backfillReplies() : Promise.resolve();
       return {
-        actions: () => [{ name: 'the office keeps older replies', run: () => (going = Promise.all([going, agents.backfillReplies()])) }],
+        actions: () => [{ name: 'Focus keeps older replies', run: () => (going = Promise.all([going, agents.backfillReplies()])) }],
         durable: kept,
         settle: async () => void (await going),
         close: () => agents.shutDown(),
@@ -61,7 +61,7 @@ const replies: Subject<Kept> = {
   },
 };
 
-describe('the captain’s replies to leads, under the office’s two rules', () => {
+describe('the captain’s replies to leads, under Focus’s two rules', () => {
   it('reaches every lead span’s replies kept once, the developer’s left out', async () => {
     const r = await replies.start(now);
     await Promise.resolve(r.actions()[0].run());

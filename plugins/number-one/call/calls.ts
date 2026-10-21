@@ -10,15 +10,15 @@ import { topics } from './brief';
 import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
 import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type QueuedGoal, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
-// Calls to Number One: one at a time, each a gpt-live-1 session the office is the backend of. The
+// Calls to Number One: one at a time, each a gpt-live-1 session Ops is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.
 // Why three parts (the stack JFDI's voice mode ended up with): a realtime voice model holds the conversation, a fast
 // "System One" model (Jev) decides what was asked with calibrated confidence, and a state machine keeps each task on
 // rails, so anything consequential (a goal started, a word to a lead) happens only from confirming, on a clear yes in
 // the captain's own words.
 
-/** What a call needs from the office: how the ship stands, its log, and the acts the captain says yes to. */
-export interface CallOffice {
+/** What a call needs from Ops: how the ship stands, its log, and the acts the captain says yes to. */
+export interface CallHost {
   snapshot(): Promise<Snapshot>;
   ledger(): LedgerEvent[];
   startQueued(projectId: string, queueId: string, station: number): Agent;
@@ -31,11 +31,11 @@ export interface CallKeys {
   typesafe?: string;
 }
 
-/** Why the office can't take a call, worded for the Call button; undefined when it can. */
+/** Why Ops can't take a call, worded for the Call button; undefined when it can. */
 export function callsMissing(keys: CallKeys, demo: boolean): string | undefined {
   if (demo) return undefined;
   const missing = [!keys.openai && 'OPENAI_API_KEY', !keys.typesafe && 'TYPESAFE_API_KEY'].filter(Boolean);
-  return missing.length ? `Calls need ${missing.join(' and ')} set where the office starts` : undefined;
+  return missing.length ? `Calls need ${missing.join(' and ')} set where Focus starts` : undefined;
 }
 
 /** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
@@ -58,7 +58,7 @@ class Call {
   constructor(
     readonly id: string,
     private readonly runtime: Runtime,
-    private readonly office: CallOffice,
+    private readonly focus: CallHost,
     private readonly changed: () => void,
   ) {
     this.actor = createActor(
@@ -154,7 +154,7 @@ class Call {
    */
   private async route({ heard, scene }: RouteInput): Promise<Routing> {
     if (!heard) return { kind: 'say', text: "Sorry, I didn't catch that." };
-    const snapshot = await this.office.snapshot();
+    const snapshot = await this.focus.snapshot();
     const projects = shownProjects(snapshot.projects);
     const recent = this.lines.slice(0, -1);
     const answers = await this.runtime.runPromise(
@@ -164,24 +164,24 @@ class Call {
       }),
     );
     if (scene.capture) return dictated(scene.capture, heard, answers, callNotes(recent.slice(scene.topic ? this.topicFrom : 0)), scene.topic);
-    return decide({ snapshot, ledger: this.office.ledger(), now: Date.now(), scene }, answers);
+    return decide({ snapshot, ledger: this.focus.ledger(), now: Date.now(), scene }, answers);
   }
 
-  /** Does what the captain said yes to; the office checks again as it does (the goal still queued, a station free). */
+  /** Does what the captain said yes to; Ops checks again as it does (the goal still queued, a station free). */
   private act(act: Act): string {
     switch (act.kind) {
       case 'start-queued': {
-        const agent = this.office.startQueued(act.start.projectId, act.start.queueId, act.start.station);
+        const agent = this.focus.startQueued(act.start.projectId, act.start.queueId, act.start.station);
         return `Started: ${agent.name} has "${act.start.title}" at station ${(agent.lead?.station ?? act.start.station) + 1}.`;
       }
       case 'new-goal': {
-        const started = this.office.startGoal(act.projectId, act.text);
+        const started = this.focus.startGoal(act.projectId, act.text);
         return 'agent' in started
           ? `Started: ${started.agent.name} has "${act.title}" at station ${(started.agent.lead?.station ?? 0) + 1}.`
           : `Queued "${act.title}" in ${act.projectName}: every team station has a goal.`;
       }
       case 'tell-lead':
-        return 'sent' in this.office.message(act.leadId, act.text)
+        return 'sent' in this.focus.message(act.leadId, act.text)
           ? `Sent to ${act.leadName}.`
           : `Not sent yet: picking ${act.leadName}'s conversation back up on the API key needs your say, on the screens.`;
     }
@@ -191,7 +191,7 @@ class Call {
 /** What a capture waits on, for the strip. */
 const capturing = (capture: Capture) => (capture.kind === 'new-goal' ? `What should the new goal in ${capture.projectName} be?` : `What should I tell ${capture.leadName}?`);
 
-/** The office's calls: whether it can take one, and the one under way (or the last, once it's ended). */
+/** Ops' calls: whether it can take one, and the one under way (or the last, once it's ended). */
 export class Calls {
   private call: Call | null = null;
   private readonly runtime: Runtime | null;
@@ -200,7 +200,7 @@ export class Calls {
   /** `publish` tells every screen how the calls stand; `layer`: OpenAI and Jev, or the demo's stand-ins for them (tests bring their own). */
   constructor(
     private readonly publish: (status: CallStatus) => void,
-    private readonly office: CallOffice,
+    private readonly focus: CallHost,
     keys: CallKeys,
     demo: boolean,
     layer: Layer.Layer<Jev | Live> = demo ? Layer.mergeAll(DemoJev.layer, DemoLive.layer) : Layer.mergeAll(Jev.layer(keys.typesafe ?? ''), Live.layer(keys.openai ?? '')),
@@ -224,13 +224,13 @@ export class Calls {
         return yield* live.create(sdp);
       }),
     );
-    const call = new Call(session.id, runtime, this.office, () => this.changed(call));
+    const call = new Call(session.id, runtime, this.focus, () => this.changed(call));
     this.call = call;
     try {
       call.sideband = await runtime.runPromise(
         Effect.gen(function* () {
           const live = yield* Live;
-          return yield* live.attach(session.id, { event: (e) => call.event(e), closed: (why) => call.end(why && `The office lost the call: ${why}`) });
+          return yield* live.attach(session.id, { event: (e) => call.event(e), closed: (why) => call.end(why && `Ops lost the call: ${why}`) });
         }),
       );
     } catch (err) {

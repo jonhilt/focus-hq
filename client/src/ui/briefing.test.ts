@@ -10,7 +10,7 @@ describe('lastWords', () => {
     expect(lastWords(lines)).toBe('Done the first slice.\nShall I go on?');
   });
 
-  it('looks past what the office logs after the turn', () => {
+  it('looks past what Ops logs after the turn', () => {
     expect(lastWords([line('text', 'Over to you.'), line('success', 'Turn done'), line('system', 'idle')])).toBe('Over to you.');
   });
 
@@ -82,7 +82,7 @@ describe('shownThisTurn', () => {
     expect(shownThisTurn(art, [line('text', 'A, B or C?')]).map((a) => a.id)).toEqual(['b']);
   });
 
-  it('looks past the office’s notes of a hand raised and approved partway through the turn', () => {
+  it('looks past Ops’ notes of a hand raised and approved partway through the turn', () => {
     const lines = [
       { t: 10, kind: 'manager' as const, text: '▶ Captain: go' },
       { t: 25, kind: 'manager' as const, text: '✋ Waiting for the captain to approve Bash' },

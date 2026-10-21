@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { processesIn, reviewEnv } from './replayRules';
 
 describe('a replayed review’s environment', () => {
-  it('gives the old build a port and data folder of its own, never the live office’s', () => {
+  it('gives the old build a port and data folder of its own, never the live Focus’s', () => {
     const env = reviewEnv({ PATH: '/bin', PORT: '4477', FOCUS_DATA_DIR: '/Users/x/.focus' }, 51234, '/tmp/clone/.replay-data');
     expect(env).toMatchObject({ PATH: '/bin', PORT: '51234', HOST: '127.0.0.1', FOCUS_DATA_DIR: '/tmp/clone/.replay-data', FOCUS_AUTO_UPDATE: '0' });
   });

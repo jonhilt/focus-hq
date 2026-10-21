@@ -81,7 +81,7 @@ export function carryMergeable(previous: PullRequest[], fresh: PullRequest[]): P
   });
 }
 
-/** A pull request the office still holds work for: a QA review (`review`), or a lead's or a finished agent's (`seat`). */
+/** A pull request Ops still holds work for: a QA review (`review`), or a lead's or a finished agent's (`seat`). */
 export interface HeldPr {
   repo: string;
   number: number;
@@ -89,7 +89,7 @@ export interface HeldPr {
 }
 
 /**
- * The pull requests the office holds work for that have left the board, so GitHub is asked whether they merged or closed:
+ * The pull requests Ops holds work for that have left the board, so GitHub is asked whether they merged or closed:
  * QA reviews first, then the leads' PRs, then finished agents'. One opened a moment ago may not be listed yet, so it's
  * asked about rather than taken as closed; a repo GitHub couldn't list (named in `board.error`) is left until it can.
  */
@@ -110,8 +110,8 @@ export type RepoListing = { repo: string; issues: Issue[]; prs: PullRequest[] } 
 
 /**
  * A project's board from its repos' listings, oldest first. A repo GitHub couldn't list is named in `error`, one line
- * each, which is how the rest of the office knows to leave that repo's work alone until it can. Each issue carries the
- * PR the office closed for it, if any, and each PR keeps `previous`'s mergeability while GitHub works it out.
+ * each, which is how the rest of Focus knows to leave that repo's work alone until it can. Each issue carries the
+ * PR Ops closed for it, if any, and each PR keeps `previous`'s mergeability while GitHub works it out.
  */
 export function freshBoard(projectId: string, listings: RepoListing[], previous: PullRequest[], closed: ClosedPr[], updatedAt: number): Board {
   const listed = listings.flatMap((l) => ('error' in l ? [] : [l]));

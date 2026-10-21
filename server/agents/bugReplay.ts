@@ -23,7 +23,7 @@ export function pointsAt(report: QaReport, sites: BugSite[]): boolean {
 }
 
 /**
- * Which review a saved run is of. `proof`: the office's QA as it is now, which blocks a change only with proof that holds
+ * Which review a saved run is of. `proof`: Focus's QA as it is now, which blocks a change only with proof that holds
  * when it's checked (docs/qa.md#proof). Runs from before that are `qa` (QA's verdict on its say-so) or `hunt` (the
  * experiment it came from, the hunting guidance with the replay checking vitest proof files).
  */
@@ -136,7 +136,7 @@ export function pickControls(history: { sha: string; subject: string }[], exclud
   return Array.from({ length: Math.min(count, pool.length) }, (_, i) => pool[Math.floor(i * step + step / 2)]).filter((c) => c !== undefined);
 }
 
-/** Whether a commit changed the office's code (not only tests, docs or assets): a control has to be a change QA could find a bug in. */
+/** Whether a commit changed Focus's code (not only tests, docs or assets): a control has to be a change QA could find a bug in. */
 const CODE = /^(server|shared|plugins|plugin-api|client\/src)\/.*\.ts$/;
 export const changesCode = (files: string[]) => files.some((f) => CODE.test(f) && !f.endsWith('.test.ts'));
 

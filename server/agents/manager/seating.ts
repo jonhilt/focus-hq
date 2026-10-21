@@ -37,18 +37,18 @@ export class Seating extends Part {
     });
   }
 
-  /** The agent in the office whose PR this is: the one who opened it, or one seated on it since. */
+  /** The agent aboard whose PR this is: the one who opened it, or one seated on it since. */
   prOwner(repo: string, number: number): Agent | undefined {
     return [...this.store.agents.values()].find((a) => a.task !== 'review' && a.repo === repo && a.pr?.number === number);
   }
 
-  /** An agent of the office opened the PR (QA's review remembers it after they've gone home). */
+  /** One of Focus's agents opened the PR (QA's review remembers it after they've gone home). */
   openedByOffice(repo: string, number: number): boolean {
     return !!this.store.reviews.get(prKey(repo, number))?.openedByOffice
       || [...this.store.agents.values()].some((a) => (a.task === 'issue' || a.task === 'brief') && a.repo === repo && a.pr?.number === number);
   }
 
-  /** Someone in the office is working on the PR right now, or queued to. */
+  /** Someone aboard is working on the PR right now, or queued to. */
   busyOn(repo: string, number: number): boolean {
     const owner = this.prOwner(repo, number);
     return !!owner && !FINISHED.includes(owner.status);
@@ -102,7 +102,7 @@ export class Seating extends Part {
    * doesn't count against a room's limit: finished work gets reviewed before new work starts.
    */
   schedule(): void {
-    // shutting down: nobody new starts, whoever's in line starts when the office does
+    // shutting down: nobody new starts, whoever's in line starts when Focus does
     if (this.core.closing) return;
     const { start, wait } = whoStarts([...this.store.agents.values()], this.store.projects, this.store.settings.maxConcurrent);
     for (const { agent, why } of wait) this.update(agent, { activity: why });
@@ -133,7 +133,7 @@ export class Seating extends Part {
       const agent = this.store.agents.get(id);
       if (!agent) return;
       this.core.ledger.digestSession(agent, this.core.ledger.prsOf(agent));
-      // out of the office first, so their work, as it's interrupted, finds them gone
+      // off the ship first, so their work, as it's interrupted, finds them gone
       this.core.runtimes.get(id)?.session?.stop();
       this.core.runtimes.delete(id);
       for (const h of agent.helpers ?? []) this.store.dropLines(h.id);
@@ -150,7 +150,7 @@ export class Seating extends Part {
     });
   }
 
-  /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. `headSha` is the commit that merged, when the office knows it. */
+  /** Called when a PR an agent opened was merged or closed. The agent packs up and goes home. `headSha` is the commit that merged, when Ops knows it. */
   prClosed(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
     this.core.ledger.recordLanding(repo, number, merged, by, headSha);
     this.core.reviews.reviewGone(repo, number, merged);
@@ -170,7 +170,7 @@ export class Seating extends Part {
     ));
   }
 
-  /** Issues already claimed by an agent who is still in the office. */
+  /** Issues already claimed by an agent who is still aboard. */
   claimed(repo: string): Set<number> {
     return new Set([...this.store.agents.values()].filter((a) => a.repo === repo).map((a) => a.issue.number));
   }

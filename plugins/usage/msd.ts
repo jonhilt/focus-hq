@@ -5,7 +5,7 @@ import type { Usage } from './shared';
 
 const TONE: Record<UsageTone, string> = { ok: LCARS.sky, warn: LCARS.gold, bad: LCARS.red };
 
-/** The readout as the engineering panel has it, big enough to read from the gallery: a gauge per limit, and how the office signs in. */
+/** The readout as the engineering panel has it, big enough to read from the gallery: a gauge per limit, and how Focus signs in. */
 export function drawUsage(ctx: CanvasRenderingContext2D, b: Box, usage: Usage | null): void {
   const px = (f: number) => Math.round(b.h * f);
   ctx.textBaseline = 'top';

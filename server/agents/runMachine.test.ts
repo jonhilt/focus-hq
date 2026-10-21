@@ -75,7 +75,7 @@ describe('the run machine', () => {
     expect(after(state, outcome, over)).toBe(target);
   });
 
-  it('fails a turn signed in with the key behind the office’s back, before it counts as stopped', () => {
+  it('fails a turn signed in with the key behind Ops’ back, before it counts as stopped', () => {
     expect(after('local', failed('Stopped', { aborted: true }), {}, 'apiKeyHelper')).toBe('sign-in-mismatch');
   });
 

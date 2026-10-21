@@ -1,4 +1,4 @@
-// A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. The office keeps
+// A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. Ops keeps
 // them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
 
 import type { ChecksState, ClaudeTask, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';

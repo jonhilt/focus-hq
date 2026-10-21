@@ -1,5 +1,5 @@
 [Unit]
-Description=Focus: back up the office's state nightly
+Description=Focus: back up its state nightly
 
 [Timer]
 OnCalendar=*-*-* 03:30

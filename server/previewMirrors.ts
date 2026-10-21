@@ -210,7 +210,7 @@ function mirrorServer(port: number, target: string, tls: Tls | undefined): Serve
       if (!res.headersSent) res.writeHead(502, { 'content-type': 'text/plain' });
       res.end(`The preview isn't answering: ${errorMessage(err)}`);
     };
-    // a throw in here would take the office down with it
+    // a throw in here would take Focus down with it
     try {
       const upstream = http.request({ host: target, port, method: req.method, path: req.url, headers: localHeaders(req.headers, `${target}:${port}`) }, (answer) => {
         const headers = { ...answer.headers };

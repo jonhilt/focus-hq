@@ -1,14 +1,14 @@
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState, CallStatus } from '../shared';
-import { type CallOffice, Calls, callsMissing, stepOf } from './calls';
+import { type CallHost, Calls, callsMissing, stepOf } from './calls';
 import { Jev, type JevAnswers } from './jev';
 import { Live, type LiveClientEvent, type LiveEvent, type SidebandListener } from './live';
 import { SETTLE_MS } from './machine';
 import { type Agent, type MessageReply, type Project, type Snapshot } from '../../../plugin-api/server';
 
-// A call end to end through the office's side: stand-ins for OpenAI's session (what the office sends over its
-// sideband, and events played into it), for Jev (answers in turn) and for the office (a project with a goal queued).
+// A call end to end through Ops' side: stand-ins for OpenAI's session (what Ops sends over its
+// sideband, and events played into it), for Jev (answers in turn) and for Ops (a project with a goal queued).
 
 const shop = { id: 'p1', name: 'Shop', repos: ['acme/shop'], goalQueue: [{ id: 'q1', text: 'Voice mode', at: 0 }] } as Project;
 const snapshot = { info: { github: { ok: true, login: 'captain' } }, projects: [shop], agents: [], boards: [], reviews: [] } as unknown as Snapshot;
@@ -30,7 +30,7 @@ function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true 
   const started: [string, string, number][] = [];
   const goals: [string, string][] = [];
   const messages: [string, string][] = [];
-  const office: CallOffice = {
+  const focus: CallHost = {
     snapshot: () => Promise.resolve(ship),
     ledger: () => [],
     startQueued: (projectId, queueId, station) => {
@@ -46,7 +46,7 @@ function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true 
       return messageReply;
     },
   };
-  const calls = new Calls((status) => void events.push(status), office, { openai: 'sk', typesafe: 'ts' }, false, Layer.mergeAll(live, jev));
+  const calls = new Calls((status) => void events.push(status), focus, { openai: 'sk', typesafe: 'ts' }, false, Layer.mergeAll(live, jev));
   /** The captain says something, and the voice model hands it over. */
   const say = async (text: string, delegation: string) => {
     for (const e of [
@@ -141,14 +141,14 @@ describe('Calls', () => {
 
   it("won't take a call without both keys", async () => {
     const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
-    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where the office starts', call: null });
+    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where Focus starts', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TYPESAFE_API_KEY');
   });
 });
 
 describe('callsMissing', () => {
   it('names each missing key, and needs none in the demo', () => {
-    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where the office starts');
+    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where Focus starts');
     expect(callsMissing({ openai: 'a', typesafe: 'b' }, false)).toBeUndefined();
     expect(callsMissing({}, true)).toBeUndefined();
   });

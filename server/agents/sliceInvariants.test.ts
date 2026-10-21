@@ -4,11 +4,11 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
 import { leadWorktreeId } from './lead';
-import { office, restarted } from './fakeOffice';
+import { focus, restarted } from './fakeFocus';
 import { type Action, checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 import type { WorkspaceOps } from './types';
 
-// A goal lead's slices, under the office's two rules (docs/invariants.md): a restart is atomic, and two things at once
+// A goal lead's slices, under Focus's two rules (docs/invariants.md): a restart is atomic, and two things at once
 // end as one after the other would. A slice ships (its pull requests pushed and opened), lands (each merged), and moves
 // on to fresh code (checkouts gone and made again, what never shipped brought over), each told by the slice journal
 // (sliceJournal.ts). Described here (what can happen to a lead's slices, what must survive), not told what to expect.
@@ -62,14 +62,14 @@ const pr = (p: { repo: string; number: number; outcome?: string }) => `${p.repo}
 /**
  * The lead's slices, from a goal just set up, or (`shipped`) with its first slice shipped (and their turn ended). `only`: the actions
  * offered, by name, when a check is after one thing. `landsMidTurn`: whether the captain can merge the slice's last pull request while the lead's turn
- * is under way. The office moves a landed slice on at the start of the lead's next turn, and a restart starts one (the
+ * is under way. Ops moves a landed slice on at the start of the lead's next turn, and a restart starts one (the
  * resumed turn), so a slice that landed mid-turn moves on a turn early after a restart: by design, and nothing half-done,
  * but not what the rule for a restart allows. The restart check leaves that case out; the check for two at once has it.
  */
 const slices = ({ landsMidTurn, shipped = false, only }: { landsMidTurn: boolean; shipped?: boolean | 'and their turn ended'; only?: RegExp }): Subject<Kept> => ({
   name: 'slices',
   start: async (start) => {
-    // GitHub, kept across lives as GitHub keeps it: the pull requests the office opens asked for through `later`
+    // GitHub, kept across lives as GitHub keeps it: the pull requests Ops opens asked for through `later`
     const gh = Effect.runSync(Effect.provide(GitHub, demoLayer));
     const opened: { repo: string; number: number; branch: string; merged?: boolean }[] = [];
     const github = (later: Later) =>
@@ -91,7 +91,7 @@ const slices = ({ landsMidTurn, shipped = false, only }: { landsMidTurn: boolean
     // the goal's own setting up (its first checkouts) isn't what's under test: it's done before the first action
     let setUp = false;
     const later: Later = (label, work) => (setUp ? start(label, work) : work());
-    const first = office(workspace(later, disk), github(later));
+    const first = focus(workspace(later, disk), github(later));
     // QA's reviews are held to the rules on their own (reviewInvariants.test.ts)
     first.project.autoQa = false;
     const started = first.agents.startGoal(first.project.id, 'Saved items');
@@ -116,7 +116,7 @@ const slices = ({ landsMidTurn, shipped = false, only }: { landsMidTurn: boolean
         told: [1, 2, 3].filter((n) => heard.some((h) => h.includes(`Slice ${n} has landed`))),
       };
     };
-    const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude'>): Running<Kept> & { all: () => Action[] } => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>): Running<Kept> & { all: () => Action[] } => {
       const ended = new Set<number>();
       // Claude Code calls a tool that changes things (ship isn't marked read-only) one at a time: never two ships at once
       let shipping = false;
@@ -193,7 +193,7 @@ const slices = ({ landsMidTurn, shipped = false, only }: { landsMidTurn: boolean
   },
 });
 
-describe('a lead’s slices, under the office’s two rules', () => {
+describe('a lead’s slices, under Focus’s two rules', () => {
   // a description that never got a slice shipped, landed and moved on would pass both rules and prove nothing
   it('reaches a slice shipped, landed and moved on to fresh code, taken one at a time', async () => {
     const s = await slices({ landsMidTurn: true }).start(now);

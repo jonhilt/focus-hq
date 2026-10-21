@@ -1,8 +1,8 @@
 import { fieldsOf } from '../../shared/records';
 import type { ClaudeTask } from '../../shared/types';
 
-// The task list an agent keeps for itself with Claude Code's task tools, followed from its session's messages: the
-// office watches it, and never asks for one or changes how the agent keeps it.
+// The task list an agent keeps for itself with Claude Code's task tools, followed from its session's messages: Ops
+// watches it, and never asks for one or changes how the agent keeps it.
 
 /** The tools an agent keeps its task list with. */
 export const TASK_TOOLS = new Set(['TodoWrite', 'TaskCreate', 'TaskUpdate', 'TaskList']);

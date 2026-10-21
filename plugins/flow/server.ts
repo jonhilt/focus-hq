@@ -8,7 +8,7 @@ import { FLOW, type FlowPluginState } from './shared';
 const flow: FocusPlugin = {
   id: FLOW,
   start(host) {
-    // worked out again as the office starts, from the transcripts and the ledger, so there's nothing to save
+    // worked out again as Focus starts, from the transcripts and the ledger, so there's nothing to save
     const flows = new Flows(host, host.state<FlowPluginState>(() => ({ leads: {} }), { saved: false }));
     void flows.all();
     return {

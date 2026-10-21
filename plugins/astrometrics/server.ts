@@ -1,4 +1,4 @@
-// The astrometrics plugin: the office's state machines, each laid out once as the office starts, and
+// The astrometrics plugin: Ops' state machines, each laid out once as Focus starts, and
 // where every run of them is now, kept up to date as their journals step, for the holodeck's screen to draw.
 // FOCUS_PLUGINS=astrometrics.
 import { errorMessage, type FocusPlugin } from '../../plugin-api/server';
@@ -11,7 +11,7 @@ const SETTLE_MS = 200;
 const astrometrics: FocusPlugin = {
   id: ASTROMETRICS,
   start(host) {
-    // read again as the office starts, from the machines' code and their journals
+    // read again as Focus starts, from the machines' code and their journals
     const state = host.state<Astrometrics>(freshAstrometrics, { saved: false });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const refresh = () => {

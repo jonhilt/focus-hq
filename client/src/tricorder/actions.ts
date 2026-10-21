@@ -2,7 +2,7 @@ import { confirmDialog } from '../ui/confirmDialog';
 import { h } from '../ui/dom';
 
 /**
- * The Tricorder's API buttons. Screens re-render whenever the office changes, so a call's in-flight state and its error
+ * The Tricorder's API buttons. Screens re-render whenever Focus's state changes, so a call's in-flight state and its error
  * live here by key rather than on the button: a re-render mid-call keeps the button disabled and the error in view.
  * Keys are `<scope>:<verb>`, so `errors(scope)` shows everything that went wrong on one card.
  */

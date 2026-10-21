@@ -101,7 +101,7 @@ export class Leads extends Part {
     const project = this.store.project(projectId);
     const goal = (project.goals ?? []).find((g) => g.id === goalId);
     if (!goal) throw new Refused({ message: 'That goal isn’t in the room’s log' });
-    if (!reopenable(goal)) throw new Refused({ message: `“${goal.title}” closed before the office kept its branch, so it can’t be reopened` });
+    if (!reopenable(goal)) throw new Refused({ message: `“${goal.title}” closed before Ops kept its branch, so it can’t be reopened` });
     if (this.store.agents.has(goal.id)) throw new Refused({ message: `“${goal.title}” is already under way` });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
     const free = pickStation(leads.map((a) => a.lead?.station ?? 0), station) ?? pickStation(leads.map((a) => a.lead?.station ?? 0));
@@ -241,7 +241,7 @@ export class Leads extends Part {
   }
 
   /**
-   * After a restart: a close the office went down in the middle of (`closeStarted`) is finished, rather than the lead
+   * After a restart: a close Focus went down in the middle of (`closeStarted`) is finished, rather than the lead
    * picking up a goal whose work is part committed as WIP snapshots. A close that fails then leaves the goal open, and
    * its lead's run picks back up (`recoverAgent`). The leads it's finishing a close for.
    */
@@ -409,12 +409,12 @@ export class Leads extends Part {
     if (sliceLanded(prs)) {
       this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
       // a lead in the middle of a turn carries on: their repos only move at the start of the next one
-      this.core.comms.message(lead.id, (this.rt(lead.id).busy ? landedMidTurnNote : landedNote)(lead.lead), 'Office');
+      this.core.comms.message(lead.id, (this.rt(lead.id).busy ? landedMidTurnNote : landedNote)(lead.lead), 'Ops');
     }
     return true;
   }
 
-  /** The leads' pull requests still open, for the office to notice when they're merged or closed on GitHub. */
+  /** The leads' pull requests still open, for Ops to notice when they're merged or closed on GitHub. */
   leadPrs(projectId: string): { repo: string; number: number }[] {
     return this.store.agentsIn(projectId).flatMap((a) => (a.task === 'lead' ? (a.lead?.prs ?? []).filter((p) => !p.outcome) : []));
   }

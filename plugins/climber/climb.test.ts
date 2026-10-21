@@ -103,10 +103,10 @@ describe('reading a climb’s pull request', () => {
     expect(climbTarget('Target: none, the scorecard can’t see it')).toBeUndefined();
   });
 
-  it('keeps the captain’s own words, not the office’s reports posted from the same account, nor a bot’s', () => {
+  it('keeps the captain’s own words, not Ops’ reports posted from the same account, nor a bot’s', () => {
     const comments = [
       { author: 'jonhilt', body: '## 🔍 QA report: ✅ Passed\nAll good.' },
-      { author: 'jonhilt', body: '🧭 Lt. Abara, the Focus office’s operations officer, closed this pull request: stuck.' },
+      { author: 'jonhilt', body: '🧭 Lt. Abara, operations officer aboard the Focus, closed this pull request: stuck.' },
       { author: 'qodo-code-review', body: '<!-- qodo:billing-blocked -->\nTrial ended.' },
       { author: 'someone-bot', body: 'Beep.' },
       { author: 'jonhilt', body: 'Not this: the fence matters less than the gate’s time right now.' },
@@ -233,7 +233,7 @@ describe('the brief’s memory', () => {
 describe('climbHome', () => {
   const projects = [{ id: 'shop', repos: ['acme/shop'] }, { id: 'focus', repos: ['acme/api', REPO] }];
 
-  it('is the project with the office’s own repo', () => {
+  it('is the project with Focus’s own repo', () => {
     expect(climbHome(projects, REPO, false)).toEqual({ projectId: 'focus', repo: REPO });
   });
 

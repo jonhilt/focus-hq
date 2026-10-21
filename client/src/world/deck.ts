@@ -6,7 +6,7 @@ import { type Box2, contains, footprint, type Seat } from './layout';
 import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { dimsAtNight } from './night';
-import type { Place } from './office';
+import type { Place } from './ship';
 import { consoleTexture, lcarsSign, readoutTexture, SlidingDoors, starChartTexture, touchPanelTexture } from './starship';
 import { viewportGlass } from './starfield';
 import { tiled } from './textures';

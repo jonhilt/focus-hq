@@ -113,7 +113,7 @@ export function routingQuestions(projects: Pick<Project, 'id' | 'name'>[], optio
   };
 }
 
-const WHO = { captain: 'Captain', ship: 'Ship', office: 'Office' } as const;
+const WHO = { captain: 'Captain', ship: 'Ship', office: 'Ops' } as const;
 
 /** What Jev reads: the projects, the topic, what waits on the captain, the call so far, and what the captain just said. */
 export function routingState(projects: Pick<Project, 'id' | 'name'>[], heard: string, recent: CallLine[], scene: CallScene = {}): string {
@@ -231,7 +231,7 @@ function act(d: Deciding, action: Action, answers: JevAnswers): Routing {
       return captureForLead(d.snapshot, answers, topic);
     case 'other':
       return topic
-        ? { kind: 'say', text: 'Nothing for the office to do there: carry on talking it through from the briefing.', quiet: true }
+        ? { kind: 'say', text: 'Nothing for Ops to do there: carry on talking it through from the briefing.', quiet: true }
         : { kind: 'say', text: 'By voice I can tell you how things stand, start the next queued goal, or talk something through with you.' };
   }
 }

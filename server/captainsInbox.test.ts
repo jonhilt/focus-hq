@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { office, until } from './agents/fakeOffice';
+import { focus, until } from './agents/fakeFocus';
 import type { CosRead } from '../shared/types';
 import { Inbox } from './captainsInbox';
 import { AUTO_SEND_MS } from '../shared/tricorder';
 import type { FocusPlugin } from './plugins/contract';
 
-/** An office with a lead whose first turn has ended, waiting on the captain, and its inbox. */
+/** A Focus with a lead whose first turn has ended, waiting on the captain, and its inbox. */
 async function waitingLead() {
-  const o = office();
+  const o = focus();
   const inbox = new Inbox(o.store, { agents: o.agents, githubLogin: undefined });
   const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
   await until(() => o.claude.turns.length === 1);
@@ -66,9 +66,9 @@ describe('the captain’s inbox, as the API serves it', () => {
   });
 });
 
-/** An office whose leads' turns a plugin judges, as the chief of staff does, with `judged` for each. */
+/** A Focus whose leads' turns a plugin judges, as the chief of staff does, with `judged` for each. */
 async function judgedLead(judged: NonNullable<CosRead['judged']>, { autoSend = false, since = Date.now }: { autoSend?: boolean; since?: () => number } = {}) {
-  const o = office();
+  const o = focus();
   o.project.cosAutoSend = autoSend;
   const judge: FocusPlugin = {
     id: 'judge',

@@ -7,7 +7,7 @@ Each project's architecture, as a map that keeps up with its code. A repo keeps 
 - **Which code belongs to which part.** Each part names its paths: a folder (ending in `/`) or a file. When paths overlap, the longest wins, so a part can claim a file out of another part's folder.
 - **Its views.** Each view is a question the map answers, with the parts it takes to answer it.
 
-Nobody draws the connections. The office reads what every source file uses of the others, in the languages it knows (`languages.ts`, a reader per language behind the one interface), and adds them up part to part, so a connection on the map is one the code makes, and says what goes across it. Tests are left out, since they import whatever they test. A Java repo's model names its parts by folder, like any other: `paths: [src/main/java/org/springframework/samples/petclinic/owner/]`.
+Nobody draws the connections. Ops reads what every source file uses of the others, in the languages it knows (`languages.ts`, a reader per language behind the one interface), and adds them up part to part, so a connection on the map is one the code makes, and says what goes across it. Tests are left out, since they import whatever they test. A Java repo's model names its parts by folder, like any other: `paths: [src/main/java/org/springframework/samples/petclinic/owner/]`.
 
 ```yaml
 parts:
@@ -26,7 +26,7 @@ views:
 A browser and its server don't import each other: they talk over HTTP and WebSockets. A repo can keep a recorded run of that traffic beside its model, in `.focus/cartography-flows.json` (`shared/flows.ts`): each kind of message (an event's type, or a request's method and route), which file sent it, which received it, and how often, with what the run was and the commit it was recorded on.
 
 ```json
-{ "run": "the demo office at speed 3 for 120 s…", "commit": "eec5747…",
+{ "run": "the demo ship at speed 3 for 120 s…", "commit": "eec5747…",
   "flows": [{ "via": "ws", "name": "agent", "from": "server/agents/manager/core.ts", "to": "client/src/net/state.ts", "count": 36 }] }
 ```
 
@@ -38,7 +38,7 @@ Every map with a git history has a **changes** view too (`history.ts`): hotspots
 
 ## Diagrams leads draw, kept
 
-The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with the office's `model` tool ([docs/goals.md](../../docs/goals.md)). Cartography keeps it with the project, so it's there after the goal closes:
+The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with Ops' `model` tool ([docs/goals.md](../../docs/goals.md)). Cartography keeps it with the project, so it's there after the goal closes:
 
 - **What's kept**: a model of how the code works. One of what a change does (parts or connections marked added, changed or removed) is about a slice, and goes stale the moment it merges, so it isn't kept.
 - **Out of date**: when a file it cites has changed or gone on the default branch. It's a warning: the diagram may still be right, but the code under it has moved.
@@ -46,7 +46,7 @@ The diagram most worth having is the one asked for: the captain asks a lead how 
 
 ## A lead's map tool
 
-The plugin adds `mcp__office__map` to every goal lead's office (`leadTool.ts`), so a lead puts a view on their station's screen with one call rather than drawing a diagram of the system afresh. With no view, it lists each repo's views; with a view (or `whole`, or `changes`), it maps the lead's own checkout, uncommitted work and all.
+The plugin adds `mcp__office__map` to every goal lead's toolkit (`leadTool.ts`), so a lead puts a view on their station's screen with one call rather than drawing a diagram of the system afresh. With no view, it lists each repo's views; with a view (or `whole`, or `changes`), it maps the lead's own checkout, uncommitted work and all.
 
 When no view answers what a lead wants to show, they add one to the model in their slice, a question and its parts, and show it at once; once it merges, every later goal has it. A view reads best with up to about nine parts.
 

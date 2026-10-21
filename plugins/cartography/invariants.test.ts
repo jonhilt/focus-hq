@@ -8,7 +8,7 @@ import type { KeptDiagram } from './diagrams';
 import { DiagramKeeper } from './keeper';
 import type { CartographyState } from './shared';
 
-// The diagrams the office keeps, under its two rules (docs/invariants.md): a restart is atomic, and two things done to
+// The diagrams Ops keeps, under its two rules (docs/invariants.md): a restart is atomic, and two things done to
 // them at once end as one after the other would. Described here (what can be done, what must survive), not told what
 // to expect.
 
@@ -26,7 +26,7 @@ const keeper: Subject<Record<string, unknown>[]> = {
     fs.mkdirSync(path.join(data, 'diagrams'));
     fs.writeFileSync(path.join(data, 'diagrams', 'index.json'), JSON.stringify({ shop: [kept('a'), kept('b')] }));
     for (const id of ['a', 'b']) fs.writeFileSync(path.join(data, 'diagrams', `${id}.html`), '<p>first</p>');
-    // a life of the office: its plugin state isn't kept between lives (the keeper's own files are)
+    // a life of Focus: its plugin state isn't kept between lives (the keeper's own files are)
     const life = (draw: Later): Running<Record<string, unknown>[]> => {
       let saved: CartographyState = { maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {} };
       const state = { get: () => saved, set: (patch) => (saved = { ...saved, ...patch }) } as PluginState<CartographyState>;
@@ -52,7 +52,7 @@ const keeper: Subject<Record<string, unknown>[]> = {
   },
 };
 
-describe('the kept diagrams, under the office’s two rules', () => {
+describe('the kept diagrams, under Focus’s two rules', () => {
   it('end a restart as if what was under way had never started, or had finished', async () => {
     await checkRestart(keeper, { runs: 30 });
   });

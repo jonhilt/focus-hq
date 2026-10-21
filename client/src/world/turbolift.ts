@@ -1,5 +1,5 @@
 import type * as THREE from 'three';
-import type { Place } from './office';
+import type { Place } from './ship';
 
 /** How far from a stop you can be and still be at it: anywhere in its car, or at its call panel. */
 const AT_STOP = 2.5;

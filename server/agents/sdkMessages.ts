@@ -378,7 +378,7 @@ function rateLimit(msg: SDKRateLimitEvent, ctx: RunContext, hooks: RunHooks): vo
   hooks.activity(null, notice.activity);
 }
 
-/** Whether a session that's hit your plan's limit stops to carry on with the key: a local one on your plan, once the office says so. */
+/** Whether a session that's hit your plan's limit stops to carry on with the key: a local one on your plan, once Ops says so. */
 export function switchesToKey(ctx: Pick<RunContext, 'onKey' | 'cloud'>, keyNow: () => boolean): boolean {
   return !ctx.onKey && !ctx.cloud && keyNow();
 }

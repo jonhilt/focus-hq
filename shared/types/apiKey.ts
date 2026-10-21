@@ -20,7 +20,7 @@ export type ResumeHow = 'key' | 'wait';
 export type MessageReply = { sent: true } | { costly: ResumeCost };
 
 /**
- * Where the office stands on your plan and your API key, as its new sessions sign in: 'login', your plan; 'key', your
+ * Where Focus stands on your plan and your API key, as its new sessions sign in: 'login', your plan; 'key', your
  * API key; 'fallback', your plan, then the key while the plan's usage limit is reached.
  */
 export interface SignIn {

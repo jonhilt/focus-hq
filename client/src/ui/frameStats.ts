@@ -26,8 +26,8 @@ interface Drawn {
  * How the 3D view is running, shown with `?stats=1`: frame rate and time, the pixel ratio it's drawn at
  * (resolution.ts), draw calls and the GPU. So anyone can say how it runs on their
  * machine: the GPU's name is what makes a report from someone else's machine useful. It's logged too: a sample a
- * second, and each hitch with what came with it, sent to the office, which keeps them in its data folder
- * (frame-stats/<session>.jsonl, server/frameStats.ts), so a run on a laptop elsewhere can be read where the office is.
+ * second, and each hitch with what came with it, sent to Focus, which keeps them in its data folder
+ * (frame-stats/<session>.jsonl, server/frameStats.ts), so a run on a laptop elsewhere can be read where Focus runs.
  */
 export class FrameStats {
   /** Where the camera is (World.locationOf), for the log. */
@@ -84,7 +84,7 @@ export class FrameStats {
       gpuTimer: !!this.timer,
     });
     addEventListener('pagehide', () => this.send());
-    // once the office is built and warmed up, while the splash screen's still up
+    // once the ship is built and warmed up, while the splash screen's still up
     setTimeout(() => this.lines.push(benchUploads(renderer)), BENCH_AFTER);
   }
 
@@ -161,7 +161,7 @@ export class FrameStats {
     this.counted.buffers = 0;
   }
 
-  /** Sends the lines so far to the office: every few seconds, and as the page closes. */
+  /** Sends the lines so far to Focus: every few seconds, and as the page closes. */
   private send(now = performance.now()): void {
     this.lastSend = now;
     const lines = this.lines;
@@ -191,7 +191,7 @@ export class FrameStats {
 
   /**
    * Logs each task that kept the main thread busy over 50 ms (a long task): one of the frames, or work between them
-   * that `busy` doesn't see, like handling a burst of the office's messages, or the garbage collector.
+   * that `busy` doesn't see, like handling a burst of Focus's messages, or the garbage collector.
    */
   private watchLongTasks(): void {
     if (!PerformanceObserver.supportedEntryTypes?.includes('longtask')) return;

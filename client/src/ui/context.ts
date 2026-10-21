@@ -1,6 +1,6 @@
 import type { Trace, TraceSubject } from '../../../shared/ledgerReview';
 import type { AgentView } from './agentPanel';
-import type { Place } from '../world/office';
+import type { Place } from '../world/ship';
 import type { Hud } from './hud';
 import type { Panels } from './panels';
 

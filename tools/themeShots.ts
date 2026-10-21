@@ -1,10 +1,10 @@
-// Screenshots of the office's interface (the splash, HUD, panels and the screens round the ship) from a running demo
-// office, to compare its look before and after a change: `tsx tools/themeShots.ts <url> <out dir> [a.css,b.css]`,
+// Screenshots of Focus's interface (the splash, HUD, panels and the screens round the ship) from a running demo
+// ship, to compare its look before and after a change: `tsx tools/themeShots.ts <url> <out dir> [a.css,b.css]`,
 // laying the stylesheets (if any) over the page in order, to try a look out before building it.
 import { mkdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Page } from 'playwright';
-import { launchBrowser } from './demoOffice';
+import { launchBrowser } from './demoShip';
 
 const [url = 'http://127.0.0.1:5173/', out = 'smoke-shots/theme', css = ''] = process.argv.slice(2);
 
@@ -18,7 +18,7 @@ async function shot(page: Page, name: string, act: string): Promise<void> {
   console.log(`  ${name}`);
 }
 
-// going somewhere drops the pointer lock, which pauses the office, so the pause panel is closed once it's up
+// going somewhere drops the pointer lock, which pauses the ship, so the pause panel is closed once it's up
 const settle = 'setTimeout(() => ui.panels.close(), 600);';
 const place = (label: string) => `ui.goTo(ui.places().find((p) => p.label.includes(${JSON.stringify(label)}))); ${settle}`;
 const lead = `[...state.agents.values()].find((a) => a.task === 'lead').id`;
@@ -40,7 +40,7 @@ try {
   await shot(page, 'board', 'ui.openBoard(state.projects[0].id)');
   await shot(page, 'chart', `ui.openChart(${lead})`);
   await shot(page, 'teleport', 'ui.openTeleport()');
-  await shot(page, 'pause', 'ui.goTo(ui.places()[0])' /* the pointer lock lost pauses the office */);
+  await shot(page, 'pause', 'ui.goTo(ui.places()[0])' /* the pointer lock lost pauses the ship */);
   await shot(page, 'engineering-panel', 'ui.openEngineering()');
   await shot(page, 'engineering', place('Engineering'));
   await shot(page, 'ready-room', place('Ready room'));

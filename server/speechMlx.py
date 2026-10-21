@@ -1,6 +1,6 @@
-# Kokoro on the Apple GPU, through mlx-audio: the crew's voices when the office runs on Apple Silicon (server/speech.ts
-# starts it with uv, and says why). It speaks the same messages as server/speechWorker.ts, one JSON object a line: the
-# office's on stdin, its own on stdout, the WAVs base64. Anything a library prints goes to stderr, so stdout stays ours.
+# Kokoro on the Apple GPU, through mlx-audio: the crew's voices when Focus runs on Apple Silicon (server/speech.ts
+# starts it with uv, and says why). It speaks the same messages as server/speechWorker.ts, one JSON object a line:
+# Focus's on stdin, its own on stdout, the WAVs base64. Anything a library prints goes to stderr, so stdout stays ours.
 import base64
 import io
 import json
@@ -59,7 +59,7 @@ for line in sys.stdin:
                 for voice in message.get("voices") or ["af_heart", "bf_emma"]:
                     say("Ready.", voice)
             tell({"type": "ready"})
-        except Exception as err:  # noqa: BLE001 - the office falls back to Kokoro on the CPU, whatever went wrong
+        except Exception as err:  # noqa: BLE001 - Focus falls back to Kokoro on the CPU, whatever went wrong
             tell({"type": "failed", "error": str(err)[:500]})
     elif message.get("type") == "speak":
         try:

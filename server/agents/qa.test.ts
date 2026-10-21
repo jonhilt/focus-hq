@@ -109,7 +109,7 @@ describe('filesSection', () => {
     ]);
   });
 
-  it('drops the opened column when the office couldn’t read QA’s tool calls, and folds a long table away', () => {
+  it('drops the opened column when Ops couldn’t read QA’s tool calls, and folds a long table away', () => {
     const many = Array.from({ length: 13 }, (_, i) => `src/f${i}.ts`);
     const lines = filesSection(report({ files }), { changed: many });
     expect(lines[3]).toBe('**13** changed files · **13** code files with no test · **13** left out of QA\'s report');
@@ -214,7 +214,7 @@ describe('QA instructions', () => {
 `);
   });
 
-  it('name the repo’s checks when the office knows them, else leave QA to work them out', () => {
+  it('name the repo’s checks when Ops knows them, else leave QA to work them out', () => {
     const named = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha, [], ['pnpm run typecheck', 'pnpm test']);
     expect(named).toContain("3. Install dependencies if needed, then run these checks: `pnpm run typecheck`, `pnpm test`, and anything else the repo's CLAUDE.md asks.");
     expect(qaSteps('main', [])[2].text).toContain('(whichever exist)');
@@ -295,13 +295,13 @@ describe('fixPrompt', () => {
     expect(text).toContain('- Empty cart: Page goes blank');
     expect(text).toContain('What needs fixing:\nGuard the empty cart in cart.ts');
     expect(text).toContain('`focus/7-save-for-later-ab12`');
-    expect(text).toContain('The office pushes your commits');
+    expect(text).toContain('Ops pushes your commits');
   });
 
   it('has a cloud developer push the fix themselves', () => {
     const text = fixPrompt(pr, { sha: 'fed9876543', report: failed }, true);
     expect(text).toContain('git push origin HEAD:focus/7-save-for-later-ab12');
-    expect(text).not.toContain('The office pushes');
+    expect(text).not.toContain('Ops pushes');
   });
 });
 
@@ -338,7 +338,7 @@ describe('qaPlaybook', () => {
 });
 
 describe('qaAgentModel', () => {
-  it("uses the office's model when no QA model is set", () => {
+  it("uses Focus's own model when no QA model is set", () => {
     expect(qaAgentModel({ model: 'claude-opus-5-5', qaModel: '' })).toBe('claude-opus-5-5');
   });
 
@@ -522,7 +522,7 @@ describe('proof', () => {
     expect(off).not.toContain('Hunting');
   });
 
-  it('shows a blocking fail’s proof on the comment, with what the office saw', () => {
+  it('shows a blocking fail’s proof on the comment, with what Ops saw', () => {
     const body = qaComment(report({ verdict: 'fail', fixInstructions: 'Persist the list.', proofs: [held, { kind: 'test', finding: 'Double save', file: 'b.proof.test.ts', command: 'vitest run b.proof.test.ts', outcome: 'broken', note: 'it ran no tests' }] }), { officer: 'Lt. Q' }, [], false);
     expect(body).toContain('QA report: ❌ Failed');
     expect(body).toContain('### 🧪 Proof');
@@ -535,7 +535,7 @@ describe('proof', () => {
     const body = qaComment(report({ verdict: 'pass', advisory: true, fixInstructions: 'Persist the list.', proofs: [{ ...held, outcome: 'passed', note: undefined, source: undefined }] }), { officer: 'Lt. Q' }, [], false);
     expect(body).toContain('QA report: ✅ Passed with advice');
     expect(body).toContain('none came with proof that held');
-    expect(body).toContain('passed when the office ran it');
+    expect(body).toContain('passed when Ops ran it');
     expect(body).toContain('### 💡 Advice (not proved)\n\nPersist the list.');
     expect(body).not.toContain('What needs fixing');
   });

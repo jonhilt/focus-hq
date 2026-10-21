@@ -1,5 +1,5 @@
-// The plugin API's server part (docs/plugins.md): the contract a plugin's server.ts implements, what the office lends
-// it (`PluginHost`), and the helpers it may share with the core. Anything the office does for a plugin (files,
+// The plugin API's server part (docs/plugins.md): the contract a plugin's server.ts implements, what Focus lends
+// it (`PluginHost`), and the helpers it may share with the core. Anything Focus does for a plugin (files,
 // checkouts, GitHub) goes on the host, so the core decides what a plugin can do and a test can lend it a fake.
 export * from './shared';
 export type { BriefSpec, BriefWork, FocusPlugin, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
@@ -10,8 +10,8 @@ export { demoPace } from '../server/demoPace';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
 export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
 /**
- * The environment the office's Claude Code sessions run in, for a plugin that starts one through the Agent SDK itself:
- * `agentEnv(false)` signs in with your plan whatever the API key's doing, and with no argument as the office's new
+ * The environment Focus's Claude Code sessions run in, for a plugin that starts one through the Agent SDK itself:
+ * `agentEnv(false)` signs in with your plan whatever the API key's doing, and with no argument as Focus's new
  * sessions do now (`host.signIn`).
  */
 export { agentEnv } from '../server/agents/claudeRunner';
@@ -22,8 +22,8 @@ export { GitHub } from '../server/github/service';
 export type { PastPullRequest } from '../server/github/provider';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
-/** The office on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */
-export { officeLedger, officeMirror, officeTranscript } from './office';
+/** Focus on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */
+export { focusLedger, focusMirror, focusTranscript } from './focus';
 /** Reading an agent: whether it's a goal's lead (a `LeadAgent`), and its goal as the ledger would record it. */
 export { goalRecord, hasLeadWork, pickStation } from '../server/agents/lead';
 /** The demo's made-up files, by repo, for a plugin's scripted stand-in to talk about. */
@@ -32,15 +32,15 @@ export { FILES as DEMO_FILES } from '../server/agents/demoRunner';
 export { type Block, blocks, clip, type Line, messageFrom, resultText, transcriptLines } from '../server/agents/transcript';
 /** What a lead said since the last message to it, clipped to its end as the ledger's `captain-replies` keep it. */
 export { leadTail } from '../server/agents/sessionDigest';
-/** Reading the office's journals (`host.journals`): a fact and what a journal adds up to, fact by fact, and a run's fact in words. */
+/** Reading Ops' journals (`host.journals`): a fact and what a journal adds up to, fact by fact, and a run's fact in words. */
 export type { Stamped } from '../server/journals';
 export { factLine, type JournalEntry, type RunFact } from '../server/agents/runJournal';
 export { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact } from '../server/agents/reviewJournal';
 export { EMPTY_SLICE, evolveSlice, type SliceFact } from '../server/agents/sliceJournal';
-/** QA's catch rate (docs/qa-catch.md): the office's latest run, and its totals. */
+/** QA's catch rate (docs/qa-catch.md): Focus's latest run, and its totals. */
 export { latestRun as latestQaCatch } from '../server/agents/qaCatchRuns';
 export { type CatchRun, catchTotals } from '../server/agents/qaCatch';
-/** Speech, for a plugin's scripts that talk to the office aloud: audio as whisper takes it, and what the demo hears. */
+/** Speech, for a plugin's scripts that talk to Focus aloud: audio as whisper takes it, and what the demo hears. */
 export { encodeWav, toMono16k } from '../client/src/ui/speech';
 export { DEMO_TRANSCRIPT } from '../server/voice';
 export type { VoiceStatus } from '../shared/types';

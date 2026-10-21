@@ -8,7 +8,7 @@ import { sessionEnv, WAIT_BIN, WAIT_RULE, withWaitHelper } from './wait';
 
 interface Result { code: number; stdout: string; stderr: string }
 
-/** Runs `focus-wait` as a session would: found on the PATH the office gives it. */
+/** Runs `focus-wait` as a session would: found on the PATH Ops gives it. */
 function focusWait(args: string[], cwd: string): Promise<Result> {
   return new Promise((resolve) => {
     const env = withWaitHelper({ PATH: process.env.PATH });
@@ -57,7 +57,7 @@ describe('focus-wait', () => {
 });
 
 describe('withWaitHelper', () => {
-  it('puts the office’s bin first on the PATH, and keeps the rest', () => {
+  it('puts Ops’ bin first on the PATH, and keeps the rest', () => {
     expect(withWaitHelper({ PATH: '/usr/bin', HOME: '/h' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, HOME: '/h' });
     expect(withWaitHelper({}).PATH).toBe(WAIT_BIN);
   });

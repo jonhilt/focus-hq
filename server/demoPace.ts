@@ -1,4 +1,4 @@
-// The demo office's live pace (shared/demoPace.ts): every pretend agent that waits divides its waits by it, from its
+// The demo ship's live pace (shared/demoPace.ts): every pretend agent that waits divides its waits by it, from its
 // next wait on, so the captain's change reaches them all at once. It starts at FOCUS_DEMO_SPEED.
 
 let set: number | undefined;

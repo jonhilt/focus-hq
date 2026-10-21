@@ -328,14 +328,14 @@ export class Previews {
   }
 
   /**
-   * Demo mode: pretend to install and start the site(s), which the office serves itself. Multi-repo projects get a
+   * Demo mode: pretend to install and start the site(s), which Focus serves itself. Multi-repo projects get a
    * stack CLI that prints its URLs as JSON, single-repo ones a Vite dev server.
    */
   private launchDemo(run: Run): Effect.Effect<void, CheckoutFailed, PreviewMachine> {
     return Effect.gen({ self: this }, function* () {
       const { repo, number } = run.preview;
-      const office = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-      const page = (site: string) => `${office}/demo-preview/${repo}/${number}?site=${site}`;
+      const focus = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
+      const page = (site: string) => `${focus}/demo-preview/${repo}/${number}?site=${site}`;
       const stack = run.repos.length > 1;
       const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
       const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
@@ -766,7 +766,7 @@ function shellQuote(value: string): string {
 
 function previewEnv(port: number, auto: boolean): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...process.env, FOCUS_PREVIEW_PORT: String(port), BROWSER: 'none', NO_COLOR: '1', FORCE_COLOR: '0' };
-  // The office's own PORT/HOST must not leak into the site. Auto-detected Node apps get PORT (Next, Express, CRA…);
+  // Focus's own PORT/HOST must not leak into the site. Auto-detected Node apps get PORT (Next, Express, CRA…);
   // a project's own command doesn't, so a CLI starting several sites doesn't hand them all one port.
   delete env.PORT;
   delete env.HOST;

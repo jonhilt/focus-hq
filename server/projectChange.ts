@@ -49,7 +49,7 @@ export function changeProject(project: Project, patch: unknown): Project {
   return changed;
 }
 
-/** A repo's merge method set, or (empty or unknown) cleared to follow the office-wide setting. */
+/** A repo's merge method set, or (empty or unknown) cleared to follow the ship-wide setting. */
 function mergeMethodsAfter(project: Project, { repo, method }: Fields): Project['mergeMethods'] {
   if (typeof repo !== 'string' || !project.repos.includes(repo)) throw new Error(`${String(repo)} isn’t connected to ${project.name}`);
   const { [repo]: _, ...rest } = project.mergeMethods ?? {};
@@ -63,7 +63,7 @@ function previewAfter(p: Fields): PreviewConfig {
 }
 
 /**
- * What the office does once a change is saved: tell the plugins one was switched, seat agents again, and hold the
+ * What Ops does once a change is saved: tell the plugins one was switched, seat agents again, and hold the
  * chief of staff's words that were counting down to go by themselves, once that's switched off.
  */
 export function projectChangeFollowUps(patch: unknown): { plugins: boolean; schedule: boolean; holdSends: boolean } {

@@ -7,7 +7,7 @@ export const SECTIONS: Record<ScorecardSection, string> = {
   fence: 'Fence (code outside tests)',
   effect: 'Effect (server)',
   tests: 'Tests',
-  office: 'Office (ledger)',
+  office: 'Ops (ledger)',
 };
 
 const ORDER: ScorecardSection[] = ['gate', 'fence', 'effect', 'tests', 'office'];
@@ -108,11 +108,11 @@ export function scorecardHeadOf(desk: Scorecards | null, ago: (at: number) => st
 
 function measureStatus(desk: Scorecards | null, measuring: boolean, measured: boolean, ago: (at: number) => string): ScorecardHead['status'] {
   if (measuring) {
-    const what = desk?.trigger === 'new-commit' ? 'Measuring the new commit the office started on' : 'Running the gate on the office’s own checkout';
+    const what = desk?.trigger === 'new-commit' ? 'Measuring the new commit Focus started on' : 'Running the gate on Focus’s own checkout';
     return { tone: 'muted', text: `${what}${desk?.startedAt ? `, started ${ago(desk.startedAt)}` : ''}: about a minute and a half` };
   }
   if (desk?.status === 'failed') return { tone: 'bad', text: desk.error ?? '' };
-  return measured ? null : { tone: 'muted', text: 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on the office’s own checkout.' };
+  return measured ? null : { tone: 'muted', text: 'Not measured yet. Measure now runs the gate, counts the fence and reads the ledger on Focus’s own checkout.' };
 }
 
 export type Trend = 'better' | 'worse' | 'same';

@@ -3,7 +3,7 @@ import type { ReadOnlyRun, Settings } from '../../plugin-api/server';
 import { ClaudeEngineer, READER_MODEL } from './claudeEngineer';
 
 describe('ClaudeEngineer', () => {
-  it('reads and drafts in the read-only sessions the office lends it: no tools to read, the code tools to draft', async () => {
+  it('reads and drafts in the read-only sessions Ops lends it: no tools to read, the code tools to draft', async () => {
     const runs: ReadOnlyRun[] = [];
     const engineer = new ClaudeEngineer((run) => {
       runs.push(run);

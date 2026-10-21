@@ -28,13 +28,13 @@ import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
 import { Hub } from './hub';
 import { flowRecorder } from './flows';
 import { loadPlugins } from './plugins/load';
-import { Office } from './office';
+import { Focus } from './focus';
 import { PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
-import { errorMessage, run, seedOffice } from './util';
+import { errorMessage, run, seedShip } from './util';
 import { Voice } from './voice';
 
 /** How often orphaned agent workspaces are swept up, besides once at startup. */
@@ -42,19 +42,19 @@ const SWEEP_EVERY_MS = 60 * 60_000;
 
 async function main() {
   // the demo rolls the same ids each run
-  seedOffice(config);
+  seedShip(config);
   const store = new Store(!config.demo);
   store.load();
 
   const hub = new Hub();
   keyFallback.onChange = (onKey, spell) => {
-    // the office is up by the time a session runs into the plan's limit
-    office.agents.plugins.signInChanged(keyFallback.signIn());
+    // Focus is up by the time a session runs into the plan's limit
+    focus.agents.plugins.signInChanged(keyFallback.signIn());
     if (onKey) hub.toast('info', `🔑 Your plan's usage limit is reached until ${clock(spell.until)}: agents carry on with your API key (up to $${keyFallback.budgetUsd})`);
     else if (spell.until > Date.now()) hub.toast('error', `🔑 Your API key has spent its $${keyFallback.budgetUsd}: agents wait for your plan's usage limit to reset at ${clock(spell.until)}`);
     else hub.toast('success', `🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $${spell.spentUsd.toFixed(2)})`);
   };
-  // one GitHub for the whole office (the demo's lives in memory), as an Effect service and through the Promise adapter
+  // one GitHub for the whole ship (the demo's lives in memory), as an Effect service and through the Promise adapter
   const gitHub = Layer.succeed(GitHub, await ManagedRuntime.make(config.demo ? demoLayer : ghCliLayer).runPromise(GitHub.use(Effect.succeed)));
   const github = toProvider(gitHub);
   const browsers = new BrowserPool();
@@ -63,38 +63,38 @@ async function main() {
   const previews = new Previews(hub, github, config.demo, undefined, config.demo ? undefined : new PreviewMirrors());
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
-  // plugins read the ship through the office, which is up by the time anyone asks
+  // plugins read the ship through `focus`, which is up by the time anyone asks
   const shipStatus = async (): Promise<ShipStatus> => {
-    const snapshot = await office.snapshot();
+    const snapshot = await focus.snapshot();
     // closed goals' PRs, looked up live on every call: one that fails falls back to what was recorded
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
-  const office = new Office(store, hub, github, previews, planner, new Voice(hub, config.demo), await currentVersion());
-  office.voice.warmSpeech();
+  const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo), await currentVersion());
+  focus.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers), QaChat.fromChatter(config.demo ? new DemoQaChat() : new ClaudeQaChat()));
-  office.agents = new AgentManager(store, hub, crew, (id) => office.boardChanged(id));
-  // the office's own repo, for plugins that work on it (the demo has none)
-  office.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
+  focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id));
+  // Focus's own repo, for plugins that work on it (the demo has none)
+  focus.ownRepo = config.demo ? undefined : githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => ''));
   // each agent session is digested into the ledger as it ends: the demo's agents have no transcripts
   // the demo's older sessions are its scripted ones, digested without Haiku
   if (config.demo) {
-    office.agents.transcripts = demoTranscripts;
+    focus.agents.transcripts = demoTranscripts;
   } else {
-    office.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
-    office.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
-    office.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
+    focus.agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+    focus.agents.titleGoal = (brief) => titleGoal(brief, store.settings);
+    focus.agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
     // the captain's replies to leads, from the spans digested before they were kept, while their transcripts last
-    void office.agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));
+    void focus.agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));
   }
-  // plugins read the agents' transcripts as the office does; in the demo, its pretend leads keep transcripts of their
+  // plugins read the agents' transcripts as Ops does; in the demo, its pretend leads keep transcripts of their
   // own, and its older sessions are the scripted ones
-  office.startPlugins(await loadPlugins(config.plugins, config.root), {
+  focus.startPlugins(await loadPlugins(config.plugins, config.root), {
     transcript: demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()),
     shipStatus,
   });
   // turns Focus stopped part way through carry on, from each agent's run journal
-  office.agents.recover();
+  focus.agents.recover();
 
   if (config.demo && store.projects.length === 0) {
     const shop = store.addProject('Sock Shop', '#ff8a5b', 'beach');
@@ -107,16 +107,16 @@ async function main() {
     // and every PR going to QA by itself, and one QA fails going back to be fixed, which a new project leaves to the captain
     for (const p of [shop, game]) Object.assign(p, { autoQa: true, autoSendBack: true });
     // and what each plugin that works per project does, in both: switched on for them all (the others don't look)
-    for (const p of [shop, game]) p.plugins = office.agents.plugins.ids();
+    for (const p of [shop, game]) p.plugins = focus.agents.plugins.ids();
     // the demo keeps no ledger: a few days of one, to review at the master systems table
     store.ledger = demoLedger(shop.id, game.id, Date.now());
     // two goals under way side by side, each with its own lead at its own team station
-    office.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
-    office.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
+    focus.agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
+    focus.agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
   }
 
   const app = express();
-  // the office has no login: it only answers the captain's own browser (server/hostGuard.ts)
+  // Focus has no login: it only answers the captain's own browser (server/hostGuard.ts)
   const hosts = allowedHosts(config.host, process.env.FOCUS_ALLOWED_HOSTS);
   const refuse = (req: http.IncomingMessage) => refusal({ host: req.headers.host, origin: req.headers.origin }, hosts);
   app.use((req, res, next) => {
@@ -135,10 +135,10 @@ async function main() {
   if (config.demo)
     app.post('/api/demo/speed', express.json(), (req, res) => {
       const speed = setDemoPace(clampSpeed((req.body as { speed?: unknown } | undefined)?.speed));
-      office.infoChanged();
+      focus.infoChanged();
       res.json({ speed });
     });
-  app.use('/api', apiRouter(office, store));
+  app.use('/api', apiRouter(focus, store));
   if (config.demo) {
     app.get('/demo-preview/:owner/:name/:number', (req, res) => {
       const repo = `${req.params.owner}/${req.params.name}`;
@@ -154,20 +154,20 @@ async function main() {
       const pr = project && store.boards.get(project.id)?.prs.find((p) => p.repo === repo && p.number === number);
       if (!project || !pr || !demoPush) return void res.status(404).json({ error: `${repo}#${number} is not an open pull request on a board` });
       const head = demoPush(repo, number, req.query.kind === 'change' ? 'change' : 'merge-base');
-      void office.refreshBoard(project.id).then(() => office.agents.requestReview(project.id, repo, number, pr.title)).catch((err: unknown) => console.warn(`Demo push to ${repo}#${number}: ${String(err)}`));
+      void focus.refreshBoard(project.id).then(() => focus.agents.requestReview(project.id, repo, number, pr.title)).catch((err: unknown) => console.warn(`Demo push to ${repo}#${number}: ${String(err)}`));
       res.json({ head });
     });
   }
   // the Tricorder's page lives in a folder (client/tricorder/index.html), and its relative URLs need the slash
   app.get('/tricorder', (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(req.originalUrl.replace('/tricorder', '/tricorder/'))));
   const server = http.createServer(app);
-  hub.attach(server, () => office.snapshot(), refuse);
+  hub.attach(server, () => focus.snapshot(), refuse);
 
   if (config.dev) {
     const { createServer } = await import('vite');
     const vite = await createServer({
       configFile: path.join(config.root, 'vite.config.ts'),
-      // .ts.net: the phone reaches the office through Tailscale Serve
+      // .ts.net: the phone reaches Focus through Tailscale Serve
       server: { middlewareMode: true, hmr: { server }, allowedHosts: ['.ts.net'] },
       appType: 'spa',
     });
@@ -183,7 +183,7 @@ async function main() {
   }
 
   server.listen(config.port, config.host, () => {
-    console.log(`\n  🏢  Focus office is open: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
+    console.log(`\n  🖖  Focus is open: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
     console.log(`      mode: ${config.demo ? 'demo (fake GitHub, pretend agents)' : 'live (gh CLI + Claude Agent SDK)'}`);
     if (!config.demo && keyFallback.mode === 'fallback') {
       console.log(`      agents use your Claude login, and ANTHROPIC_API_KEY while your plan's usage limit is reached (up to $${keyFallback.budgetUsd} each time).`);
@@ -196,7 +196,7 @@ async function main() {
     console.log('');
   });
 
-  await office.start();
+  await focus.start();
   if (!config.demo) {
     const sweep = () =>
       git
@@ -204,7 +204,7 @@ async function main() {
         .catch((err: unknown) => console.error(`Workspace sweep failed: ${errorMessage(err)}`));
     void sweep();
     setInterval(() => void sweep(), SWEEP_EVERY_MS);
-    const info = await office.checkGitHub();
+    const info = await focus.checkGitHub();
     if (!info.github.ok) console.warn(`  ⚠ ${info.github.error}`);
     else console.log(`  GitHub: signed in as ${info.github.login}`);
   }
@@ -213,12 +213,12 @@ async function main() {
   const shutdown = async () => {
     if (closing) return;
     closing = true;
-    console.log('\nClosing the office…');
-    // their sessions stop, and the turns they were in carry on when the office starts again
-    office.agents.shutDown();
+    console.log('\nShutting Focus down…');
+    // their sessions stop, and the turns they were in carry on when Focus starts again
+    focus.agents.shutDown();
     store.save();
     // Kokoro's process goes by SIGKILL (see server/speech.ts): with onnxruntime out of this process, exiting can't abort
-    office.voice.close();
+    focus.voice.close();
     await Promise.all([browsers.shutdown(), previews.shutdown()]);
     setTimeout(() => process.exit(0), 300);
   };
@@ -233,7 +233,7 @@ async function main() {
 }
 
 main().catch((err: unknown) => {
-  // another office on the same data folder is expected, and its message says what to do: no stack trace to bury it
+  // another running Focus on the same data folder is expected, and its message says what to do: no stack trace to bury it
   if (err instanceof StateLockedError) console.error(err.message);
   else console.error(err);
   process.exit(1);

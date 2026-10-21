@@ -1,5 +1,5 @@
 // The cartography plugin follows the switch in each project's settings: it maps only the projects it's on for, maps one
-// as it's switched on, and forgets one as it's switched off. In the demo it maps the office's own checkout.
+// as it's switched on, and forgets one as it's switched off. In the demo it maps Focus's own checkout.
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -11,7 +11,7 @@ import type { CartographyState } from './shared';
 // mapping runs real git (ls-files, rev-parse, log), which takes longer than vitest's 5 s on a busy machine
 vi.setConfig({ testTimeout: 30_000 });
 
-/** What the office answers a plugin asking for a model drawn afresh, or a refusal. */
+/** What Ops answers a plugin asking for a model drawn afresh, or a refusal. */
 let drawn: PluginHost['drawModel'] = ({ title }) =>
   Promise.resolve({ id: title, title, html: '<p>again</p>', problems: [], model: { question: 'Q?', nodes: [{ id: 'k', label: 'K', kind: 'store', layer: 'L', cite: { file: path.join(process.cwd(), 'plugins/cartography/keeper.ts'), line: 1 } }], edges: [], trace: [], simplified: [] } });
 
@@ -26,9 +26,9 @@ function host(projects: Pick<Project, 'id' | 'name' | 'repos' | 'plugins'>[], ag
     state,
     projects: () => projects as Project[],
     on: (id: string) => !!projects.find((p) => p.id === id)?.plugins?.includes('cartography'),
-    officeDir: process.cwd(),
+    focusDir: process.cwd(),
     dataDir: () => data,
-    // the demo's stand-in, as the office draws it: one model of its own code
+    // the demo's stand-in, as Ops draws it: one model of its own code
     drawModel: drawn,
     agent: (id: string) => agents.find((a) => a.id === id),
     agents: () => agents,
@@ -92,7 +92,7 @@ describe('what a goal\'s slice changes', () => {
     await settled(busy);
     parts.turn?.(agent, 'end');
     for (let i = 0; i < 300 && !slices().shop; i++) await new Promise((r) => setTimeout(r, 50));
-    // the office's own checkout stands in for the lead's: whatever its branch changes, it's the lead's goal that says so
+    // Focus's own checkout stands in for the lead's: whatever its branch changes, it's the lead's goal that says so
     for (const s of slices().shop ?? []) {
       expect(s).toMatchObject({ leadId: 'lead_shop_1', title: 'Wishlist', station: 0 });
       for (const r of s.repos) expect(r.change.repo).toBe('o/shop');
@@ -116,7 +116,7 @@ describe('what a goal\'s slice changes', () => {
 
 describe('the diagrams leads draw', () => {
   const lead = { id: 'lead_shop_1', name: 'Lt. Okafor', projectId: 'shop', lead: { title: 'Wishlist', station: 0, repos: [{ repo: 'o/shop', folder: 'shop', baseBranch: 'main' }] } } as unknown as Agent;
-  // in the demo the office's own checkout stands in for the lead's, and for the project's default branch
+  // in the demo Focus's own checkout stands in for the lead's, and for the project's default branch
   const cited = path.join(process.cwd(), 'plugins/cartography/diagrams.ts');
   const model = (change?: 'added') => ({
     question: 'How is a diagram kept?',
@@ -126,7 +126,7 @@ describe('the diagrams leads draw', () => {
     simplified: [],
   });
 
-  it('keeps one of how the code works, with the files it cites, past the office restarting; not one of a change', async () => {
+  it('keeps one of how the code works, with the files it cites, past Focus restarting; not one of a change', async () => {
     const shop = { id: 'shop', name: 'Shop', repos: ['o/shop'], plugins: ['cartography'] };
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'));
     const { lent, diagrams } = host([shop], [lead], data);
@@ -140,7 +140,7 @@ describe('the diagrams leads draw', () => {
     // a browser reads its page and picture through the plugin's route
     const route = parts.routes?.find((r) => r.path === '/diagram');
     expect(route?.handle({ body: { project: 'shop', id: kept.id }, query: {} })).toEqual({ html: '<p>it</p>', image: 'data:image/jpeg;base64,AQI=' });
-    // and the office starting again finds it
+    // and Focus starting again finds it
     const again = host([shop], [lead], data);
     cartography.start(again.lent);
     expect(again.diagrams().shop?.[0]?.id).toBe(kept.id);
@@ -170,9 +170,9 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     const parts = cartography.start(lent);
     seed({ diagrams: { shop: [old] } });
     parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
-    await until(() => diagrams().shop?.[0]?.by === 'the office');
+    await until(() => diagrams().shop?.[0]?.by === 'Ops');
     const [again] = diagrams().shop ?? [];
-    expect(again).toMatchObject({ id: 'd', question: 'Q?', goal: 'Wishlist', by: 'the office' });
+    expect(again).toMatchObject({ id: 'd', question: 'Q?', goal: 'Wishlist', by: 'Ops' });
     expect(again.stale).toBeUndefined();
     expect(again.redrawing).toBeUndefined();
     expect(again.files).toEqual([{ repo: 'o/shop', path: 'plugins/cartography/keeper.ts', hash: expect.any(String) }]);
@@ -204,7 +204,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     expect(read.image).toBeUndefined();
   });
 
-  it('isn’t left being drawn again by an office that stopped in the middle of drawing it', async () => {
+  it('isn’t left being drawn again by a Focus that stopped in the middle of drawing it', async () => {
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'cartography-'));
     fs.mkdirSync(path.join(data, 'diagrams'));
     fs.writeFileSync(path.join(data, 'diagrams', 'index.json'), JSON.stringify({ shop: [{ ...old, redrawing: true }] }));
@@ -213,8 +213,8 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     expect(diagrams().shop?.[0]?.redrawing).toBeUndefined();
     // so it can be drawn again
     parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
-    await until(() => diagrams().shop?.[0]?.by === 'the office');
-    expect(diagrams().shop?.[0]?.by).toBe('the office');
+    await until(() => diagrams().shop?.[0]?.by === 'Ops');
+    expect(diagrams().shop?.[0]?.by).toBe('Ops');
   });
 
   it('leaves one forgotten while it was being drawn again forgotten', async () => {

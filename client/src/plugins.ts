@@ -1,6 +1,6 @@
 /// <reference types="vite/client" />
 // The plugins' parts in the browser (docs/plugins.md): each plugin folder's client.ts, found as the client's built.
-// Only the plugins the office has switched on (`info.plugins`) show.
+// Only the plugins Focus has switched on (`info.plugins`) show.
 import type * as THREE from 'three';
 import { pluginOn } from '../../shared/projectPlugins';
 import type { Agent, AgentStatus, GoalArtifact } from '../../shared/types';
@@ -18,7 +18,7 @@ export interface ClientPlugin {
   /** What it draws on main engineering's MSD beside the ship, while it's put up there (`ui.showOnMsd({ plugin })`). */
   msd?: (ctx: CanvasRenderingContext2D, box: Box) => void;
   /**
-   * A stat it adds to the HUD's top row, beside the office's own counts, wherever the captain is on the ship; or null
+   * A stat it adds to the HUD's top row, beside Focus's own counts, wherever the captain is on the ship; or null
    * for none just now. Asked again as the plugin's state changes.
    */
   hud?: () => HudStat | null;
@@ -38,7 +38,7 @@ export interface ClientPlugin {
   /** Keys it adds to the lists of controls, on the splash screen and the HUD: `{ key: 'G', label: 'the gallery' }`, say. */
   legend?: { key: string; label: string }[];
   /**
-   * Called once, when the office first says the plugin is on (its first snapshot), with the app: what the plugin does
+   * Called once, when Focus first says the plugin is on (its first snapshot), with the app: what the plugin does
    * outside any panel (its toasts, say) starts here, never as its module loads, since every plugin's `client.ts` is
    * loaded whether it's on or not. Returns its parts that run from then on.
    */
@@ -222,7 +222,7 @@ export function hallScreens(projectId: string): { plugin: string; screen: HallSc
     .flatMap((p) => (p.hall?.(projectId) ?? []).map((screen) => ({ plugin: p.id, screen })));
 }
 
-/** The plugins switched on in the office that work per project, for a project's settings to switch on and off. */
+/** The plugins switched on in Focus that work per project, for a project's settings to switch on and off. */
 export const projectPlugins = (): (ClientPlugin & Required<Pick<ClientPlugin, 'project'>>)[] =>
   clientPlugins().filter((p): p is ClientPlugin & Required<Pick<ClientPlugin, 'project'>> => !!p.project);
 
@@ -306,7 +306,7 @@ export function clientPlugins(): ClientPlugin[] {
 }
 
 /**
- * The plugin `id`'s state as the office sent it, in the plugin's own type `S` (its server part's slot): the one place
+ * The plugin `id`'s state as Focus sent it, in the plugin's own type `S` (its server part's slot): the one place
  * the browser takes a plugin's word for the shape of its state.
  */
 export const pluginState = <S>(id: string): S | undefined => state.plugins[id] as S | undefined;

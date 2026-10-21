@@ -115,7 +115,7 @@ describe('scratchRmDenial', () => {
 });
 
 describe('dcgConfig', () => {
-  it('allows exactly the scratch rm the office checks', () => {
+  it('allows exactly the scratch rm Ops checks', () => {
     const config = dcgConfig();
     expect(config).toContain(`allow = [ '''${SCRATCH_RM}''' ]`);
     // TOML literal strings: nothing in them may close one early

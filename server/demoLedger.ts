@@ -10,7 +10,7 @@ const facts = (minutes: number, costUsd: number, f: Partial<SessionFacts> = {}):
 const PORT_IN_USE: Friction = { kind: 'demo-env', signature: 'demo port in use', quote: 'Error: listen EADDRINUSE: address already in use 127.0.0.1:4477' };
 
 /**
- * A few days of the ledger for the demo office, which keeps none of its own: a Sock Shop goal whose API pull request
+ * A few days of the ledger for the demo ship, which keeps none of its own: a Sock Shop goal whose API pull request
  * failed QA once, conflicted and passed, and a Space Dodger pull request an agent untangled and the captain merged
  * before QA was done. Every session's frictions are already read, so nothing in the demo goes looking for them.
  */
@@ -43,7 +43,7 @@ export function demoLedger(shopId: string, gameId: string, now: number): LedgerE
     [20, shopId, read('demo-s3', [PORT_IN_USE])],
     [20, gameId, read('demo-s4')],
     [20, gameId, read('demo-s5')],
-    [19, shopId, { kind: 'retro-decision', title: 'Give agents a demo office that owns its port', signatures: ['demo-env: demo port in use'], accepted: true, issue: { repo: 'demo/webshop-api', number: 30 } }],
+    [19, shopId, { kind: 'retro-decision', title: 'Give agents a demo ship that owns its port', signatures: ['demo-env: demo port in use'], accepted: true, issue: { repo: 'demo/webshop-api', number: 30 } }],
   ];
   return lines.map(([hoursAgo, projectId, entry], i) => ({ ...entry, at: now - hoursAgo * HOUR, projectId, seq: i + 1 }));
 }

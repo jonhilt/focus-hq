@@ -12,7 +12,7 @@ import { contactShadow } from './contactShadow';
 
 /**
  * The engineering station: where the ship's engineer keeps the ship running, facing their board on the wall, which
- * shows the ledger's report card (how the office's work has gone lately) and, under it, what a plugin has them busy
+ * shows the ledger's report card (how the ship's work has gone lately) and, under it, what a plugin has them busy
  * with (`EngineeringPart.station`). E opens the station's panel. In world coordinates: whoever places it adds `group`
  * to the scene and `footprint` to the colliders.
  */

@@ -6,12 +6,12 @@ import { isRecord } from './transcript';
 // QA blocks a pull request only with proof (docs/qa.md#proof): the hunting guidance QA is given, the proofs its report
 // names, and the rules for whether one holds and whether the verdict blocks. Pure, and tested beside it
 // (qaProof.test.ts), but for `prove`, which takes the running of commands and the reading of files from its caller: the
-// office's checkout of the PR (manager/reviews.ts), or a replay's clone (tools/qaReview.ts).
+// checkout Ops makes of the PR (manager/reviews.ts), or a replay's clone (tools/qaReview.ts).
 
-/** How many of a report's proofs the office checks, at most: more than that is a list of worries, not proof. */
+/** How many of a report's proofs Ops checks, at most: more than that is a list of worries, not proof. */
 export const MAX_PROOFS = 5;
 
-/** How long a proof's command may run, in the office's own run of it. */
+/** How long a proof's command may run, in Ops' own run of it. */
 export const PROOF_MS = 10 * 60_000;
 
 /**
@@ -35,8 +35,8 @@ const PROBE: QaStep = {
 };
 
 const PROOF: QaStep = {
-  title: 'Fails a PR only with proof the office checks',
-  text: `The office checks your proof itself, before it posts your report, and your verdict blocks the pull request only if a proof holds. Name each in your report's \`proofs\`:
+  title: 'Fails a PR only with proof Ops checks',
+  text: `Ops checks your proof itself, before it posts your report, and your verdict blocks the pull request only if a proof holds. Name each in your report's \`proofs\`:
 
 - **test**: a test file that fails (one of your probes, or a test already in the repo that the change breaks), and the command that runs just that file from the repo's root, as you ran it (\`pnpm vitest run src/queue.proof.test.ts\`, \`python -m pytest tests/test_queue_proof.py\`). It must name the file, and it runs without a shell: no pipes, \`&&\` or redirects. It holds when the test fails on an assertion: one that fails to load, compile or find its imports doesn't.
 - **check**: one of the project's own checks (its type check, lint or build) that fails, and its command (\`pnpm run typecheck\`). It holds when the command exits with a failure.
@@ -98,7 +98,7 @@ export function parseProofs(raw: unknown): QaProof[] {
 
 /**
  * A command as the words it runs, split the way a shell would split plain words and quotes. Undefined for one that needs
- * a shell (a pipe, `&&`, `;`, a redirect, `$` or a backquote outside quotes), or that's empty: the office runs proofs
+ * a shell (a pipe, `&&`, `;`, a redirect, `$` or a backquote outside quotes), or that's empty: Ops runs proofs
  * without one (`run()` in server/util.ts).
  */
 export function commandArgs(command: string): string[] | undefined {
@@ -144,7 +144,7 @@ export function proofProblem(proof: QaProof): string | undefined {
   if (proof.kind === 'screenshot') return proof.screenshot && proof.screenshot > 0 ? undefined : 'it names no screenshot';
   if (!proof.command) return 'it gives no command to run';
   const args = commandArgs(proof.command);
-  if (!args) return 'its command needs a shell (a pipe, `&&`, a redirect or `$`), and the office runs proofs without one';
+  if (!args) return 'its command needs a shell (a pipe, `&&`, a redirect or `$`), and Ops runs proofs without one';
   if (proof.kind === 'check') return undefined;
   if (!proof.file) return 'it names no test file';
   if (!insideRepo(proof.file)) return 'its file is outside the repo';
@@ -177,13 +177,13 @@ function lineOf(output: string, ...res: RegExp[]): string {
 }
 
 /**
- * What the office's run of a proof's command says about it. A test proves a bug when its command fails and what it
+ * What Ops' run of a proof's command says about it. A test proves a bug when its command fails and what it
  * printed shows a test failing, and nothing says it never really ran (an import that isn't there, a compile error, no
  * tests found): QA's typo isn't proof. A check proves one when its command exits with a failure. A run that timed out or
  * couldn't start (`code` null) proves nothing.
  */
 export function proofOutcome(kind: 'test' | 'check', run: CommandRun): Pick<QaProof, 'outcome' | 'note'> {
-  if (run.code === 0) return { outcome: 'passed', note: kind === 'test' ? 'the test passed when the office ran it' : 'the check passed when the office ran it' };
+  if (run.code === 0) return { outcome: 'passed', note: kind === 'test' ? 'the test passed when Ops ran it' : 'the check passed when Ops ran it' };
   if (run.code === null) return { outcome: 'broken', note: 'its command timed out or couldn\'t start' };
   const didnt = DIDNT_RUN.find(([re]) => re.test(run.output));
   if (kind === 'check') return didnt?.[1] === 'its command couldn\'t be found' ? { outcome: 'broken', note: didnt[1] } : { outcome: 'failed', note: lineOf(run.output, /error|fail/i) };
@@ -212,7 +212,7 @@ export function screenshotOutcome(n: number, shots: { taken: number; kept: numbe
 export const blocksWithProof = (report: Pick<QaReport, 'verdict' | 'proofs'>): boolean => report.verdict === 'fail' && (report.proofs ?? []).some((p) => p.outcome === 'failed');
 
 /**
- * The report the office posts, given what it saw of each proof (`proofs`, checked): QA's own, unless QA failed the change
+ * The report Ops posts, given what it saw of each proof (`proofs`, checked): QA's own, unless QA failed the change
  * and none of its proofs held, when the verdict is a pass and QA's findings go up as advice (`advisory`). A pass stays a
  * pass whatever its proofs.
  */
@@ -275,7 +275,7 @@ export function proofsToKeep(report: Pick<QaReport, 'proofs'>): string[] {
   const tests = held.filter((p) => p.kind === 'test');
   return [
     '',
-    'QA proved it, and the office checked the proof itself:',
+    'QA proved it, and Ops checked the proof itself:',
     ...held.flatMap((p) => {
       if (p.kind === 'screenshot') return [`- ${p.finding} (a screenshot on the PR comment shows it)`];
       if (p.kind === 'check') return [`- ${p.finding}: \`${p.command}\` fails${p.note ? `: ${p.note}` : ''}`];

@@ -9,13 +9,13 @@ export interface LedgerHealth {
   repaired: string[];
   /** Damage that needs a look: where the file was copied aside, and what's wrong. */
   problems: string[];
-  /** Not damage, but worth knowing: another office holds the lock, so this one isn't writing. */
+  /** Not damage, but worth knowing: another Focus holds the lock, so this one isn't writing. */
   notes: string[];
 }
 
 /**
  * The ledger's one writer: appends each event as a numbered line and flushes it to disk (fsync) before carrying on, so
- * a line the office has acted on is a line that's kept. A lock file next to it keeps a second office on the same data
+ * a line Ops has acted on is a line that's kept. A lock file next to it keeps a second Focus on the same data
  * folder from writing too: that one reads the ledger but keeps its new lines to itself, and says so.
  */
 export class LedgerLog {
@@ -31,7 +31,7 @@ export class LedgerLog {
     const check = checkLedger(text);
     const holder = takeLock(`${file}.lock`);
     if (holder) {
-      health.notes.push(`another Focus office (pid ${holder}) is writing it, so this one isn’t`);
+      health.notes.push(`another running Focus (pid ${holder}) is writing it, so this one isn’t`);
       return { log: new LedgerLog(null, check.nextSeq), events: check.events, health };
     }
     if (check.problems.length) {

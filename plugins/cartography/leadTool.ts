@@ -1,4 +1,4 @@
-// The map tool in every goal lead's office (mcp__office__map): a view of the project's architecture map on their
+// The map tool in every goal lead's toolkit (mcp__office__map): a view of the project's architecture map on their
 // station's screen, mapped from their own checkout, so a view they add to the model in their slice shows at once, and
 // every later goal reuses it once it merges. With no view, it lists them.
 import { z } from 'zod';

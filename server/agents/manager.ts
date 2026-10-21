@@ -25,8 +25,8 @@ import { Triages } from './manager/triages';
 import { Core, type ManagerServices } from './manager/core';
 
 /**
- * Hires agents, seats them at desks, runs them, and turns their work into pull requests: the office's one way in to its
- * agents, for the routes and the office's loops.
+ * Hires agents, seats them at desks, runs them, and turns their work into pull requests: Focus's one way in to its
+ * agents, for the routes and its loops.
  *
  * Each concern is a part of its own in `manager/` (seating, sessions, delivery, conflicts, leads, slices, goal tools,
  * comms, reviews, triages, cloud moves, the ledger, merges, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
@@ -100,8 +100,8 @@ export class AgentManager {
     return this.core.seating.openedByOffice(repo, number);
   }
 
-  /** The office opened the PR: one of its developers', a plugin's brief, or a goal's slice. */
-  officePr(repo: string, number: number): boolean {
+  /** Ops opened the PR: one of its developers', a plugin's brief, or a goal's slice. */
+  opsPr(repo: string, number: number): boolean {
     return this.core.seating.openedByOffice(repo, number) || !!this.core.leads.leadWith(repo, number);
   }
 
@@ -121,7 +121,7 @@ export class AgentManager {
     for (const room of rooms) this.core.reviews.nextReview(room);
   }
 
-  /** The office is shutting down (`AgentSessions.shutDown`). */
+  /** Focus is shutting down (`AgentSessions.shutDown`). */
   shutDown(): void {
     this.core.sessions.shutDown();
   }
@@ -304,12 +304,12 @@ export class AgentManager {
     this.core.ledger.record(projectId, entry, at);
   }
 
-  /** Starts the plugins switched on (docs/plugins.md), lending each the manager's seating and terminals, and what the office lends. */
+  /** Starts the plugins switched on (docs/plugins.md), lending each the manager's seating and terminals, and what Focus lends. */
   startPlugins(plugins: FocusPlugin[], lent: Lent): void {
     this.core.plugins.start(plugins, (plugin) => pluginHost(this.core, plugin.id, lent));
   }
 
-  /** The plugins switched on: the office's way to their states, routes and hooks. */
+  /** The plugins switched on: Focus's way to their states, routes and hooks. */
   get plugins(): Plugins {
     return this.core.plugins;
   }

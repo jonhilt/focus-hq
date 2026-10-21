@@ -94,7 +94,7 @@ describe('recovery', () => {
 });
 
 describe('signInMismatch', () => {
-  it('is a key that costs when the office meant your plan, and nothing else', () => {
+  it('is a key that costs when Ops meant your plan, and nothing else', () => {
     expect(signInMismatch(false, 'ANTHROPIC_API_KEY')).toBe(true);
     expect(signInMismatch(false, 'apiKeyHelper')).toBe(true);
     expect(signInMismatch(false, 'none')).toBe(false);
@@ -186,7 +186,7 @@ describe('a delivery in the journal', () => {
     expect(runView(fold([...ended, { kind: 'delivering', turn: 't0', summary: 'Old' }])).phase).toBe('ended');
   });
 
-  it('is finished by the office after a restart, without Claude: only a developer’s, and only one cut off', () => {
+  it('is finished by Ops after a restart, without Claude: only a developer’s, and only one cut off', () => {
     expect(recovery(fold(delivering), { task: 'issue', sessionId: 's1' }, true)).toEqual({ kind: 'deliver', turn: 't1', summary: 'Dark mode' });
     expect(recovery(fold([...delivering, { kind: 'pushed', turn: 't1' }]), { task: 'fix' }, false)).toMatchObject({ kind: 'deliver' });
     expect(recovery(fold([...delivering, { kind: 'delivered', turn: 't1', outcome: 'no-commits' }]), { task: 'issue' }, false)).toEqual({ kind: 'none' });

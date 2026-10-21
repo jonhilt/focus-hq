@@ -5,14 +5,14 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { Hub } from '../hub';
 import { demoWorkspace } from './demoRunner';
-import { office } from './fakeOffice';
+import { focus } from './fakeFocus';
 import type { WorkspaceOps } from './types';
 
-// The merge check through the office (docs/merging.md): the demo GitHub, and a workspace whose trial of the merge the test decides.
+// The merge check through Ops (docs/merging.md): the demo GitHub, and a workspace whose trial of the merge the test decides.
 
 const REPO = 'demo/webshop-frontend';
 
-/** A fake office whose GitHub the test can read, and whose merge checks come out as `outcome` says: each trial counted. */
+/** A fake Focus whose GitHub the test can read, and whose merge checks come out as `outcome` says: each trial counted. */
 async function gated(outcome: (heads: MergeHeads) => MergeTrial, hold?: Promise<void>) {
   const gh = await ManagedRuntime.make(demoLayer).runPromise(GitHub.use(Effect.succeed));
   let base = 'base0000aaa';
@@ -26,10 +26,10 @@ async function gated(outcome: (heads: MergeHeads) => MergeTrial, hold?: Promise<
       return outcome(heads);
     },
   };
-  const o = office(workspace, Layer.succeed(GitHub, gh));
+  const o = focus(workspace, Layer.succeed(GitHub, gh));
   const prs = await Effect.runPromise(gh.listPullRequests(REPO));
   const pr = prs.find((p) => p.author === 'demo-manager');
-  if (!pr) throw new Error('the demo has no PR of the office’s');
+  if (!pr) throw new Error('the demo has no PR of Ops’');
   o.store.boards.set(o.project.id, { projectId: o.project.id, issues: [], prs, updatedAt: 0 });
   const state = () => Effect.runPromise(gh.pullRequestState(REPO, pr.number));
   const comments = () => Effect.runPromise(gh.pullRequestComments(REPO, pr.number));

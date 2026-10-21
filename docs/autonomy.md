@@ -6,11 +6,11 @@
 | **Auto mode** | Claude Code's auto-mode classifier decides. Agents only raise their hand when it can't. |
 | **Full autonomy** | `bypassPermissions`. Fastest, but agents can run anything on your machine. |
 
-The office setting is the default: it applies to agents started from then on, and to every agent you haven't given a mode of their own.
+The ship-wide setting is the default: it applies to agents started from then on, and to every agent you haven't given a mode of their own.
 
 ## One agent's mode
 
-An agent can be given a mode of their own, whether they're working, idle or finished: the office setting and every other agent stay as they are. The choice stays on the agent: their later turns and resumes start in it, and changing the office setting afterwards doesn't touch them.
+An agent can be given a mode of their own, whether they're working, idle or finished: the ship-wide setting and every other agent stay as they are. The choice stays on the agent: their later turns and resumes start in it, and changing the ship-wide setting afterwards doesn't touch them.
 
 - A session running on this machine switches at once, without restarting: the mode is read afresh on each tool call, so a switch applies to the very next one (`toolPermission`, tested next to it in `server/agents/claudeRunner.test.ts`). A hand already up stays up until you answer it.
 - A cloud session's permissions are set as its turn starts, so the change applies from their next turn.

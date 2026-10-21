@@ -4,7 +4,7 @@ import { ClaudeJudge, JUDGE_MODEL } from './claudeJudge';
 import { VERDICT_SCHEMA } from './judge';
 
 describe('ClaudeJudge', () => {
-  it('judges in a read-only session the office lends it: Haiku, no tools, its own system prompt, a structured answer', async () => {
+  it('judges in a read-only session Ops lends it: Haiku, no tools, its own system prompt, a structured answer', async () => {
     const runs: ReadOnlyRun[] = [];
     const judge = new ClaudeJudge((run) => {
       runs.push(run);

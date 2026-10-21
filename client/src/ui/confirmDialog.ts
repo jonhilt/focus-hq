@@ -13,7 +13,7 @@ export interface ConfirmOptions {
 /**
  * The ship's own confirm dialog, in an LCARS frame: resolves true on confirm, false on cancel, Escape or a click outside it.
  * It sits above any open panel without replacing it, and keeps every key (Escape included) from the panel and the
- * office underneath while it's up.
+ * ship underneath while it's up.
  */
 export function confirmDialog(opts: ConfirmOptions): Promise<boolean> {
   return chooseDialog(opts).then((choice) => choice === 'confirm');

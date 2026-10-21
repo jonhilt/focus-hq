@@ -4,7 +4,7 @@ import type { AgentTask, ArchivedGoal, GoalRecord, CosRoute, TriageAction } from
 export type { CosRoute } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
-// closed goals, and a digest of each agent session as it ends. The office appends to it as things happen and never
+// closed goals, and a digest of each agent session as it ends. Ops appends to it as things happen and never
 // rewrites it (data/ledger.jsonl), so it outlives the reviews, agents and transcripts it's about. Each line carries the
 // format's version and a sequence number, so a gap or a line cut short shows on load (`checkLedger`). The chief
 // engineer reads it, and `reportCard` sums it up for their screen.
@@ -12,7 +12,7 @@ export type { CosRoute } from './types';
 /** The version of the line format: 1 was the first ledger's (no `v`, no `seq`). */
 export const LEDGER_VERSION = 2;
 
-/** Who merged or closed a pull request: the office (auto-merge), the captain (the board), the operations officer, or someone on GitHub. */
+/** Who merged or closed a pull request: Ops (auto-merge), the captain (the board), the operations officer, or someone on GitHub. */
 export type Closer = 'office' | 'captain' | 'officer' | 'github';
 
 interface PrRef {
@@ -25,17 +25,17 @@ interface PrRef {
 export type LedgerEntry =
   | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number })
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
-  | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when the office knew. */ closes?: number[] })
+  | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when Ops knew. */ closes?: number[] })
   | (PrRef & { kind: 'closed'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number })
   /**
-   * The PR conflicted with its base: the office merged the base in cleanly, settled the conflicts by the repo's rules
+   * The PR conflicted with its base: Ops merged the base in cleanly, settled the conflicts by the repo's rules
    * (`auto`: union or generated files), or an agent had to resolve them. `files` are the paths that conflicted (missing
    * on lines from before they were logged); `broke` the check that failed on a merge git made by itself.
    */
   | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'auto' | 'agent' | 'up-to-date'; files?: string[]; broke?: string })
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
   /**
-   * The office's merge check before a merge (docs/merging.md): the PR's head merged onto its base, checked. `failed` is
+   * Ops' merge check before a merge (docs/merging.md): the PR's head merged onto its base, checked. `failed` is
    * the command that failed, the files that conflicted, or why it couldn't run; `overridden` is the captain merging
    * past it on purpose. `base` and `head` are the commits it checked.
    */
@@ -62,7 +62,7 @@ export type LedgerEntry =
   | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: CosRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
   /**
    * The captain answered something in their inbox (shared/captainsInbox.ts): `item` is what it was (its inbox id, kind and line),
-   * `answer` what they decided in a few words, `via` where (the office, or a bot on the API). `agent` is who it was for.
+   * `answer` what they decided in a few words, `via` where (Focus, or a bot on the API). `agent` is who it was for.
    */
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
@@ -70,12 +70,12 @@ export type LedgerEntry =
 
 
 /**
- * Where it was decided: by the captain in the office, or through the API (a bot speaking for them), or by the chief of
+ * Where it was decided: by the captain in Focus, or through the API (a bot speaking for them), or by the chief of
  * staff, sending its own words where the captain let it (`Project.cosAutoSend`).
  */
 export type DecidedVia = 'office' | 'api' | 'chief-of-staff';
 
-/** Where a decision came from, said after it: nothing for the captain in the office. */
+/** Where a decision came from, said after it: nothing for the captain in Focus. */
 export const viaNote = (via: DecidedVia): string => ({ office: '', api: 'via the API', 'chief-of-staff': 'sent by the chief of staff' })[via];
 
 /** Who a chief of staff's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
@@ -104,7 +104,7 @@ export interface SessionFacts {
   /** Calls that had already failed, run again unchanged. */
   repeatedCalls: number;
   wastedCalls: number;
-  /** What the span cost, from the agent's running total; missing when the office doesn't know. */
+  /** What the span cost, from the agent's running total; missing when Ops doesn't know. */
   costUsd?: number;
   captainMessages: number;
   nudges: number;
@@ -120,10 +120,10 @@ export interface SessionFacts {
  * captain (or a slice) adds one; a growing pile of `other` says it's time to.
  */
 export const FRICTION_KINDS = {
-  'demo-env': 'the demo office or dev server not starting, dying, or fighting over a port',
+  'demo-env': 'the demo ship or dev server not starting, dying, or fighting over a port',
   'guard-block': 'a guard, hook or permission check refusing a command',
   shell: 'a shell command going wrong by itself: globs, quoting, a missing command, the wrong directory',
-  'tool-refused': 'an office or Claude Code tool refusing its input (too long, wrong shape)',
+  'tool-refused': 'an Ops or Claude Code tool refusing its input (too long, wrong shape)',
   conflicts: 'merge conflicts, or a branch behind its base',
   'qa-rerun': 'QA re-testing, or re-running, without new work to test',
   'captain-correction': 'the captain correcting the agent, or asking for something it missed',
@@ -268,15 +268,15 @@ export interface ReportCard {
   sessions: number;
   costPerMerge: number;
   wastedPerMerge: number;
-  /** Agent spend the office knows of, all told. */
+  /** Agent spend Ops knows of, all told. */
   costUsd: number;
   /** Each retro fix the captain accepted, and whether its frictions stopped coming up once it landed (whenever it was accepted). */
   fixes: FixEffect[];
   /** The open frictions (no retro decision yet) of the last OPEN_FRICTION_DAYS, the most widespread first: the top few. */
   frictions: { key: string; sessions: number }[];
-  /** Damage found in the ledger when the office opened it: it needs a look. */
+  /** Damage found in the ledger when Focus opened it: it needs a look. */
   warnings?: string[];
-  /** Not damage, but worth knowing: another office holds the ledger, so this one's lines aren't kept. */
+  /** Not damage, but worth knowing: another running Focus holds the ledger, so this one's lines aren't kept. */
   notes?: string[];
 }
 

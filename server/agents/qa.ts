@@ -10,7 +10,7 @@ import { HUNTING, HUNTING_STEPS, parseProofs, PROOFS_SCHEMA, proofsToKeep } from
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
-// The QA officer's instructions, their report's schema, and the PR comment the office posts. Pure, so they're unit
+// The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
 // tested (qa.test.ts).
 
 export { qaAgentModel } from '../../shared/qa';
@@ -200,8 +200,8 @@ export interface Revisit {
 
 /**
  * The changed files a report should go back to QA for: those it leaves out, those it says it only skimmed, and the code
- * files its session never opened (`opened`, when the office could read its tool calls). Nothing once QA has been sent
- * back already this review, or when the office doesn't know the changed files.
+ * files its session never opened (`opened`, when Ops could read its tool calls). Nothing once QA has been sent
+ * back already this review, or when Ops doesn't know the changed files.
  */
 export function filesToRevisit(report: QaReport, files: { changed: string[]; askedAgain: boolean } | undefined, opened?: Set<string>): Revisit | undefined {
   if (!files || files.askedAgain) return undefined;
@@ -261,7 +261,7 @@ const OPENED = { yes: '✅', no: '❌', na: '–', unknown: '' } as const;
 /**
  * The per-file account as a section of the comment (`filesCovered`): a headline (code files opened by evidence, files
  * with no test, files left out of the report and sent back to), then each changed file with whether it was opened, its
- * tests and what QA checked, gaps first. Nothing when neither the report nor the office knows the files.
+ * tests and what QA checked, gaps first. Nothing when neither the report nor Ops knows the files.
  */
 export function filesSection(report: QaReport, account: FileAccount | undefined): string[] {
   const c = filesCovered(report, account);
@@ -287,7 +287,7 @@ export function filesSection(report: QaReport, account: FileAccount | undefined)
 }
 
 /**
- * A verdict's own mark, hidden at the end of its comment: after a restart the office looks for it among the pull
+ * A verdict's own mark, hidden at the end of its comment: after a restart Ops looks for it among the pull
  * request's comments before posting the verdict again, since the comment may have gone up just as it went down. One
  * verdict's, not the pull request's: a re-review posts another verdict on the same one.
  */
@@ -301,7 +301,7 @@ export function postedAlready(comments: readonly string[], body: string): boolea
 
 const PROOF_ICON = { failed: '❌', passed: '✅', broken: '⚠️' } as const;
 
-/** The proofs QA named and what the office saw of each, as a section of the comment. Nothing when it named none. */
+/** The proofs QA named and what Ops saw of each, as a section of the comment. Nothing when it named none. */
 export function proofSection(report: Pick<QaReport, 'proofs' | 'verdict' | 'advisory'>, shots = 0): string[] {
   const proofs = report.proofs ?? [];
   if (!proofs.length) return [];
@@ -311,12 +311,12 @@ export function proofSection(report: Pick<QaReport, 'proofs' | 'verdict' | 'advi
   };
   const seen = (p: QaProof) => {
     if (p.outcome === 'failed') return p.kind === 'screenshot' ? `holds: ${p.note ?? ''}` : `fails${p.note ? `: ${cell(truncate(p.note, 200))}` : ''}`;
-    if (p.outcome === 'passed') return 'passed when the office ran it';
+    if (p.outcome === 'passed') return 'passed when Ops ran it';
     return `not proof: ${cell(p.note ?? 'not checked')}`;
   };
   return [
-    '', '### 🧪 Proof', '', 'QA blocks a pull request only with proof the office checks itself: it runs each test and check in QA\'s checkout before posting.', '',
-    '| | Finding | Proof | What the office saw |', '|---|---|---|---|',
+    '', '### 🧪 Proof', '', 'QA blocks a pull request only with proof Ops checks itself: it runs each test and check in QA\'s checkout before posting.', '',
+    '| | Finding | Proof | What Ops saw |', '|---|---|---|---|',
     ...proofs.map((p) => `| ${p.outcome ? PROOF_ICON[p.outcome] : ' '} | ${cell(p.finding)} | ${p.kind}: ${what(p)} | ${seen(p)} |`),
   ];
 }
@@ -328,7 +328,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
   const heading = report.advisory ? '✅ Passed with advice' : pass ? '✅ Passed' : '❌ Failed';
   const lines = [`## 🔍 QA report: ${heading}`, ...(tested ? [tested] : []), '', report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.')];
-  if (report.advisory) lines.push('', `> QA found problems, but none came with proof that held when the office checked it (a test that fails, a failing check, or a screenshot of a broken page), so they don't block this pull request: they're advice, below.`);
+  if (report.advisory) lines.push('', `> QA found problems, but none came with proof that held when Ops checked it (a test that fails, a failing check, or a screenshot of a broken page), so they don't block this pull request: they're advice, below.`);
   if (report.checks.length) {
     lines.push('', '| | Check | Details |', '|---|---|---|', ...report.checks.map((c) => `| ${ICON[c.result]} | ${cell(c.name)} | ${cell(c.details)} |`));
   }
@@ -351,7 +351,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
     const caption = s.caption.replace(/\r?\n/g, ' ');
     lines.push('', `**${i + 1}. ${caption}**`, '', s.url ? `![${caption.replace(/[[\]]/g, '')}](${s.url})` : '_The image couldn\'t be uploaded._');
   });
-  if (attribution) lines.push('', `<sub>Posted by the Focus office. QA reviews and tests; the manager decides what merges.</sub>`);
+  if (attribution) lines.push('', `<sub>Posted by Ops, aboard the Focus. QA reviews and tests; the manager decides what merges.</sub>`);
   return lines.join('\n');
 }
 
@@ -379,7 +379,7 @@ Test this PR on its own first, as below. Then, where the repos depend on each ot
 /**
  * QA's "How to test" steps for a pull request into `baseBranch`, numbered in this order in its instructions
  * (`qaSystemAppend`) and listed by title at the QA station's Playbook. `checks` are the commands of the repo's own checks
- * when the office knows them (`repoChecks`); without them QA works out which there are.
+ * when Ops knows them (`repoChecks`); without them QA works out which there are.
  */
 export function qaSteps(baseBranch: string, checks: readonly string[] = []): QaStep[] {
   const run = checks.length
@@ -420,7 +420,7 @@ ${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this proje
 How to test:
 ${qaSteps(pr.baseBranch, checks).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
 ${proof ? HUNTING : ''}
-Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: the office posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
+Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: Ops posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
 
 Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took, up to ${SPOT_CHECKS} spot-checks${proof ? ', the proofs for what you fail it for' : ''} and, on a fail, precise fix instructions for the developer.
 
@@ -526,7 +526,7 @@ export function checksFixPrompt(pr: { number: number; branch: string }, sha: str
 function fixAndPush(what: string, branch: string, cloud: boolean): string {
   return cloud
     ? `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, commit, and push with \`git push origin HEAD:${branch}\`. That updates the pull request and QA tests it again.`
-    : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. The office pushes your commits to the same pull request and QA tests it again.`;
+    : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. Ops pushes your commits to the same pull request and QA tests it again.`;
 }
 
 /**

@@ -1,10 +1,10 @@
-// Smoke test for the opening splash screen: starts the office in demo mode on a free port,
+// Smoke test for the opening splash screen: starts Focus in demo mode on a free port,
 // drives it in headless Chromium and exits non-zero naming the first check that failed.
 import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Browser, Page } from 'playwright';
-import { CheckFailed, freePort, launchBrowser, root, startDemo, stopDemo, waitForServer } from './demoOffice';
+import { CheckFailed, freePort, launchBrowser, root, startDemo, stopDemo, waitForServer } from './demoShip';
 
 const shotsDir = path.join(root, 'smoke-shots');
 const DEMO_TEXT = 'Demo mode – simulated GitHub and agents.';
@@ -21,7 +21,7 @@ async function runChecks(page: Page, url: string, errors: string[]): Promise<voi
   // the app's ready signal: main.ts sets window.focusHQ last, once the fonts and the ship's GLBs have loaded and the
   // splash is up, which on a cold dev server (Vite compiling, maybe reloading for new dependencies) is well after load
   const ready = await page.waitForFunction(() => 'focusHQ' in window, null, { timeout: 90_000 }).then(() => true, () => false);
-  check('the office is ready (window.focusHQ is defined)', ready, errors.join(' | '));
+  check('the ship is ready (window.focusHQ is defined)', ready, errors.join(' | '));
   const splash = page.locator('.splash');
   check('splash is visible', await splash.isVisible().catch(() => false));
   check('splash shows the FOCUS HQ heading', (await splash.locator('h1').textContent().catch(() => null))?.trim() === 'FOCUS HQ');
@@ -52,7 +52,7 @@ async function main(): Promise<number> {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), 'focus-smoke-'));
   const port = await freePort();
   const url = `http://127.0.0.1:${port}/`;
-  console.log(`Smoke test: demo office on ${url}`);
+  console.log(`Smoke test: demo ship on ${url}`);
   const server = startDemo(port, dataDir);
   let browser: Browser | undefined;
   try {

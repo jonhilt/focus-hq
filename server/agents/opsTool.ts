@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { MODEL_SCHEMA } from './modelSchema';
 import { errorMessage } from '../util';
 import { CONTACT_LIMITS as C } from './contacts';
-import type { ExtraTool, OfficeTools, ToolReply } from './types';
+import type { ExtraTool, OpsTools, ToolReply } from './types';
 
 /** The note tool's input: what the goal's note keeps, and the goal's contacts. */
 export const noteShape = {
@@ -12,7 +12,7 @@ export const noteShape = {
   learned: z.string().optional().describe('One new line on what a slice taught you, or a decision and why.'),
   allLearned: z.array(z.string()).optional().describe('Replaces every learned line: to merge older lessons.'),
   next: z.array(z.string()).optional().describe('Ideas for what comes next, replacing the last ones.'),
-  contact: z.string().max(C.text).optional().describe(`Log one loose thread you noticed and don't want lost, a question, a risk or an idea off the current path, as a contact on the goal's chart (at most ${C.text} characters, ${C.open} open at once). The office gives it an id (c1, c2…).`),
+  contact: z.string().max(C.text).optional().describe(`Log one loose thread you noticed and don't want lost, a question, a risk or an idea off the current path, as a contact on the goal's chart (at most ${C.text} characters, ${C.open} open at once). Ops gives it an id (c1, c2…).`),
   closeContact: z.object({
     id: z.string().describe('The contact\'s id, like c2.'),
     as: z.enum(['pursued', 'dropped']).describe('pursued: you\'re taking it up as work; dropped: it isn\'t worth it, or the course moved on.'),
@@ -31,13 +31,13 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
   }
 }
 
-/** The office's own tools' names: a plugin's tool with one of them is left out. */
-export const OFFICE_TOOL_NAMES = ['ship', 'note', 'show', 'model', 'ask', 'propose_close'] as const;
+/** Ops' own tools' names: a plugin's tool with one of them is left out. */
+export const OPS_TOOL_NAMES = ['ship', 'note', 'show', 'model', 'ask', 'propose_close'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
-/** The plugins' tools a lead's office takes: well named, clear of the office's own and of each other's (the first wins). */
+/** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
 export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
-  const taken = new Set<string>(OFFICE_TOOL_NAMES);
+  const taken = new Set<string>(OPS_TOOL_NAMES);
   return extra.filter((t) => {
     if (!TOOL_NAME.test(t.name) || taken.has(t.name)) return false;
     taken.add(t.name);
@@ -46,19 +46,19 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * The office's tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, model, ask and
+ * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, model, ask and
  * propose_close, and those the plugins switched on add.
  */
-export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInstance {
+export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
     name: 'office',
     version: '1.0.0',
     alwaysLoad: true,
-    instructions: 'The Focus office: it pushes your work and opens pull requests for you, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done. Never push or open pull requests yourself.',
+    instructions: 'Ops, the automated side of Focus: it pushes your work and opens pull requests for you, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done. Never push or open pull requests yourself.',
     tools: [
       tool(
         'ship',
-        'Ship the slice: the office pushes every repo in your workspace with new commits, and opens (or updates) a pull request in each. Commit everything first.',
+        'Ship the slice: Ops pushes every repo in your workspace with new commits, and opens (or updates) a pull request in each. Commit everything first.',
         {
           title: z.string().describe('The pull requests’ title: imperative and specific, under 70 characters.'),
           summary: z.string().describe('The pull requests’ description in Markdown: what the slice does and why, and how you tested it.'),
@@ -83,7 +83,7 @@ export function officeMcpServer(tools: OfficeTools): McpSdkServerConfigWithInsta
       ),
       tool(
         'model',
-        "Show how code works, or what your change does to it, as a system model recovered from the code: its parts, how they connect, and one concrete scenario as steps along the connections, every part and connection cited at the file and line in your workspace. The office checks every cite against your workspace and tells you what didn't check out (drawn flagged in red), draws it one fixed way (its structure, the scenario as a sequence diagram, and the data at each step, with a key), and puts it on your station's screen like show's visuals; up close the captain steps through the scenario and clicks any part to see the code it cites. Use it rather than a hand-drawn diagram whenever the captain needs to understand how real code works, or to review what a slice changes (mark what it adds, changes or removes). Keep to one level of detail, 8 to 12 parts on the scenario's path; fix what the check reports and send it again under the same id.",
+        "Show how code works, or what your change does to it, as a system model recovered from the code: its parts, how they connect, and one concrete scenario as steps along the connections, every part and connection cited at the file and line in your workspace. Ops checks every cite against your workspace and tells you what didn't check out (drawn flagged in red), draws it one fixed way (its structure, the scenario as a sequence diagram, and the data at each step, with a key), and puts it on your station's screen like show's visuals; up close the captain steps through the scenario and clicks any part to see the code it cites. Use it rather than a hand-drawn diagram whenever the captain needs to understand how real code works, or to review what a slice changes (mark what it adds, changes or removes). Keep to one level of detail, 8 to 12 parts on the scenario's path; fix what the check reports and send it again under the same id.",
         {
           id: z.string().describe('A short name for it, lowercase with dashes (like "save-flow"): the same id again replaces it.'),
           title: z.string().describe('What it shows, in a few words (at most 80 characters).'),

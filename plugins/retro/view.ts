@@ -1,7 +1,7 @@
 // The retro on the engineering station: its card on the overview, and its own view, where the captain
 // starts one and decides on its drafts.
 import {
-  busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, office, pluginState, timeAgo, type Ui,
+  busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, focus, pluginState, timeAgo, type Ui,
 } from '../../plugin-api/client';
 import { type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, retroStanding, startReading, windowInput, type WindowInput } from './shared';
 
@@ -43,7 +43,7 @@ export function retroView(ui: Ui): HTMLElement {
     controls(ui, eng.name, page),
     page.standing ? status(page.standing) : null,
     page.found ? findings(ui, page.found) : null,
-    fixes(office.report?.fixes),
+    fixes(focus.report?.fixes),
   );
 }
 
@@ -106,7 +106,7 @@ function draft(ui: Ui, d: RetroDraft, i: number): HTMLElement {
       : h('span', { class: 'chip off' }, 'Rejected');
     return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, said, h('small', { class: 'muted' }, timeAgo(d.decision.at))));
   }
-  const repos = office.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
+  const repos = focus.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
   const pick = h('select', null, ...repos.map((r) => h('option', { value: `${r.projectId} ${r.repo}` }, r.label)));
   const last = localStorage.getItem(FILE_IN);
   if (last && repos.some((r) => `${r.projectId} ${r.repo}` === last)) pick.value = last;

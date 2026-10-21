@@ -35,7 +35,7 @@ export interface Microphone {
 const stopTracks = (stream: MediaStream) => stream.getTracks().forEach((t) => t.stop());
 
 function openStream(): Promise<MediaStream> {
-  if (!navigator.mediaDevices?.getUserMedia) return Promise.reject(new Error('This page can’t use the microphone. Open the office on localhost or over https.'));
+  if (!navigator.mediaDevices?.getUserMedia) return Promise.reject(new Error('This page can’t use the microphone. Open Focus on localhost or over https.'));
   return navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } });
 }
 

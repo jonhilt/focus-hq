@@ -1,7 +1,7 @@
 import os from 'node:os';
 
 /**
- * The names a browser may reach the office by. `names` are exact hostnames, `suffixes` (starting with a dot) match any
+ * The names a browser may reach Focus by. `names` are exact hostnames, `suffixes` (starting with a dot) match any
  * hostname under them, like a Tailscale Serve address under `.ts.net`.
  */
 export interface AllowedHosts {
@@ -11,12 +11,12 @@ export interface AllowedHosts {
 
 const LOOPBACK = ['localhost', '127.0.0.1', '::1'];
 
-/** Listening on every interface, so the office is reachable by any of the machine's addresses. */
+/** Listening on every interface, so Focus is reachable by any of the machine's addresses. */
 const isWildcard = (host: string) => host === '0.0.0.0' || host === '::';
 
 /**
- * Where the office may be reached from: loopback, `HOST` itself, `.ts.net` (the Tricorder through Tailscale Serve)
- * and anything in `FOCUS_ALLOWED_HOSTS` (comma-separated, `.example.com` for a suffix). An office
+ * Where Focus may be reached from: loopback, `HOST` itself, `.ts.net` (the Tricorder through Tailscale Serve)
+ * and anything in `FOCUS_ALLOWED_HOSTS` (comma-separated, `.example.com` for a suffix). A Focus
  * listening on every interface adds the machine's own name and addresses.
  */
 export function allowedHosts(host: string, extra = '', machine = { hostname: os.hostname(), addresses: interfaceAddresses() }): AllowedHosts {
@@ -46,7 +46,7 @@ export function hostname(hostHeader: string): string {
 const allowed = (name: string, hosts: AllowedHosts) => hosts.names.has(name) || hosts.suffixes.some((s) => name.endsWith(s));
 
 /**
- * Why a request to the office is refused, or undefined to let it through. The office has no login, so it only answers
+ * Why a request to Focus is refused, or undefined to let it through. Focus has no login, so it only answers
  * the captain's own browser: a `Host` it doesn't know is another site's name pointed at this machine (DNS rebinding),
  * and an `Origin` it doesn't know is another site's page (or a sandboxed one, `null`, like a lead's artifact) trying
  * to drive it. Requests with no `Origin` (same-origin page loads, curl, scripts) need only the `Host`.
@@ -64,5 +64,5 @@ export function refusal(headers: { host?: string; origin?: string }, hosts: Allo
   return undefined;
 }
 
-/** True when the office listens beyond this machine, where anyone who can reach the port can drive it. */
+/** True when Focus listens beyond this machine, where anyone who can reach the port can drive it. */
 export const listensBeyondLoopback = (host: string) => !LOOPBACK.includes(hostname(host));

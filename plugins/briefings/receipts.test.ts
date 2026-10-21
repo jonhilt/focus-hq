@@ -52,7 +52,7 @@ describe('the names a line says', () => {
     expect(namesIn('It writes to `ledger.jsonl` and Kokoro says it.')).toEqual(['Kokoro', 'ledger.jsonl']);
   });
 
-  it('leaves out titles and the office’s own words', () => {
+  it('leaves out titles and Ops’ own words', () => {
     expect(namesIn('So Lieutenant Moreau tells the Captain, and QA checks it.')).toEqual(['Moreau']);
   });
 });

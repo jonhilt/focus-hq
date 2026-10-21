@@ -7,10 +7,10 @@ import { type Action, checkAtOnce, type Later, now, type Running, type Subject }
 import type { AgentSession, RunHooks, RunRequest } from './types';
 import { StandInClaude as Code } from './claudeStandIn';
 
-// The Claude Code session runner (`ClaudeRunner`), under the office's rule that two things at once end as one after the
+// The Claude Code session runner (`ClaudeRunner`), under Focus's rule that two things at once end as one after the
 // other would (docs/invariants.md). A session keeps listening while what a turn left running in the background (a
-// command, a workflow) runs on after the turn, takes what it reports in a turn of its own that can still ask the
-// office (docs/goals.md: "It keeps listening through the turn Claude Code takes for the last task's result"), and stops
+// command, a workflow) runs on after the turn, takes what it reports in a turn of its own that can still ask
+// Ops (docs/goals.md: "It keeps listening through the turn Claude Code takes for the last task's result"), and stops
 // listening once nothing's left. Described here (what can happen to a session, what must hold), not told what to
 // expect: the runner runs as it is, on a stand-in for Claude Code at the SDK's `query`.
 
@@ -53,13 +53,13 @@ export interface Said {
   taken: string[];
   waiting: string[];
   turn: boolean;
-  /** What runs in the background, as Claude Code has it and as the office was told. */
+  /** What runs in the background, as Claude Code has it and as Ops was told. */
   running: string[];
   told: string[];
-  /** Tools the office approved, and those Claude Code cancelled because nobody was listening to ask. */
+  /** Tools Ops approved, and those Claude Code cancelled because nobody was listening to ask. */
   approved: number;
   cancelled: number;
-  /** Whether the office is still listening to the session (between turns), and how the session ended, once it has. */
+  /** Whether Ops is still listening to the session (between turns), and how the session ended, once it has. */
   listening?: boolean;
   ended?: string;
 }
@@ -85,7 +85,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
     const life = (later: Later, resume?: string): Running<Said> => {
       let code: Code | undefined;
       sdk.code = ({ prompt, options }) => (code = new Code(taken, options, prompt, later)).query();
-      // what the office was told runs in the background (its probes and transporter rooms)
+      // what Ops was told runs in the background (its probes and transporter rooms)
       const told = new Map<string, string>();
       let ended: string | undefined;
       const hooks: RunHooks = {
@@ -112,12 +112,12 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
         waiting: sorted(code?.queue ?? []),
         turn: !!code?.turn,
         running: sorted((code?.tasks ?? []).map((t) => t.kind)),
-        // once the session's over, what its probes last said is the office's to settle (a restart marks them lost)
+        // once the session's over, what its probes last said is Ops' to settle (a restart marks them lost)
         told: ended ? [] : sorted([...told.values()]),
         approved: code?.approved ?? 0,
         cancelled: code?.cancelled ?? 0,
         // compared between turns: mid-turn it can be off, as a message sent just as a turn ends gets a turn of its
-        // own that the office has stopped listening to (`a message sent as the turn ends`, below)
+        // own that Ops has stopped listening to (`a message sent as the turn ends`, below)
         ...(!code?.turn && { listening: !code?.inputEnded }),
         ended,
       });
@@ -162,7 +162,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
               }
             },
           },
-          { name: 'the office goes down', run: () => session.stop() },
+          { name: 'Focus goes down', run: () => session.stop() },
         ] satisfies Action[]).filter((a) => (!only || only.test(a.name)) && !except?.test(a.name));
       return {
         actions,
@@ -170,7 +170,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
         settle: () => steady(() => [said(), code?.busy]),
         close: () => session.stop(),
         restart: (l) => {
-          // the office stops every session as it goes down (`shutDown`), and resumes the lead's when it's back
+          // Focus stops every session as it goes down (`shutDown`), and resumes the lead's when it's back
           session.stop();
           return life(l, 'session-1');
         },
@@ -183,7 +183,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
 });
 const session = sessionOf();
 
-describe('a Claude Code session, under the office’s rule for two things at once', () => {
+describe('a Claude Code session, under Focus’s rule for two things at once', () => {
   // a description that never got a session listening past its turn, or a report taken in a turn that could still ask,
   // would prove nothing of what the session hears after its turn
   it('reaches a session listening on past its turn, hearing a message and a report, and done once nothing’s left', async () => {
@@ -198,7 +198,7 @@ describe('a Claude Code session, under the office’s rule for two things at onc
     s.close?.();
     // the turn over with a command and a workflow running: still listening
     expect(seen[2]).toMatchObject({ turn: false, running: ['local_bash', 'local_workflow'], told: ['local_bash', 'local_workflow'], listening: true });
-    // a message then, taken in a turn that could ask the office
+    // a message then, taken in a turn that could ask Ops
     expect(seen[3]).toMatchObject({ taken: ['a message', 'the brief'], turn: true, approved: 2 });
     // the command's report taken in a turn of its own, which can still ask
     expect(seen[5]).toMatchObject({ taken: ['a message', 'report from local_bash', 'the brief'], approved: 3, cancelled: 0, running: ['local_workflow'] });
@@ -207,7 +207,7 @@ describe('a Claude Code session, under the office’s rule for two things at onc
     expect(seen[8]).toMatchObject({ listening: false, ended: 'done', cancelled: 0 });
   });
 
-  it('reaches a message sent mid-turn taken in a turn of its own, with the office listening on through it', async () => {
+  it('reaches a message sent mid-turn taken in a turn of its own, with Ops listening on through it', async () => {
     const s = await session.start(now);
     for (const name of ['the captain sends a message', 'the turn ends', 'the turn starts a command in the background', 'the turn ends']) {
       await Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
@@ -237,7 +237,7 @@ describe('a Claude Code session, under the office’s rule for two things at onc
     expect(seen[5]).toMatchObject({ turn: false, running: ['local_workflow'] });
   });
 
-  // docs/goals.md: "A workflow the office has seen start and not end holds it open too, whatever Claude Code lists"
+  // docs/goals.md: "A workflow Ops has seen start and not end holds it open too, whatever Claude Code lists"
   it('keeps listening while a workflow it saw start runs, whatever Claude Code lists', async () => {
     const s = await session.start(now);
     for (const name of ['the turn starts a workflow', 'the turn ends', 'Claude Code lists its background leaving a workflow out', 'a minute passes', 'a workflow reports how it’s going']) {
@@ -254,7 +254,7 @@ describe('a Claude Code session, under the office’s rule for two things at onc
   });
 
   // Found on main by the check above (docs/invariants.md): the turn's result says nothing's queued, as the message is
-  // still on its way to Claude Code, so the office stops listening; Claude Code takes the message in a turn of its own
+  // still on its way to Claude Code, so Ops stops listening; Claude Code takes the message in a turn of its own
   // anyway, and what that turn leaves running reports to a session nobody's listening to, whose tools it cancels.
   it('a message sent as the turn ends is heard by a session still listening', async () => {
     const held: { label: string; go: () => void }[] = [];

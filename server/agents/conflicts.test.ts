@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { autoMergePlan, conflictsAgentModel, conflictsRecord, conflictStages, mergeRules } from './conflicts';
 
 describe('conflictsAgentModel', () => {
-  it('falls back to the office model when no conflicts model is set', () => {
+  it('falls back to Focus’s model when no conflicts model is set', () => {
     expect(conflictsAgentModel({ model: 'claude-opus-5-5', conflictsModel: '' })).toEqual({ model: 'claude-opus-5-5', effort: undefined });
   });
 
@@ -66,7 +66,7 @@ describe('settling conflicts by rule', () => {
 });
 
 describe('the ledger’s conflicts line', () => {
-  it('says the office settled it by rule, with the files', () => {
+  it('says Ops settled it by rule, with the files', () => {
     expect(conflictsRecord({ kind: 'merged', sha: 'b', from: 'a', auto: ['CLAUDE.md'] })).toEqual({ resolved: 'auto', files: ['CLAUDE.md'] });
   });
 

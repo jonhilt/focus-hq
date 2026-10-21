@@ -19,7 +19,7 @@ const ROOT = path.resolve(import.meta.dirname, '../../..');
 const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
 const RUNS = Number(arg('--runs') ?? 3);
 const JUDGE = arg('--judge') ?? 'claude-haiku-4-5-20251001';
-const REASON = 'Not this one: it isn’t where the office hurts right now, and it would take the next climb off what matters. Pick another gap.';
+const REASON = 'Not this one: it isn’t where Focus hurts right now, and it would take the next climb off what matters. Pick another gap.';
 
 const gh = (...args: string[]) => execFileSync('gh', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const repo = gh('repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner').trim();
@@ -85,7 +85,7 @@ async function main() {
   const result = replayVerdict(controlSeen, treatmentSeen, [...control, ...treatment]);
 
   const out = { at: Date.now(), commit: execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim(), runs: RUNS, judge: JUDGE, rejected, control, treatment, controlSeen, treatmentSeen, result, costUsd: cost };
-  // the plugin's own folder (kept in the office's climb-replays/ before the climber was a plugin)
+  // the plugin's own folder (kept in Focus's climb-replays/ before the climber was a plugin)
   const dir = pluginDataDir(CLIMBER, { movedFrom: 'climb-replays' });
   mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${new Date(out.at).toISOString().replace(/[:.]/g, '-')}.json`);

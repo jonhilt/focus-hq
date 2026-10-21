@@ -53,7 +53,7 @@ export function renderFrictions(groups: FrictionGroup[], days: number): string {
   return [
     `# Frictions in the last ${days} days that came up in ${PATTERN_SESSIONS} or more sessions`,
     '',
-    'Each was found in a session digest by a cheap model told only to find and quote, so a group can hold the odd moment that isn’t really the office’s doing: weigh the quotes. Kinds:',
+    'Each was found in a session digest by a cheap model told only to find and quote, so a group can hold the odd moment that isn’t really Ops’ doing: weigh the quotes. Kinds:',
     ...Object.entries(FRICTION_KINDS).map(([k, d]) => `- ${k}: ${d}`),
     '',
     ...groups.flatMap((g, i) => [`## G${i + 1}: ${g.key} (${g.sessions} sessions)`, ...g.moments.map((m) => `- ${day(m.at)} ${m.agent}: “${m.quote}”`), '']),
@@ -64,7 +64,7 @@ export function engineerSystemPrompt(name: string): string {
   return `
 # You are ${name}, chief engineer aboard the Focus
 
-The Focus is an office where Claude Code agents build software for the captain: each goal's lead works with the captain a slice at a time and ships pull requests, developers resolve issues, and QA officers review every pull request before it merges. You keep the ship running. Each agent session is digested as it ends, and its frictions (moments where the office, its tools or the environment got in the way) are picked out and quoted. Today you turn the ones that keep coming back into issues the captain can accept, so the office stops tripping over them.
+The Focus is a starship where Claude Code agents build software for the captain: each goal's lead works with the captain a slice at a time and ships pull requests, developers resolve issues, and QA officers review every pull request before it merges. You keep the ship running. Each agent session is digested as it ends, and its frictions (moments where Ops, its tools or the environment got in the way) are picked out and quoted. Today you turn the ones that keep coming back into issues the captain can accept, so the ship stops tripping over them.
 
 Your current directory holds, read-only:
 - frictions.md: the frictions that came up in three or more sessions, grouped (G1, G2, …) with quoted moments. Start here.
@@ -72,8 +72,8 @@ Your current directory holds, read-only:
 - goals.md: goals that closed, and what their leads learned.
 
 How to work:
-- Draft one issue per group that is worth fixing, or one for a few groups that are plainly the same trouble. Leave out a group whose moments, read together, aren't the office's doing (a bug in the code being worked on, a check in that code doing its job).
-- Each issue is for an agent who knows the Focus codebase but not this retro. Its body says what keeps happening and what it costs, then has "## What to build" (the cheapest fix that would work, preferring a check or automation the office runs over a rule in a prompt; a pointer in CLAUDE.md or the docs only for what a machine can't check; or deleting something that isn't earning its keep) and "## Done when". Don't paste the quotes: the office adds them under "## Evidence".
+- Draft one issue per group that is worth fixing, or one for a few groups that are plainly the same trouble. Leave out a group whose moments, read together, aren't Ops' doing (a bug in the code being worked on, a check in that code doing its job).
+- Each issue is for an agent who knows the Focus codebase but not this retro. Its body says what keeps happening and what it costs, then has "## What to build" (the cheapest fix that would work, preferring a check or automation Ops runs over a rule in a prompt; a pointer in CLAUDE.md or the docs only for what a machine can't check; or deleting something that isn't earning its keep) and "## Done when". Don't paste the quotes: Ops adds them under "## Evidence".
 - Give each its kind of fix (check, qa-rule, pointer, delete) and the number the next retro should watch, with today's value (the sessions it came up in).
 - Most worth doing first; a few sharp drafts beat many. You change nothing and file nothing: the captain decides.
 
@@ -101,7 +101,7 @@ export const DRAFTS_SCHEMA: Record<string, unknown> = {
         properties: {
           groups: { type: 'array', minItems: 1, items: { type: 'string' }, description: 'The groups it rests on, as in frictions.md: G1, G2…' },
           title: { type: 'string', description: 'Imperative and specific, under 80 characters.' },
-          body: { type: 'string', description: 'Markdown: what keeps happening and what it costs, then ## What to build and ## Done when. No quotes: the office adds the evidence.' },
+          body: { type: 'string', description: 'Markdown: what keeps happening and what it costs, then ## What to build and ## Done when. No quotes: Ops adds the evidence.' },
           kind: { type: 'string', enum: [...FIX_KINDS] },
           measure: { type: 'string', description: 'The number the next retro should watch, with its value today.' },
         },

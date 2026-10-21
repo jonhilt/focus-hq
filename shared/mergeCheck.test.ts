@@ -64,7 +64,7 @@ describe('mergeVerdict', () => {
 
   it('refuses a conflicting merge, and one it couldn’t check', () => {
     expect(mergeVerdict(conflicts)).toEqual({ kind: 'refuse', reason: 'it conflicts with its base at bbbbbbb (src/a.ts, src/b.ts)' });
-    expect(mergeVerdict({ kind: 'broken', reason: 'git fetch failed' })).toEqual({ kind: 'refuse', reason: 'the office couldn’t check the merge: git fetch failed' });
+    expect(mergeVerdict({ kind: 'broken', reason: 'git fetch failed' })).toEqual({ kind: 'refuse', reason: 'Ops couldn’t check the merge: git fetch failed' });
   });
 });
 

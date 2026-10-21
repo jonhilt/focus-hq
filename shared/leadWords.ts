@@ -4,7 +4,7 @@ import type { GoalArtifact, TermLine } from './types';
 // the inbox's API both put it in front of them. Pure, so it's tested (client/src/ui/briefing.test.ts).
 
 /**
- * What an agent said last, from its terminal: its last run of text lines, past whatever came after (the office's log
+ * What an agent said last, from its terminal: its last run of text lines, past whatever came after (Ops' log
  * of a turn ending, or the tool call a raised hand is for), at most `max` characters of its end, from a whole line.
  */
 export function lastWords(lines: readonly TermLine[], max = 1500): string {
@@ -26,7 +26,7 @@ export function lastWords(lines: readonly TermLine[], max = 1500): string {
  */
 export function shownThisTurn(artifacts: readonly GoalArtifact[] | undefined, lines: readonly TermLine[]): GoalArtifact[] {
   const newest = [...(artifacts ?? [])].sort((a, b) => b.at - a.at);
-  // words to the lead are ▶ lines; the office's own notes of a hand raised or approved, or a question asked, aren't
+  // words to the lead are ▶ lines; Ops' own notes of a hand raised or approved, or a question asked, aren't
   const spoke = lines.findLast((l) => l.kind === 'manager' && l.text.startsWith('▶'));
   return spoke ? newest.filter((a) => a.at >= spoke.t) : newest.slice(0, 1);
 }

@@ -4,7 +4,7 @@ import type { BaseMerge } from './types';
 
 /**
  * The model and effort a new agent seated to resolve a pull request's merge conflicts works at, stamped on them so a
- * resumed session keeps them: the office's conflicts model, else its `model` setting, and the conflicts effort, if any.
+ * resumed session keeps them: Focus's conflicts model, else its `model` setting, and the conflicts effort, if any.
  */
 export function conflictsAgentModel(settings: Pick<Settings, 'model' | 'conflictsModel' | 'conflictsEffort'>): Pick<Agent, 'model' | 'effort'> {
   const model = settings.conflictsModel.trim() || settings.model.trim();
@@ -12,7 +12,7 @@ export function conflictsAgentModel(settings: Pick<Settings, 'model' | 'conflict
 }
 
 /**
- * How the office settles a conflicted file by itself, as the repo's `.gitattributes` says: `focus-merge=union` keeps
+ * How Ops settles a conflicted file by itself, as the repo's `.gitattributes` says: `focus-merge=union` keeps
  * both sides' lines (append-only docs), `theirs` takes the base branch's version and `ours` the PR's (generated files,
  * like baked GLBs). A file with git's own `merge=union` counts as union too, though git rarely leaves one conflicted.
  */
@@ -45,7 +45,7 @@ export function conflictStages(lsFiles: string): Map<string, Set<number>> {
 }
 
 /**
- * Which conflicted files the office settles by rule, and those left for an agent. A union needs both sides' versions
+ * Which conflicted files Ops settles by rule, and those left for an agent. A union needs both sides' versions
  * (a file deleted on one side isn't a union); taking one side's always works, deleting the file if that side did.
  */
 export function autoMergePlan(stages: Map<string, Set<number>>, rules: Map<string, MergeRule>): { auto: { file: string; rule: MergeRule }[]; left: string[] } {
@@ -59,7 +59,7 @@ export function autoMergePlan(stages: Map<string, Set<number>>, rules: Map<strin
   return { auto, left };
 }
 
-/** What the ledger's `conflicts` line says about the office's merge of a PR's base: who resolved it, and the files that conflicted. */
+/** What the ledger's `conflicts` line says about Ops' merge of a PR's base: who resolved it, and the files that conflicted. */
 export function conflictsRecord(merge: BaseMerge): Pick<Extract<LedgerEntry, { kind: 'conflicts' }>, 'resolved' | 'files' | 'broke'> {
   if (merge.kind === 'up-to-date') return { resolved: 'up-to-date' };
   if (merge.kind === 'merged') return merge.auto?.length ? { resolved: 'auto', files: merge.auto } : { resolved: 'office' };

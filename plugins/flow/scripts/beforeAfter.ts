@@ -6,7 +6,7 @@
 //   pnpm run before-after --project proj_…         one room's (--task lead for one kind of session)
 
 import { execFileSync } from 'node:child_process';
-import { type AgentTask, officeLedger } from '../../../plugin-api/server';
+import { type AgentTask, focusLedger } from '../../../plugin-api/server';
 import { beforeAfter, beforeAfterLines } from '../beforeAfter';
 
 const args = process.argv.slice(2);
@@ -19,7 +19,7 @@ const atArg = opt('at') ?? execFileSync('git', ['log', '-1', '--format=%cI', '--
 const at = Date.parse(atArg);
 if (Number.isNaN(at)) throw new Error(`--at ${atArg}: not a date`);
 const days = Number(opt('days') ?? 7);
-const { file, events: ledger } = officeLedger();
+const { file, events: ledger } = focusLedger();
 if (!ledger) {
   console.error(`No ledger at ${file}.`);
   process.exit(1);

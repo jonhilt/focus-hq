@@ -1,4 +1,4 @@
-// How the 3D view runs as the captain walks round a busy office: starts the office in demo mode on a free port, sets
+// How the 3D view runs as the captain walks round a busy ship: starts Focus in demo mode on a free port, sets
 // agents and leads working in its first project, then walks from the bridge through a holodeck's door into its hall
 // and on into a briefing room, twice, on the GPU in headless Chromium. For each step it prints the frames' times, how
 // long each kept the main thread busy, and what the GPU was handed: shader programs linked, textures sent (and how
@@ -7,7 +7,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Browser, Page } from 'playwright';
-import { CheckFailed, freePort, launchBrowser, startDemo, stopDemo, waitForServer } from './demoOffice';
+import { CheckFailed, freePort, launchBrowser, startDemo, stopDemo, waitForServer } from './demoShip';
 
 const GPU = ['--enable-gpu', '--ignore-gpu-blocklist', ...(process.platform === 'darwin' ? ['--use-angle=metal'] : [])];
 
@@ -77,13 +77,13 @@ interface Frame {
   bytes: number;
 }
 
-/** Sets the first project's developers and leads working, as a busy office has them. */
+/** Sets the first project's developers and leads working, as a busy ship has them. */
 async function busy(url: string): Promise<void> {
   const api = (p: string, body?: unknown) =>
     fetch(`${url}api${p}`, body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : undefined).then((r) => r.json() as Promise<unknown>);
   const state = (await api('/state')) as { projects: { id: string }[]; agents: { id: string; task: string; projectId: string }[]; boards: { projectId: string; issues: { repo: string; number: number; title: string }[] }[] };
   const project = state.projects[0];
-  if (!project) throw new CheckFailed('the demo office has a project');
+  if (!project) throw new CheckFailed('the demo ship has a project');
   const issues = state.boards.find((b) => b.projectId === project.id)?.issues ?? [];
   for (const issue of issues.slice(0, 2)) await api('/agents', { projectId: project.id, repo: issue.repo, number: issue.number, title: issue.title });
   for (const lead of state.agents.filter((a) => a.task === 'lead' && a.projectId === project.id)) await api(`/agents/${lead.id}/message`, { text: 'Carry on with the next slice' });
@@ -141,7 +141,7 @@ async function main(): Promise<number> {
     // ?adapt=0 holds the pixel ratio, so every step's drawn at the same size
     await page.goto(`${url}?adapt=0`);
     const built = await page.waitForFunction('window.focusHQ?.world.rooms.size > 0', null, { timeout: 30_000 }).then(() => true, () => false);
-    if (!built) throw new CheckFailed('the office is built within 30s');
+    if (!built) throw new CheckFailed('the ship is built within 30s');
     console.log(`GPU: ${await page.evaluate<string>(`(() => { const gl = document.querySelector('canvas.world').getContext('webgl2'); const i = gl.getExtension('WEBGL_debug_renderer_info'); return String(i ? gl.getParameter(i.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)); })()`)}`);
     await walk(page);
     report(await page.evaluate<Frame[]>('window.__perf.frames'));

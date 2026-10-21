@@ -9,15 +9,15 @@ import { Workspace } from '../services';
 import { type BaseMerge } from '../types';
 import { FINISHED, Part, Refused } from './core';
 
-/** Resolving a pull request's merge conflicts: the office's own merge of its base, or an agent seated on it. */
+/** Resolving a pull request's merge conflicts: Ops' own merge of its base, or an agent seated on it. */
 export class Conflicts extends Part {
-  /** The pull requests (prKey) the office is merging its base branch into right now. */
+  /** The pull requests (prKey) Ops is merging its base branch into right now. */
   private merging = new Set<string>();
 
   /**
-   * Gets a pull request's merge conflicts resolved without interrupting anyone. The office first merges the base branch
+   * Gets a pull request's merge conflicts resolved without interrupting anyone. Ops first merges the base branch
    * in itself, and pushes it when git needs no help (or the repo's rules settle every conflicted file) and it
-   * type-checks. Otherwise the developer who opened the PR takes it, if they're still in the office; for anyone else's,
+   * type-checks. Otherwise the developer who opened the PR takes it, if they're still aboard; for anyone else's,
    * a goal's slice included, a new agent sits down on the PR's branch in a worktree of their own. A goal's lead hears
    * about it once their turn is over.
    */
@@ -30,7 +30,7 @@ export class Conflicts extends Part {
     if (merge.kind === 'up-to-date') return merge;
     this.core.ledger.record(projectId, { kind: 'conflicts', repo: pr.repo, pr: pr.number, goal: lead?.lead?.title, ...conflictsRecord(merge) });
     if (merge.kind === 'merged') {
-      if (lead) this.mergedForLead(lead, pr, merge.sha, 'the office');
+      if (lead) this.mergedForLead(lead, pr, merge.sha, 'Ops');
       else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
       this.verdictCatchesUp(projectId, pr, merge.sha);
       return { kind: 'merged', ...(merge.auto ? { auto: merge.auto } : {}) };
@@ -53,7 +53,7 @@ export class Conflicts extends Part {
   }
 
   /**
-   * The office's merge of the base left QA's verdict on the commit before it: back to QA, who carry a pass over a clean
+   * Ops' merge of the base left QA's verdict on the commit before it: back to QA, who carry a pass over a clean
    * merge with the project's checks alone (`precheck`), so the PR doesn't wait for the captain at an older commit.
    */
   private verdictCatchesUp(projectId: string, pr: PullRequest, sha: string): void {
@@ -66,14 +66,14 @@ export class Conflicts extends Part {
     }
   }
 
-  /** The office's own merge of the PR's base branch into it. One that fails for any reason other than conflicts goes to an agent too. */
+  /** Ops' own merge of the PR's base branch into it. One that fails for any reason other than conflicts goes to an agent too. */
   private async mergeBase(pr: PullRequest): Promise<BaseMerge> {
     const key = prKey(pr.repo, pr.number);
-    if (this.merging.has(key)) throw new Refused({ message: `The office is already merging ${pr.baseBranch} into #${pr.number}` });
+    if (this.merging.has(key)) throw new Refused({ message: `Ops is already merging ${pr.baseBranch} into #${pr.number}` });
     this.merging.add(key);
     const merge = Workspace.use((w) => w.mergeBase(pr.repo, pr.branch, pr.baseBranch)).pipe(
       Effect.catch((err) => Effect.sync((): BaseMerge => {
-        console.warn(`Couldn't merge ${pr.baseBranch} into ${pr.repo}#${pr.number} on the office's side: ${err.message}`);
+        console.warn(`Couldn't merge ${pr.baseBranch} into ${pr.repo}#${pr.number} on Ops' side: ${err.message}`);
         return { kind: 'conflicts', files: [] };
       })),
     );
@@ -81,7 +81,7 @@ export class Conflicts extends Part {
   }
 
   /**
-   * The office merged the base into a finished developer's PR: their worktree, which still has the PR's old head and
+   * Ops merged the base into a finished developer's PR: their worktree, which still has the PR's old head and
    * nothing else, moves up to the merge, so their next push doesn't undo it.
    */
   private catchUp(owner: Agent, merge: { from: string }): Effect.Effect<void, never, Workspace> {
@@ -95,7 +95,7 @@ export class Conflicts extends Part {
   }
 
   /**
-   * The office pushed a merge to one of a lead's pull requests: the slice records the PR's new head, and the lead hears
+   * Ops pushed a merge to one of a lead's pull requests: the slice records the PR's new head, and the lead hears
    * to pull it before touching that repo again, once their turn is over.
    */
   mergedForLead(lead: Agent, pr: Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | 'branch'>, sha: string, who: string): void {
@@ -104,6 +104,6 @@ export class Conflicts extends Part {
     const folder = work.repos.find((r) => r.repo === pr.repo)?.folder ?? pr.repo.split('/')[1];
     const prs = work.prs.map((p) => (p.repo === pr.repo && p.number === pr.number ? { ...p, sha } : p));
     this.update(lead, { lead: { ...work, prs } });
-    this.core.leads.noteForLead(lead, 'Office', conflictsResolvedNote(pr, folder, who));
+    this.core.leads.noteForLead(lead, 'Ops', conflictsResolvedNote(pr, folder, who));
   }
 }

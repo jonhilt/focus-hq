@@ -1,6 +1,6 @@
 // A machine laid out to draw: ELK's layered layout (elkjs), left to right, compound states as boxes round their
 // children, each arrow carrying every event that takes it, and those taken from any state drawn from a box of their own. A machine's layout is the same for every run of it, so it's
-// made once as the office starts and the runs are drawn over it (draw.ts).
+// made once as Focus starts and the runs are drawn over it (draw.ts).
 import ELK, { type ElkExtendedEdge, type ElkNode } from 'elkjs/lib/elk.bundled.js';
 import type { MachineGraph, MachineTransition } from '../../plugin-api/shared';
 import { ANY_STATE, type LaidEdge, type LaidState, type MachineLayout } from './shared';

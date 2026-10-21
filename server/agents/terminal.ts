@@ -5,7 +5,7 @@ import path from 'node:path';
 import { errorMessage } from '../util';
 
 // A terminal on the captain's screen that starts a Claude Code cloud session: the CLI starts a new one only from a
-// terminal (`--cloud` without one can only attach to an existing session), so the office opens one, and attaches to the
+// terminal (`--cloud` without one can only attach to an existing session), so Ops opens one, and attaches to the
 // session once the terminal shows its id. The pure parts (scripts, launchers, finding the id) are tested; opening the
 // window is the I/O at the end.
 
@@ -18,7 +18,7 @@ export interface TerminalScript {
   description: string;
   /** Who it's for, for the lines the terminal shows first. */
   agentName: string;
-  /** Where the terminal's output is recorded (`script`), for the office to find the session's id in. None on Windows. */
+  /** Where the terminal's output is recorded (`script`), for Ops to find the session's id in. None on Windows. */
   log?: string;
 }
 
@@ -98,7 +98,7 @@ export function cloudSessionId(text: string): string | undefined {
 }
 
 /**
- * The Claude Code executable the Agent SDK bundles, the one the office's agents run on (so the terminal starts the
+ * The Claude Code executable the Agent SDK bundles, the one Focus's agents run on (so the terminal starts the
  * same version that attaches afterwards), or else `claude` on the PATH.
  */
 export function bundledClaude(): string {

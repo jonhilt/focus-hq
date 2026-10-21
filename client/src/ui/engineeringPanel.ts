@@ -14,7 +14,7 @@ type View = string;
 
 /**
  * The engineering station, a view at a time: the plugins' parts at a glance (what they put across the top, the
- * scorecard's overview, the plugins' cards), each plugin's views (the scorecard's code and office numbers), and the ledger as it
+ * scorecard's overview, the plugins' cards), each plugin's views (the scorecard's code and Ops numbers), and the ledger as it
  * stands, with the agents' older sessions to digest.
  */
 export function openEngineeringPanel(ui: Ui): void {

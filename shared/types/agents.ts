@@ -98,7 +98,7 @@ export type Effort = (typeof EFFORT_LEVELS)[number];
 export type AgentTask = 'issue' | 'conflicts' | 'fix' | 'review' | 'lead' | 'brief';
 
 /**
- * What the office did about a pull request's merge conflicts: merged its base branch in by itself (`auto`: the conflicted
+ * What Ops did about a pull request's merge conflicts: merged its base branch in by itself (`auto`: the conflicted
  * files it settled by the repo's rules), found it already had everything (GitHub hadn't caught up), or handed it to an agent.
  */
 export type ConflictsOutcome = { kind: 'merged'; auto?: string[] } | { kind: 'up-to-date' } | { kind: 'agent'; agent: Agent };
@@ -214,7 +214,7 @@ export interface Workflow {
   startedAt: number;
   /**
    * The phases the script's meta declares, in order, before it reaches them (`phases` has only those it has reached).
-   * Missing when the office hasn't seen the script.
+   * Missing when Ops hasn't seen the script.
    */
   plan?: { title: string; detail?: string }[];
   /** What it has used so far, as Claude Code counts it: tokens and tool calls, across all its agents. */
@@ -226,7 +226,7 @@ export interface Workflow {
  * too big to send with every change to the lead.
  */
 export interface WorkflowScript {
-  /** The script's source, as the lead wrote it. Empty when the office never saw it. */
+  /** The script's source, as the lead wrote it. Empty when Ops never saw it. */
   source: string;
   /** What the script said with log(), once Claude Code has saved the run (when it ends). */
   logs: string[];
@@ -265,8 +265,8 @@ export interface BackgroundTask {
 
 /**
  * An agent waiting for a Claude Code cloud session to take over: the captain moved them to the cloud, or Claude Code
- * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal the office opens,
- * or on claude.ai) and the office attaches to it, which Claude Code does without a terminal.
+ * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal Ops opens,
+ * or on claude.ai) and Ops attaches to it, which Claude Code does without a terminal.
  */
 export interface CloudHandover {
   since: number;
@@ -274,7 +274,7 @@ export interface CloudHandover {
   fresh: boolean;
   /** Their conversation on this machine, to go back to if the captain keeps them here. */
   localSessionId?: string;
-  /** When the office opened a terminal starting the session; it watches the terminal for the session's id. */
+  /** When Ops opened a terminal starting the session; it watches the terminal for the session's id. */
   terminalAt?: number;
 }
 
@@ -309,10 +309,10 @@ export interface Agent {
   effort?: Effort;
   /**
    * How much they may do without asking, chosen by the captain for this agent alone: it carries on through their later
-   * turns and resumes. Missing = the office's `autonomy` setting (`effectiveAutonomy`).
+   * turns and resumes. Missing = Focus's `autonomy` setting (`effectiveAutonomy`).
    */
   autonomy?: Autonomy;
-  /** Claude model chosen for this agent when it was seated (a conflicts agent's). Missing = the office's `model` setting. */
+  /** Claude model chosen for this agent when it was seated (a conflicts agent's). Missing = Focus's `model` setting. */
   model?: string;
   /**
    * Works in a Claude Code cloud session instead of on this machine: it pushes its own branch, and `sessionId` is the
@@ -323,7 +323,7 @@ export interface Agent {
   handover?: CloudHandover;
   /**
    * On hold while your plan's usage limit is reached: picking their conversation back up on your API key would cost more
-   * than the office spends without asking. They carry on at `until`, when it resets, or when the captain says to.
+   * than Ops spends without asking. They carry on at `until`, when it resets, or when the captain says to.
    */
   held?: { until: number };
   /**

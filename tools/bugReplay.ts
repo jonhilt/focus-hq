@@ -12,7 +12,7 @@
 //   pnpm run bug-replay --dry           say what it would review, without running any review
 //
 // QA blocks a change only with proof that holds when it's checked (docs/qa.md#proof): tools/qaReview.ts checks it in
-// the clone as the office does in its checkout, so a review stops a change when its (checked) verdict is a fail.
+// the clone as Ops does in its checkout, so a review stops a change when its (checked) verdict is a fail.
 // A catch counts only when a judge (a separate model, holding the fix's own diff as the answer key) says one of the
 // review's findings is the very bug the fix fixed; whether the report merely named the bug's file is kept beside it.
 

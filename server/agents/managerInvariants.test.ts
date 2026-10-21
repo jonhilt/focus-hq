@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { keyFallback } from './apiKey';
-import { office, restarted } from './fakeOffice';
+import { focus, restarted } from './fakeFocus';
 import type { Agent } from '../../shared/types';
 import type { FocusPlugin, PluginHost } from '../plugins/contract';
 import { type Action, checkRestart, now, type Running, type Subject } from './invariants';
 
-// A goal's lead, under the office's rule that a restart is atomic (docs/invariants.md): what's said of a lead (held for
+// A goal's lead, under Focus's rule that a restart is atomic (docs/invariants.md): what's said of a lead (held for
 // the plan's limit, where its run is, what's waiting in its inbox, and that nothing it was told is lost) is the same
-// after the office goes down and starts again as before. Its run journal (runJournal.ts) is what it keeps of its turns
+// after Focus goes down and starts again as before. Its run journal (runJournal.ts) is what it keeps of its turns
 // and inbox. Described here (what can happen to a lead, what must survive), not told what to expect.
 
-// the office falls back on an API key while the plan's usage limit is reached, as in runRecovery.limit.test.ts
+// Ops falls back on an API key while the plan's usage limit is reached, as in runRecovery.limit.test.ts
 vi.hoisted(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-test';
   process.env.FOCUS_USE_API_KEY = 'fallback';
@@ -40,10 +40,10 @@ interface Said {
   told: string[];
 }
 
-/** The office's note for a lead that needn't cost a turn (a QA verdict that passes, the star chart): it waits for the
+/** Ops' note for a lead that needn't cost a turn (a QA verdict that passes, the star chart): it waits for the
  *  end of the turn in hand, or for whatever they hear next. Only the manager's own parts send one. */
-const noteForLead = (agents: ReturnType<typeof office>['agents'], lead: Agent, text: string) =>
-  (Reflect.get(agents, 'core') as { leads: { noteForLead(lead: Agent, from: string, text: string): void } }).leads.noteForLead(lead, 'Office', text);
+const noteForLead = (agents: ReturnType<typeof focus>['agents'], lead: Agent, text: string) =>
+  (Reflect.get(agents, 'core') as { leads: { noteForLead(lead: Agent, from: string, text: string): void } }).leads.noteForLead(lead, 'Ops', text);
 
 /** A plugin that judges the leads' turns, as the chief of staff does: it says how when the description has it say. */
 const judging = (hosts: PluginHost[]): FocusPlugin => ({
@@ -53,16 +53,16 @@ const judging = (hosts: PluginHost[]): FocusPlugin => ({
     return { judgesTurns: (agent) => agent.task === 'lead' };
   },
 });
-const startJudging = (agents: ReturnType<typeof office>['agents'], hosts: PluginHost[]) =>
+const startJudging = (agents: ReturnType<typeof focus>['agents'], hosts: PluginHost[]) =>
   agents.startPlugins([judging(hosts)], { demo: false, ownRepo: () => undefined });
 
 /** A goal's lead; `only`, the actions offered, by name, when a check is after one thing. */
 const leadOf = (only?: RegExp): Subject<Said> => ({
   name: 'lead',
   start: async () => {
-    // the limit is the office's own, kept between tests: each run starts with it not reached
+    // the limit is Ops' own, kept between tests: each run starts with it not reached
     Reflect.set(keyFallback, 'spell', undefined);
-    const first = office();
+    const first = focus();
     // the chief of staff's words for the lead go by themselves, unless the captain holds them
     first.project.cosAutoSend = true;
     // each life's chief of staff, the latest last
@@ -78,7 +78,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
     const said = (): Said => {
       const run = first.store.run(id);
       // a turn's prompt is in its conversation once it starts; what went into its session while it ran, only if it ran
-      // on (a turn stopped as the office went down may never have read it: the resumed turn hears it again)
+      // on (a turn stopped as Focus went down may never have read it: the resumed turn hears it again)
       const heard = claudes.flatMap((c) => c.turns.flatMap((t) => [t.req.prompt, ...(t.stopped ? [] : t.sent)]));
       // not what was just taken for a turn that was never asked for: once settled, nothing will hear that
       const waiting = [...run.inbox, ...run.later];
@@ -93,7 +93,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
       };
     };
     await steady(said);
-    const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude'>): Running<Said> => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>): Running<Said> => {
       // the turns this life's Claude Code has had ended: a turn ends once
       const ended = new Set<number>();
       // the lead's turn under way, ended once: with none under way, there's nothing to end
@@ -119,7 +119,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
           },
           { name: 'the captain writes', run: () => o.agents.message(id, `And the header: Message ${++sent}`) },
           // news that waits for the turn in hand to end, or goes with what they hear next
-          { name: 'the office leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
+          { name: 'Ops leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
           { name: 'the captain stops them', run: () => o.agents.stop(id) },
           // its verdict, whenever it comes: kept only while the turn it's on is still being read
           { name: 'the chief of staff judges', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 2, ask: 'Slice 2?', why: 'A pick.', message: 'Shall it?' }, Date.now()) },
@@ -146,12 +146,12 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
 });
 const lead = leadOf();
 
-describe('a goal’s lead, under the office’s rule for a restart', () => {
+describe('a goal’s lead, under Focus’s rule for a restart', () => {
   // a description that never got a message into a turn, or one waiting for it to end, would prove nothing of the inbox
   it('reaches messages sent into a turn, waiting for it to end, and waiting for the next, taken one at a time', async () => {
     const l = await lead.start(now);
     const seen: Said[] = [];
-    for (const name of ['the captain writes', 'the office leaves a note', 'the turn ends', 'the turn ends', 'the office leaves a note', 'the captain writes']) {
+    for (const name of ['the captain writes', 'Ops leaves a note', 'the turn ends', 'the turn ends', 'Ops leaves a note', 'the captain writes']) {
       await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
       await l.settle();
       seen.push(l.durable());
@@ -190,12 +190,12 @@ describe('a goal’s lead, under the office’s rule for a restart', () => {
     expect(seen).toEqual(['reading', 'reading', '1 sends', '1', 'none']);
   });
 
-  it('is said to be where it was, and held if it was, after the office goes down and starts again', async () => {
+  it('is said to be where it was, and held if it was, after Focus goes down and starts again', async () => {
     await checkRestart(lead, { runs: 15 });
   });
 
   // what the lead's told, kept through a restart: messages into a turn, notes waiting for it to end, and the next turn
-  it('loses nothing it was told, and keeps what’s waiting where it was, after the office goes down and starts again', async () => {
+  it('loses nothing it was told, and keeps what’s waiting where it was, after Focus goes down and starts again', async () => {
     await checkRestart(leadOf(/writes|note|turn ends$/), { runs: 15 });
   });
 });

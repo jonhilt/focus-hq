@@ -3,7 +3,7 @@
 // project's holodeck, its map as a star chart, which takes you into the architecture space, where its views float
 // round you.
 import * as THREE from 'three';
-import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, makeCanvas, office, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
+import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, makeCanvas, focus, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
 import { drawChart } from './chart';
 import { miniature, miniatureKey } from './miniature';
 import { TIES_QUESTION } from './draw';
@@ -60,9 +60,9 @@ function tiesCard(projectId: string, ties: ProjectCard['ties'], open: Set<string
 
 function projectMaps(ui: Ui, open: Set<string>): HTMLElement[] {
   const now = maps();
-  const on = office.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
+  const on = focus.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
   // the projects it's off for are only counted: switching it on is in each project's settings
-  const off = offNote(office.projects.length - on.length);
+  const off = offNote(focus.projects.length - on.length);
   return [...on.map((project) => {
     const card = projectCard(project, now);
     const remap = h('button', { class: 'btn small', onclick: () => void callPlugin(CARTOGRAPHY, '/map', { projectId: project.id }).catch((err: Error) => ui.error(err.message)) }, card.remap);
@@ -82,7 +82,7 @@ const CHART_PX = { w: 1280, h: 800 } as const;
  * star chart, to go there: built with the ship, so again whenever a project's switched on or off.
  */
 function ship(host: ShipHost): ShipPart | null {
-  const on = office.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
+  const on = focus.projects.filter((p) => pluginOn(p, CARTOGRAPHY));
   if (!on.length) return null;
   const space: ArchitectureSpace = new ArchitectureSpace(host.space(() => space.label()), host, maps);
   const spot = hallChart();
@@ -152,7 +152,7 @@ const cartography: ClientPlugin = {
           const drift = Object.values(maps()?.maps ?? {}).flat().reduce((n, m) => n + m.problems.length, 0);
           return drift ? `${drift} DRIFT` : '';
         },
-        standby: () => !office.projects.some((p) => pluginOn(p, CARTOGRAPHY)),
+        standby: () => !focus.projects.some((p) => pluginOn(p, CARTOGRAPHY)),
         render: (ui, _go, open) => projectMaps(ui, open),
       },
     ],

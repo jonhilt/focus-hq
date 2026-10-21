@@ -1,6 +1,6 @@
-// A recorded run's traffic between the browser and the office (`pnpm run record-flows`): each kind of request or event, which
+// A recorded run's traffic between the browser and the server (`pnpm run record-flows`): each kind of request or event, which
 // file sent it and which received it, and how often. The cartography plugin draws it as the flows imports can't show.
-// Pure: the browser (net/api.ts) and the office (server/flows.ts) both record with it.
+// Pure: the browser (net/api.ts) and the server (server/flows.ts) both record with it.
 
 /** One kind of message from one file to another in a recorded run: an `/api` request, or an event over `/ws`. */
 export interface Flow {
@@ -79,7 +79,7 @@ export class FlowCounter {
   }
 }
 
-/** Where an `/api` request was handled: a plugin's route in its server, the demo's own in the office's start, the rest in the router. */
+/** Where an `/api` request was handled: a plugin's route in its server, the demo's own in Focus's start, the rest in the router. */
 export function handlerOf(path: string, routed: boolean): string {
   const plugin = /^\/api\/plugins\/([^/]+)\//.exec(path)?.[1];
   if (plugin) return `plugins/${plugin}/server.ts`;

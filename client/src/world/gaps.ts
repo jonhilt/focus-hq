@@ -1,7 +1,7 @@
 // Finds gaps in a scene graph: faces from different meshes that face each other a little way apart, like the back of a
 // panel hovering a centimetre off the wall it should be fixed to. Faces pressed together (closer than MIN_GAP) are
 // attached; faces further apart than MAX_GAP are separate things. `pnpm run gaps` (tools/gaps.ts) imports this into
-// the running office; it isn't part of the client bundle.
+// the running ship; it isn't part of the client bundle.
 import * as THREE from 'three';
 import { SKIN } from './scenery';
 import { basis, ccw, cells, clip, key, meshPath, MIN_GAP, signedArea, trianglesOf, visible, type Tri } from './zfight';

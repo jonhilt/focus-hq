@@ -2,7 +2,7 @@
 
 A plugin (`FOCUS_PLUGINS=scorecard`, [plugins](../../docs/plugins.md)). `pnpm run scorecard` and `pnpm run crap` work in the terminal either way; the plugin puts the scorecards in main engineering.
 
-`pnpm run scorecard` measures Focus against its own standard and keeps each result, so you can see whether the code and the office are getting better or worse over time. Every number comes from a command it runs or a syntax tree it walks, never from reading code by eye. It's the first step of a hill-climb (after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb)): measure, take the worst gap, fix it, and prove the fix with the same numbers before and after.
+`pnpm run scorecard` measures Focus against its own standard and keeps each result, so you can see whether the code and Ops are getting better or worse over time. Every number comes from a command it runs or a syntax tree it walks, never from reading code by eye. It's the first step of a hill-climb (after [ratstack's hill-climb prompt](https://ratstack.sh/prompts/hill-climb)): measure, take the worst gap, fix it, and prove the fix with the same numbers before and after.
 
 It always exits 0: it measures, it doesn't judge. It only exits non-zero when it couldn't measure at all.
 
@@ -19,9 +19,9 @@ It always exits 0: it measures, it doesn't judge. It only exits non-zero when it
 - **Fence:** type assertions, non-null assertions, `any` written out, and comments that switch a check off, tests left out.
 - **Effect:** in `server/`, the share of the files doing I/O that are on Effect, and the edges where Effect hands over to Promise code. A file that only decides counts neither way: those are meant to stay plain. See the [Effect assessment](../../docs/effect-assessment.md) for the migration path.
 - **Tests:** how many tests there are, how many test files use property tests, and how many functions score over [CRAP](crap.md) 30.
-- **Office:** from [the ledger](../../docs/ledger.md): the report card's numbers and the open friction patterns.
+- **Ops:** from [the ledger](../../docs/ledger.md): the report card's numbers and the open friction patterns.
 
-The [climber](../climber/README.md) plugin works from it: each climb measures the scorecard before and after its one change. With the plugin on, the office measures each merge to main by itself, so the trend fills in without anyone running it. The build step builds into a temporary folder, never the `dist/` the office may be serving.
+The [climber](../climber/README.md) plugin works from it: each climb measures the scorecard before and after its one change. With the plugin on, Focus measures each merge to main by itself, so the trend fills in without anyone running it. The build step builds into a temporary folder, never the `dist/` Focus may be serving.
 
 ## Comparing
 
@@ -29,7 +29,7 @@ Each number knows which way is better. The printout marks a change since the lat
 
 ### Noise floor
 
-`pnpm run scorecard --repeat 5` measures the same commit 5 times (it needs no uncommitted changes) and keeps each number's lowest and highest (`noiseOf` in `scorecard.ts`). The counts read from the code hold still; the times don't, and the office's numbers drift as the ledger fills. Every comparison in the terminal uses the latest saved one, and says which. Take a new one when the machine or the gate changes a lot. The panel and the MSD still use the 10% rule for times. The comparison header names the commit and branch it compares against, and a scorecard measured with uncommitted changes says so.
+`pnpm run scorecard --repeat 5` measures the same commit 5 times (it needs no uncommitted changes) and keeps each number's lowest and highest (`noiseOf` in `scorecard.ts`). The counts read from the code hold still; the times don't, and Ops' numbers drift as the ledger fills. Every comparison in the terminal uses the latest saved one, and says which. Take a new one when the machine or the gate changes a lot. The panel and the MSD still use the 10% rule for times. The comparison header names the commit and branch it compares against, and a scorecard measured with uncommitted changes says so.
 
 To show a change's before and after:
 

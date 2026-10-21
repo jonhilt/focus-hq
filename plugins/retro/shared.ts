@@ -5,7 +5,7 @@ import type { AgentStatus } from '../../plugin-api/shared';
 /** The plugin's id: in FOCUS_PLUGINS, its state's key and its routes' prefix. */
 export const RETRO = 'retro';
 
-/** The cheapest kind of fix that would do: a check the office runs, a rule for QA, a pointer in a prompt or doc, or taking something out. */
+/** The cheapest kind of fix that would do: a check Ops runs, a rule for QA, a pointer in a prompt or doc, or taking something out. */
 export const FIX_KINDS = ['check', 'qa-rule', 'pointer', 'delete'] as const;
 export type FixKind = (typeof FIX_KINDS)[number];
 
@@ -30,7 +30,7 @@ export interface RetroDraft {
 
 export type RetroStatus = 'idle' | 'gathering' | 'thinking' | 'done' | 'failed';
 
-/** A look back over the office's recent sessions by the chief engineer at the engineering station. */
+/** A look back over the ship's recent sessions by the chief engineer at the engineering station. */
 export interface Retro {
   status: RetroStatus;
   /** What they're doing right now. */

@@ -4,7 +4,7 @@ import { MAX_FAILED_ROUNDS, qaNextStep } from './qaLoop';
 const ours = { openedByOffice: true, autoSendBack: true };
 
 describe('qaNextStep', () => {
-  it('sends a failed PR the office opened back to a developer', () => {
+  it('sends a failed PR Ops opened back to a developer', () => {
     expect(qaNextStep(ours, { kind: 'verdict', verdict: 'fail', failedRounds: 1 })).toEqual({ kind: 'send-back' });
     expect(qaNextStep(ours, { kind: 'verdict', verdict: 'fail', failedRounds: MAX_FAILED_ROUNDS - 1 })).toEqual({ kind: 'send-back' });
   });

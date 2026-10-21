@@ -1,7 +1,7 @@
 {
   "name": "Focus Tricorder",
   "short_name": "Tricorder",
-  "description": "Check on the Focus office from your phone.",
+  "description": "Check on Focus from your phone.",
   "start_url": "/tricorder/",
   "scope": "/tricorder/",
   "display": "standalone",

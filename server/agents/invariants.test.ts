@@ -18,7 +18,7 @@ interface Flaws {
 
 function toy(flaws: Flaws): Subject<Disk> {
   const life = (disk: Disk, later: Later): Running<Disk> => {
-    // a sound start forgets a mark left by an office that went down mid-filing
+    // a sound start forgets a mark left by a Focus that went down mid-filing
     if (!flaws.leavesMark) delete disk.filing;
     let busy = false;
     const file = async (draft: string) => {
@@ -48,7 +48,7 @@ function toy(flaws: Flaws): Subject<Disk> {
 }
 
 // A second toy, for what a restart can lose without looking any different at the time: an outbox that keeps what it's
-// asked to post and posts it to "GitHub", which outlives any office.
+// asked to post and posts it to "GitHub", which outlives any Focus.
 
 interface Outbox {
   /** How many it's been asked for: each request has an id of its own, as a comment can be posted twice on purpose. */
@@ -133,7 +133,7 @@ describe('the invariant harness', () => {
     await expect(checkAtOnce(toy({ raceable: true }), { runs: 120 })).rejects.toThrow(/"file (a|b)" and "file (a|b)" at once/);
   }, 60_000);
 
-  // a request landing just as the office goes down is a rare draw: a toy is cheap, so it takes many
+  // a request landing just as Focus goes down is a rare draw: a toy is cheap, so it takes many
   it('passes an outbox that keeps its queue and looks before posting again', async () => {
     await checkRestart(outbox({}), { runs: 120 });
   }, 60_000);
@@ -142,7 +142,7 @@ describe('the invariant harness', () => {
     await expect(checkRestart(outbox({ forgetsQueue: true }), { runs: 120 })).rejects.toThrow(/then \[.*post the next/);
   }, 60_000);
 
-  it('catches a restart that posts again what went up as the office went down', async () => {
+  it('catches a restart that posts again what went up as Focus went down', async () => {
     await expect(checkRestart(outbox({ repostsBlind: true }), { runs: 120 })).rejects.toThrow(/restarted during "post the next"/);
   }, 60_000);
 });

@@ -28,7 +28,7 @@ export interface Spell {
   spentUsd: number;
 }
 
-/** When the plan doesn't say when its limit resets, the office tries it again after this long. */
+/** When the plan doesn't say when its limit resets, Ops tries it again after this long. */
 export const UNKNOWN_RESET_MS = 60 * 60_000;
 
 /**
@@ -129,8 +129,8 @@ export function afterLimit(costUsd: number | undefined, onKey: boolean): 'carry-
 }
 
 /**
- * Whether the office's new sessions sign in with your login or your API key: the plan's usage limit as it stands, and
- * what the key has spent while it's reached. Every Claude Code session the office starts asks it (`agentEnv`).
+ * Whether Focus's new sessions sign in with your login or your API key: the plan's usage limit as it stands, and
+ * what the key has spent while it's reached. Every Claude Code session Focus starts asks it (`agentEnv`).
  */
 export class KeyFallback {
   private spell?: Spell;
@@ -157,7 +157,7 @@ export class KeyFallback {
     return this.reached()?.spentUsd ?? 0;
   }
 
-  /** Where the office stands on your plan and your key now (lent to plugins as `host.signIn`). */
+  /** Where Focus stands on your plan and your key now (lent to plugins as `host.signIn`). */
   signIn(): SignIn {
     return { mode: this.mode, onKey: this.onKey(), keySpentUsd: this.spentUsd(), keyBudgetUsd: this.budgetUsd };
   }
@@ -192,5 +192,5 @@ export class KeyFallback {
   }
 }
 
-/** The office's one: what FOCUS_USE_API_KEY, ANTHROPIC_API_KEY and FOCUS_API_BUDGET say. */
+/** Focus's one: what FOCUS_USE_API_KEY, ANTHROPIC_API_KEY and FOCUS_API_BUDGET say. */
 export const keyFallback = new KeyFallback(keyMode(process.env), keyBudget(process.env));

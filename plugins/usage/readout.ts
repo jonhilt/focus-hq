@@ -47,7 +47,7 @@ export function usageHeadline(usage: Usage | null): string {
   return `${usage.plan.plan ? `${usage.plan.plan[0].toUpperCase()}${usage.plan.plan.slice(1)} plan` : 'Your plan'}`;
 }
 
-/** How the office's sessions sign in, in a line: the plan, the key, or the plan with the key behind it. */
+/** How Focus's sessions sign in, in a line: the plan, the key, or the plan with the key behind it. */
 export function signInLine(usage: Usage | null): string {
   if (!usage) return '';
   if (usage.signIn === 'key') return 'Signed in with your API key';

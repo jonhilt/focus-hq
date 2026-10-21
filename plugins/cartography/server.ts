@@ -1,5 +1,5 @@
 // The cartography plugin (README.md): each project's architecture map, from the model its repos keep in MODEL_FILE and
-// the imports their code makes, made again as the office starts and whenever a pull request merges into one of them,
+// the imports their code makes, made again as Focus starts and whenever a pull request merges into one of them,
 // for each project it's switched on for in the project's settings; and what each goal's slice does to it, from its
 // lead's checkout, worked out again as the lead's turn ends.
 // FOCUS_PLUGINS=cartography.
@@ -12,18 +12,18 @@ import { crossCalls as callsAcross, type RepoRoutes } from './routes';
 import { CARTOGRAPHY, type CartographyState, type GoalSlice, type RepoMap } from './shared';
 import { changesAnything, sliceChange } from './slice';
 
-/** How long after the office starts it maps every project, once it's settled in. */
+/** How long after Focus starts it maps every project, once it's settled in. */
 const MAP_AFTER_START_MS = 20_000;
 
-/** Where a repo is checked out to be mapped: the office's own checkout in the demo, whose projects' repos are made up. */
-const checkout = (host: PluginHost, repo: string): Promise<string> => (host.demo ? Promise.resolve(host.officeDir) : host.checkout(repo));
+/** Where a repo is checked out to be mapped: Focus's own checkout in the demo, whose projects' repos are made up. */
+const checkout = (host: PluginHost, repo: string): Promise<string> => (host.demo ? Promise.resolve(host.focusDir) : host.checkout(repo));
 
 /**
- * A lead's checkouts: in the demo, whose leads have none, the office's own checkout stands in for each, so the demo
- * shows what the office's branch does to it.
+ * A lead's checkouts: in the demo, whose leads have none, Focus's own checkout stands in for each, so the demo
+ * shows what Focus's branch does to it.
  */
 const leadCheckouts = (host: PluginHost, agentId: string) =>
-  host.demo ? host.leadCheckouts(agentId).map((c) => ({ ...c, dir: host.officeDir, baseBranch: 'main' })) : host.leadCheckouts(agentId);
+  host.demo ? host.leadCheckouts(agentId).map((c) => ({ ...c, dir: host.focusDir, baseBranch: 'main' })) : host.leadCheckouts(agentId);
 
 /** A goal still under way: its lead's still here, and the goal isn't closing. */
 const underWay = (agent: Agent | undefined): boolean => !!agent?.lead && !agent.lead.closing;
@@ -146,7 +146,7 @@ class Cartographer {
 const cartography: FocusPlugin = {
   id: CARTOGRAPHY,
   start(host) {
-    // made again from the code as the office starts, so never saved in state.json
+    // made again from the code as Focus starts, so never saved in state.json
     const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {} }), { saved: false });
     // the diagrams are kept in files of their own, beside the maps that are made again
     const diagrams = new DiagramKeeper(host, state, (repo) => checkout(host, repo));

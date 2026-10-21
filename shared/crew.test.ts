@@ -86,12 +86,12 @@ describe('hiredName', () => {
     for (const roll of rolls) expect(officers).not.toContain(surname(hiredName('p1', 'ensign', [], roll)));
   });
 
-  it('never shares a surname with anyone already in the office', () => {
+  it('never shares a surname with anyone already aboard', () => {
     const taken = ['Ensign Okafor', 'Ensign Varga', 'Lt. Moreau', 'Ensign Tanaka'];
     for (const roll of rolls) expect(taken.map(surname)).not.toContain(surname(hiredName('p1', 'ensign', taken, roll)));
   });
 
-  it('hires a whole office of different names, then numbers them once every surname is taken', () => {
+  it('hires a whole ship of different names, then numbers them once every surname is taken', () => {
     const taken: string[] = [];
     for (const roll of rolls.slice(0, 60)) {
       const name = hiredName('p1', 'ensign', taken, roll);

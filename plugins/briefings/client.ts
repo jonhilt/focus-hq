@@ -1,6 +1,6 @@
 // The briefings plugin in the browser: round a lead's explainer up close, its voice-over, which hears from
 // the player's page and talks each beat through; and on the engineering panel, the captain's setting for the writer.
-import { callPlugin, type ClientPlugin, h, leadVoice, office, pluginState, type ScreenPart, type ScreenView, Switch, type Ui } from '../../plugin-api/client';
+import { callPlugin, type ClientPlugin, h, leadVoice, focus, pluginState, type ScreenPart, type ScreenView, Switch, type Ui } from '../../plugin-api/client';
 import { EFFORT_LEVELS } from '../../plugin-api/shared';
 import { Narrator } from './narrator';
 import { BRIEFINGS, type BriefingsState, freshBriefings, hasFast, WRITER_MODELS, type WriterSetting, writtenHow } from './shared';
@@ -17,7 +17,7 @@ class BriefingScreen implements ScreenPart {
     before?.narrator.end();
     const updated = h('span', { class: 'chip updated', hidden: true });
     this.head = updated;
-    const leadName = () => office.agent(view.leadId)?.name ?? 'The lead';
+    const leadName = () => focus.agent(view.leadId)?.name ?? 'The lead';
     this.narrator = new Narrator(view.frame, leadVoice(view.leadId), before ? {
       beats: before.narrator.beats,
       updated: (beat) => {

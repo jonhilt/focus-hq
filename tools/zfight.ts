@@ -1,11 +1,11 @@
-// Z-fighting check: starts the office in demo mode on a free port, scans the 3D scene for faces from different meshes
+// Z-fighting check: starts Focus in demo mode on a free port, scans the 3D scene for faces from different meshes
 // that share a plane (client/src/world/zfight.ts) and exits non-zero listing each fighting pair.
 import { mkdtempSync, rmSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { Browser } from 'playwright';
 import type { FightingPair } from '../client/src/world/zfight';
-import { CheckFailed, freePort, launchBrowser, openScene, startDemo, stopDemo, waitForServer } from './demoOffice';
+import { CheckFailed, freePort, launchBrowser, openScene, startDemo, stopDemo, waitForServer } from './demoShip';
 
 /** Overlaps that are fine as they are. Each pattern matches one mesh's identity, in either order. */
 const ALLOWED: { a: RegExp; b: RegExp; reason: string }[] = [];
@@ -37,7 +37,7 @@ async function main(): Promise<number> {
   const url = `http://127.0.0.1:${port}/`;
   // the decks' meshes as built, not merged (merge.ts), so what's found is named as in Blender, and all of the ship
   // drawn, not just where the camera is (regions.ts)
-  console.log(`Z-fighting scan: demo office on ${url}`);
+  console.log(`Z-fighting scan: demo ship on ${url}`);
   const server = startDemo(port, dataDir);
   let browser: Browser | undefined;
   try {

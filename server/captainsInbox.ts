@@ -4,7 +4,7 @@ import { answerText, type Decide, decideRefusal, type DecidedVia, type Inbox as 
 import { openQuestion } from '../shared/artifacts';
 import type { Attention } from '../shared/tricorder';
 import type { Agent, ResumeHow } from '../shared/types';
-import type { Office } from './office';
+import type { Focus } from './focus';
 import { errorMessage } from './util';
 import type { Store } from './store';
 
@@ -19,14 +19,14 @@ const CHIEF_OF_STAFF = 'Chief of Staff';
 export class Inbox {
   constructor(
     private readonly store: Store,
-    private readonly office: Pick<Office, 'agents' | 'githubLogin'>,
+    private readonly focus: Pick<Focus, 'agents' | 'githubLogin'>,
   ) {}
 
   private waiting(): Attention[] {
     const projects = shownProjects(this.store.projects);
     const shown = new Set(projects.map((p) => p.id));
     const agents = [...this.store.agents.values()].filter((a) => shown.has(a.projectId));
-    const login = this.office.githubLogin;
+    const login = this.focus.githubLogin;
     const prs = projects.flatMap((project) =>
       columns(project, this.store.boards.get(project.id), agents.filter((a) => a.projectId === project.id), login).prs.map((pr) => ({ projectId: project.id, pr })),
     );
@@ -53,7 +53,7 @@ export class Inbox {
     if (!('agent' in a)) throw new Error('A pull request is decided on the board');
     const { agent } = a;
     const reply = await this.answering(agent.id, d, via, () => this.act(agent, d, item.cos?.message ?? '', how));
-    // the office asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
+    // Ops asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
     return landed(reply) ? { ok: true } : reply;
   }
 
@@ -89,12 +89,12 @@ export class Inbox {
   hold(id: string): void {
     const found = this.items().find(({ item }) => item.id === id);
     if (!found || found.a.kind !== 'turn') throw new Error('That’s no longer waiting on you');
-    this.office.agents.holdSend(found.a.agent.id);
+    this.focus.agents.holdSend(found.a.agent.id);
   }
 
   /** Does what the captain decided. `words` are the chief of staff's, for `send`. */
   private act(agent: Agent, d: Decide, words: string, how?: ResumeHow): unknown {
-    const agents = this.office.agents;
+    const agents = this.focus.agents;
     if ('allow' in d) return agents.resolvePermission(agent.id, agent.permission?.id ?? '', d.allow);
     if ('option' in d) return agents.answer(agent.id, openQuestion(agent)?.id ?? '', d.option, d.note, how);
     if ('close' in d) return agents.closeGoal(agent.id);
@@ -115,7 +115,7 @@ export class Inbox {
     const reply = await act();
     const answer = answerText(d);
     if (item && answer && landed(reply)) {
-      this.office.agents.record(item.projectId, { kind: 'captain-decision', agent: item.name, ...(item.goal && { goal: item.goal }), item: { id: item.id, kind: item.kind, what: item.what }, answer, via });
+      this.focus.agents.record(item.projectId, { kind: 'captain-decision', agent: item.name, ...(item.goal && { goal: item.goal }), item: { id: item.id, kind: item.kind, what: item.what }, answer, via });
     }
     return reply;
   }

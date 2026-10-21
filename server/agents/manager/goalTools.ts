@@ -9,7 +9,7 @@ import { citedLines, modelPage } from '../modelPage';
 import { sourceReader } from '../sourceReader';
 import { Part, Refused } from './core';
 
-/** The lead's office tools besides ship: the goal's note, show, model, ask (and the captain's answer) and propose_close. */
+/** The lead's `office` MCP tools besides ship: the goal's note, show, model, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /** The lead's note tool: the goal's note and title, as they want them. */
   noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
@@ -24,7 +24,7 @@ export class GoalTools extends Part {
   }
 
   /**
-   * The lead's show tool: the page goes on the goal, with a picture of it for the station's screen. A page the office
+   * The lead's show tool: the page goes on the goal, with a picture of it for the station's screen. A page Ops
    * can't take a picture of still goes up: the captain can open it, though the screen only shows its title.
    */
   showArtifact(agent: Agent, input: ArtifactInput): Effect.Effect<string, Refused, Renderer> {
@@ -63,7 +63,7 @@ export class GoalTools extends Part {
       const where = `“${next.find((a) => a.id === input.id)?.title ?? input.title}” is on your station's screen; the captain can open it up close.`;
       return 'bytes' in picture
         ? { text: `${where}${pageErrorsNote(picture.errors)}`, picture: picture.taken }
-        : { text: `${where} The office couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
+        : { text: `${where} Ops couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
     });
   }
 
@@ -132,7 +132,7 @@ export class GoalTools extends Part {
       this.update(agent, { lead: { ...work, questions } });
       this.print(agent, [{ kind: 'manager', text: `❓ Asked the captain: ${asked.question} (${asked.options.map((o) => `${o.id.toUpperCase()}: ${o.label}`).join(' · ')})` }]);
       const missing = pictures.filter((p) => !p).length;
-      return `Your question is on your station's screen with its ${asked.options.length} options${missing ? ` (the office couldn't take a picture of ${missing} of them, so the screen shows just their labels)` : ''}. The captain's pick comes back to you as a message from them: end your turn here and wait for it.`;
+      return `Your question is on your station's screen with its ${asked.options.length} options${missing ? ` (Ops couldn't take a picture of ${missing} of them, so the screen shows just their labels)` : ''}. The captain's pick comes back to you as a message from them: end your turn here and wait for it.`;
     });
   }
 

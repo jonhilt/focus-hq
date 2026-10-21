@@ -67,9 +67,9 @@ export function stopTarget(health: DemoHealth, record: DemoRecord | undefined): 
 
 /** What `start` and `status` print: one fact a line, the URL first. */
 export function describeDemo(health: DemoHealth, record: DemoRecord | undefined, head: { commit: string; dirty: boolean }): string {
-  if (!record || health === 'none') return 'No demo office started from this checkout. Start one with: pnpm run demo:start';
+  if (!record || health === 'none') return 'No demo ship started from this checkout. Start one with: pnpm run demo:start';
   const lines = [
-    health === 'up' ? `Demo office up at ${record.url}` : health === 'stuck' ? `Demo office not answering at ${record.url} (pid ${record.pid} still running)` : `Demo office gone (pid ${record.pid} has exited)`,
+    health === 'up' ? `Demo ship up at ${record.url}` : health === 'stuck' ? `Demo ship not answering at ${record.url} (pid ${record.pid} still running)` : `Demo ship gone (pid ${record.pid} has exited)`,
     `pid ${record.pid} (its own process group) · port ${record.port} · data ${record.dataDir}`,
     `log ${record.log}`,
     `client: ${record.built ? 'a build from start (no hot reload)' : "Vite's dev server (hot reload)"}`,

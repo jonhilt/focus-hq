@@ -19,7 +19,7 @@ import type { Previews } from './previews';
 import type { Store } from './store';
 import { changeSettings } from './settings';
 import { projectChangeFollowUps } from './projectChange';
-import { issueRefusal, previewTarget } from './officeRequests';
+import { issueRefusal, previewTarget } from './focusRequests';
 import { errorMessage, newId } from './util';
 import type { Voice } from './voice';
 
@@ -33,17 +33,17 @@ function normalizeRepo(input: string): string {
   return repo;
 }
 
-/** The office itself: projects (rooms), their Kanban boards, and the manager's actions. */
-export class Office {
+/** The ship itself: projects (rooms), their Kanban boards, and the manager's actions. */
+export class Focus {
   agents!: AgentManager;
-  /** The office's own repo (`owner/repo`, from its checkout's remote), lent to plugins (main engineering's climber works on it). */
+  /** Focus's own repo (`owner/repo`, from its checkout's remote), lent to plugins (main engineering's climber works on it). */
   ownRepo: string | undefined;
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
   /** What auto-merge already did about each PR's head commit (by prKey). Forgotten on restart, so it may try once more. */
   private gateMarks = new Map<string, GateMark>();
-  /** The PRs (by prKey) the office is merging, their merge check under way. */
+  /** The PRs (by prKey) Ops is merging, their merge check under way. */
   private merging = new Set<string>();
 
   constructor(
@@ -77,17 +77,17 @@ export class Office {
     return this.infoChanged();
   }
 
-  /** Who the office is on GitHub, when it knows: whose pull requests the boards' "only mine" shows. */
+  /** Who Focus is on GitHub, when it knows: whose pull requests the boards' "only mine" shows. */
   get githubLogin(): string | undefined {
     return this.info.github.login;
   }
 
-  /** What the office says of itself now: its settings, and in a demo office the pace its agents go at. */
+  /** What Focus says of itself now: its settings, and in a demo ship the pace its agents go at. */
   private served(): ServerInfo {
     return { ...this.info, settings: this.store.settings, ...(config.demo && { demoPace: demoPace() }) };
   }
 
-  /** Tells every browser what the office says of itself now, as after the demo's pace changes. */
+  /** Tells every browser what Focus says of itself now, as after the demo's pace changes. */
   infoChanged(): ServerInfo {
     const info = this.served();
     this.hub.send({ type: 'info', info });
@@ -238,7 +238,7 @@ export class Office {
 
   /**
    * Merges an open PR on the board once its merge check passes (docs/merging.md), or past it when the captain
-   * `override`s it. `headSha` merges only that commit: the check refuses if the PR has moved on since. The office
+   * `override`s it. `headSha` merges only that commit: the check refuses if the PR has moved on since. Ops
    * auto-merges; otherwise it's the captain. Rejects with why it didn't merge.
    */
   async mergePullRequest(projectId: string, repo: string, number: number, headSha?: string, by: Closer = 'captain', override = false): Promise<void> {
@@ -275,7 +275,7 @@ export class Office {
       merged: () => this.hub.toast('success', boardMergeSaid(where, pr.baseBranch, override), undefined, projectId),
       refused: (err) => this.hub.toast('error', `${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId),
     });
-    if (!started) throw new Error(`The office is already merging ${where}`);
+    if (!started) throw new Error(`Ops is already merging ${where}`);
     return { checking: true };
   }
 
@@ -397,7 +397,7 @@ export class Office {
     }
   }
 
-  /** Starts the plugins switched on (docs/plugins.md), lending them the office's own repo, and in the demo its agents' transcripts. */
+  /** Starts the plugins switched on (docs/plugins.md), lending them Focus's own repo, and in the demo its agents' transcripts. */
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
   startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>): void {
     this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, ...more });
@@ -440,13 +440,13 @@ export class Office {
     }
   }
 
-  /** Sends each of the office's PRs whose head moved past QA's verdict, by a push the office didn't make, back to QA. */
+  /** Sends each of Ops' PRs whose head moved past QA's verdict, by a push Ops didn't make, back to QA. */
   private verdictsCatchUp(projectId: string, board: Board): void {
     const project = this.store.projects.find((p) => p.id === projectId);
     if (!project) return;
     for (const pr of board.prs) {
       const review = this.store.reviews.get(prKey(pr.repo, pr.number));
-      if (!verdictBehindHead(review, pr, { ours: this.agents.officePr(pr.repo, pr.number), autoQa: autoQaFor(project) })) continue;
+      if (!verdictBehindHead(review, pr, { ours: this.agents.opsPr(pr.repo, pr.number), autoQa: autoQaFor(project) })) continue;
       try {
         this.agents.requestReview(projectId, pr.repo, pr.number, pr.title, undefined, false, pr.headSha);
       } catch (err) {

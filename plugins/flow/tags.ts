@@ -4,8 +4,8 @@ import { FLOW, type FlowPluginState, type LeadFlow } from './shared';
 import { flowNow, flowText, flowTitle } from './words';
 
 // What a goal's waiting on and for how long (README.md), wherever a panel lists goals: Comms and the goals list.
-// Panels keep some rows from render to render (so a busy button isn't swapped under the pointer), and nothing in the
-// office changes while a goal waits on the captain, so each tag writes itself from its goal's latest flow as the
+// Panels keep some rows from render to render (so a busy button isn't swapped under the pointer), and nothing on the
+// ship changes while a goal waits on the captain, so each tag writes itself from its goal's latest flow as the
 // plugin's state changes and again each minute, rather than only when its row is built.
 
 /** An open goal's latest flow, as the plugin's state has it. */
@@ -38,7 +38,7 @@ let live = false;
 
 /**
  * From the first tag on: every tag on the page written again as the plugin's state changes, and each minute. Never
- * undone, on purpose: the page lives as long as the office does, and a page with no tags on it costs one query a minute.
+ * undone, on purpose: the page lives as long as Focus does, and a page with no tags on it costs one query a minute.
  */
 function keepLive(): void {
   if (live) return;

@@ -1,7 +1,7 @@
 import { sameCommit } from './qa';
 import type { MergeCheck, PullRequest } from './types';
 
-// The merge check: before the office merges a pull request, it builds what the merge would leave on the base branch
+// The merge check: before Ops merges a pull request, it builds what the merge would leave on the base branch
 // (the PR's head merged onto the base as it is now) and runs the repo's checks on it. Whether that lets the merge
 // through is decided here, pure, so it's unit tested (shared/mergeCheck.test.ts); server/agents/manager/merges.ts
 // fetches, merges and runs the checks, and server/agents/workspace.ts does the git. docs/merging.md tells it.
@@ -45,7 +45,7 @@ export interface CheckResult {
   output?: string;
 }
 
-/** The two commits a merge check is about: the base branch's head and the PR's, as the office's clone fetched them. */
+/** The two commits a merge check is about: the base branch's head and the PR's, as the clone Ops keeps fetched them. */
 export interface MergeHeads {
   base: string;
   head: string;
@@ -53,7 +53,7 @@ export interface MergeHeads {
 
 /**
  * What came of building the merge and checking it: git couldn't merge them (`files` conflict), the checks ran on the
- * merge commit (none at all for a repo without any), or the office couldn't build or check it (`reason`).
+ * merge commit (none at all for a repo without any), or Ops couldn't build or check it (`reason`).
  */
 export type MergeTrial =
   | (MergeHeads & { kind: 'conflicts'; files: string[] })
@@ -69,12 +69,12 @@ export type GateStep =
   | { kind: 'try' };
 
 /**
- * What the office does before merging a PR now at `heads.head` onto `heads.base` (the captain merging past the check
+ * What Ops does before merging a PR now at `heads.head` onto `heads.base` (the captain merging past the check
  * never gets here): `want` is the commit the caller means to merge (QA's pass, say), when it named one; `cached` the
  * PR's last trial. A trial that couldn't run is tried again; one of other commits is old news.
  */
 export function gateStep(heads: MergeHeads, opts: { want?: string; cached?: MergeTrial }): GateStep {
-  if (!heads.head) return { kind: 'refuse', reason: 'the office can’t tell which commit it’s at' };
+  if (!heads.head) return { kind: 'refuse', reason: 'Ops can’t tell which commit it’s at' };
   if (opts.want && !sameCommit(opts.want, heads.head)) return { kind: 'refuse', reason: `it moved on to ${short(heads.head)} since ${short(opts.want)}` };
   const cached = opts.cached;
   if (cached && cached.kind !== 'broken' && sameCommit(cached.base, heads.base) && sameCommit(cached.head, heads.head)) return { kind: 'reuse', trial: cached };
@@ -87,7 +87,7 @@ export type MergeVerdict = { kind: 'merge'; said: string } | { kind: 'refuse'; r
 export function mergeVerdict(trial: MergeTrial): MergeVerdict {
   switch (trial.kind) {
     case 'broken':
-      return { kind: 'refuse', reason: `the office couldn’t check the merge: ${trial.reason}` };
+      return { kind: 'refuse', reason: `Ops couldn’t check the merge: ${trial.reason}` };
     case 'conflicts':
       return { kind: 'refuse', reason: `it conflicts with its base at ${short(trial.base)}${trial.files.length ? ` (${trial.files.join(', ')})` : ''}` };
     case 'checked': {
@@ -125,7 +125,7 @@ export function refusalComment(trial: MergeTrial, reason: string): string {
   const failed = trial.kind === 'checked' ? trial.results.find((r) => !r.ok) : undefined;
   const output = failed?.output?.trim() ? `\n\n\`\`\`\n${failed.output.trim().split('\n').slice(-30).join('\n')}\n\`\`\`` : '';
   const ran = trial.kind === 'checked' ? `\n\nOn the merge commit \`${short(trial.merge)}\`: ${trial.results.map((r) => `${r.ok ? '✅' : '❌'} \`${r.command}\``).join(' · ')}` : '';
-  return `## 🚦 Merge check: refused\n\nThe office didn’t merge this: ${reason}.${ran}${output}\n\nPush a fix, or merge it anyway from the board (the ledger notes an override).`;
+  return `## 🚦 Merge check: refused\n\nOps didn’t merge this: ${reason}.${ran}${output}\n\nPush a fix, or merge it anyway from the board (the ledger notes an override).`;
 }
 
 /** The ledger's line for a merge check (`merge-check`), without the PR it's on. */

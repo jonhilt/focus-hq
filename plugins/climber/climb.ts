@@ -13,7 +13,7 @@ export const SWEEP_LINES = 400;
 
 /** What the climber is told in their system prompt: how a climb goes, and what they never do. */
 export const CLIMB_ASSIGNMENT =
-  'You are main engineering\'s climber. Your job is to move Focus, the office you work in, one change at a time towards its ' +
+  'You are main engineering\'s climber. Your job is to move Focus, the ship you serve on, one change at a time towards its ' +
   'own standard: its CLAUDE.md and docs, Effect v4 done properly, honest types, and a fence of checks that makes the easy ' +
   'path the right one. This climb is one change, measured before and after: one gap, or a sweep of one kind of fix ' +
   'across several places.';
@@ -64,16 +64,16 @@ export function climbTarget(body: string): ClimbTarget | undefined {
   return m && Number.isFinite(num(m[2])) && Number.isFinite(num(m[3])) ? { key: m[1], before: num(m[2]), after: num(m[3]) } : undefined;
 }
 
-/** Comments the office posts itself on a pull request: QA's reports, and the operations officer closing one. */
-const OFFICE_COMMENT = /^(## 🔍 QA|🧭 )/;
+/** Comments Ops posts itself on a pull request: QA's reports, and the operations officer closing one. */
+const OPS_COMMENT = /^(## 🔍 QA|🧭 )/;
 
 /**
- * What people said on a climb's pull request, in their own words: the captain's comments (`captain` is the office's
- * GitHub login, which also posts the office's own reports, told apart by how they start), never a bot's.
+ * What people said on a climb's pull request, in their own words: the captain's comments (`captain` is Focus's
+ * GitHub login, which also posts Ops' own reports, told apart by how they start), never a bot's.
  */
 export function ownWords(comments: PastPullRequest['comments'], captain: string | undefined): string[] {
   return comments
-    .filter((c) => !OFFICE_COMMENT.test(c.body.trim()) && !c.body.trim().startsWith('<!--') && (captain ? c.author === captain : !/bot\b|\[bot\]/i.test(c.author)))
+    .filter((c) => !OPS_COMMENT.test(c.body.trim()) && !c.body.trim().startsWith('<!--') && (captain ? c.author === captain : !/bot\b|\[bot\]/i.test(c.author)))
     .map((c) => c.body.trim())
     .filter(Boolean);
 }
@@ -81,7 +81,7 @@ export function ownWords(comments: PastPullRequest['comments'], captain: string 
 /** One gap on a climb's shortlist, scored as step 2 of the brief asks. */
 export interface ShortlistEntry {
   gap: string;
-  /** Harm to the captain and the office, 1 to 5. */
+  /** Harm to the captain and Focus, 1 to 5. */
   harm: number;
   /** How far the code is from its standard, 1 to 5. */
   distance: number;
@@ -192,7 +192,7 @@ export function climbLogText(log: ClimbRecord[], limit = 25): string {
 }
 
 
-/** The climb's first message: the evidence beyond the code (the office's frictions, the retro's open issues) and the steps. */
+/** The climb's first message: the evidence beyond the code (Focus's frictions, the retro's open issues) and the steps. */
 export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>, events: LedgerEvent[], now: number, log: ClimbRecord[] = [], noise?: ScorecardNoise): string {
   const frictions = frictionGroups(events, now, OPEN_FRICTION_DAYS).filter((g) => g.sessions >= 3).slice(0, 8);
   const issues = openRetroIssues(events, agent.repo);
@@ -212,19 +212,19 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     'Times swing with the machine\'s load (other agents run beside you): if your target is a time, measure it interleaved, base and change taking turns on the same machine (at least 5 of each, the base in a worktree of its own), and compare medians.',
     '',
     '## 2. Rank',
-    'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to the captain and the office, 1 to 5 (5: it breaks or misleads the office now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
+    'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to the captain and Focus, 1 to 5 (5: it breaks or misleads Focus now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
     '- the scorecard\'s numbers: a gate that fails or is slow, type assertions and non-null assertions, the server\'s edges between Effect and Promise code, functions over CRAP 30, no property tests;',
     frictions.length
-      ? `- the office's open frictions: what got in the agents' way in 3 or more sessions in the last ${OPEN_FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`
-      : '- the office\'s open frictions: none came up in 3 or more sessions lately;',
+      ? `- Focus's open frictions: what got in the agents' way in 3 or more sessions in the last ${OPEN_FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`
+      : '- Focus\'s open frictions: none came up in 3 or more sessions lately;',
     issues.length
       ? `- the retro's accepted issues, still open in ${agent.repo} (if you take one, say \`Closes #n\` in the Solution):\n${issues.map((i) => `  - #${i.number} ${i.title}`).join('\n')}`
       : '- the retro\'s accepted issues: none are open.',
     `**Group before you score.** Run \`pnpm run crap --top 25\` and see where the fence's casts sit, then group the gaps that take the same fix: functions over CRAP 30 whose decisions can move into pure functions, casts one honest type would replace, untested decisions in one area. A kind of fix with 2 or more places goes on the shortlist as one row, a sweep, never a place at a time: name the kind of fix and its places, worst first, up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines. Score a sweep by its worst place, with Harm one higher (up to 5) when it takes 3 or more places, since leaving the rest costs the next change; size it by the whole sweep. A row with one function over CRAP 30, while others over 30 could take the same fix, is the mistake this rule is here to stop.`,
-    'Skip anything that needs the captain\'s sign-off (a dependency version, a change to how the office merges or deploys, anything outside this repo) and list it at the end instead.',
+    'Skip anything that needs the captain\'s sign-off (a dependency version, a change to how Ops merges or deploys, anything outside this repo) and list it at the end instead.',
     '',
     '## Hypothesis, before you change anything',
-    'Write it down in your terminal now, and keep it as your pull request\'s **Hypothesis** section: which gap, why it\'s the top one, which scorecard number it will move, by how much, and what result would show you wrong. End it with one line, `Target: <metric key> <before> → <expected after>` (a key from `pnpm run scorecard --json`, like `Target: fence.typeAssertions 226 → 214`); the office reads that line to check, on main, whether your gain holds. A gap the scorecard can\'t see still gets its nearest number, or `Target: none` and why.',
+    'Write it down in your terminal now, and keep it as your pull request\'s **Hypothesis** section: which gap, why it\'s the top one, which scorecard number it will move, by how much, and what result would show you wrong. End it with one line, `Target: <metric key> <before> → <expected after>` (a key from `pnpm run scorecard --json`, like `Target: fence.typeAssertions 226 → 214`); Ops reads that line to check, on main, whether your gain holds. A gap the scorecard can\'t see still gets its nearest number, or `Target: none` and why.',
     '',
     '## 3. Fix',
     'If the bad pattern can come back, add a check first (a lint rule, a type, a test that guards it) and watch it fail. Then make the smallest coherent change. Plant a bug to prove each new test can fail, then take the bug out.',
@@ -259,7 +259,7 @@ export function climbPullRequest(summary: string): { title: string; body: string
 /**
  * What to do about the climb now: start one (climbing is on and none is open), wait for the one under way (its
  * climber is working, or its pull request is open), or stop climbing because the last one ended without a pull
- * request. `climber` is the climbing engineer while they're in the office: a new climb also waits while they're still
+ * request. `climber` is the climbing engineer while they're aboard: a new climb also waits while they're still
  * busy with the last (a pull request closed while they were fixing QA's findings), since every climb is theirs.
  */
 export type ClimbStep = { kind: 'start' } | { kind: 'wait' } | { kind: 'stop'; why: string; outcome: 'nothing' | 'failed' } | { kind: 'idle' };
@@ -278,7 +278,7 @@ export function climbStep(climb: Climb, climber: Pick<Agent, 'status' | 'pr' | '
 }
 
 /**
- * Where the climbs are: the project with the office's own repo (`ownRepo`, from its checkout's remote). The demo office
+ * Where the climbs are: the project with Focus's own repo (`ownRepo`, from its checkout's remote). The demo ship
  * has no repo of its own, so it climbs its first project's first repo.
  */
 export function climbHome(projects: Pick<Project, 'id' | 'repos'>[], ownRepo: string | undefined, demo: boolean): { projectId: string; repo: string } | undefined {

@@ -307,18 +307,18 @@ export function testMetrics(tests: { total: number; files: number; propertyFiles
 }
 
 const DAY = 24 * 60 * 60 * 1000;
-/** The window the office's numbers cover, as the report card's and the retro's. */
-export const OFFICE_DAYS = 30;
+/** The window Ops' numbers cover, as the report card's and the retro's. */
+export const OPS_DAYS = 30;
 /** The window the open frictions cover: the report card's and the retro's. */
 export const FRICTION_DAYS = OPEN_FRICTION_DAYS;
 
 /** The ledger's report card as metrics, and the open frictions of the last `FRICTION_DAYS`. */
-export function officeMetrics(events: LedgerEvent[], now: number): { metrics: Metric[]; frictions: Scorecard['frictions'] } {
-  const card = reportCard(events, now, OFFICE_DAYS);
+export function opsMetrics(events: LedgerEvent[], now: number): { metrics: Metric[]; frictions: Scorecard['frictions'] } {
+  const card = reportCard(events, now, OPS_DAYS);
   const sessions = events.filter((e) => e.kind === 'session-digest' && e.at > now - FRICTION_DAYS * DAY).length;
   const groups = frictionGroups(events, now, FRICTION_DAYS);
   const metrics = [
-    metric('office', 'office.merged', `PRs merged (${OFFICE_DAYS} days)`, card.merged, 'none', 'count'),
+    metric('office', 'office.merged', `PRs merged (${OPS_DAYS} days)`, card.merged, 'none', 'count'),
     metric('office', 'office.firstTime', 'QA passed first time', card.merged ? card.mergedFirstTime / card.merged : 0, 'higher', 'percent'),
     metric('office', 'office.roundsPerMerge', 'Failed QA rounds per merge', card.roundsPerMerge, 'lower', 'ratio'),
     metric('office', 'office.mergedUnpassed', 'Merged without a QA pass', card.mergedUnpassed, 'lower', 'count'),

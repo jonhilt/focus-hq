@@ -54,7 +54,7 @@ describe('deciding an inbox item', () => {
     expect(answerText({ send: true })).toBe('Sent the chief of staff’s words');
   });
 
-  it('counts an answer as given unless the office came back to ask about cost, or warn before closing', () => {
+  it('counts an answer as given unless Ops came back to ask about cost, or warn before closing', () => {
     expect(landed({ sent: true })).toBe(true);
     expect(landed(undefined)).toBe(true);
     expect(landed({ costly: { usd: 3 } })).toBe(false);

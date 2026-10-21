@@ -13,12 +13,12 @@ export function speechRoute(engine: SpeechEngine | undefined): 'kokoro' | 'wait'
     case 'failed':
       return 'browser';
     default:
-      // idle, loading, or no word from the office yet
+      // idle, loading, or no word from Focus yet
       return 'wait';
   }
 }
 
-/** Resolves true once Kokoro is ready, asking the office to load it if it's idle; false once it's failed (or `signal` aborts). */
+/** Resolves true once Kokoro is ready, asking Focus to load it if it's idle; false once it's failed (or `signal` aborts). */
 export function kokoroReady(signal?: AbortSignal): Promise<boolean> {
   return new Promise((resolve) => {
     let asked = false;

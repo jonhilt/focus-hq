@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
-// The office's own merges work in data/repos and data/merges, so this file gets a data folder of its own (set before the
+// Ops' own merges work in data/repos and data/merges, so this file gets a data folder of its own (set before the
 // workspace module reads the config).
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-merge-'));
 process.env.FOCUS_DATA_DIR = path.join(tmp, 'data');
@@ -27,7 +27,7 @@ function commit(dir: string, file: string, text: string): string {
 }
 
 /**
- * An origin with a PR branch, a developer's clone of it, and the office's mirror (as if it had already cloned). `files`
+ * An origin with a PR branch, a developer's clone of it, and Ops' mirror (as if it had already cloned). `files`
  * go on main before the branch starts, and `changes` on the branch.
  */
 function pullRequest(repo: string, files: Record<string, string> = {}, changes: Record<string, string> = {}) {
@@ -48,8 +48,8 @@ function pullRequest(repo: string, files: Record<string, string> = {}, changes: 
   git(dev, 'push', '-q', '-u', 'origin', 'focus/pr');
   const mirror = path.join(process.env.FOCUS_DATA_DIR!, 'repos', repo.replace('/', '__'));
   git(tmp, 'clone', '-q', origin, mirror);
-  git(mirror, 'config', 'user.email', 'office@focus.test');
-  git(mirror, 'config', 'user.name', 'Office');
+  git(mirror, 'config', 'user.email', 'ops@focus.test');
+  git(mirror, 'config', 'user.name', 'Ops');
   /** Someone lands `text` in `file` on main. */
   const land = (file: string, text: string) => {
     git(dev, 'checkout', '-q', 'main');
@@ -63,7 +63,7 @@ function pullRequest(repo: string, files: Record<string, string> = {}, changes: 
   return { dev, pr, land, remoteHead, remoteFile };
 }
 
-describe('the office’s own merge of a PR’s base branch', () => {
+describe('Ops’ own merge of a PR’s base branch', () => {
   it('pushes the merge when git needs no help, and the developer’s checkout is then behind', async () => {
     const { dev, pr, land, remoteHead } = pullRequest('acme/clean');
     land('footer.ts', 'footer');

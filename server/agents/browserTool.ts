@@ -64,9 +64,9 @@ export function withTimeout<T>(work: Promise<T>, ms: number, what: string): Prom
   return Promise.race([work, timeout]).finally(() => clearTimeout(timer));
 }
 
-/** The test hooks the office's own page exposes, for agents working on it (see `client/src/main.ts`). */
+/** The test hooks Focus's own page exposes, for agents working on it (see `client/src/main.ts`). */
 const FOCUS_HQ_HOOKS =
-  ' On the Focus office page, `window.focusHQ` is `{ state, world, player, ui }`: ' +
+  ' On Focus\'s own page, `window.focusHQ` is `{ state, world, player, ui }`: ' +
   '`ui.places(): { label, position, lookAt, projectId? }[]`, `ui.goTo(place)` teleports there, `ui.goToAgent(id)`, ' +
   '`ui.openAgent(id)`, `ui.openBoard(projectId)`, `ui.openQa(projectId)`, `ui.openGoals(projectId)`, `ui.openChart(leadId)`, `ui.openComms()`, ' +
   '`ui.panels.isOpen` (a getter, not a function) and `ui.panels.close()`; ' +
@@ -86,7 +86,7 @@ export function evaluateHint(message: string, shape: string | null): string | un
   if (global)
     return `\`${global[1]}\` isn't a global on this page: only what the page puts on \`window\` is in scope, not its modules' imports. Reach what you need through an object you already have (\`.constructor\` of one gives you its class).`;
   if (/Failed to fetch dynamically imported module/.test(message))
-    return "The page couldn't load that module (a built office serves no source files). Reach the running app through `window.focusHQ` instead.";
+    return "The page couldn't load that module (a built Focus serves no source files). Reach the running app through `window.focusHQ` instead.";
   if (!/TypeError: (Cannot (read|set) properties of (undefined|null)|.+ is not a function)/.test(message)) return undefined;
   if (shape) return `Something your code reached for isn't there. What the page's hooks have right now:\n${shape}`;
   return "Something your code reached for isn't there. Check the path one step at a time (`Object.keys(x)`) before using it.";

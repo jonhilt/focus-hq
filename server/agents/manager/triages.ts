@@ -149,7 +149,7 @@ export class Triages extends Part {
       const github = yield* GitHub;
       const officer = plannerFor(review.projectId).name;
       const pr = yield* github.getPullRequest(review.repo, review.number);
-      const comment = `🧭 ${officer}, the Focus office's operations officer, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
+      const comment = `🧭 ${officer}, operations officer aboard the Focus, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
       yield* github.closePullRequest(review.repo, review.number, comment);
       for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
       this.core.seating.prClosed(review.repo, review.number, false, 'officer');
@@ -157,7 +157,7 @@ export class Triages extends Part {
     });
   }
 
-  /** The office stops sending the PR back: it's the manager's call now. */
+  /** Ops stops sending the PR back: it's the manager's call now. */
   needsYou(review: QaReview, reason: string): void {
     this.core.reviews.record(prKey(review.repo, review.number), { kind: 'follow-up', followUp: { kind: 'needs-you', reason } });
     this.hub.toast('error', `🙋 ${review.repo.split('/')[1]}#${review.number} needs you: ${reason}`, undefined, review.projectId);

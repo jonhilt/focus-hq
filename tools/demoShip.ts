@@ -1,4 +1,4 @@
-// Shared by the Playwright scripts (smoke, zfight, gaps): a demo office on a free port and a headless browser to drive it.
+// Shared by the Playwright scripts (smoke, zfight, gaps): a demo ship on a free port and a headless browser to drive it.
 import { spawn, type ChildProcess } from 'node:child_process';
 import net from 'node:net';
 import path from 'node:path';
@@ -85,7 +85,7 @@ export async function launchBrowser(args: string[] = []): Promise<Browser> {
 }
 
 /**
- * Opens the office at `url` and readies its whole 3D scene for a scan: built, and the team stations' briefing rooms
+ * Opens the ship at `url` and readies its whole 3D scene for a scan: built, and the team stations' briefing rooms
  * shown.
  */
 export async function openScene(browser: Browser, url: string): Promise<Page> {
@@ -98,7 +98,7 @@ export async function openScene(browser: Browser, url: string): Promise<Page> {
       return !!hq && hq.world.rooms.size > 0;
     }, null, { timeout: 30_000 })
     .then(() => true, () => false);
-  if (!built) throw new CheckFailed('the office is built within 30s');
+  if (!built) throw new CheckFailed('the ship is built within 30s');
   await page.evaluate(() => {
     const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
     // team stations' briefing rooms are only drawn while you're in one or looking in through its door (teamStation.ts)

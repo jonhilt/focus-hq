@@ -53,7 +53,7 @@ describe('a goal’s lead', () => {
     expect(long.length).toBeLessThanOrEqual(61);
   });
 
-  it('works at the effort the captain picked, else the office’s default for leads', () => {
+  it('works at the effort the captain picked, else Focus’s default for leads', () => {
     expect(goalEffort(undefined, { leadEffort: 'high' })).toBe('high');
     expect(goalEffort('xhigh', { leadEffort: 'high' })).toBe('xhigh');
   });
@@ -166,7 +166,7 @@ describe('needsFreshBranch', () => {
     expect(repoBranch(moved.repos[0], 'focus/a')).toBe('focus/b');
     expect(workspaceList(moved, 'focus/a')).toBe('- ./web: acme/web, on branch `focus/b` from `main`\n- ./api: acme/api, on branch `focus/a` from `develop`');
     const fresh = { folder: 'web', from: 'focus/a', to: 'focus/b', baseBranch: 'main' };
-    expect(freshBranchNote({ ...fresh, commits: [], applied: true })).toBe("./web's pull request from `focus/a` has merged, so the office moved it to a new branch, `focus/b`, from fresh `main`.");
+    expect(freshBranchNote({ ...fresh, commits: [], applied: true })).toBe("./web's pull request from `focus/a` has merged, so Ops moved it to a new branch, `focus/b`, from fresh `main`.");
     expect(freshBranchNote({ ...fresh, commits: ['c1', 'c2'], applied: true })).toMatch(/and brought along the 2 commits you hadn't shipped\.$/);
     expect(freshBranchNote({ ...fresh, commits: ['0123456789abcdef'], applied: false })).toMatch(/only on `focus\/a`\. Bring it over with `git -C web cherry-pick 0123456789`, resolve the conflicts, then ship again\.$/);
   });
@@ -199,12 +199,12 @@ describe('shipPlan', () => {
 describe('what the lead writes and hears', () => {
   it('describes each pull request with the repos shipping alongside it, signed when attribution is on', () => {
     expect(leadPrBody('Adds saving', { name: 'Lt. Okafor' }, ['acme/api'], true)).toBe(
-      'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, a lead in the Focus office, with Claude Code._',
+      'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, a lead aboard the USS Focus, with Claude Code._',
     );
     expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work from one of the project’s leads.');
   });
 
-  it('works in slices across every repo, ships through the office, and never pushes', () => {
+  it('works in slices across every repo, ships through Ops, and never pushes', () => {
     const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
     expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
     expect(prompt).toContain('team station 2');
@@ -268,7 +268,7 @@ describe('what the lead writes and hears', () => {
 
   it('tells a lead whose repos were checked out again where they are, and that unshipped commits stayed behind', () => {
     const text = reposBackNote({ ...work, slice: 3, prs: [] }, 'focus/saved-items-3-cd');
-    expect(text).toMatch(/^\[Office\] Your repos are checked out again/);
+    expect(text).toMatch(/^\[Ops\] Your repos are checked out again/);
     expect(text).toContain('fresh code for slice 3');
     expect(text).toContain('- ./api: acme/api, on branch `focus/saved-items-3-cd` from `develop`');
     expect(text).toContain("commits you hadn't shipped didn't come along");
@@ -530,16 +530,16 @@ describe('closing a goal', () => {
     expect(closeCheck({ slice: 2, prs: [] }, 'focus/b', clean)).toEqual({ kind: 'ok' });
   });
 
-  it('warns about work only the office’s clone has, pull requests it leaves behind, and a goal that shipped nothing', () => {
+  it('warns about work only Ops’ clone has, pull requests it leaves behind, and a goal that shipped nothing', () => {
     expect(closeCheck(work, 'focus/b', [{ folder: 'web', dirty: true, branch: pushed }, clean[1]])).toEqual({
       kind: 'warn',
-      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the office’s clone.', 'acme/api#7 stays open on GitHub, with no lead to fix it.'],
+      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the clone Ops keeps.', 'acme/api#7 stays open on GitHub, with no lead to fix it.'],
     });
     expect(closeCheck({ slice: 1, prs: [] }, 'focus/b', [{ folder: 'web', dirty: false, branch: { onOrigin: false, unpushed: 3 } }, { folder: 'api', dirty: false, branch: { onOrigin: true, unpushed: 1 } }])).toEqual({
       kind: 'warn',
       reasons: [
-        './web’s branch `focus/b` never reached GitHub: its 3 commits stay only in the office’s clone.',
-        './api has 1 commit that never reached GitHub, kept only in the office’s clone.',
+        './web’s branch `focus/b` never reached GitHub: its 3 commits stay only in the clone Ops keeps.',
+        './api has 1 commit that never reached GitHub, kept only in the clone Ops keeps.',
         'The goal never shipped anything: no pull request was opened for it.',
       ],
     });
@@ -550,7 +550,7 @@ describe('closing a goal', () => {
   it('says so when git couldn’t tell how a checkout stands', () => {
     expect(closeCheck({ slice: 2, prs: [] }, 'focus/b', [{ folder: 'web', dirty: true }])).toEqual({
       kind: 'warn',
-      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the office’s clone.', 'Couldn’t tell whether ./web’s commits reached GitHub.'],
+      reasons: ['Uncommitted changes in ./web are committed as a WIP snapshot on `focus/b`, kept only in the clone Ops keeps.', 'Couldn’t tell whether ./web’s commits reached GitHub.'],
     });
   });
 
@@ -623,7 +623,7 @@ describe('reopening a closed goal', () => {
     const record = goalRecord(lead, closedAt);
     const again = reopenedWork(record, 0);
     expect(reopenedNote(again, 'focus/saved-items-2-ab12', record.closedAt)).toBe(
-      '[Office] The captain reopened this goal, closed on 2026-10-07. Your repos are checked out again on `focus/saved-items-2-ab12`, as you left them: ./web, ./api. ' +
+      '[Ops] The captain reopened this goal, closed on 2026-10-07. Your repos are checked out again on `focus/saved-items-2-ab12`, as you left them: ./web, ./api. ' +
       'If you had uncommitted work when it closed, it\'s the commit “WIP: uncommitted work when the goal “Saved items” closed” at the tip: build on it, or `git reset HEAD~1` to have it uncommitted again. ' +
       'Still open on GitHub: acme/api#7. Tell the captain where the goal stands and what you\'d do next.',
     );
@@ -777,7 +777,7 @@ describe('a slice’s merge conflicts', () => {
     const note = conflictsResolvedNote(pr, 'web', 'Ensign Kim');
     expect(note).toMatch(/^acme\/web#12 had merge conflicts with `main`: Ensign Kim merged `main` into `focus\/goal-1` and pushed it, so \.\/web is behind GitHub\./);
     expect(note).toContain('`git -C web pull --no-rebase origin focus/goal-1`');
-    expect(note).toContain("the office won't ship that repo");
+    expect(note).toContain("Ops won't ship that repo");
   });
 
   it('keep the lead from shipping a checkout that’s behind', () => {
@@ -795,11 +795,11 @@ describe('a lead’s first message in a new conversation', () => {
   });
 
   it('says where the goal stands when the conversation before couldn’t be picked back up', () => {
-    const text = freshSessionPrompt(goal, 'focus/saved-2-ab', ['[Office] Slice 1 has landed'], false);
+    const text = freshSessionPrompt(goal, 'focus/saved-2-ab', ['[Ops] Slice 1 has landed'], false);
     expect(text).toMatch(/^Your workspace, with every repo/);
     expect(text).toContain("You're carrying on with this goal in a new conversation");
     expect(text).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Let shoppers save items for later\n\nWhat done looks like: Saved items survive a reload');
-    expect(text).toMatch(/\[Office\] Slice 1 has landed$/);
+    expect(text).toMatch(/\[Ops\] Slice 1 has landed$/);
     // a slice that has landed: the new slice's note says where the repos are and where the goal stands
     expect(freshSessionPrompt(goal, 'focus/saved-1-ab', [], true)).toBe(
       "You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.\n\nLook over the repos, then tell the captain where you think the goal stands and what you'd do next.",

@@ -87,9 +87,9 @@ const short = (repo: string) => repo.split('/').pop() ?? repo;
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const money = (usd: number) => `$${usd.toFixed(2)}`;
 
-const BY: Record<string, string> = { office: 'by the office', captain: 'by the captain', officer: 'by the operations officer', github: 'on GitHub' };
+const BY: Record<string, string> = { office: 'by Ops', captain: 'by the captain', officer: 'by the operations officer', github: 'on GitHub' };
 const RESOLVED: Record<string, string> = {
-  office: 'the office merged its base in cleanly',
+  office: 'Ops merged its base in cleanly',
   auto: 'settled by the repo’s rules for union and generated files',
   agent: 'an agent resolved them',
   'up-to-date': 'already up to date',

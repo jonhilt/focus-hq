@@ -15,7 +15,7 @@ export interface QueuedGoal {
 }
 
 /**
- * What a goal's lead keeps track of, through the office's note tool: not a spec, but the part of the goal that has to
+ * What a goal's lead keeps track of, through Ops' note tool: not a spec, but the part of the goal that has to
  * survive a summarised conversation.
  */
 export interface GoalNote {
@@ -28,7 +28,7 @@ export interface GoalNote {
 }
 
 /**
- * One slice of a goal, as a waypoint on its chart: what it set out to do, what it taught us, and when. The office keeps
+ * One slice of a goal, as a waypoint on its chart: what it set out to do, what it taught us, and when. Ops keeps
  * them as the lead ships, notes and lands each slice (`server/agents/waypoints.ts`).
  */
 export interface Waypoint {
@@ -72,7 +72,7 @@ export interface Probe {
   /** The kind of subagent: Explore, general-purpose… */
   type?: string;
   launchedAt: number;
-  /** Missing while it's out (or if it never reported: the office restarted under it). */
+  /** Missing while it's out (or if it never reported: Focus restarted under it). */
   endedAt?: number;
   ok?: boolean;
   /** The opening of what it reported, cut short. */
@@ -210,7 +210,7 @@ export interface LeadWork {
   cos?: CosRead;
   /**
    * Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. `branch` is the one it's
-   * on when that isn't the goal's (`Agent.branch`): the office starts a repo a fresh one from its base when it ships
+   * on when that isn't the goal's (`Agent.branch`): Ops starts a repo a fresh one from its base when it ships
    * again after its pull request merged (`needsFreshBranch`).
    */
   repos: { repo: string; folder: string; baseBranch: string; branch?: string }[];
@@ -241,7 +241,7 @@ export interface LeadWork {
 }
 
 /**
- * A question the lead put to the captain with the office's ask tool, each option a page of its own (served like an
+ * A question the lead put to the captain with Ops' ask tool, each option a page of its own (served like an
  * artifact, as `<question id>.<option id>`). The captain answers by picking one, or by telling the lead in chat
  * instead; it stays, answered, for the goal.
  */
@@ -261,7 +261,7 @@ export interface GoalQuestion {
 }
 
 /**
- * A visual the lead put on their station's screen with the office's show tool (a diagram, a mockup, a comparison): a
+ * A visual the lead put on their station's screen with Ops' show tool (a diagram, a mockup, a comparison): a
  * self-contained HTML page, and a picture of it for the screen. Served from /api/artifacts/<lead id>/<id>.html and .jpg.
  */
 export interface GoalArtifact {
@@ -272,7 +272,7 @@ export interface GoalArtifact {
   title: string;
   /** When it was last shown: the screen shows the latest, and the picture's URL changes with it. */
   at: number;
-  /** There's a picture of it for the screen. Missing when the office couldn't render one (no browser to hand). */
+  /** There's a picture of it for the screen. Missing when Ops couldn't render one (no browser to hand). */
   image?: boolean;
 }
 

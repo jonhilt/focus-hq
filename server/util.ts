@@ -62,15 +62,15 @@ export function seedRandom(seed: number): void {
   seedIds(seededRandom(seed + 1));
 }
 
-/** The dice the demo office's ids roll from: any fixed number would do. */
+/** The dice the demo ship's ids roll from: any fixed number would do. */
 const DEMO_ID_SEED = 226;
 
 /**
- * The dice an office starts with. The demo rolls its ids from the same dice each time it starts, so its projects and
+ * The dice Focus starts with. The demo rolls its ids from the same dice each time it starts, so its projects and
  * goal leads keep their ids across a restart and a script driving its API can go on using the ones it read (Math.random
- * still varies its waits and picks). The real office's ids come from crypto.
+ * still varies its waits and picks). The real ship's ids come from crypto.
  */
-export function seedOffice(mode: { demo: boolean }): void {
+export function seedShip(mode: { demo: boolean }): void {
   if (mode.demo) seedIds(seededRandom(DEMO_ID_SEED));
 }
 

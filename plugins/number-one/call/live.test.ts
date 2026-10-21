@@ -6,7 +6,7 @@ import { type WebSocket, WebSocketServer } from 'ws';
 import { Live, LIVE_MODEL, type LiveEvent, readEvent, sessionConfig } from './live';
 
 // gpt-live-1's client against a stand-in for OpenAI's Live API on this machine: creating a session for the browser's
-// offer, and attaching the office's sideband to it.
+// offer, and attaching Ops' sideband to it.
 
 let server: Server | undefined;
 let wss: WebSocketServer | undefined;
@@ -47,7 +47,7 @@ const live = <A, E>(url: string, use: (live: Live['Service']) => Effect.Effect<A
   }).pipe(Effect.provide(Live.layer('sk-test', url)));
 
 describe('sessionConfig', () => {
-  it('hands work to the office and lets the browser do nothing but hang up', () => {
+  it('hands work to Ops and lets the browser do nothing but hang up', () => {
     const config = sessionConfig('v=0 offer') as { session: Record<string, unknown>; transport: unknown };
     expect(config.transport).toEqual({ type: 'webrtc', sdp: 'v=0 offer' });
     expect(config.session).toMatchObject({
@@ -84,7 +84,7 @@ describe('Live', () => {
     expect(error.message).toBe("The voice call couldn't start: HTTP 400 (Unknown model)");
   });
 
-  it('attaches the sideband to the session: hears its events, and sends the office’s', async () => {
+  it('attaches the sideband to the session: hears its events, and sends Ops’', async () => {
     const received: unknown[] = [];
     const events: LiveEvent[] = [];
     let closed = false;

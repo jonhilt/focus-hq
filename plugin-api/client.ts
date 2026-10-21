@@ -1,6 +1,6 @@
 // The plugin API's browser part (docs/plugins.md): the contract a plugin's client.ts default-exports, a read-only view
-// of the office's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
-// core's: a plugin reads what `office` shows and calls only its own routes.
+// of Focus's state, its own routes, and the station's UI kit. The browser's own state and REST client stay the
+// core's: a plugin reads what `focus` shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
 import type { Agent, IssueDraft, Project, TermLine } from '../shared/types';
 import type { KokoroVoice } from '../shared/voice';
@@ -18,7 +18,7 @@ export { handOffControl } from '../client/src/ui/goals';
 /** The captain's voice: dictating into a field, and talking with a crew member aloud. */
 export { type MicMode, micPerRecording, withMic } from '../client/src/ui/dictation';
 export { CrewSpeaker, voicePrefs, VoiceSession, voiceToggle } from '../client/src/ui/voiceMode';
-/** The crew's voices: whether Kokoro's ready on this office, the browser's best voice for a language, and a line said in a Kokoro voice (a WAV). */
+/** The crew's voices: whether Kokoro's ready on this ship, the browser's best voice for a language, and a line said in a Kokoro voice (a WAV). */
 export { bestBrowserVoice, kokoroReady } from '../client/src/ui/crewVoice';
 export const speak = (text: string, voice: KokoroVoice, signal: AbortSignal, urgency?: 'now' | 'ahead'): Promise<Blob> => api.speak(text, voice, signal, urgency);
 /** A crew member in 3D, and what they sit on and cast. */
@@ -36,12 +36,12 @@ export { canvasTexture, fitText, makeCanvas, UI_FONT } from '../client/src/world
 export { OVERLAY_LAYER } from '../client/src/world/frame';
 export { Hologram, hover } from '../client/src/world/hologram';
 export { around, SPACE } from './layout';
-export type { Place } from '../client/src/world/office';
+export type { Place } from '../client/src/world/ship';
 export type { Box } from '../client/src/world/msd';
 export { LCARS, LCARS_FONT, LCARS_STATUS } from '../client/src/world/starship';
 
-/** The office as the browser has it now, read-only: what a plugin's views may show. */
-export const office = {
+/** Focus as the browser has it now, read-only: what a plugin's views may show. */
+export const focus = {
   get projects(): readonly Project[] {
     return state.projects;
   },
@@ -51,7 +51,7 @@ export const office = {
   get agents(): readonly Readonly<Agent>[] {
     return [...state.agents.values()];
   },
-  /** The demo office: fake GitHub and scripted agents. */
+  /** The demo ship: fake GitHub and scripted agents. */
   get demo(): boolean {
     return state.info?.mode === 'demo';
   },
@@ -64,7 +64,7 @@ export const office = {
   onLines: (fn: (agentId: string, lines: readonly TermLine[]) => void): (() => void) => state.on('lines', ({ id, lines }) => fn(id, lines)),
   /** Asks project `projectId`'s Ops officer to write `idea` up as an issue (it waits at their station). */
   draftIssue: (projectId: string, idea: string): Promise<unknown> => api.draftIssue(projectId, idea),
-  /** The ledger's report card as the office last sent it: none until it has. */
+  /** The ledger's report card as Focus last sent it: none until it has. */
   get report(): Readonly<ReportCard> | null {
     return state.report;
   },
@@ -73,5 +73,5 @@ export const office = {
 /** Calls `fn` whenever plugin `id`'s state changes in the browser; returns what stops it. */
 export const onPluginState = (id: string, fn: () => void): (() => void) => state.on('plugin', (changed) => changed === id && fn());
 
-/** Calls one of plugin `id`'s own routes (`/api/plugins/<id><path>`), POSTing `body`; rejects with the office's word on why. */
+/** Calls one of plugin `id`'s own routes (`/api/plugins/<id><path>`), POSTing `body`; rejects with Focus's word on why. */
 export const callPlugin = <T>(id: string, path: string, body?: unknown): Promise<T> => api.plugin<T>(id, path, body);

@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { newestFirst } from './blender';
-import { root } from './demoOffice';
+import { root } from './demoShip';
 
 /** Where Blender's Windows installer puts it: a folder per version (`Blender 5.2`), newest first. */
 function windowsInstalls(): string[] {
@@ -42,7 +42,7 @@ if (!blender) {
     [
       'Blender not found.',
       'You only need it to change the ship: the decks are built from blender/*.py into client/public/ship/*.glb, which are',
-      'committed, so the office runs without it.',
+      'committed, so Focus runs without it.',
       `To build them, install Blender (blender.org), or set BLENDER to its executable. Tried: ${candidates.join(', ')}`,
     ].join('\n'),
   );

@@ -119,7 +119,7 @@ export function agentView(id: string, actions: Actions, back: () => void): View 
   const update = () => {
     const a = state.agents.get(id);
     if (!a) return;
-    // a lead's turn read here stops hailing, here and in the 3D office
+    // a lead's turn read here stops hailing, here and in the 3D ship
     markRead(a);
     const next = renderHead(a);
     if (!head.firstElementChild) head.append(next);

@@ -2,9 +2,9 @@ import { assign, setup, type StateValue, transition } from 'xstate';
 import type { FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
 import type { Recovery } from './runJournal';
 
-// A QA review's journal, pure: the facts the office records about one pull request's review (data/runs/reviews/<pr>.jsonl),
-// what they add up to, and what the office does with them after a restart. Like an agent's run journal, each fact is on
-// disk before the office acts on it, and what they add up to is a state machine's (`reviewMachine`): each fact an event,
+// A QA review's journal, pure: the facts Ops records about one pull request's review (data/runs/reviews/<pr>.jsonl),
+// what they add up to, and what Ops does with them after a restart. Like an agent's run journal, each fact is on
+// disk before Ops acts on it, and what they add up to is a state machine's (`reviewMachine`): each fact an event,
 // the review's phase its state. The reviewer's turns are in their own run journal; this one is the review around them,
 // from being asked for to the verdict on GitHub.
 
@@ -21,7 +21,7 @@ export type ReviewFact =
   | { kind: 'head-shipped'; sha: string }
   /** The captain asked for the PR to merge once QA passes it, or took that back. */
   | { kind: 'merge-requested'; on: boolean }
-  /** The office looks at what changed since QA's last verdict, to see whether QA needs to test it again. */
+  /** Ops looks at what changed since QA's last verdict, to see whether QA needs to test it again. */
   | { kind: 'prechecking' }
   /** Nothing to test again: the last verdict stands. */
   | { kind: 'precheck-skipped' }
@@ -45,7 +45,7 @@ export type ReviewFact =
   | { kind: 'announced' }
   /** It ended without a verdict: stopped, failed, or interrupted when it couldn't carry on. */
   | { kind: 'ended'; error: string }
-  /** What the office is doing about a failed PR: a developer fixing it, or you wanted (none: nothing now). */
+  /** What Ops is doing about a failed PR: a developer fixing it, or you wanted (none: nothing now). */
   | { kind: 'follow-up'; followUp?: Exclude<QaFollowUp, { kind: 'triaging' }> }
   /** The PR's stuck: the room's operations officer comes over to look. */
   | { kind: 'triaging'; officer: string }
@@ -292,13 +292,13 @@ export function resumedFacts(review: ReviewState, agent: string): ReviewFact[] {
   return [{ kind: 'requested', projectId, repo, number, title, ...(openedByOffice !== undefined && { openedByOffice }) }, { kind: 'seated', agent }, testing];
 }
 
-/** What the office does at startup with a review its journal says was under way. */
+/** What Ops does at startup with a review its journal says was under way. */
 export type ReviewRecovery =
   /** Nothing was under way. */
   | { kind: 'none' }
   /** It was waiting for a reviewer: it waits for one again. */
   | { kind: 'queue' }
-  /** The office was looking at what changed since the last verdict: QA tests it instead. */
+  /** Ops was looking at what changed since the last verdict: QA tests it instead. */
   | { kind: 'retest' }
   /** Its reviewer was setting up, before any Claude turn: back in the queue, to start again. */
   | { kind: 'restart' }
@@ -306,9 +306,9 @@ export type ReviewRecovery =
   | { kind: 'carry-on' }
   /** It can't carry on by itself: it ends without a verdict, and the captain sends it to QA again. */
   | { kind: 'interrupted'; error: string }
-  /** The verdict's in hand: the office posts it, then tells everyone who hears of it. */
+  /** The verdict's in hand: Ops posts it, then tells everyone who hears of it. */
   | { kind: 'post' }
-  /** The verdict's posted: the office tells everyone who hears of it. */
+  /** The verdict's posted: Ops tells everyone who hears of it. */
   | { kind: 'announce' };
 
 export const REVIEW_INTERRUPTED = 'Interrupted when Focus shut down. Send it to QA again.';

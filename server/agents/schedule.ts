@@ -5,7 +5,7 @@ import { ACTIVE_STATUSES, AWAY_DESK } from '../../shared/types';
 export const deskless = (a: Pick<Agent, 'task' | 'desk'>) => a.task === 'review' || a.task === 'lead' || a.desk === AWAY_DESK;
 
 /**
- * Which queued agents start now, under the office's limit (`maxConcurrent`, everyone counts) and each room's
+ * Which queued agents start now, under Focus's limit (`maxConcurrent`, everyone counts) and each room's
  * (`maxAgents`, desk agents only), and why the others wait. QA goes first, then whoever was queued first: finished
  * work gets reviewed before new work starts.
  */

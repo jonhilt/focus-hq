@@ -59,7 +59,7 @@ export function flowTitle(flow: LeadFlow, now: number): string {
 const AWAY_MS = 4 * 60 * 60 * 1000;
 
 /**
- * The goal's time in each state while someone was around, up to `now`: what the office worked out at `flow.at`, with
+ * The goal's time in each state while someone was around, up to `now`: what Ops worked out at `flow.at`, with
  * the state it's in now carried on to `now`, unless that stretch has run to a stretch away.
  */
 export function flowSoFar(flow: LeadFlow, now: number): LeadFlow['active'] {

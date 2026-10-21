@@ -28,7 +28,7 @@ export interface Serving {
 }
 
 const KEEP = 'max-age=31536000, immutable';
-// an SVG is served from the office's own origin: nothing in it runs or loads
+// an SVG is served from Focus's own origin: nothing in it runs or loads
 const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
 
 /** A picture, kept for good unless `fresh`: an SVG one sandboxed so nothing in it runs. */
@@ -37,7 +37,7 @@ const picture = (ext: string, fresh: boolean): Serving => ({
   headers: { 'Cache-Control': fresh ? 'no-cache' : KEEP, ...(ext === 'svg' && { 'Content-Security-Policy': SVG_SANDBOX }) },
 });
 
-/** A QA screenshot (`GET /api/qa-shots/:file`), or undefined for a name the office doesn't serve. */
+/** A QA screenshot (`GET /api/qa-shots/:file`), or undefined for a name Focus doesn't serve. */
 export function qaShotServing(file: string): Serving | undefined {
   const ext = /^[\w-]+\.(jpg|png|svg)$/.exec(file)?.[1];
   return ext ? picture(ext, false) : undefined;
@@ -45,8 +45,8 @@ export function qaShotServing(file: string): Serving | undefined {
 
 /**
  * What a goal's lead put on their station's screen (`GET /api/artifacts/:lead/:file`), or undefined for a name the
- * office doesn't serve: an artifact (data-flow.html) or an option of a question (q1.a.html), and their pictures. The
- * page runs sandboxed in an origin of its own, so its scripts can't reach the office. A picture's URL changes with
+ * Focus doesn't serve: an artifact (data-flow.html) or an option of a question (q1.a.html), and their pictures. The
+ * page runs sandboxed in an origin of its own, so its scripts can't reach Focus. A picture's URL changes with
  * each version (?v=), so it's kept; a waypoint's evidence (shot-…) keeps its name from one QA round to the next.
  */
 export function artifactServing(lead: string, file: string): Serving | undefined {

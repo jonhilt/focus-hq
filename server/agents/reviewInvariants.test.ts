@@ -4,17 +4,17 @@ import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
-import { office, restarted } from './fakeOffice';
+import { focus, restarted } from './fakeFocus';
 import type { WorkspaceOps } from './types';
 import { checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 
-// QA reviews, under the office's two rules (docs/invariants.md): a restart is atomic, and two things at once end as one
+// QA reviews, under Focus's two rules (docs/invariants.md): a restart is atomic, and two things at once end as one
 // after the other would. Described here (what can happen to a review, what must survive), not told what to expect.
 
 vi.setConfig({ testTimeout: 120_000 });
 
 /** QA's report, accounting for every changed file (there are none here), so it isn't sent back to look again. */
-/** A fail comes with a proof test, which fails when the office runs it (the workspace's `runIn`), so it blocks. */
+/** A fail comes with a proof test, which fails when Ops runs it (the workspace's `runIn`), so it blocks. */
 const report = (verdict: 'pass' | 'fail') => ({
   verdict,
   summary: verdict === 'pass' ? 'Works.' : 'Broken.',
@@ -73,14 +73,14 @@ const reviews: Subject<Kept[]> = {
           pullRequestComments: (_repo, number) => Effect.promise(() => later('read comments', () => Promise.resolve([...(comments.get(number) ?? [])]))),
         });
       })).pipe(Layer.provide(demoLayer));
-    const kept = (store: ReturnType<typeof office>['store']): Kept[] =>
+    const kept = (store: ReturnType<typeof focus>['store']): Kept[] =>
       prs.map((pr) => ({
         pr: pr.number,
         status: store.reviews.get(prKey(pr.repo, pr.number))?.status,
         verdicts: store.ledger.filter((e) => e.kind === 'qa-verdict' && e.pr === pr.number).length,
         comments: comments.get(pr.number)?.length ?? 0,
       }));
-    const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
       const ended = new Set<number>();
       // QA's turn under way, ended once: with none under way, there's nothing to end
       const turn = () => {
@@ -108,11 +108,11 @@ const reviews: Subject<Kept[]> = {
         },
       };
     };
-    return life(office(workspace(start), github(start)));
+    return life(focus(workspace(start), github(start)));
   },
 };
 
-describe('QA reviews, under the office’s two rules', () => {
+describe('QA reviews, under Focus’s two rules', () => {
   // a description that never got a review past the queue would pass both rules and prove nothing
   it('reaches a review under test, a failed one and a passed one, taken one at a time', async () => {
     const r = await reviews.start(now);
@@ -140,7 +140,7 @@ describe('what QA runs, as docs/qa.md promises', () => {
 
   // "A review's step 3 names the same commands, read from QA's checkout of the PR."
   it('tells QA to run the merge checks its checkout of the PR has', async () => {
-    const o = office({ ...workspace(now), packageFacts: () => Promise.resolve(facts) });
+    const o = focus({ ...workspace(now), packageFacts: () => Promise.resolve(facts) });
     const project = o.store.projects[0];
     const pr = prs[0];
     if (!project || !pr) throw new Error('the demo has no project or pull request');
@@ -151,9 +151,9 @@ describe('what QA runs, as docs/qa.md promises', () => {
     expect(o.claude.turns[0]?.req.systemAppend).toContain("run these checks: `pnpm run lint`, `pnpm test`, and anything else the repo's CLAUDE.md asks.");
   });
 
-  // "per repo, the project's merge checks the repo's package.json has … read from the office's clone; with no clone … QA works the checks out itself"
-  it('shows at the Playbook what QA runs on each repo, from the office’s clone', async () => {
-    const o = office({ ...workspace(now), cloneFacts: (repo) => Promise.resolve(repo === 'demo/webshop-frontend' ? facts : undefined) });
+  // "per repo, the project's merge checks the repo's package.json has … read from Ops' clone; with no clone … QA works the checks out itself"
+  it('shows at the Playbook what QA runs on each repo, from Ops’ clone', async () => {
+    const o = focus({ ...workspace(now), cloneFacts: (repo) => Promise.resolve(repo === 'demo/webshop-frontend' ? facts : undefined) });
     const project = o.store.projects[0];
     if (!project) throw new Error('the demo has no project');
     const playbook = await o.agents.qaPlaybook(project.id);
@@ -164,7 +164,7 @@ describe('what QA runs, as docs/qa.md promises', () => {
 
   // "The officer answers, and when what you ask means a change, proposes one … It changes nothing itself: **Apply** saves the change"
   it('proposes a change to QA’s settings when the captain asks at the Playbook, and changes nothing itself', async () => {
-    const o = office(workspace(now));
+    const o = focus(workspace(now));
     const project = o.store.projects[0];
     if (!project) throw new Error('the demo has no project');
     const before = structuredClone(o.store.project(project.id));

@@ -54,7 +54,7 @@ export class AgentSessions extends Part {
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
       // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts works on a
-      // local branch of their own, which the office pushes to the PR's
+      // local branch of their own, which Ops pushes to the PR's
       const local = agent.task === 'conflicts' ? `${agent.branch}-conflicts-${agent.id.slice(-4)}` : undefined;
       yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id), local);
       // a cloud session works in a clone of its own, so it installs there
@@ -128,9 +128,9 @@ export class AgentSessions extends Part {
         if (open?.id !== turn || (open.session === sessionId && open.keySource === keySource)) return;
         this.store.journal(agent.id, { kind: 'turn-started', turn, session: sessionId, keySource });
         if (open.mismatch || !keySource || !signInMismatch(open.onKey, keySource)) return;
-        // signed in with a key that costs, behind the office's back: stopped before it spends any more
+        // signed in with a key that costs, behind Ops' back: stopped before it spends any more
         this.store.journal(agent.id, { kind: 'sign-in-mismatch', turn, observed: keySource });
-        this.print(agent, [{ kind: 'error', text: `✘ Claude Code signed in with ${keySource} when the office meant your plan: stopping the turn` }]);
+        this.print(agent, [{ kind: 'error', text: `✘ Claude Code signed in with ${keySource} when Focus meant your plan: stopping the turn` }]);
         rt.session?.stop();
       },
       context: (context) => this.update(agent, { context }),
@@ -249,7 +249,7 @@ export class AgentSessions extends Part {
     };
   }
 
-  /** The tools of the plugins switched on for a lead's project, in their office, bound to them: their checkouts (in `workspace`), and their station's screen. */
+  /** The tools of the plugins switched on for a lead's project, in their `office` server, bound to them: their checkouts (in `workspace`), and their station's screen. */
   private leadTools(agent: Agent, workspace: string): ExtraTool[] {
     // only the plugins switched on for the lead's project
     const project = this.store.projects.find((p) => p.id === agent.projectId);
@@ -295,7 +295,7 @@ export class AgentSessions extends Part {
         Effect.sync(() => {
           rt.session = undefined;
           rt.turn = undefined;
-          // the office shutting down stops every turn: each stays open in the journal, to carry on at the next start
+          // Focus shutting down stops every turn: each stays open in the journal, to carry on at the next start
           if (this.core.closing) return;
           // interrupted (sent home, moved to the cloud): it's over as much as a stop is
           this.store.journal(agent.id, { kind: 'turn-ended', turn, outcome: Exit.isSuccess(exit) ? turnEnding(exit.value) : { ok: false, aborted: true } });
@@ -305,7 +305,7 @@ export class AgentSessions extends Part {
   }
 
   /**
-   * Compacts the agent's conversation with `/compact` and the office's instructions for what to keep. Never fails the
+   * Compacts the agent's conversation with `/compact` and Ops' instructions for what to keep. Never fails the
    * agent: a compaction that doesn't happen leaves the conversation as it was. Succeeds with whether it happened.
    */
   private compact(agent: Agent, keep: string): Effect.Effect<boolean, never, ManagerServices> {
@@ -315,7 +315,7 @@ export class AgentSessions extends Part {
       const wasBusy = rt.busy;
       rt.busy = true;
       this.update(agent, { activity: 'Compacting the conversation' });
-      this.print(agent, [{ kind: 'system', text: '✻ The office compacts the conversation, keeping what the goal needs' }]);
+      this.print(agent, [{ kind: 'system', text: '✻ Ops compacts the conversation, keeping what the goal needs' }]);
       const outcome = yield* this.instructions(agent).pipe(
         Effect.flatMap((instructions) => this.turn(agent, this.runRequest(agent, `/compact ${keep}`, instructions, agent.sessionId), false, 'compact')),
         Effect.catch((err) => Effect.succeed<RunOutcome>({ ok: false, summary: '', error: err.message })),
@@ -358,13 +358,13 @@ export class AgentSessions extends Part {
       // a turn that's interrupted (sent home, moved to the cloud) still ends, for the plugins
       const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true).pipe(
         Effect.ensuring(Effect.sync(() => {
-          // not a turn the office stopped as it went down: it carries on after the restart
+          // not a turn Ops stopped as it went down: it carries on after the restart
           if (lead && !this.core.closing && this.core.plugins.judgesTurns(agent)) this.core.comms.reading(agent.id);
           this.core.plugins.turn(agent, 'end');
         })),
       );
       rt.busy = false;
-      // the office is shutting down: what follows waits for it to start again (`recover`)
+      // Focus is shutting down: what follows waits for it to start again (`recover`)
       if (this.core.closing) return;
       // what the manager wrote during the turn carries them on into another; notes that waited for its end don't
       const carryOn = rt.inbox.length > 0;
@@ -536,7 +536,7 @@ export class AgentSessions extends Part {
     }
     if (next.kind === 'deliver') {
       // what they'd committed goes onto GitHub as it was going to: they aren't asked to commit anything more, unless
-      // the office hadn't got as far as asking them
+      // Ops hadn't got as far as asking them
       if (!next.unasked) this.rt(agent.id).nudged = true;
       this.print(agent, [{ kind: 'system', text: next.unasked ? '✻ Focus restarted as their turn ended: putting their work on GitHub' : '✻ Focus restarted while their work was going onto GitHub: finishing that' }]);
       this.runFor(agent.id, this.core.delivery.deliver(agent, next.summary));
@@ -556,7 +556,7 @@ export class AgentSessions extends Part {
   }
 
 
-  /** The office is shutting down: every agent's session stops, and their turns are left to carry on when it starts again. */
+  /** Focus is shutting down: every agent's session stops, and their turns are left to carry on when it starts again. */
   shutDown(): void {
     this.core.closing = true;
     for (const id of [...this.store.agents.keys()]) this.core.comms.stop(id);
@@ -581,7 +581,7 @@ interface TurnEnd {
   lead?: LeadAgent;
   review: boolean;
   attaching?: Runtime['attaching'];
-  /** How Claude Code signed in, when it wasn't the way the office meant. */
+  /** How Claude Code signed in, when it wasn't the way Focus meant. */
   mismatch?: string;
 }
 

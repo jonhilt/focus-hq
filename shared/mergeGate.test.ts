@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateOffice, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
+import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateOps, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -25,7 +25,7 @@ const review = (r: Partial<QaReview> = {}): QaReview => ({
   ...r,
 });
 
-const office = (o: Partial<GateOffice> = {}): GateOffice => ({ openedByOffice: true, developerBusy: false, autoSendBack: true, ...o });
+const ops = (o: Partial<GateOps> = {}): GateOps => ({ openedByOffice: true, developerBusy: false, autoSendBack: true, ...o });
 
 const failing = pr({
   checks: 'failing',
@@ -37,124 +37,124 @@ const failing = pr({
 
 describe('mergeStep', () => {
   it('merges the head commit once QA passed it, its checks pass and it merges cleanly', () => {
-    expect(mergeStep(pr(), review(), office())).toEqual({ kind: 'merge', sha: HEAD });
+    expect(mergeStep(pr(), review(), ops())).toEqual({ kind: 'merge', sha: HEAD });
   });
 
   it('never merges a pull request a plugin keeps for the captain (a climb), however well QA did', () => {
-    expect(mergeStep(pr(), review(), office({ captainMerges: true }))).toEqual({ kind: 'blocked', reason: 'only the captain merges it' });
+    expect(mergeStep(pr(), review(), ops({ captainMerges: true }))).toEqual({ kind: 'blocked', reason: 'only the captain merges it' });
   });
 
   it('merges a PR without checks', () => {
-    expect(mergeStep(pr({ checks: 'none' }), review(), office())).toEqual({ kind: 'merge', sha: HEAD });
+    expect(mergeStep(pr({ checks: 'none' }), review(), ops())).toEqual({ kind: 'merge', sha: HEAD });
   });
 
   it('never merges a teammate’s PR', () => {
-    expect(mergeStep(pr(), review(), office({ openedByOffice: false }))).toEqual({ kind: 'blocked', reason: 'a teammate opened it' });
+    expect(mergeStep(pr(), review(), ops({ openedByOffice: false }))).toEqual({ kind: 'blocked', reason: 'a teammate opened it' });
   });
 
   it('leaves drafts alone', () => {
-    expect(mergeStep(pr({ isDraft: true }), review(), office()).kind).toBe('blocked');
+    expect(mergeStep(pr({ isDraft: true }), review(), ops()).kind).toBe('blocked');
   });
 
   it('waits for checks that are still running', () => {
-    expect(mergeStep(pr({ checks: 'pending' }), review(), office())).toEqual({ kind: 'wait', reason: 'checks are running' });
+    expect(mergeStep(pr({ checks: 'pending' }), review(), ops())).toEqual({ kind: 'wait', reason: 'checks are running' });
   });
 
   it('waits while GitHub works out whether it merges', () => {
-    expect(mergeStep(pr({ mergeable: 'UNKNOWN' }), review(), office()).kind).toBe('wait');
+    expect(mergeStep(pr({ mergeable: 'UNKNOWN' }), review(), ops()).kind).toBe('wait');
   });
 
   it('waits while a developer is working on it', () => {
-    expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), office({ developerBusy: true }))).toEqual({ kind: 'wait', reason: 'a developer is working on it' });
+    expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), ops({ developerBusy: true }))).toEqual({ kind: 'wait', reason: 'a developer is working on it' });
   });
 
   describe('QA', () => {
     it('sends a PR QA never tested to QA', () => {
-      expect(mergeStep(pr(), undefined, office())).toEqual({ kind: 'qa', reason: 'QA hasn’t tested it' });
+      expect(mergeStep(pr(), undefined, ops())).toEqual({ kind: 'qa', reason: 'QA hasn’t tested it' });
     });
 
     it('sends a PR back to QA when commits arrived after the pass', () => {
-      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review(), office())).toEqual({ kind: 'qa', reason: 'commits arrived after QA passed it' });
+      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review(), ops())).toEqual({ kind: 'qa', reason: 'commits arrived after QA passed it' });
     });
 
     it('sends a PR back to QA when a fix arrived after a fail', () => {
-      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review({ status: 'failed' }), office())).toEqual({ kind: 'qa', reason: 'commits arrived after QA failed it' });
+      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review({ status: 'failed' }), ops())).toEqual({ kind: 'qa', reason: 'commits arrived after QA failed it' });
     });
 
     it('waits while QA is testing', () => {
-      expect(mergeStep(pr(), review({ status: 'queued' }), office()).kind).toBe('wait');
-      expect(mergeStep(pr(), review({ status: 'testing' }), office()).kind).toBe('wait');
+      expect(mergeStep(pr(), review({ status: 'queued' }), ops()).kind).toBe('wait');
+      expect(mergeStep(pr(), review({ status: 'testing' }), ops()).kind).toBe('wait');
     });
 
     it('stops at a fail on the head commit (the QA loop sends that back)', () => {
-      expect(mergeStep(pr(), review({ status: 'failed' }), office())).toEqual({ kind: 'blocked', reason: 'QA failed it' });
+      expect(mergeStep(pr(), review({ status: 'failed' }), ops())).toEqual({ kind: 'blocked', reason: 'QA failed it' });
     });
 
     it('leaves a pass with advice (a fail no proof held) for the captain to merge', () => {
       const report = { verdict: 'pass' as const, advisory: true, summary: 'Double clicks save twice', checks: [], commands: [], files: [], captions: [] };
-      expect(mergeStep(pr(), review({ report }), office())).toEqual({ kind: 'blocked', reason: 'QA passed it with advice for the captain to read' });
+      expect(mergeStep(pr(), review({ report }), ops())).toEqual({ kind: 'blocked', reason: 'QA passed it with advice for the captain to read' });
       expect(unpassedReason(review({ report }), pr())).toBeUndefined();
     });
 
     it('stops when QA couldn’t finish', () => {
-      expect(mergeStep(pr(), review({ status: 'error' }), office()).kind).toBe('blocked');
+      expect(mergeStep(pr(), review({ status: 'error' }), ops()).kind).toBe('blocked');
     });
 
     it('won’t merge when it can’t tell which commit QA passed', () => {
-      expect(mergeStep(pr(), review({ sha: undefined }), office()).kind).toBe('blocked');
-      expect(mergeStep(pr({ headSha: undefined }), review(), office()).kind).toBe('blocked');
+      expect(mergeStep(pr(), review({ sha: undefined }), ops()).kind).toBe('blocked');
+      expect(mergeStep(pr({ headSha: undefined }), review(), ops()).kind).toBe('blocked');
     });
 
-    it('stops when the office gave up on the PR', () => {
-      expect(mergeStep(failing, review({ followUp: { kind: 'needs-you', reason: 'Ada pushed no fix' } }), office({ mark: { sha: HEAD, kind: 'sent-back' } })))
+    it('stops when Ops gave up on the PR', () => {
+      expect(mergeStep(failing, review({ followUp: { kind: 'needs-you', reason: 'Ada pushed no fix' } }), ops({ mark: { sha: HEAD, kind: 'sent-back' } })))
         .toEqual({ kind: 'blocked', reason: 'Ada pushed no fix' });
     });
   });
 
   describe('failing checks', () => {
     it('re-runs the failed Actions runs once', () => {
-      expect(mergeStep(failing, review(), office())).toEqual({ kind: 'rerun-checks', sha: HEAD, runIds: [77] });
+      expect(mergeStep(failing, review(), ops())).toEqual({ kind: 'rerun-checks', sha: HEAD, runIds: [77] });
     });
 
     it('sends the PR back to its developer with the failing checks when they fail again', () => {
-      expect(mergeStep(failing, review(), office({ mark: { sha: HEAD, kind: 'rerun' } }))).toEqual({ kind: 'send-back', sha: HEAD, checks: failing.failedChecks });
+      expect(mergeStep(failing, review(), ops({ mark: { sha: HEAD, kind: 'rerun' } }))).toEqual({ kind: 'send-back', sha: HEAD, checks: failing.failedChecks });
     });
 
     it('sends it straight back when there’s nothing to re-run', () => {
       const external = pr({ checks: 'failing', failedChecks: [{ name: 'ci/circleci', url: 'https://circleci.com/x' }] });
-      expect(mergeStep(external, review(), office()).kind).toBe('send-back');
+      expect(mergeStep(external, review(), ops()).kind).toBe('send-back');
     });
 
     it('re-runs again for a new head commit', () => {
-      expect(mergeStep(failing, review(), office({ mark: { sha: 'fff0000aaa', kind: 'sent-back' } })).kind).toBe('rerun-checks');
+      expect(mergeStep(failing, review(), ops({ mark: { sha: 'fff0000aaa', kind: 'sent-back' } })).kind).toBe('rerun-checks');
     });
 
     it('stops once the PR went back and its checks still fail', () => {
-      expect(mergeStep(failing, review(), office({ mark: { sha: HEAD, kind: 'sent-back' } })).kind).toBe('blocked');
+      expect(mergeStep(failing, review(), ops({ mark: { sha: HEAD, kind: 'sent-back' } })).kind).toBe('blocked');
     });
 
     it('stops when the project doesn’t send PRs back', () => {
-      expect(mergeStep(failing, review(), office({ autoSendBack: false, mark: { sha: HEAD, kind: 'rerun' } }))).toEqual({ kind: 'blocked', reason: 'checks fail' });
+      expect(mergeStep(failing, review(), ops({ autoSendBack: false, mark: { sha: HEAD, kind: 'rerun' } }))).toEqual({ kind: 'blocked', reason: 'checks fail' });
     });
   });
 
   describe('conflicts', () => {
     it('resolves conflicts first, whatever QA said', () => {
-      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), office())).toEqual({ kind: 'resolve-conflicts', sha: HEAD });
-      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), undefined, office()).kind).toBe('resolve-conflicts');
+      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), ops())).toEqual({ kind: 'resolve-conflicts', sha: HEAD });
+      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), undefined, ops()).kind).toBe('resolve-conflicts');
     });
 
     it('stops when resolving them left the PR where it was', () => {
-      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), office({ mark: { sha: HEAD, kind: 'resolving' } })).kind).toBe('blocked');
+      expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), ops({ mark: { sha: HEAD, kind: 'resolving' } })).kind).toBe('blocked');
     });
 
     it('goes back to QA once the resolved commit is up', () => {
-      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review(), office({ mark: { sha: HEAD, kind: 'resolving' } })).kind).toBe('qa');
+      expect(mergeStep(pr({ headSha: 'fff0000aaa' }), review(), ops({ mark: { sha: HEAD, kind: 'resolving' } })).kind).toBe('qa');
     });
   });
 
   it('stops trying once GitHub refused to merge the head commit', () => {
-    expect(mergeStep(pr(), review(), office({ mark: { sha: HEAD, kind: 'refused', reason: 'reviews required' } })))
+    expect(mergeStep(pr(), review(), ops({ mark: { sha: HEAD, kind: 'refused', reason: 'reviews required' } })))
       .toEqual({ kind: 'blocked', reason: 'the merge was refused: reviews required' });
   });
 });
@@ -248,10 +248,10 @@ describe('goneReply', () => {
 });
 
 describe('mergeMethodFor', () => {
-  it('uses the repo’s own choice over the office-wide one', () => {
+  it('uses the repo’s own choice over the Focus-wide one', () => {
     expect(mergeMethodFor({ mergeMethods: { 'o/a': 'rebase' } }, 'o/a', 'squash')).toBe('rebase');
   });
-  it('falls back to the office-wide setting for a repo without one', () => {
+  it('falls back to the Focus-wide setting for a repo without one', () => {
     expect(mergeMethodFor({ mergeMethods: { 'o/a': 'rebase' } }, 'o/b', 'merge')).toBe('merge');
     expect(mergeMethodFor({}, 'o/a', 'squash')).toBe('squash');
     expect(mergeMethodFor(undefined, 'o/a', 'squash')).toBe('squash');
@@ -303,10 +303,10 @@ describe('conflictsSaid', () => {
     expect(conflictsSaid('shop#12', 'main', { kind: 'agent' })).toBe('🔧 shop#12 conflicts with main – resolving them before QA');
   });
 
-  it('says the office merged the base in, and which files it settled by rule', () => {
-    expect(conflictsSaid('shop#12', 'main', { kind: 'merged' })).toBe('🔧 shop#12 conflicts with main – the office merged main in cleanly');
+  it('says Ops merged the base in, and which files it settled by rule', () => {
+    expect(conflictsSaid('shop#12', 'main', { kind: 'merged' })).toBe('🔧 shop#12 conflicts with main – Ops merged main in cleanly');
     expect(conflictsSaid('shop#12', 'main', { kind: 'merged', auto: ['pnpm-lock.yaml', 'CHANGELOG.md'] }))
-      .toBe('🔧 shop#12 conflicts with main – the office merged main in, settling pnpm-lock.yaml, CHANGELOG.md by rule');
+      .toBe('🔧 shop#12 conflicts with main – Ops merged main in, settling pnpm-lock.yaml, CHANGELOG.md by rule');
   });
 
   it('says when GitHub is behind and it already has everything from the base', () => {

@@ -1,11 +1,11 @@
-// The office's open frictions as bars: on the engineering station's ledger, and in plugins' views (the retro's,
+// The open frictions as bars: on the engineering station's ledger, and in plugins' views (the retro's,
 // through plugin-api/client). Apart from the station's panel so a plugin can show them without importing the panel.
 import { frictionName } from '../../../shared/ledger';
 import { state } from '../net/state';
 import type { Ui } from './context';
 import { h } from './dom';
 
-/** The office's open frictions, the most widespread first, as bars (plugins' views show them too). Each opens its trace in the ledger review. */
+/** The open frictions, the most widespread first, as bars (plugins' views show them too). Each opens its trace in the ledger review. */
 export function frictionBars(ui: Ui, limit: number): HTMLElement | null {
   const frictions = state.report?.frictions.slice(0, limit) ?? [];
   if (!frictions.length) return null;

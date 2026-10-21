@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Issue, PluginHost } from '../../plugin-api/server';
-import { office } from '../../plugin-api/testing';
+import { focus } from '../../plugin-api/testing';
 import { ChiefEngineer, type RetroRequest } from './engineer';
 import retroPlugin from './server';
 import { freshRetro, RETRO, type Retro } from './shared';
@@ -14,11 +14,11 @@ afterEach(() => dirs.splice(0).forEach((d) => fs.rmSync(d, { recursive: true, fo
 const facts = { minutes: 1, turns: 1, toolCalls: 1, failedCalls: 0, refusedCalls: 0, repeatedCalls: 0, wastedCalls: 0, captainMessages: 0, nudges: 0, officeMessages: 0, compactions: 0, qaFails: 0, conflicts: 0 };
 
 /**
- * The chief engineer in the pretend office, on the host it lends plugins. `unread`: the digests haven't been read for
+ * The chief engineer in the pretend Focus, on the host it lends plugins. `unread`: the digests haven't been read for
  * frictions, and their transcripts say what the reader will find; `missing` sessions have no transcript.
  */
 function engineer(structured: unknown, sessions: string[], opts: { unread?: boolean; missing?: string[] } = {}) {
-  const o = office();
+  const o = focus();
   for (const s of sessions) {
     o.store.record({
       kind: 'session-digest', key: `${s}:u`, sessionId: s, agentId: s, agent: `Ens. ${s}`, task: 'issue', prs: [], toUuid: 'u', facts,
@@ -81,7 +81,7 @@ describe('ChiefEngineer', () => {
     const done = await eng.decide(draft.id, true, project.id, 'demo/webshop-api');
     expect(done.decision).toMatchObject({ accepted: true, issue: { repo: 'demo/webshop-api', number: 42 } });
     expect(filed).toHaveLength(1);
-    expect(filed[0].body).toMatch(/_Drafted by .+, the Focus office's chief engineer, from frictions in 3 agent sessions; accepted by the captain._$/);
+    expect(filed[0].body).toMatch(/_Drafted by .+, the Focus's chief engineer, from frictions in 3 agent sessions; accepted by the captain._$/);
     expect(store.ledger.at(-1)).toMatchObject({ kind: 'retro-decision', projectId: project.id, accepted: true, signatures: ['demo-env: demo port in use'], issue: { repo: 'demo/webshop-api', number: 42 } });
     await expect(eng.decide(draft.id, false)).rejects.toThrow('already accepted');
     expect(eng.current().drafts[0].decision?.accepted).toBe(true);
@@ -135,7 +135,7 @@ describe('ChiefEngineer', () => {
 
 describe('the retro plugin', () => {
   it('ends a retro that was under way when Focus shut down, and answers on its routes', async () => {
-    const o = office();
+    const o = focus();
     o.store.plugins[RETRO] = { ...freshRetro(), status: 'thinking', activity: 'Drafting' };
     o.agents.startPlugins([retroPlugin], { demo: false, ownRepo: () => undefined });
     expect(o.agents.plugins.stateOf(RETRO)).toMatchObject({ status: 'failed', activity: 'Interrupted' });

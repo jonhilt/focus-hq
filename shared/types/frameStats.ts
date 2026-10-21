@@ -1,5 +1,5 @@
-// How the 3D view ran in a browser opened with ?stats=1: it sends the office a line a second, and the office keeps them
-// in its data folder (frame-stats/<session>.jsonl), so a run on someone else's machine can be read where the office is.
+// How the 3D view ran in a browser opened with ?stats=1: it sends Focus a line a second, and Focus keeps them
+// in its data folder (frame-stats/<session>.jsonl), so a run on someone else's machine can be read where Focus runs.
 
 /** The first line: the machine, and how the page was opened. */
 export interface FrameStatsSession {
@@ -89,7 +89,7 @@ export interface FrameStatsBench {
   msPerMB: Record<string, number>;
 }
 
-/** A task that kept the main thread busy over 50 ms: a frame, or work between frames (the office's messages, the garbage collector). */
+/** A task that kept the main thread busy over 50 ms: a frame, or work between frames (Focus's messages, the garbage collector). */
 export interface FrameStatsLongTask {
   kind: 'longtask';
   /** When it started (seconds since the page opened), where, and how long it took (ms). */

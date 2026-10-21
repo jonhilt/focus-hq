@@ -5,15 +5,15 @@ import { GhServerError } from '../github/runner';
 import { demoLayer } from '../github/demo';
 import { GitHub, GitHubRejected } from '../github/service';
 import { demoWorkspace } from './demoRunner';
-import { type FakeClaude, office, restarted } from './fakeOffice';
+import { type FakeClaude, focus, restarted } from './fakeFocus';
 import { type Action, checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 import { COMMIT_NUDGE } from './prompts';
 import { RESUMED_NOTE } from './runJournal';
 import type { WorkspaceOps } from './types';
 
-// A developer's work going onto GitHub (`Delivery`, server/agents/manager/delivery.ts), under the office's two rules
+// A developer's work going onto GitHub (`Delivery`, server/agents/manager/delivery.ts), under Focus's two rules
 // (docs/invariants.md): a restart is atomic, and two things at once end as one after the other would. After a
-// developer's turn the office asks them once to commit what they left, then pushes their branch and opens (or updates)
+// developer's turn Ops asks them once to commit what they left, then pushes their branch and opens (or updates)
 // their pull request, journaling each step so a restart part way finishes it without another turn (docs/AGENTS.md,
 // "Deliver", "The run journal" and "After a restart"). Described here (what can happen to a delivery, what must
 // survive), not told what to expect.
@@ -36,7 +36,7 @@ const steady = async (read: () => unknown) => {
 };
 
 /**
- * The world outside the office, kept across its lives: the developer's checkout (what they left uncommitted, and the
+ * The world outside Focus, kept across its lives: the developer's checkout (what they left uncommitted, and the
  * commits on their branch), the branch as GitHub has it (what was pushed), GitHub's pull requests, and how many more
  * times GitHub answers a push, or opening a pull request, with a 5xx.
  */
@@ -49,7 +49,7 @@ interface World {
   failOpens: number;
   /** The developer's edits, numbered as they're made. */
   edits: number;
-  /** What happens as the office asks for the next push, before it goes: the captain writing, say. */
+  /** What happens as Ops asks for the next push, before it goes: the captain writing, say. */
   atPush?: () => void;
 }
 
@@ -112,7 +112,7 @@ interface Kept {
   /** The run journal's phase (the delivery's, once one's under way), and how its last delivery ended. */
   phase: string;
   delivered?: string;
-  /** Where the developer is: their status, and the pull request the office has for them. */
+  /** Where the developer is: their status, and the pull request Ops has for them. */
   status?: string;
   pr?: number;
   /** The checkout, and the branch as GitHub has it. */
@@ -130,7 +130,7 @@ interface Kept {
 const phaseOf = (phase: unknown): string =>
   typeof phase === 'string' ? phase : typeof phase === 'object' && phase ? Object.entries(phase).map(([k, v]) => `${k}.${phaseOf(v)}`).join(',') : '';
 
-/** How many turns the developer has had, across the office's lives: what a description lets its plain tests count. */
+/** How many turns the developer has had, across Focus's lives: what a description lets its plain tests count. */
 interface Spy {
   turns: () => number;
 }
@@ -148,7 +148,7 @@ const delivery = ({ only, writes = false, spy = { turns: () => 0 } }: { only?: R
     // the developer's setting up (their checkout, their first turn) isn't what's under test: it's done before the first action
     let setUp = false;
     const later: Later = (label, work) => (setUp ? start(label, work) : work());
-    const first = office(workspace(later, world), github(later, world));
+    const first = focus(workspace(later, world), github(later, world));
     const { store, project } = first;
     const id = first.agents.hire(project.id, REPO, ISSUE).id;
     // every life's Claude Code, for what the developer was told across them
@@ -174,9 +174,9 @@ const delivery = ({ only, writes = false, spy = { turns: () => 0 } }: { only?: R
         heard: [...new Set(turns().flatMap((t) => [t.req.prompt, ...t.sent]).flatMap((s) => s.match(/follow-up \d+/g) ?? []))].sort(),
       };
     };
-    const life = (o: Pick<ReturnType<typeof office>, 'agents' | 'claude'>, later: Later): Running<Kept> => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>, later: Later): Running<Kept> => {
       lives.push(o.claude);
-      // this life of the office is over: what an action of it was still waiting to do, it never does
+      // this life of Focus is over: what an action of it was still waiting to do, it never does
       let gone = false;
       const ended = new Set<number>();
       // the developer's turn under way: with none, there's nobody at the keyboard
@@ -188,7 +188,7 @@ const delivery = ({ only, writes = false, spy = { turns: () => 0 } }: { only?: R
       };
       const landed = (state: 'MERGED' | 'CLOSED'): Action => ({
         name: `the pull request is ${state === 'MERGED' ? 'merged' : 'closed'} on GitHub`,
-        // it lands on GitHub in its own time, and the office hears of it (its board's refresh) once it has
+        // it lands on GitHub in its own time, and Ops hears of it (its board's refresh) once it has
         run: async () => {
           const open = world.prs.find((p) => p.state === 'OPEN');
           if (!open) throw new Error('no pull request open');
@@ -223,7 +223,7 @@ const delivery = ({ only, writes = false, spy = { turns: () => 0 } }: { only?: R
             name: 'the turn ends, and the captain writes as the work goes up',
             run: () => {
               const { t, at } = turn();
-              // what they write reaches the office in its own time, from the moment the push is asked for
+              // what they write reaches Ops in its own time, from the moment the push is asked for
               world.atPush = () => void later('the captain writes', () => Promise.resolve()).then(() => gone || o.agents.message(id, `Please also do follow-up ${++messages}`));
               ended.add(at);
               t.end({ ok: true, summary: 'Dark mode toggle in the header' });
@@ -282,7 +282,7 @@ async function take(names: string[]) {
 }
 
 /**
- * Takes the named actions on a fresh delivery, the office going down at the first `label` it hands the world outside
+ * Takes the named actions on a fresh delivery, Focus going down at the first `label` it hands the world outside
  * (which lands out there, or is lost on the way), then starting again: what it kept just before, once it settled after,
  * and how many more turns the developer had.
  */
@@ -309,7 +309,7 @@ async function cutOff(label: string, as: 'landed' | 'lost', names: string[]) {
   return { before, after, turns: spy.turns() - turns };
 }
 
-describe('a developer’s work going onto GitHub, under the office’s two rules', () => {
+describe('a developer’s work going onto GitHub, under Focus’s two rules', () => {
   // a description that never got the work onto GitHub would pass both rules and prove nothing
   it('reaches a delivery asked to commit, pushed through a 502, a pull request opened and updated, failed and merged, taken one at a time', async () => {
     const after = await take([
@@ -352,7 +352,7 @@ describe('a developer’s work going onto GitHub, under the office’s two rules
     await checkAtOnce(delivery({ writes: true }), { runs: 25 });
   });
 
-  // the captain writing as the work goes up: their message reaches the office at any point of the delivery
+  // the captain writing as the work goes up: their message reaches Ops at any point of the delivery
   it('end a message and the delivery it lands in as one after the other would', async () => {
     await checkAtOnce(delivery({ only: /developer commits$|writes|502/, writes: true }), { runs: 25, prefix: 2 });
   });
@@ -364,7 +364,7 @@ describe('a developer’s work going onto GitHub, under the office’s two rules
 });
 
 describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () => {
-  // "Deliver": "if they left uncommitted changes, they're asked once to commit them. Then the office pushes the branch
+  // "Deliver": "if they left uncommitted changes, they're asked once to commit them. Then Ops pushes the branch
   // and opens the PR"
   it('asks them once to commit what they left, then pushes what they committed and opens the pull request', async () => {
     const after = await take(['the developer commits', 'the developer leaves work uncommitted', 'the turn ends', 'the turn ends']);
@@ -375,7 +375,7 @@ describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () =>
 
   // "Deliver": "they're asked once", a restart while they're being asked included. Found on main by the restart check
   // (docs/invariants.md, "Found on main"): the turn asking them picked back up, and as it ended they were asked again
-  it('asks them once to commit, though the office restarted while it asked', async () => {
+  it('asks them once to commit, though Focus restarted while it asked', async () => {
     const d = await delivery().start(now);
     for (const name of ['the developer commits', 'the developer leaves work uncommitted', 'the turn ends']) {
       await Promise.resolve(d.actions().find((a) => a.name === name)?.run());
@@ -397,10 +397,10 @@ describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () =>
     expect(after[2]).toMatchObject({ phase: 'turn.started', nudges: 1, delivered: undefined });
   });
 
-  // "After a restart": "a developer's work the journal says was going onto GitHub (delivering) is finished by the office:
+  // "After a restart": "a developer's work the journal says was going onto GitHub (delivering) is finished by Ops:
   // pushed again and its pull request found or opened, with no Claude turn and no nudge to commit"
   it('a restart part way finishes the pull request without another turn', async () => {
-    // the push never comes back: the office goes down while it's under way
+    // the push never comes back: Focus goes down while it's under way
     const { before, after, turns } = await cutOff('push', 'lost', ['the developer commits', 'the developer leaves work uncommitted', 'the turn ends', 'the developer commits what they left', 'the developer leaves work uncommitted', 'the turn ends']);
     expect(before).toMatchObject({ phase: 'delivering.pushing', pushed: [], nudges: 1 });
     expect(after).toMatchObject({ phase: 'delivered', delivered: 'pr #100', status: 'done', pr: 100, pushed: ['w1', 'w2'], uncommitted: ['edit 2'], github: ['#100 OPEN'], nudges: 1 });
@@ -408,7 +408,7 @@ describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () =>
   });
 
   // "After a restart": "pushed again and its pull request found or opened … (both steps are safe to repeat)": a push
-  // that landed, and a pull request GitHub opened, as the office went down, aren't done twice
+  // that landed, and a pull request GitHub opened, as Focus went down, aren't done twice
   it('pushed again and its pull request found or opened, both steps safe to repeat', async () => {
     const pushed = await cutOff('push', 'landed', ['the developer commits', 'the turn ends']);
     expect(pushed.before).toMatchObject({ phase: 'delivering.pushing', pushed: ['w1'], github: [] });
@@ -428,7 +428,7 @@ describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () =>
 
   // "After a restart": one "decided" to be delivered "but not yet as far as asking them to commit what they left, is
   // delivered from the start". Found on main by the restart check (docs/invariants.md, "Found on main"): a restart while
-  // the office looked for uncommitted changes left the work off GitHub, the developer stopped, waiting for a message
+  // Ops looked for uncommitted changes left the work off GitHub, the developer stopped, waiting for a message
   it('a restart as their turn ends, before the delivery is journaled, still asks them to commit and delivers', async () => {
     const asked = await cutOff('look for changes', 'lost', ['the developer commits', 'the developer leaves work uncommitted', 'the turn ends']);
     expect(asked.after).toMatchObject({ phase: 'turn.started', status: 'working', nudges: 1 });
@@ -474,7 +474,7 @@ describe('a developer’s work going onto GitHub, as docs/AGENTS.md says', () =>
 
   // "Deliver": "if they left uncommitted changes, they're asked once to commit them": once for each delivery, a
   // follow-up's too, however the captain's message reached them
-  // Found on main by this plain test (docs/invariants.md, "Found on main"): the office still had them down as asked
+  // Found on main by this plain test (docs/invariants.md, "Found on main"): Ops still had them down as asked
   it('asks them to commit what a follow-up left, though the message came as the work went up', async () => {
     const after = await take(['the developer commits', 'the developer leaves work uncommitted', 'the turn ends', 'the turn ends, and the captain writes as the work goes up', 'the developer leaves work uncommitted', 'the turn ends']);
     expect(after[3]).toMatchObject({ nudges: 1, pushed: ['w1'], phase: 'turn.started', heard: ['follow-up 1'] });

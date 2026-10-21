@@ -9,7 +9,7 @@ import { type FocusPlugin } from '../../plugin-api/server';
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-/** The keys calls need, from where the office starts: OpenAI's for gpt-live-1, TypeSafe's for Jev. */
+/** The keys calls need, from where Focus starts: OpenAI's for gpt-live-1, TypeSafe's for Jev. */
 const callKeys = () => ({ openai: process.env.OPENAI_API_KEY || undefined, typesafe: process.env.TYPESAFE_API_KEY || undefined });
 
 const numberOnePlugin: FocusPlugin = {
@@ -17,7 +17,7 @@ const numberOnePlugin: FocusPlugin = {
   start(host) {
     const saved = host.state<NumberOneSaved>(() => ({ chat: freshChat() }));
     const live = host.state<NumberOneLive>(() => ({ activity: '', call: { call: null } }), { saved: false });
-    // a turn in flight when the office shut down ends, and the chat stays usable
+    // a turn in flight when Focus shut down ends, and the chat stays usable
     const chat = saved.get().chat;
     if (chatAfterRestart(chat) !== chat) saved.set({ chat: chatAfterRestart(chat) });
     const numberOne = new NumberOne(
@@ -31,7 +31,7 @@ const numberOnePlugin: FocusPlugin = {
       },
       host.demo ? new DemoNumberOne() : new ClaudeNumberOne((run) => host.shipSession(run)),
     );
-    // calls read the ship and act on the captain's goals through the office, once the captain has said yes
+    // calls read the ship and act on the captain's goals through Ops, once the captain has said yes
     const calls: Calls = new Calls((call) => live.set({ call }), {
       snapshot: () => host.snapshot(),
       ledger: () => host.ledger(),
@@ -44,7 +44,7 @@ const numberOnePlugin: FocusPlugin = {
       routes: [
         { method: 'post', path: '/say', handle: ({ body }) => numberOne.say(text(body.text)) },
         { method: 'post', path: '/new', handle: () => numberOne.newConversation() },
-        // the browser's WebRTC offer in, the session's id and answer out; the office joins the call itself
+        // the browser's WebRTC offer in, the session's id and answer out; Ops joins the call itself
         {
           method: 'post',
           path: '/call',

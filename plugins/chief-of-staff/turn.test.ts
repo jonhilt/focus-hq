@@ -12,7 +12,7 @@ describe('turnTail', () => {
     expect(turnTail(t)).toEqual({ text: 'Looking.\n\nList it is. Ship?', uuid: 'f' });
   });
 
-  it('starts again after the office’s messages too, and skips the harness’s own and lines mid-write', () => {
+  it('starts again after Ops’ messages too, and skips the harness’s own and lines mid-write', () => {
     const t = jsonl([said('a', 'Before.'), to('b', '[Office] Slice 1 merged.'), said('c', 'Next.'), to('d', '<system-reminder>x</system-reminder>')]) + '\n{"type":"assi';
     expect(turnTail(t)).toEqual({ text: 'Next.', uuid: 'd' });
   });

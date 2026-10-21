@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-// What a goal lead may cite when it sends a system model (its `model` tool, docs/goals.md): the office reads a cited
+// What a goal lead may cite when it sends a system model (its `model` tool, docs/goals.md): Ops reads a cited
 // file's lines to check the model against the code, but only files inside `roots` (the lead's workspace, say), and only
 // plain files of a sensible size.
 

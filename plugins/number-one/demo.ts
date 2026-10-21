@@ -1,4 +1,4 @@
-// The demo office's Number One: scripted, on the demo's ship.
+// The demo ship's Number One: scripted, on the demo's ship.
 import type { NumberOneOfficer, NumberOneReply, NumberOneTurn } from './chat';
 import { DEMO_FILES as FILES, demoPace, randomHex, sleep } from '../../plugin-api/server';
 

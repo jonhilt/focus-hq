@@ -41,12 +41,12 @@ describe('flowText and flowTitle', () => {
 });
 
 describe('flowSoFar', () => {
-  it('carries the state the goal is in on to now, from when the office last worked it out', () => {
+  it('carries the state the goal is in on to now, from when Ops last worked it out', () => {
     const f = { ...flow({ state: 'qa', since: 2 * MIN }, { working: 10 * MIN, qa: MIN }), at: 3 * MIN };
     expect(flowSoFar(f, 8 * MIN)).toMatchObject({ working: 10 * MIN, qa: 6 * MIN });
   });
 
-  it('stops counting a wait that has run to a stretch away, as the office would', () => {
+  it('stops counting a wait that has run to a stretch away, as Ops would', () => {
     const f = flow({ state: 'captain', since: 0 }, { working: 10 * MIN });
     expect(flowSoFar(f, 5 * 60 * MIN).captain).toBe(0);
     expect(flowSoFar(flow({ state: 'working', since: 0 }), 5 * 60 * MIN).working).toBe(5 * 60 * MIN);

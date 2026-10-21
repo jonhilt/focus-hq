@@ -35,7 +35,7 @@ export type LogKind =
 
 export interface LogLine {
   t: number;
-  /** Who it's about: a crew member, QA, the office. */
+  /** Who it's about: a crew member, QA, Ops. */
   who: string;
   source: LogSource;
   kind: LogKind;

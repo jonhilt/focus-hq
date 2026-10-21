@@ -39,7 +39,7 @@ const call = (patch: Partial<CallState>): CallState => ({ id: 'c1', step: 'liste
 const line = { who: 'ship' as const, text: 'Aye, captain.', at: 1 };
 
 describe('callStrip', () => {
-  it('offers a call once the office can take one, and says why not until then', () => {
+  it('offers a call once Ops can take one, and says why not until then', () => {
     expect(callStrip({ call: null })).toMatchObject({ kind: 'idle', canDial: true, ended: null });
     expect(callStrip({ missing: 'Set an OpenAI key first', call: null })).toMatchObject({ kind: 'idle', canDial: false, dialTitle: 'Set an OpenAI key first' });
     expect(callStrip(undefined)).toMatchObject({ kind: 'idle', canDial: false });
@@ -61,7 +61,7 @@ describe('callStrip', () => {
 });
 
 describe('callOver', () => {
-  it('lets go of this browser’s call once the office has none, has another, or ended it', () => {
+  it('lets go of this browser’s call once Ops has none, has another, or ended it', () => {
     expect(callOver('c1', call({}))).toBe(false);
     expect(callOver('c1', null)).toBe(true);
     expect(callOver('c1', undefined)).toBe(true);

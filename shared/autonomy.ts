@@ -1,4 +1,4 @@
-// How much an agent may do without asking: the office's setting, or the captain's choice for one agent.
+// How much an agent may do without asking: Focus's setting, or the captain's choice for one agent.
 
 import { isOneOf } from './records';
 import type { Autonomy, Settings } from './types';
@@ -12,7 +12,7 @@ export function isAutonomy(value: unknown): value is Autonomy {
   return isOneOf(AUTONOMY_MODES, value);
 }
 
-/** The mode an agent's session runs in: the captain's choice for them, else the office's setting. */
+/** The mode an agent's session runs in: the captain's choice for them, else Focus's setting. */
 export function effectiveAutonomy(agent: { autonomy?: Autonomy }, settings: Pick<Settings, 'autonomy'>): Autonomy {
   return agent.autonomy ?? settings.autonomy;
 }

@@ -27,7 +27,7 @@ const qaAgentId = (projectId: string) => `qa_${projectId}`;
 
 /** QA reviews of pull requests: the queue, seating a reviewer, their verdict, and sending a failed PR back to be fixed. */
 export class Reviews extends Part {
-  /** PRs back for QA whose new commits the office is looking at first, to see whether QA needs to test them again. */
+  /** PRs back for QA whose new commits Ops is looking at first, to see whether QA needs to test them again. */
   private prechecking = new Set<string>();
 
   /** Asks the room's QA officer to review and test a pull request. Queued if they're busy with another. */
@@ -60,7 +60,7 @@ export class Reviews extends Part {
     return review;
   }
 
-  /** Remembers (or, with `on` false, forgets) that the captain wants the PR merged once QA passes it; office.ts merges it. */
+  /** Remembers (or, with `on` false, forgets) that the captain wants the PR merged once QA passes it; Ops merges it (focus.ts). */
   requestMerge(repo: string, number: number, on: boolean): QaReview {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) throw new Refused({ message: `QA isn't reviewing ${repo}#${number}` });
@@ -70,7 +70,7 @@ export class Reviews extends Part {
 
   /**
    * Before QA re-tests a PR they gave a verdict on: a head they already tested goes back to that verdict, and one that
-   * only merged the base branch in, cleanly, on top of a pass gets the project's checks run by the office, which carries
+   * only merged the base branch in, cleanly, on top of a pass gets the project's checks run by Ops, which carries
    * the pass over when they're green. Anything else, or anything that goes wrong on the way, goes to QA as usual.
    */
   private precheck(review: QaReview, last: QaReview): Effect.Effect<void, never, ManagerServices> {
@@ -241,7 +241,7 @@ export class Reviews extends Part {
       .map((s) => ({ repo: s.repo, number: s.number, folder: this.folderOf(agent.projectId, s.repo), sha: s.sha }));
   }
 
-  /** The QA officer's instructions; rebuilt from GitHub and their checkout if the office restarted since the review began. */
+  /** The QA officer's instructions; rebuilt from GitHub and their checkout if Focus restarted since the review began. */
   qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace> {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
@@ -263,7 +263,7 @@ export class Reviews extends Part {
     });
   }
 
-  /** The QA station's Playbook: what QA does on the project, from its instructions as they'd be now and the office's clone of each repo. */
+  /** The QA station's Playbook: what QA does on the project, from its instructions as they'd be now and the clone Ops keeps of each repo. */
   playbook(projectId: string): Promise<QaPlaybook> {
     return this.runtime.runPromise(this.playbookOf(this.store.project(projectId)));
   }
@@ -296,7 +296,7 @@ export class Reviews extends Part {
   }
 
   /**
-   * The changed files QA's session opened, from its tool calls in its transcript, when the office can read it (not in
+   * The changed files QA's session opened, from its tool calls in its transcript, when Ops can read it (not in
    * the demo, nor for a cloud session): both rounds, when it was sent back.
    */
   private openedBy(agent: Agent): Effect.Effect<Set<string> | undefined> {
@@ -336,7 +336,7 @@ export class Reviews extends Part {
       const n = report.proofs?.length ?? 0;
       if (n) {
         this.update(agent, { activity: `Running QA's proof${n === 1 ? '' : 's'}` });
-        this.print(agent, [{ kind: 'system', text: `✻ The office checks ${n === 1 ? 'the proof' : `the ${n} proofs`} QA named before posting the report` }]);
+        this.print(agent, [{ kind: 'system', text: `✻ Ops checks ${n === 1 ? 'the proof' : `the ${n} proofs`} QA named before posting the report` }]);
       }
       const proven = yield* prove(report, { run: (args) => workspace.runIn(dir, args, PROOF_MS), read: (file) => workspace.readIn(dir, file), changed, shots });
       for (const p of proven.proofs ?? []) {
@@ -365,7 +365,7 @@ export class Reviews extends Part {
       const opened = yield* this.openedBy(agent);
       const revisit = filesToRevisit(said, files, opened);
       if (revisit && agent.sessionId) return yield* this.revisitFiles(agent, agent.sessionId, revisit);
-      // the verdict blocks only with proof the office checked itself (docs/qa.md#proof)
+      // the verdict blocks only with proof Ops checked itself (docs/qa.md#proof)
       const shots = this.rt(agent.id).shots;
       const report = qaProofFor(this.store.project(agent.projectId))
         ? yield* this.proveReport(agent, said, files?.changed ?? [], { taken: shots?.taken ?? 0, kept: shots?.frames.length ?? 0 })
@@ -395,7 +395,7 @@ export class Reviews extends Part {
       const agent = this.reviewerOn(repo, number);
       if (typeof journal.phase === 'object' && journal.phase.reported === 'posting' && journal.reported) {
         const body = journal.reported.body;
-        // after a restart the comment may have gone up just as the office went down: look before posting it again
+        // after a restart the comment may have gone up just as Focus went down: look before posting it again
         // (and if GitHub can't say, post it: twice beats never)
         const there = recovering && postedAlready(yield* GitHub.use((github) => github.pullRequestComments(repo, number)).pipe(Effect.orElseSucceed((): string[] => [])), body);
         const url = there ? undefined : yield* this.postVerdict(agent, repo, number, body);
@@ -518,7 +518,7 @@ export class Reviews extends Part {
   }
 
   /**
-   * Hands QA's findings, or the failing checks, to the developer who opened the PR, if they're still in the office;
+   * Hands QA's findings, or the failing checks, to the developer who opened the PR, if they're still aboard;
    * otherwise a new agent sits down on the PR's branch to fix it.
    */
   /** `note` is the operations officer's advice, when they're the one sending it back. */

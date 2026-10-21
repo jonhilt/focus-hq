@@ -1,9 +1,9 @@
 import type { QaReport } from '../../shared/types';
 
-// What the office does after QA fails a pull request: send it back to a developer, stop and hand it to the manager, or
+// What Ops does after QA fails a pull request: send it back to a developer, stop and hand it to the manager, or
 // leave it alone. Pure, so it's unit tested (qaLoop.test.ts); manager.ts does the sending.
 
-/** Failed QA rounds on one PR before the office stops sending it back. */
+/** Failed QA rounds on one PR before Ops stops sending it back. */
 export const MAX_FAILED_ROUNDS = 3;
 
 export type QaLoopEvent =

@@ -30,7 +30,7 @@ describe('refusal', () => {
     expect(refusal({}, local)).toMatch(/host \(none\)/);
   });
 
-  it('refuses another site’s page, and a sandboxed one, driving the office', () => {
+  it('refuses another site’s page, and a sandboxed one, driving Focus', () => {
     expect(refusal({ host: 'localhost:4477', origin: 'https://evil.example' }, local)).toMatch(/pages from https:\/\/evil\.example/);
     expect(refusal({ host: 'localhost:4477', origin: 'null' }, local)).toMatch(/pages from null/);
     expect(refusal({ host: 'localhost:4477', origin: 'https://localhost.evil.example' }, local)).toBeDefined();
@@ -42,7 +42,7 @@ describe('refusal', () => {
 });
 
 describe('allowedHosts', () => {
-  it('adds the host the office listens on, and FOCUS_ALLOWED_HOSTS’s names and suffixes', () => {
+  it('adds the host Focus listens on, and FOCUS_ALLOWED_HOSTS’s names and suffixes', () => {
     const hosts = allowedHosts('focus.lan', 'Office.Example, .corp.example', machine);
     expect(refusal({ host: 'focus.lan:4477' }, hosts)).toBeUndefined();
     expect(refusal({ host: 'office.example' }, hosts)).toBeUndefined();

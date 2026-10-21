@@ -7,7 +7,7 @@ const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
   title: 'Ledger v2',
   beats: [
     { title: 'Append, never rewrite', text: 'Each event becomes one line.', seconds: 7 },
-    { title: 'One writer', text: 'A lock file keeps a second office out.', seconds: 5, label: 'Lock' },
+    { title: 'One writer', text: 'A lock file keeps a second Focus out.', seconds: 5, label: 'Lock' },
   ],
   stage: { html: '<div id="file" class="panel"></div>', css: '#file { left: 0 }', script: 'function render(t) { $("#file").style.opacity = p(t, 0, 1); }' },
   ...over,
@@ -50,9 +50,9 @@ describe('explainerPage', () => {
   it("gives the voice each beat's narration, or its title and caption read out", () => {
     const beats = [
       { title: 'Append, never rewrite', text: 'Each event becomes one line.', seconds: 7, narration: '  On the left   is the file. ' },
-      { title: 'One writer?', text: 'A lock file keeps a second office out.', seconds: 5 },
+      { title: 'One writer?', text: 'A lock file keeps a second Focus out.', seconds: 5 },
     ];
-    expect(beatsIn(page({ beats }).html).map((b) => b.say)).toEqual(['On the left is the file.', 'One writer? A lock file keeps a second office out.']);
+    expect(beatsIn(page({ beats }).html).map((b) => b.say)).toEqual(['On the left is the file.', 'One writer? A lock file keeps a second Focus out.']);
     expect(beatNarration({ title: 'One writer', text: 'Only one.', seconds: 1, narration: ' ' })).toBe('One writer. Only one.');
   });
 

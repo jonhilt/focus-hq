@@ -27,7 +27,7 @@ describe('ledgerRow', () => {
     const merged = ev({ kind: 'merged', repo: REPO, pr: 199, by: 'captain', qa: 'stale', failedRounds: 0, triages: 0 }, 2);
     expect(ledgerRow(merged)).toMatchObject({ tag: 'Merged', tone: 'warn', title: 'focus #199 · by the captain · without a QA pass (QA stale)' });
     const clean = ev({ kind: 'merged', repo: REPO, pr: 237, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, closes: [226] }, 2);
-    expect(ledgerRow(clean)).toMatchObject({ tone: 'ok', title: 'focus #237 · by the office · QA passed first time', detail: ' · closed #226' });
+    expect(ledgerRow(clean)).toMatchObject({ tone: 'ok', title: 'focus #237 · by Ops · QA passed first time', detail: ' · closed #226' });
   });
 
   it('says how conflicts were settled, and which files', () => {

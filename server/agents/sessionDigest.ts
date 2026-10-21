@@ -99,7 +99,7 @@ export const leadTail = (said: readonly string[]): string => tail(said.join('\n\
 
 /**
  * Each message the captain sent in a span of a transcript (after `afterUuid`, up to and including `toUuid`), in full,
- * with the end of what the agent had said since the last message to it (the office's included, which reset it too).
+ * with the end of what the agent had said since the last message to it (Ops' included, which reset it too).
  */
 export function captainReplies(jsonl: string, afterUuid?: string, toUuid?: string): CaptainReply[] {
   const replies: CaptainReply[] = [];

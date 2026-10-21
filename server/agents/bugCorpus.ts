@@ -1,4 +1,4 @@
-// The bug corpus (docs/bug-corpus.md): real bugs the office's agents shipped, each with a referee that can't be argued
+// The bug corpus (docs/bug-corpus.md): real bugs Focus's agents shipped, each with a referee that can't be argued
 // with. A fix that came with a test is a case when that test fails on the code just before the fix, for the bug's
 // sake (an assertion, not a function that didn't exist yet), and passes on the fix. The rules are here, pure; git,
 // the worktrees and vitest are in tools/bugCorpus.ts.

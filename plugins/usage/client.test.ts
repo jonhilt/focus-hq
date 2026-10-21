@@ -14,7 +14,7 @@ const agents = [
 vi.mock('../../plugin-api/client', async () => ({
   ...(await import('../../plugin-api/shared')),
   pluginState: () => usage,
-  office: { get agents() {
+  focus: { get agents() {
     return agents;
   } },
   timeAgo: () => '2 min ago',
@@ -74,7 +74,7 @@ describe('the usage plugin in the browser', () => {
     expect(plugin.hud?.()).toEqual({ text: '◔ session 10%', title: 'Your Claude plan’s usage' });
   });
 
-  it('opens the engineering overview with a bar per limit, how the office signs in, and who signs in with what', () => {
+  it('opens the engineering overview with a bar per limit, how Focus signs in, and who signs in with what', () => {
     usage = reading();
     const top = plugin.engineering?.top?.(ui as never);
     const text = top?.textContent ?? '';

@@ -236,7 +236,7 @@ describe('dictated', () => {
 });
 
 describe('callNotes', () => {
-  it("keeps what the captain and the ship said, not the office's notes, the latest when it's long", () => {
+  it("keeps what the captain and the ship said, not Ops' notes, the latest when it's long", () => {
     expect(callNotes([{ who: 'captain', text: 'Hi', at: 0 }, { who: 'office', text: 'x', at: 0 }, { who: 'ship', text: 'Hello', at: 0 }])).toBe('Captain: Hi\nShip: Hello');
     const long = Array.from({ length: 200 }, (_, i) => ({ who: 'captain' as const, text: `line ${i} ${'x'.repeat(40)}`, at: 0 }));
     const notes = callNotes(long);

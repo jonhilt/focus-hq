@@ -29,7 +29,7 @@ export interface RunContext {
 /** What a turn's end was. */
 export type TurnEvent =
   | { type: 'done' }
-  /** Claude Code signed the turn in with a key that costs, when the office meant your plan's login. */
+  /** Claude Code signed the turn in with a key that costs, when Ops meant your plan's login. */
   | { type: 'mismatch'; observed: string }
   /** Your plan's usage limit stopped it. */
   | { type: 'limited' }
@@ -56,7 +56,7 @@ export type Target =
   | 'attach-refused'
   /** Attaching failed some other way: wait for the captain to start the cloud session again. */
   | 'attach-failed'
-  /** Signed in with the key behind the office's back: the agent fails, saying where to look. */
+  /** Signed in with the key behind Ops' back: the agent fails, saying where to look. */
   | 'sign-in-mismatch'
   /** Carry on with your API key, now or once your plan's limit resets. */
   | 'limited'

@@ -47,7 +47,7 @@ export function openWorkflowScriptPanel(ui: Ui, leadId: string, workflowId: stri
         const colour = phase !== undefined ? colourOf(phase) : undefined;
         return h('div', { class: `script-line${colour ? ' lit' : ''}`, style: colour ? `--c:${colour}` : '' }, h('span', { class: 'script-num' }, String(i + 1)), text || ' ');
       })
-      : [h('div', { class: 'muted' }, script ? 'The office never saw this workflow’s script.' : 'Reading the script…')]));
+      : [h('div', { class: 'muted' }, script ? 'Ops never saw this workflow’s script.' : 'Reading the script…')]));
     // the first time there's something running, bring it into view
     const first = code.querySelector('.script-line.lit');
     if (first && !scrolled) {

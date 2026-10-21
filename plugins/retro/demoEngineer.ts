@@ -31,7 +31,7 @@ export class DemoEngineer implements RetroOfficer {
         drafts: groups.map(([, id, kind, signature, sessions]) => ({
           groups: [id],
           title: kind === 'demo-env' ? 'Give each workspace its own demo port' : `Stop “${signature}” recurring`,
-          body: `Agents keep hitting “${signature}” (${kind}): it came up in ${sessions} sessions, each time costing a few tool calls and a restart.\n\n## What to build\n- The office passes each workspace a free PORT, and \`npm run demo\` uses it.\n\n## Done when\n- Two demos in two workspaces start side by side without a clash.`,
+          body: `Agents keep hitting “${signature}” (${kind}): it came up in ${sessions} sessions, each time costing a few tool calls and a restart.\n\n## What to build\n- Ops passes each workspace a free PORT, and \`npm run demo\` uses it.\n\n## Done when\n- Two demos in two workspaces start side by side without a clash.`,
           kind: 'check',
           measure: `Sessions with “${signature}”: ${sessions} this time.`,
         })),

@@ -7,8 +7,12 @@ import { RESUMED_NOTE } from './runJournal';
 import { blocks, field, isRecord, messageFrom, resultText, transcriptFolders, transcriptLines, transcriptReader } from './transcript';
 
 describe('messageFrom', () => {
-  it('knows the office’s and QA’s messages by how they open', () => {
+  it('knows Ops’ and QA’s messages by how they open', () => {
+    expect(messageFrom('[Ops] Slice 1 has landed')).toBe('office');
+    expect(messageFrom('Ops paused you mid-turn when its Claude usage limit was reached.')).toBe('office');
+    // as transcripts written before Ops had its name still say
     expect(messageFrom('[Office] Slice 1 has landed')).toBe('office');
+    expect(messageFrom('The office paused you mid-turn when its Claude usage limit was reached.')).toBe('office');
     expect(messageFrom('[QA officer Ensign Halloran] QA failed jonhilt/focus#154')).toBe('qa');
     expect(messageFrom('Please QA pull request #12 in demo/shop')).toBe('office');
     expect(messageFrom('This session is being continued from a previous conversation')).toBe('compacted');
@@ -76,7 +80,7 @@ function projects() {
 }
 
 describe('transcriptFolders', () => {
-  it('finds the office’s agents’ sessions, each with its kind, its id and a name to tell it by', async () => {
+  it('finds Focus’s agents’ sessions, each with its kind, its id and a name to tell it by', async () => {
     const { root, workspaces, folder, write } = projects();
     write(folder('lead-proj-1'), '0123456789ab-lead.jsonl', 'lead');
     write(folder('qa-proj-1'), 'qa-session.jsonl', 'qa');
@@ -94,7 +98,7 @@ describe('transcriptFolders', () => {
     const { root, workspaces, folder, write } = projects();
     const mine = path.join(root, '-home-me-code-shop');
     fs.mkdirSync(mine);
-    write(mine, 'mine.jsonl', 'not the office’s');
+    write(mine, 'mine.jsonl', 'not Focus’s');
     write(folder('planner-proj-1'), 'p.jsonl', 'no such kind');
     write(folder('lead-proj-1'), 'notes.txt', 'not a transcript');
     write(folder('lead-proj-1'), 'old.jsonl', 'too old', new Date(2026, 0, 1));
@@ -123,7 +127,7 @@ describe('transcriptReader', () => {
     const { root, workspaces, write } = projects();
     const mine = path.join(root, '-home-me-code-shop');
     fs.mkdirSync(mine);
-    write(mine, 's2.jsonl', 'not the office’s');
+    write(mine, 's2.jsonl', 'not Focus’s');
     expect(await transcriptReader(root, workspaces)('s2')).toBeUndefined();
     expect(await transcriptReader(path.join(os.tmpdir(), 'focus-no-such-projects'), workspaces)('s2')).toBeUndefined();
   });

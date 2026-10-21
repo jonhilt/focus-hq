@@ -1,8 +1,8 @@
 import { prKey, qaBadge, sameCommit } from './qa';
 import type { Board, ConflictsOutcome, FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
 
-// When a pull request may merge, and what the office does next with one that can't yet. Pure, so it's unit tested
-// (shared/mergeGate.test.ts); office.ts follows the steps on each board refresh while a project has auto-merge on.
+// When a pull request may merge, and what Ops does next with one that can't yet. Pure, so it's unit tested
+// (shared/mergeGate.test.ts); focus.ts follows the steps on each board refresh while a project has auto-merge on.
 
 /** What the merge gate already did about a PR's head commit, so a board refresh doesn't do it again. */
 export type GateMark = { sha: string } & ({ kind: 'rerun' } | { kind: 'sent-back' } | { kind: 'resolving' } | { kind: 'refused'; reason: string });
@@ -18,14 +18,14 @@ export type MergeStep =
   /** Checks still fail after a re-run: back to the developer with the failing checks. */
   | { kind: 'send-back'; sha: string; checks: FailedCheck[] }
   | { kind: 'resolve-conflicts'; sha: string }
-  /** The office won't take it further by itself; the manager can still merge it from the board. */
+  /** Ops won't take it further by itself; the manager can still merge it from the board. */
   | { kind: 'blocked'; reason: string };
 
-/** What the office knows about a PR beyond GitHub and QA. */
-export interface GateOffice {
-  /** An agent of the office opened it. Teammates' PRs never merge by themselves. */
+/** What Ops knows about a PR beyond GitHub and QA. */
+export interface GateOps {
+  /** One of our agents opened it. Teammates' PRs never merge by themselves. */
   openedByOffice: boolean;
-  /** An agent of the office is working on it right now (fixing it, resolving its conflicts). */
+  /** One of our agents is working on it right now (fixing it, resolving its conflicts). */
   developerBusy: boolean;
   /** The project sends failed PRs back to a developer. */
   autoSendBack: boolean;
@@ -36,14 +36,14 @@ export interface GateOffice {
 
 type GatePr = Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks' | 'failedChecks'>;
 
-export function mergeStep(pr: GatePr, review: QaReview | undefined, office: GateOffice): MergeStep {
-  if (!office.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
-  if (office.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
+export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps): MergeStep {
+  if (!ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
+  if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
   if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
   const head = pr.headSha;
   if (!head) return { kind: 'blocked', reason: 'GitHub didn’t say which commit it’s at' };
-  if (office.developerBusy) return { kind: 'wait', reason: 'a developer is working on it' };
-  const mark = office.mark && sameCommit(office.mark.sha, head) ? office.mark : undefined;
+  if (ops.developerBusy) return { kind: 'wait', reason: 'a developer is working on it' };
+  const mark = ops.mark && sameCommit(ops.mark.sha, head) ? ops.mark : undefined;
   if (pr.mergeable === 'CONFLICTING') {
     return mark?.kind === 'resolving' ? { kind: 'blocked', reason: 'it still conflicts after resolving' } : { kind: 'resolve-conflicts', sha: head };
   }
@@ -74,7 +74,7 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, office: Gate
       const runIds = [...new Set(pr.failedChecks.flatMap((c) => (c.runId ? [c.runId] : [])))];
       if (!mark && runIds.length) return { kind: 'rerun-checks', sha: head, runIds };
       if (mark?.kind === 'sent-back') return { kind: 'blocked', reason: 'checks still fail after it went back to a developer' };
-      if (!office.autoSendBack) return { kind: 'blocked', reason: 'checks fail' };
+      if (!ops.autoSendBack) return { kind: 'blocked', reason: 'checks fail' };
       return { kind: 'send-back', sha: head, checks: pr.failedChecks };
     }
     case 'passing':
@@ -97,7 +97,7 @@ export function forgottenMarks(keys: Iterable<string>, repos: string[], board: {
   });
 }
 
-/** The mark a step leaves on the PR's head as the office takes it, so the next refresh doesn't take it again. */
+/** The mark a step leaves on the PR's head as Ops takes it, so the next refresh doesn't take it again. */
 export function stepMark(step: MergeStep): GateMark | undefined {
   switch (step.kind) {
     case 'rerun-checks':
@@ -111,12 +111,12 @@ export function stepMark(step: MergeStep): GateMark | undefined {
   }
 }
 
-/** What the office tells the captain once it took on a PR's conflicts with its base branch. */
+/** What Ops tells the captain once it took on a PR's conflicts with its base branch. */
 export function conflictsSaid(where: string, base: string, outcome: Exclude<ConflictsOutcome, { kind: 'agent' }> | { kind: 'agent' }): string {
   const said = outcome.kind === 'agent' ? '– resolving them before QA'
     : outcome.kind === 'up-to-date' ? `on GitHub, but it already has everything from ${base}`
-    : outcome.auto ? `– the office merged ${base} in, settling ${outcome.auto.join(', ')} by rule`
-    : `– the office merged ${base} in cleanly`;
+    : outcome.auto ? `– Ops merged ${base} in, settling ${outcome.auto.join(', ')} by rule`
+    : `– Ops merged ${base} in cleanly`;
   return `🔧 ${where} conflicts with ${base} ${said}`;
 }
 
@@ -142,12 +142,12 @@ export function unpassedReason(review: QaReview | undefined, pr: Pick<PullReques
   }
 }
 
-/** Whether PRs the office opened merge by themselves: off unless the project switched it on. */
+/** Whether PRs Ops opened merge by themselves: off unless the project switched it on. */
 export function autoMergeFor(project: { autoMerge?: boolean }): boolean {
   return project.autoMerge === true;
 }
 
-/** How a repo's pull requests merge: the project's choice for that repo, or else the office-wide setting. */
+/** How a repo's pull requests merge: the project's choice for that repo, or else the Focus-wide setting. */
 export function mergeMethodFor(project: { mergeMethods?: Record<string, MergeMethod> } | undefined, repo: string, fallback: MergeMethod): MergeMethod {
   return project?.mergeMethods?.[repo] ?? fallback;
 }
@@ -178,10 +178,10 @@ export type RequestedStep =
   | { kind: 'wait' }
   /** Commits arrived after QA passed it: QA again, and merge once that passes. */
   | { kind: 'qa'; reason: string }
-  /** The office won't merge it after all: forget the request and tell the captain why. */
+  /** Ops won't merge it after all: forget the request and tell the captain why. */
   | { kind: 'drop'; reason: string };
 
-/** What the office does next with a merge the captain asked for while QA was testing a PR. */
+/** What Ops does next with a merge the captain asked for while QA was testing a PR. */
 export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks'>, review: QaReview): RequestedStep {
   switch (review.status) {
     case 'queued':
@@ -195,7 +195,7 @@ export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'me
       break;
   }
   const head = pr.headSha;
-  if (!head || !review.sha) return { kind: 'drop', reason: 'the office can’t tell which commit QA passed' };
+  if (!head || !review.sha) return { kind: 'drop', reason: 'Ops can’t tell which commit QA passed' };
   if (!sameCommit(review.sha, head)) return { kind: 'qa', reason: 'commits arrived after QA passed it' };
   if (pr.isDraft) return { kind: 'drop', reason: 'it’s a draft' };
   if (pr.mergeable === 'CONFLICTING') return { kind: 'drop', reason: 'it conflicts with its base branch' };
@@ -203,7 +203,7 @@ export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'me
   return { kind: 'merge', sha: head };
 }
 
-/** What the office tells the captain once their merge from the board went through: past the check (`override`), or checked. */
+/** What Ops tells the captain once their merge from the board went through: past the check (`override`), or checked. */
 export function boardMergeSaid(where: string, base: string, override: boolean): string {
   return override ? `Merged ${where} past its merge check, as you asked` : `Merged ${where}: it checks out merged onto ${base}`;
 }

@@ -1,4 +1,4 @@
-// The briefings plugin in the demo office: the explainer its scripted leads put up, as a real lead's explain call would.
+// The briefings plugin in the demo ship: the explainer its scripted leads put up, as a real lead's explain call would.
 import type { ExplainerInput } from './explainer';
 
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);

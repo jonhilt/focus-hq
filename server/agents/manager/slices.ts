@@ -97,7 +97,7 @@ export class Slices extends Part {
 
   /**
    * After a restart: each lead's pull requests are put right from their slice journal (one the saved state lost is
-   * watched again), and a ship or a move to fresh code that Focus cut off is finished by the office, with no Claude turn,
+   * watched again), and a ship or a move to fresh code that Focus cut off is finished by Ops, with no Claude turn,
    * before the lead's own run picks back up (`recoverAgent`), so the two never ship at once. The leads it's finishing
    * something for: their runs are recovered once it's done.
    */
@@ -116,14 +116,14 @@ export class Slices extends Part {
       later.add(agent.id);
       const { status, activity } = agent;
       const finish: Effect.Effect<string, GitHubError | GitFailed | Refused | NothingToCheckOut, ManagerServices> = next.kind === 'ship'
-        ? this.shipLead(agent, next).pipe(Effect.map((said) => `Focus restarted while your slice was shipping, so the office finished it:\n\n${said}`))
-        : this.move(agent, next.moving).pipe(Effect.map((said) => `Focus restarted while your repos were moving to fresh code, so the office finished the move:\n\n${said}`));
+        ? this.shipLead(agent, next).pipe(Effect.map((said) => `Focus restarted while your slice was shipping, so Ops finished it:\n\n${said}`))
+        : this.move(agent, next.moving).pipe(Effect.map((said) => `Focus restarted while your repos were moving to fresh code, so Ops finished the move:\n\n${said}`));
       this.print(agent, [{ kind: 'system', text: `✻ Focus restarted part way through ${next.kind === 'ship' ? 'shipping their slice' : 'moving their repos to fresh code'}: finishing that` }]);
       this.background(finish.pipe(
         Effect.tap((said) => Effect.sync(() => this.rt(agent.id).inbox.push(said))),
         Effect.catch((err) => Effect.sync(() => {
           this.print(agent, [{ kind: 'error', text: `✘ Couldn't finish it: ${err.message}` }]);
-          this.rt(agent.id).inbox.push(`Focus restarted part way through ${next.kind === 'ship' ? 'shipping your slice' : 'moving your repos to fresh code'}, and the office couldn't finish it: ${err.message}`);
+          this.rt(agent.id).inbox.push(`Focus restarted part way through ${next.kind === 'ship' ? 'shipping your slice' : 'moving your repos to fresh code'}, and Ops couldn't finish it: ${err.message}`);
         })),
         // the ship marked them at work: they're as the restart left them, for their own run to pick up
         Effect.ensuring(Effect.sync(() => {
@@ -204,7 +204,7 @@ export class Slices extends Part {
           }),
         { concurrency: 'unbounded' },
       );
-      // the office may have pushed a merge to the slice's branch (resolving conflicts): never ship over it
+      // Ops may have pushed a merge to the slice's branch (resolving conflicts): never ship over it
       for (const s of states.filter((x) => x.changed && openPr(work, x.repo))) {
         if (yield* workspace.missingRemoteCommits(s.dir, s.branch)) return yield* new Refused({ message: behindNote(s.folder, s.branch) });
       }
@@ -259,7 +259,7 @@ export class Slices extends Part {
   }
 
   /**
-   * The branch a repo ships from: at its first ship in the slice, the office renames the slice's working branch after
+   * The branch a repo ships from: at its first ship in the slice, Ops renames the slice's working branch after
    * the slice's work (`shipBranch`), so the pull request's branch says what it does. A repo with a pull request open
    * keeps the branch it's on, and so does one git won't rename (the name's taken).
    */

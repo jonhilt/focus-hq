@@ -26,7 +26,7 @@ import { changeProject } from './projectChange';
 
 /**
  * An agent as they pick up after a restart (`projectName` is their room's, for a lead saved before team stations): whoever was at
- * work stops, and waits for a message; what doesn't outlive the office (a lead's subagents, workflows and background work, a hold
+ * work stops, and waits for a message; what doesn't outlive Focus (a lead's subagents, workflows and background work, a hold
  * for the plan's usage limit) goes; and one saved before a field existed gets it.
  */
 export function agentAfterRestart(saved: Agent, projectName: string): Agent {
@@ -124,7 +124,7 @@ export class Store {
   }
 
   /**
-   * Reads the saved state. Throws a StateLockedError if another office holds data/state.json: two offices on one data folder each save
+   * Reads the saved state. Throws a StateLockedError if another Focus holds data/state.json: two of them on one data folder each save
    * their own copy over the other's, so a review one finished comes back as the other's older one.
    */
   load(): void {
@@ -342,7 +342,7 @@ export class Store {
 
   /**
    * Records a fact in the agent's run journal, and what the run adds up to with it. Saving to disk, it's written and
-   * flushed (fsync) before this returns, so whatever the office does next on the strength of it survives a crash.
+   * flushed (fsync) before this returns, so whatever Ops does next on the strength of it survives a crash.
    */
   journal(id: string, fact: RunFact): RunState {
     const after = this.runs.append(id, fact);
@@ -356,7 +356,7 @@ export class Store {
     return after;
   }
 
-  /** Told of each agent whose run moved on: the office sends them to every browser. */
+  /** Told of each agent whose run moved on: Ops sends them to every browser. */
   journaled?: (agent: Agent) => void;
 
   /** Told of each journal that stepped its machine (`server/agents/machines.ts`), by the machine's id and the run's key. */
@@ -367,7 +367,7 @@ export class Store {
     return machinePath(machine, key, { runs: this.runs, slices: this.slices, reviews: this.reviewJournals });
   }
 
-  /** Where every run of each of the office's machines is now (`machineRuns`). */
+  /** Where every run of each of Ops' machines is now (`machineRuns`). */
   machineRuns(): MachineRun[] {
     return machineRuns({
       agents: [...this.agents.values()],
@@ -382,7 +382,7 @@ export class Store {
     return this.runs.entries(id);
   }
 
-  /** What the agent's run journal adds up to (an agent not saved when the office started, a goal reopened since, may have one already). */
+  /** What the agent's run journal adds up to (an agent not saved when Focus started, a goal reopened since, may have one already). */
   run(id: string): RunState {
     return this.runs.state(id);
   }
@@ -502,8 +502,8 @@ export class Store {
   }
 }
 
-/** Why the office won't open a data folder another office is using, and what to do instead. */
-/** Another live office holds the data folder: an expected refusal, which the office reports in a line, not a crash. */
+/** Why Focus won't open a data folder another Focus is using, and what to do instead. */
+/** Another running Focus holds the data folder: an expected refusal, which Focus reports in a line, not a crash. */
 export class StateLockedError extends Error {
   constructor(
     readonly pid: number,
@@ -515,7 +515,7 @@ export class StateLockedError extends Error {
 }
 
 export function stateLocked(pid: number, dataDir: string): string {
-  return `Another Focus office (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run pnpm run demo, which saves nothing.`;
+  return `Another running Focus (pid ${pid}) is using ${dataDir}. Stop it first, or give this one a data folder of its own (FOCUS_DATA_DIR=<empty folder>), or run pnpm run demo, which saves nothing.`;
 }
 
 function isTheme(value: unknown): value is RoomTheme {

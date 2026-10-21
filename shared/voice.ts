@@ -77,12 +77,12 @@ export interface CrewLine<S extends string = CrewSpeaker> {
   text: string;
 }
 
-/** Whether a message is the crew's, not the captain's or the office's. */
+/** Whether a message is the crew's, not the captain's or Ops'. */
 const crewSaid = <S extends string>(from: S): from is Exclude<S, 'manager' | 'system'> => from !== 'manager' && from !== 'system';
 
 /**
  * What the crew say aloud among the messages from index `from` on, in log order: an officer's reply as its spoken
- * line; QA's notes, the engineer's recommendation and the office's fixed officer lines as they are.
+ * line; QA's notes, the engineer's recommendation and Ops' fixed officer lines as they are.
  */
 export function linesToSpeak<S extends string>(messages: { from: S; text: string; spoken?: string }[], from: number): CrewLine<Exclude<S, 'manager' | 'system'>>[] {
   return messages.slice(from).flatMap((m) => {

@@ -1,5 +1,5 @@
 // Receipts: a beat of an explainer says where its facts come from, quoting each source word for word, and
-// the office checks both before the captain sees it: that every quote is in its source (a file in the lead's checkout,
+// Ops checks both before the captain sees it: that every quote is in its source (a file in the lead's checkout,
 // the lead's own earlier words, a line of the ship's log, a pull request), and that every number and name the beat's narration says is
 // in its quotes. Pure, so it's unit tested (receipts.test.ts); finding the sources is the explain tool's.
 
@@ -12,7 +12,7 @@ export interface Ref {
   quote: string;
 }
 
-/** A ref the office found in its source: what its chip says, and the quote it opens to. */
+/** A ref Ops found in its source: what its chip says, and the quote it opens to. */
 export interface Receipt {
   label: string;
   quote: string;
@@ -112,12 +112,12 @@ const COMMON = new Set(
   what's let's we're you're they're don't doesn't isn't wasn't can't won't`.split(/\s+/),
 );
 
-/** Capitalised words that aren't names to check: the start of speech, and the office's own words. */
+/** Capitalised words that aren't names to check: the start of speech, and Ops' own words. */
 const NOT_NAMES = new Set(['i', 'ok', 'okay', 'captain', 'lieutenant', 'lt', 'commander', 'cmdr', 'ensign', 'chief', 'focus', 'qa']);
 
 /**
  * The names a line says: capitalised words (Haiku, Castellanos, PostgreSQL), a sentence's first too unless it's a
- * common word ("So", "Every"), and anything in code style. Titles and the office's own words are left out.
+ * common word ("So", "Every"), and anything in code style. Titles and Ops' own words are left out.
  */
 export function namesIn(text: string): string[] {
   const names = new Set<string>();

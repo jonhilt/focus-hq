@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/server';
-import { office, until } from '../../plugin-api/testing';
+import { focus, until } from '../../plugin-api/testing';
 import flowPlugin from './server';
 import { goalMoved, withFlow, withoutClosed } from './flows';
 import { FLOW, type FlowPluginState, type LeadFlow } from './shared';
 
-/** The pretend office with the flow plugin switched on: each open goal's flow, as the browser has it. */
-function flowing(o = office()) {
+/** The pretend Focus with the flow plugin switched on: each open goal's flow, as the browser has it. */
+function flowing(o = focus()) {
   o.agents.startPlugins([flowPlugin], { demo: false, ownRepo: () => undefined });
   return { ...o, flowOf: (id: string) => (o.agents.plugins.stateOf(FLOW) as FlowPluginState | undefined)?.leads[id] };
 }
@@ -65,8 +65,8 @@ describe('the flow plugin', () => {
     await until(() => o.flowOf(id)?.now.state === 'review');
   });
 
-  it('works out every open goal’s flow as the office starts', async () => {
-    const o = office();
+  it('works out every open goal’s flow as Focus starts', async () => {
+    const o = focus();
     const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
     await until(() => o.claude.turns.length === 1);
     o.claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });

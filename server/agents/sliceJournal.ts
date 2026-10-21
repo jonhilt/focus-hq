@@ -1,9 +1,9 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
 import type { LeadPr } from '../../shared/types';
 
-// A goal's slices, as the lead's slice journal tells them, pure: the facts the office records as a slice ships, lands
-// and moves on to fresh code (data/runs/slices/<lead>.jsonl), what they add up to, and what the office does with them
-// after a restart. Each fact is on disk before the office acts on it, and what they add up to is a state machine's
+// A goal's slices, as the lead's slice journal tells them, pure: the facts Ops records as a slice ships, lands
+// and moves on to fresh code (data/runs/slices/<lead>.jsonl), what they add up to, and what Ops does with them
+// after a restart. Each fact is on disk before Ops acts on it, and what they add up to is a state machine's
 // (`sliceMachine`): each fact an event, the slice's phase its state. A ship and a move both happen on GitHub and on
 // disk, where a crash can cut them off part way: the journal says how far they got, and both are safe to do again.
 
@@ -72,7 +72,7 @@ const marked = ({ context, event }: { context: SliceContext; event: Extract<Slic
 
 /**
  * What a lead's slice journal adds up to, as a state machine. A slice is `working` until the lead ships it, `shipping`
- * while the office pushes and opens its pull requests, then `in-review` until every one has `landed` (merged or closed),
+ * while Ops pushes and opens its pull requests, then `in-review` until every one has `landed` (merged or closed),
  * when it's `moving` on to fresh code, and `working` on the next slice once it's `moved`. A ship that ships nothing goes
  * back to where it was; shipping again from review updates the pull requests.
  */
@@ -93,7 +93,7 @@ export const sliceMachine = setup({
     started: { target: '.working', actions: assign(({ event }) => ({ slice: event.slice, branch: event.branch, prs: [], ship: undefined, moving: undefined })) },
     // a pull request can land in any phase (the captain merges while the lead ships the rest)
     landed: { actions: assign(marked) },
-    // the office moves on once every pull request it knows of has landed: from a journal that started before slices had one too
+    // Ops moves on once every pull request it knows of has landed: from a journal that started before slices had one too
     moving: { target: '.moving', actions: assign(({ event: { type: _, kind: __, ...moving } }) => ({ moving })) },
   },
   states: {
@@ -137,12 +137,12 @@ export function foldSlice(entries: readonly (SliceFact & { seq?: number })[]): S
   return entries.reduce(evolveSlice, EMPTY_SLICE);
 }
 
-/** What the office does at startup with a slice its journal says was part way through something. */
+/** What Ops does at startup with a slice its journal says was part way through something. */
 export type SliceRecovery =
   | { kind: 'none' }
-  /** A ship was cut off: the office ships it again (pushing, finding or opening each pull request, asking QA), no Claude turn needed. */
+  /** A ship was cut off: Ops ships it again (pushing, finding or opening each pull request, asking QA), no Claude turn needed. */
   | { kind: 'ship'; title: string; summary: string }
-  /** A move to fresh code was cut off: the office finishes it from what was decided. */
+  /** A move to fresh code was cut off: Ops finishes it from what was decided. */
   | { kind: 'move'; moving: Moving };
 
 export function sliceRecovery(state: SliceState): SliceRecovery {
@@ -153,7 +153,7 @@ export function sliceRecovery(state: SliceState): SliceRecovery {
 
 /**
  * The lead's pull requests as the journal has them: any the saved state lost (a crash before it was saved) put back, and
- * any that landed marked, so the office keeps watching every one of them. Ones the journal doesn't know are left as they are.
+ * any that landed marked, so Ops keeps watching every one of them. Ones the journal doesn't know are left as they are.
  */
 export function reconciledPrs(lead: LeadPr[], journal: SlicePr[]): LeadPr[] {
   const known = lead.map((p) => {

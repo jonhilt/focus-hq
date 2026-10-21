@@ -11,7 +11,7 @@ import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
 import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
-import { office, restarted, until } from './fakeOffice';
+import { focus, restarted, until } from './fakeFocus';
 import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
@@ -21,7 +21,7 @@ import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
 import { CARRYING_ON_HERE } from './manager/cloudMoves';
 
-// the office falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
+// Ops falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
 vi.hoisted(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-test';
   process.env.FOCUS_USE_API_KEY = 'fallback';
@@ -63,8 +63,8 @@ function auditor(agents: AgentManager) {
 }
 
 describe('AgentManager', () => {
-  it('runs a goal’s lead one turn at a time, however often the office schedules', async () => {
-    const { agents, claude, store, project } = office();
+  it('runs a goal’s lead one turn at a time, however often Ops schedules', async () => {
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     expect(claude.turns[0].req.prompt).toMatch(/^Your workspace, with every repo of the project checked out side by side:\n- \.\/webshop-frontend/);
@@ -89,7 +89,7 @@ describe('AgentManager', () => {
   });
 
   it("changes one agent's autonomy, in their running session and on their later turns, and no one else's", async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     store.settings.autonomy = 'ask';
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
     await until(() => claude.turns.length === 1);
@@ -117,7 +117,7 @@ describe('AgentManager', () => {
     claude.turns[1].end({ ok: true, summary: 'Shipped' });
     await until(() => store.agent(lead.id).status === 'done');
 
-    // anyone else follows the office setting, as it is when their turn starts
+    // anyone else follows Focus's own setting, as it is when their turn starts
     store.settings.autonomy = 'full';
     const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { cloud: true });
     await until(() => claude.turns.length === 3);
@@ -132,7 +132,7 @@ describe('AgentManager', () => {
   });
 
   it('remembers which of a lead’s turns the captain read, until the next one ends', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     agents.readTurn(lead.id); // still at it: nothing to read yet
@@ -154,7 +154,7 @@ describe('AgentManager', () => {
   });
 
   it('sends a QA report that leaves changed files out back to QA once, naming them, then takes the verdict', async () => {
-    const { agents, claude, store, project } = office({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
     const [pr] = await Effect.runPromise(Effect.gen(function* () {
       return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
     }).pipe(Effect.provide(demoLayer)));
@@ -174,7 +174,7 @@ describe('AgentManager', () => {
   });
 
   it('sends QA back to a changed file its session never opened, whatever its report says, by its transcript', async () => {
-    const { agents, claude, store, project } = office({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
     // QA read src/cart.ts, and only listed the files
     agents.readTranscript = () => Promise.resolve([
       { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Bash', input: { command: 'git diff --stat origin/main...HEAD' } }] } },
@@ -195,7 +195,7 @@ describe('AgentManager', () => {
   });
 
   it('stops a QA session whose PR merged, and won’t resume it for a message', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const [pr] = await Effect.runPromise(Effect.gen(function* () {
       return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
     }).pipe(Effect.provide(demoLayer)));
@@ -216,7 +216,7 @@ describe('AgentManager', () => {
 
   // jonhilt/focus#523: QA's turn failed (out of credit), the captain said "Continue", and QA's pass went nowhere
   it('posts the verdict of a QA session the captain picked back up after it failed, and frees the reviewer', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const [pr, other] = await Effect.runPromise(Effect.gen(function* () {
       return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
     }).pipe(Effect.provide(demoLayer)));
@@ -243,7 +243,7 @@ describe('AgentManager', () => {
   it('tests a goal’s PR with its slice’s other PRs checked out beside it, and clears them all away once it merges', async () => {
     const checkouts: string[] = [];
     const removed: string[] = [];
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       checkoutPullRequest: async (repo, id, number) => {
         checkouts.push(`${repo}#${number} ${id}`);
@@ -276,7 +276,7 @@ describe('AgentManager', () => {
   });
 
   it('stops their Claude Code session when they’re sent home', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     await agents.dismiss(lead.id);
@@ -285,7 +285,7 @@ describe('AgentManager', () => {
   });
 
   it('digests their session into the ledger when they go home', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const transcript = [
       { type: 'user', uuid: 'u1', timestamp: '2026-10-08T12:00:00.000Z', message: { content: 'Your workspace, with every repo of the project checked out side by side: …' } },
       { type: 'assistant', uuid: 'u2', timestamp: '2026-10-08T12:03:00.000Z', message: { content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls *.md' } }] } },
@@ -311,7 +311,7 @@ describe('AgentManager', () => {
   });
 
   it('keeps the captain’s replies from leads’ spans digested before replies were kept, once each, dated as their digests', async () => {
-    const { agents, store } = office();
+    const { agents, store } = focus();
     const lead = [
       { type: 'assistant', uuid: 'l1', message: { content: [{ type: 'text', text: 'Ship it?' }] } },
       { type: 'user', uuid: 'l2', message: { content: 'ship it' } },
@@ -328,7 +328,7 @@ describe('AgentManager', () => {
   });
 
   it('digests older transcripts once each, dated when their session ended, facts only', async () => {
-    const { agents, store } = office();
+    const { agents, store } = focus();
     const qa = [
       { type: 'user', uuid: 'q1', timestamp: '2026-10-05T09:00:00.000Z', message: { content: 'Please QA pull request #42 in demo/webshop-frontend: Wishlist' } },
       { type: 'assistant', uuid: 'q2', timestamp: '2026-10-05T09:20:00.000Z', message: { content: [{ type: 'text', text: 'The demo port was taken, so I moved to 4600. The wishlist page loads, hearts toggle, and the saved list survives a reload; the tests and the type check pass on this commit.' }] } },
@@ -357,7 +357,7 @@ describe('AgentManager', () => {
     const steps: string[] = [];
     let saves = true;
     let shipMidClose: Promise<unknown> | undefined;
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       // the API's checkout can't say whether it has changes: that counts as having them
       hasUncommittedChanges: async (dir) => {
@@ -380,8 +380,8 @@ describe('AgentManager', () => {
 
     const first = await agents.closeGoal(lead.id);
     expect(first).toEqual({ warn: expect.arrayContaining([
-      `Uncommitted changes in ./webshop-frontend and ./webshop-api are committed as a WIP snapshot on \`${branch}\`, kept only in the office’s clone.`,
-      `./webshop-api’s branch \`${branch}\` never reached GitHub: its 2 commits stay only in the office’s clone.`,
+      `Uncommitted changes in ./webshop-frontend and ./webshop-api are committed as a WIP snapshot on \`${branch}\`, kept only in the clone Ops keeps.`,
+      `./webshop-api’s branch \`${branch}\` never reached GitHub: its 2 commits stay only in the clone Ops keeps.`,
       'The goal never shipped anything: no pull request was opened for it.',
     ]) });
     expect(steps).toEqual([]);
@@ -405,7 +405,7 @@ describe('AgentManager', () => {
   it('won’t close a goal while its slice is shipping, so the pull requests it opens stay on the goal', async () => {
     let pushed!: () => void;
     const pushing = new Promise<void>((resolve) => (pushed = resolve));
-    const { agents, claude, store, project } = office({ ...demoWorkspace, push: () => pushing });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, push: () => pushing });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const ship = claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'A slice.' });
@@ -424,7 +424,7 @@ describe('AgentManager', () => {
     let taken!: () => void;
     const taking = new Promise<void>((resolve) => (taken = resolve));
     let held = false;
-    const { agents, claude, store, project } = office(demoWorkspace, demoLayer, undefined, async () => {
+    const { agents, claude, store, project } = focus(demoWorkspace, demoLayer, undefined, async () => {
       if (held) await taking;
       return { image: Buffer.from('jpeg'), errors: [] };
     });
@@ -443,7 +443,7 @@ describe('AgentManager', () => {
   });
 
   // found by the goal's check for a restart (goalInvariants.test.ts, docs/invariants.md#found-on-main)
-  it('finishes closing a goal the office went down in the middle of, so its WIP snapshot never stays on an open goal', async () => {
+  it('finishes closing a goal Focus went down in the middle of, so its WIP snapshot never stays on an open goal', async () => {
     const snapshots: string[] = [];
     let dirty = true;
     const workspace: WorkspaceOps = {
@@ -451,10 +451,10 @@ describe('AgentManager', () => {
       hasUncommittedChanges: async () => dirty,
       snapshot: async (dir) => (dirty && snapshots.push(dir), true),
     };
-    const first = office({ ...workspace, snapshot: (dir) => (snapshots.push(dir), new Promise<boolean>(() => undefined)) });
+    const first = focus({ ...workspace, snapshot: (dir) => (snapshots.push(dir), new Promise<boolean>(() => undefined)) });
     const { agent: lead } = first.agents.startGoal(first.project.id, 'Saved items') as { agent: { id: string } };
     await until(() => first.claude.turns.length === 1);
-    // the office goes down with the first snapshot taken, before the goal's filed
+    // Focus goes down with the first snapshot taken, before the goal's filed
     void first.agents.closeGoal(lead.id, true);
     await until(() => snapshots.length === 1);
     dirty = false;
@@ -471,7 +471,7 @@ describe('AgentManager', () => {
   });
 
   it('starts a queued goal with the captain’s last edits, at the first free station once theirs is taken, and takes it out of line', () => {
-    const { agents, store, project } = office();
+    const { agents, store, project } = focus();
     agents.startGoal(project.id, 'Saved items');
     const queued = agents.queueGoal(project.id, 'Wishlists', { effort: 'low', from: 'the bridge' });
     const lead = agents.startQueued(project.id, queued.id, { text: 'Wishlists you can share', station: 0 });
@@ -482,7 +482,7 @@ describe('AgentManager', () => {
   });
 
   it('spins a goal’s open contact or idea for next off as a goal of its own, closing it and telling its lead', () => {
-    const { agents, store, project } = office();
+    const { agents, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const work = store.agent(lead.id).lead!;
     store.agent(lead.id).lead = { ...work, contacts: [{ id: 'c1', text: 'Sync across devices?', slice: 1, at: 0 }], note: { done: 'Saved', learned: [], next: ['Show it in the header', 'Tidy the store'] } };
@@ -502,7 +502,7 @@ describe('AgentManager', () => {
   });
 
   it('retitles a new goal once Haiku answers, unless it was retitled meanwhile', async () => {
-    const { agents, store, project } = office();
+    const { agents, store, project } = focus();
     let answer!: (title: string | undefined) => void;
     agents.titleGoal = () => new Promise((resolve) => (answer = resolve));
     const { agent: lead } = agents.startGoal(project.id, 'we need better branch names - when merging PRS for example') as { agent: { id: string } };
@@ -522,7 +522,7 @@ describe('AgentManager', () => {
 
   it('reopens a closed goal on its branch, with the same lead picking their conversation back up', async () => {
     const reopened: { id: string; branch: string }[] = [];
-    const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
@@ -544,7 +544,7 @@ describe('AgentManager', () => {
     expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch: r.branch })));
     expect(work!.repos.map((r) => r.branch)).toEqual(work!.repos.map(() => expect.stringMatching(/^focus\/saved-items-first-slice-/) as unknown));
     expect(leads()[1].req.resumeSessionId).toBe('session-1');
-    expect(leads()[1].req.prompt).toMatch(new RegExp(`^\\[Office\\] The captain reopened this goal, .* checked out again on \`${branch}\`, as you left them: \\./webshop-frontend, \\./webshop-api\\. .* Still open on GitHub: `));
+    expect(leads()[1].req.prompt).toMatch(new RegExp(`^\\[Ops\\] The captain reopened this goal, .* checked out again on \`${branch}\`, as you left them: \\./webshop-frontend, \\./webshop-api\\. .* Still open on GitHub: `));
     expect(store.agent(lead.id).lead).toMatchObject({ repos: work!.repos, prs: work!.prs });
 
     // Claude Code no longer has the conversation: a new one hears where the goal stands
@@ -552,13 +552,13 @@ describe('AgentManager', () => {
     await until(() => leads().length === 3);
     expect(leads()[2].req.resumeSessionId).toBeUndefined();
     expect(leads()[2].req.prompt).toContain("You're carrying on with this goal in a new conversation");
-    expect(leads()[2].req.prompt).toContain('[Office] The captain reopened this goal');
+    expect(leads()[2].req.prompt).toContain('[Ops] The captain reopened this goal');
   });
 
   it('checks a reopened goal’s repos out again before picking up its conversation, however often that fails first', async () => {
     let failures = 1;
     const reopened: string[] = [];
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       reopen: async (_repo, id) => {
         if (failures-- > 0) throw new Error('fetch failed: could not resolve host');
@@ -582,12 +582,12 @@ describe('AgentManager', () => {
     await until(() => leads().length === 2);
     expect(reopened).toEqual(repos.map((r) => `${lead.id}/${r.folder}`));
     expect(leads()[1].req.resumeSessionId).toBe('session-1');
-    expect(leads()[1].req.prompt).toMatch(/^\[Office\] The captain reopened this goal, [^]*\n\nTry again\?$/);
+    expect(leads()[1].req.prompt).toMatch(/^\[Ops\] The captain reopened this goal, [^]*\n\nTry again\?$/);
     expect(store.agent(lead.id).lead).toMatchObject({ repos, reopening: undefined });
   });
 
   it('files a reopened goal that never got its repos back so it can be reopened again', async () => {
-    const { agents, claude, store, project } = office({ ...demoWorkspace, reopen: () => Promise.reject(new Error('fetch failed')) });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, reopen: () => Promise.reject(new Error('fetch failed')) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const { branch, lead: work } = store.agent(lead.id);
@@ -603,7 +603,7 @@ describe('AgentManager', () => {
   });
 
   it('reopens a goal only to a free team station', async () => {
-    const { agents, claude, project } = office();
+    const { agents, claude, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     await agents.closeGoal(lead.id, true);
@@ -613,7 +613,7 @@ describe('AgentManager', () => {
   });
 
   it('spins a contact off as a goal of its own, at a free station or in line, closes it linked to the new goal, and tells the lead', () => {
-    const { agents, store, project } = office();
+    const { agents, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: Agent };
     const work = store.agent(lead.id).lead;
     if (!work) throw new Error('No lead work');
@@ -635,7 +635,7 @@ describe('AgentManager', () => {
   });
 
   it('puts what the lead shows on their goal, with a picture when it can take one, and files it with the goal when it closes', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const show = (input: { id: string; title: string; html: string }) => claude.turns[0].req.tools!.show(input);
@@ -657,7 +657,7 @@ describe('AgentManager', () => {
   });
 
   it('puts the lead’s model on their goal as a page of the three views, checked against their workspace', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const model = {
@@ -682,11 +682,11 @@ describe('AgentManager', () => {
   });
 
   it('puts the lead’s question to the captain with an option apiece, and tells the lead which they picked', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const ask = (question: string) => claude.turns[0].req.tools!.ask({ question, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>unrenderable</p>' }] });
-    expect(await ask('Which layout?')).toMatch(/2 options \(the office couldn't take a picture of 1 of them/);
+    expect(await ask('Which layout?')).toMatch(/2 options \(Ops couldn't take a picture of 1 of them/);
     expect(await ask('Which layout, really?')).toMatch(/end your turn here/);
     const [question] = store.agent(lead.id).lead!.questions!;
     expect(question).toMatchObject({ id: 'q2', question: 'Which layout, really?', options: [{ id: 'a', label: 'Cards', image: true }, { id: 'b', label: 'List' }] });
@@ -710,7 +710,7 @@ describe('AgentManager', () => {
   });
 
   it('settles the lead’s open question when the captain replies in chat instead of picking', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const ask = (question: string) => claude.turns[0].req.tools!.ask({ question, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>B</p>' }] });
@@ -718,7 +718,7 @@ describe('AgentManager', () => {
 
     // news from someone else aboard isn't the captain's answer
     await ask('Which layout?');
-    agents.message(lead.id, 'The build is green', 'Office');
+    agents.message(lead.id, 'The build is green', 'Ops');
     expect(openQuestion(store.agent(lead.id))).toBeDefined();
 
     agents.message(lead.id, '  Go with the list  ');
@@ -738,8 +738,8 @@ describe('AgentManager', () => {
     expect(questions().at(-1)!.answer).toEqual({ option: 'a', at: expect.any(Number) });
   });
 
-  it('sends a PR back to QA at the office’s merge of the base, so the verdict doesn’t stay on the commit before', async () => {
-    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha1234', from: 'old-sha' }) });
+  it('sends a PR back to QA at Ops’ merge of the base, so the verdict doesn’t stay on the commit before', async () => {
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha1234', from: 'old-sha' }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
@@ -753,7 +753,7 @@ describe('AgentManager', () => {
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull once their turn is over', async () => {
     const auto = ['CLAUDE.md', 'client/public/ship/holodeck-deck.glb'];
-    const { agents, claude, store, project } = office({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
@@ -776,15 +776,15 @@ describe('AgentManager', () => {
     agents.message(lead.id, 'How did it go?');
     await until(() => leads().length === 2);
     const heard = [leads()[1].req.prompt, ...leads()[1].sent].join('\n\n');
-    expect(heard).toMatch(new RegExp(`^\\[Office\\] ${pr.repo}#${pr.number} had merge conflicts with \`main\`: the office merged`));
+    expect(heard).toMatch(new RegExp(`^\\[Ops\\] ${pr.repo}#${pr.number} had merge conflicts with \`main\`: Ops merged`));
     expect(heard).toContain('How did it go?');
   });
 
   it('seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead', async () => {
     const created: { agentId: string; branch: string; local?: string }[] = [];
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
-      create: async (_repo, agentId, branch, _start, _inOffice, local) => (created.push({ agentId, branch, local }), `/demo/${agentId}`),
+      create: async (_repo, agentId, branch, _start, _aboard, local) => (created.push({ agentId, branch, local }), `/demo/${agentId}`),
     });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
@@ -814,9 +814,9 @@ describe('AgentManager', () => {
     expect([leads()[1].req.prompt, ...leads()[1].sent].join('\n\n')).toContain(`${outcome.agent.name} merged \`main\` into \`${branch}\` and pushed it`);
   });
 
-  it('won’t ship a lead’s repo over commits the office pushed to its branch', async () => {
+  it('won’t ship a lead’s repo over commits Ops pushed to its branch', async () => {
     let behind = false;
-    const { agents, claude, store, project } = office({ ...demoWorkspace, head: async () => 'lead-head', missingRemoteCommits: async () => behind });
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, head: async () => 'lead-head', missingRemoteCommits: async () => behind });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
@@ -841,7 +841,7 @@ describe('AgentManager', () => {
           ),
       });
     })).pipe(Layer.provide(demoLayer));
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       push: async (dir, branch) => {
         if (pushFailures-- > 0) throw new Error("git push --force-with-lease failed: remote: Internal Server Error\nfatal: unable to access 'https://github.com/demo/webshop-frontend.git/': The requested URL returned error: 502");
@@ -862,7 +862,7 @@ describe('AgentManager', () => {
   it('gives up shipping after GitHub answers 5xx four times, and never retries other failures', async () => {
     let pushes = 0;
     let failure = 'The requested URL returned error: 503';
-    const { agents, claude, project } = office({
+    const { agents, claude, project } = focus({
       ...demoWorkspace,
       push: async () => {
         pushes++;
@@ -882,7 +882,7 @@ describe('AgentManager', () => {
   });
 
   it('carries the goal into the next slice, as the captain put it, once the last one has landed', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
@@ -898,11 +898,11 @@ describe('AgentManager', () => {
     expect(next.prompt).toMatch(/^Slice 2 starts on fresh code/);
     expect(next.prompt).not.toContain('summarised');
     expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
-    expect(next.prompt).toMatch(/\[Office\] Slice 1 has landed/);
+    expect(next.prompt).toMatch(/\[Ops\] Slice 1 has landed/);
   });
 
   it('tells a lead whose slice lands mid-turn to carry on, and moves their repos at the start of the next turn', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
@@ -912,7 +912,7 @@ describe('AgentManager', () => {
     // still in the turn they shipped from when the pull requests merge
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
     const sent = leads()[0].sent.join('\n');
-    expect(sent).toMatch(/^\[Office\] Slice 1 has landed: .* Carry on where you are: your repos move to fresh code at the start of your next turn/);
+    expect(sent).toMatch(/^\[Ops\] Slice 1 has landed: .* Carry on where you are: your repos move to fresh code at the start of your next turn/);
     expect(store.agent(lead.id).branch).toBe(branch);
 
     leads()[0].end({ ok: true, summary: 'Finished the next piece' });
@@ -924,10 +924,10 @@ describe('AgentManager', () => {
 
   it('finishes the move to a new slice on their next message when its checkout failed', async () => {
     let failNext = false;
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       create: async (...args) => {
-        // the office restarted mid-move, killing git fetch
+        // Focus restarted mid-move, killing git fetch
         if (failNext) {
           failNext = false;
           throw new Error('git fetch origin --prune failed');
@@ -961,7 +961,7 @@ describe('AgentManager', () => {
 
   it('brings commits the lead hadn’t shipped along to the next slice', async () => {
     const picked: { dir: string; commits: string[] }[] = [];
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       // the lead carried on after shipping: a commit in each repo, and the API's won't apply to fresh code
       unshippedCommits: async (dir) => [dir.endsWith('/webshop-api') ? 'api-next' : 'web-next'],
@@ -994,7 +994,7 @@ describe('AgentManager', () => {
       const gh = yield* GitHub;
       return GitHub.of({ ...gh, createPullRequest: (repo, pr) => Effect.suspend(() => (opened.push({ repo, head: pr.head }), gh.createPullRequest(repo, pr))) });
     })).pipe(Layer.provide(demoLayer));
-    const { agents, claude, store, project } = office({
+    const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       push: async () => undefined,
       // the lead carried on after shipping: one new commit in each repo
@@ -1026,7 +1026,7 @@ describe('AgentManager', () => {
     expect(repos.find((r) => r.repo === 'demo/webshop-api')!.branch).toBe(`focus/saved-items-first-slice-${working.slice(-4)}`);
     // a new pull request from the fresh branch; the API's open one is only updated
     expect(opened.slice(2)).toEqual([{ repo: 'demo/webshop-frontend', head: next }]);
-    expect(reply).toContain(`./webshop-frontend's pull request from \`${first}\` has merged, so the office moved it to a new branch, \`${next}\``);
+    expect(reply).toContain(`./webshop-frontend's pull request from \`${first}\` has merged, so Ops moved it to a new branch, \`${next}\``);
     expect(store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend' && !p.outcome)!.branch).toBe(next);
 
     // shipping again leaves it on that branch, whose pull request is open
@@ -1035,7 +1035,7 @@ describe('AgentManager', () => {
   });
 
   it('tells a lead whose conversation can’t be picked back up where the goal stands', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
     expect(claude.turns[0].req.prompt).not.toContain('new conversation');
@@ -1053,7 +1053,7 @@ describe('AgentManager', () => {
   });
 
   it('seats an agent saved at a desk the room no longer has the next time they start', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     store.putAgent({
       id: 'old', name: 'Lt. Old', avatar: randomAvatar(), projectId: project.id, repo: 'demo/webshop-frontend', task: 'issue',
       issue: { number: 1, title: 'Dark mode', url: '' }, desk: 4, status: 'stopped', activity: 'Interrupted', sessionId: 'old-session',
@@ -1066,7 +1066,7 @@ describe('AgentManager', () => {
   });
 
   it('says why when a goal can’t have the station it asked for, and queues one when every station is taken', () => {
-    const { agents, project } = office();
+    const { agents, project } = focus();
     agents.startGoal(project.id, 'One', { station: 1 });
     expect(() => agents.startGoal(project.id, 'Two', { station: 1 })).toThrow('Team station 2 already has a goal: One');
     expect(() => agents.startGoal(project.id, ' ')).toThrow('Tell them what you’re after');
@@ -1075,7 +1075,7 @@ describe('AgentManager', () => {
   });
 
   it('carries QA’s pass over a clean merge of main without seating QA, never re-tests a commit with a verdict, and re-tests a real change', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const repo = 'demo/webshop-frontend';
     const push = demoGitHub.demoPush!;
     const number = [...Array(20).keys()].find((n) => {
@@ -1125,7 +1125,7 @@ describe('AgentManager', () => {
   };
 
   it('re-tests a lead’s ship after a verdict even while GitHub still answers with the commit QA tested', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { repo, number, push } = pushable();
     const report: QaReport = { verdict: 'fail', summary: 'Broken', checks: [], commands: [], captions: [] };
     store.reviewJournal(prKey(repo, number), { kind: 'imported', review: { projectId: project.id, repo, number, title: 'PR', status: 'failed', sha: push(), report, requestedAt: 1, finishedAt: 2 } });
@@ -1137,7 +1137,7 @@ describe('AgentManager', () => {
   });
 
   it('sends a PR the lead shipped again while QA tested it straight back to QA once they give their verdict', async () => {
-    const { agents, claude, store, project } = office();
+    const { agents, claude, store, project } = focus();
     const { repo, number, push } = pushable();
     agents.requestReview(project.id, repo, number, 'PR');
     await until(() => claude.turns.length === 1);
@@ -1157,7 +1157,7 @@ describe('AgentManager', () => {
     const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
 
     it('moves a working agent to a cloud session a terminal starts, carrying on from their branch', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
       await until(() => claude.turns.length === 1);
       expect(claude.turns[0].req.cloud).toBeUndefined();
@@ -1175,13 +1175,13 @@ describe('AgentManager', () => {
       await until(() => claude.turns.length === 2);
       const attach = claude.turns[1].req;
       expect(attach).toMatchObject({ resumeSessionId: 'session_01abcDEF234', cloud: { branch: waiting.branch } });
-      // a session the captain started gets the office's instructions with the work
+      // a session the captain started gets Ops' instructions with the work
       expect(attach.prompt).toMatch(/^# You are .*\n---\n\nYou're taking over GitHub issue #1/s);
       expect(store.agent(id)).toMatchObject({ handover: undefined, cloud: true, sessionId: 'session_01abcDEF234', status: 'working' });
     });
 
     it('has a cloud hire Claude Code won’t start without a terminal wait for the session the captain pastes', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
       await until(() => claude.turns.length === 1);
       claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
@@ -1197,7 +1197,7 @@ describe('AgentManager', () => {
       expect(claude.turns[1].req.prompt).toContain('Add a dark mode toggle to the header');
       expect(claude.turns[1].sent).toEqual(['Use CSS variables']);
 
-      // a session the office couldn't attach to leaves them waiting for another
+      // a session Ops couldn't attach to leaves them waiting for another
       claude.turns[1].end({ ok: false, summary: '', error: 'cloud session session_01XYZabc999 not found' });
       await until(() => !!store.agent(id).handover);
       expect(store.agent(id)).toMatchObject({ status: 'waiting', handover: { fresh: true } });
@@ -1205,7 +1205,7 @@ describe('AgentManager', () => {
     });
 
     it('carries a cloud hire on here when Claude Code won’t attach to the session the captain started, and stops sending later ones to wait', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
       await until(() => claude.turns.length === 1);
       claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
@@ -1234,7 +1234,7 @@ describe('AgentManager', () => {
     });
 
     it('carries a moved agent on here, in their own conversation, when Claude Code won’t attach to their cloud session', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
       await until(() => claude.turns.length === 1);
       await agents.moveToCloud(id);
@@ -1249,7 +1249,7 @@ describe('AgentManager', () => {
     });
 
     it('keeps a waiting agent here: one who hasn’t started starts their task on this machine', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
       await until(() => claude.turns.length === 1);
       claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
@@ -1262,7 +1262,7 @@ describe('AgentManager', () => {
     });
 
     it('takes back a moved agent who stays, with their own conversation, until the captain says carry on', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
       await until(() => claude.turns.length === 1);
       await agents.moveToCloud(id);
@@ -1280,7 +1280,7 @@ describe('AgentManager', () => {
   describe('when the plan’s usage limit is reached', () => {
     /** A lead mid-turn, `tokens` into their conversation, whom the plan's limit stops for `ms`. */
     async function limitedLead(tokens: number, ms: number) {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       // holding a long conversation, not compacting it, is what these are about
       store.settings.leadCompactAt = 0;
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
@@ -1343,7 +1343,7 @@ describe('AgentManager', () => {
   describe('a lead’s big conversation', () => {
     /** A goal's lead whose first turn ended `tokens` into their conversation. */
     async function bigLead(tokens: number) {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
       await until(() => claude.turns.length === 1);
       claude.turns[0].hooks.context!({ percent: 25, tokens, max: 1_000_000 });
@@ -1411,7 +1411,7 @@ describe('AgentManager', () => {
 
     it('installs in a new checkout before the agent starts, and tells them up front when it fails', async () => {
       const { ran, workspace } = installs();
-      const { agents, claude, project } = office(workspace);
+      const { agents, claude, project } = focus(workspace);
       const { id } = auditor(agents).host().seat(project.id, 'demo/webshop-frontend', { id: 'auditor', kind: 'audit', title: 'Auditing', branch: 'focus/audit-1', baseBranch: 'main' });
       await until(() => claude.turns.length === 1);
       expect(ran).toEqual([`/demo/${id}`]);
@@ -1420,7 +1420,7 @@ describe('AgentManager', () => {
 
     it('installs in each of a lead’s repos, and the lead hears which failed', async () => {
       const { ran, workspace } = installs();
-      const { agents, claude, project } = office(workspace);
+      const { agents, claude, project } = focus(workspace);
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
       await until(() => claude.turns.length === 1);
       expect(ran).toEqual([expect.stringMatching(new RegExp(`${lead.id}/webshop-frontend$`)), expect.stringMatching(new RegExp(`${lead.id}/webshop-api$`))]);
@@ -1431,7 +1431,7 @@ describe('AgentManager', () => {
 
   describe('a plugin’s lead tool', () => {
     it('puts its page on the lead’s screen with pictures of it at the moments it asks for, and answers the lead with them', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       project.plugins = ['framer'];
       agents.startPlugins([{
         id: 'framer',
@@ -1460,7 +1460,7 @@ describe('AgentManager', () => {
 
   describe('a plugin’s brief', () => {
     it('hands it to an agent away from the room’s desks, and opens their pull request as the plugin names it', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const auditing = auditor(agents);
       const agent = auditing.host().seat(project.id, 'demo/webshop-frontend', { id: 'auditor', kind: 'audit', title: 'Auditing', branch: 'focus/audit-1', baseBranch: 'main' });
       expect(agent).toMatchObject({ task: 'brief', desk: AWAY_DESK, brief: { plugin: 'auditor', kind: 'audit', label: 'Audit', icon: '🔎' } });
@@ -1483,7 +1483,7 @@ describe('AgentManager', () => {
     });
 
     it('tells plugins of a goal’s pull request merging, once the goal knows it has', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const auditing = auditor(agents);
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
       await until(() => claude.turns.length === 1);
@@ -1495,7 +1495,7 @@ describe('AgentManager', () => {
     });
 
     it('tells plugins as each turn starts and ends, one cut short too, and of each line in the ledger, and lends them transcripts', async () => {
-      const { agents, claude, store, project } = office();
+      const { agents, claude, store, project } = focus();
       const heard: string[] = [];
       let lent: PluginHost | undefined;
       agents.startPlugins([{
@@ -1523,15 +1523,15 @@ describe('AgentManager', () => {
       expect(await lent!.transcript('session-1')).toBe('the transcript of session-1');
     });
 
-    it('checks out only the office’s own repos for a plugin, and lends it the office’s checkout', async () => {
-      const { agents } = office();
+    it('checks out only the captain’s repos for a plugin, and lends it Focus’s own checkout', async () => {
+      const { agents } = focus();
       const host = auditor(agents).host();
-      await expect(host.checkout('someone/else')).rejects.toThrow('someone/else isn’t one of the office’s repositories');
-      expect(fs.existsSync(path.join(host.officeDir, 'package.json'))).toBe(true);
+      await expect(host.checkout('someone/else')).rejects.toThrow('someone/else isn’t one of the captain’s repositories');
+      expect(fs.existsSync(path.join(host.focusDir, 'package.json'))).toBe(true);
     });
 
-    it('lends a plugin copies: what it changes of the agents, projects, settings and ledger it reads never reaches the office', async () => {
-      const { agents, claude, store, project } = office();
+    it('lends a plugin copies: what it changes of the agents, projects, settings and ledger it reads never reaches Focus', async () => {
+      const { agents, claude, store, project } = focus();
       let lent: PluginHost | undefined;
       const heard: string[] = [];
       agents.startPlugins([{
@@ -1567,14 +1567,14 @@ describe('AgentManager', () => {
       expect(store.settings.model).not.toBe('meddled');
       expect(store.ledger.at(-1)).toMatchObject({ kind: 'closed', repo: 'demo/webshop-api' });
 
-      // and printing on its copy prints on the office's own agent
+      // and printing on its copy prints on Focus's own agent
       host.print(host.agent(lead.id)!, 'From the meddler');
       expect(store.recentLines(lead.id).at(-1)).toMatchObject({ kind: 'system', text: 'From the meddler' });
       await agents.dismiss(lead.id);
     });
 
     it('keeps the plugin’s state in its own slot, with what it adds later filled in fresh', () => {
-      const { agents, store } = office();
+      const { agents, store } = focus();
       const host = auditor(agents).host();
       const state = host.state(() => ({ audits: 0, strict: false }));
       state.set({ audits: 1 });
@@ -1585,7 +1585,7 @@ describe('AgentManager', () => {
     });
 
     it('lends plugins the ledger to write in, the captain’s settings, and filing issues only in the project’s own repos', async () => {
-      const { agents, store, project } = office();
+      const { agents, store, project } = focus();
       const filed: string[] = [];
       let lent: PluginHost | undefined;
       agents.startPlugins([{ id: 'filer', start: (host) => ((lent = host), {}) }], {
@@ -1604,8 +1604,8 @@ describe('AgentManager', () => {
       expect(filed).toEqual([`${project.id} demo/webshop-api Ports`]);
     });
 
-    it('lends plugins the office’s snapshot and the ship’s status, and the captain’s goals to act on', async () => {
-      const { agents, claude, store, project } = office();
+    it('lends plugins Focus’s snapshot and the ship’s status, and the captain’s goals to act on', async () => {
+      const { agents, claude, store, project } = focus();
       let lent: PluginHost | undefined;
       agents.startPlugins([{ id: 'xo', start: (host) => ((lent = host), {}) }], {
         demo: false,
@@ -1629,11 +1629,11 @@ describe('AgentManager', () => {
       expect(claude.turns[1].req.prompt).toContain('Go ahead');
     });
 
-    it('tells a plugin in a test office that it has no snapshot or ship’s status to lend', async () => {
-      const { agents } = office();
+    it('tells a plugin, in a test, that Focus has no snapshot or ship’s status to lend', async () => {
+      const { agents } = focus();
       const host = auditor(agents).host();
-      await expect(host.snapshot()).rejects.toThrow('This office has no snapshot');
-      await expect(host.shipStatus()).rejects.toThrow('This office has no ship’s status');
+      await expect(host.snapshot()).rejects.toThrow('Focus has no snapshot to lend here');
+      await expect(host.shipStatus()).rejects.toThrow('Focus has no ship’s status to lend here');
     });
   });
 });

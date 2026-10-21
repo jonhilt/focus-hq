@@ -153,8 +153,8 @@ describe('probes', () => {
   const course = [{ slice: 1, startedAt: 10, landedAt: 40 }, { slice: 2, startedAt: 40 }];
 
   it('launches one from the slice under way for each helper the lead sends out', () => {
-    const after = launchedProbe({ slice: 2, waypoints: course }, { id: 'toolu_1', description: '  Find how\nthe office sees  tool calls ', type: 'Explore' }, 50);
-    expect(after[1].probes).toEqual([{ id: 'toolu_1', description: 'Find how the office sees tool calls', type: 'Explore', launchedAt: 50 }]);
+    const after = launchedProbe({ slice: 2, waypoints: course }, { id: 'toolu_1', description: '  Find how\nOps sees  tool calls ', type: 'Explore' }, 50);
+    expect(after[1].probes).toEqual([{ id: 'toolu_1', description: 'Find how Ops sees tool calls', type: 'Explore', launchedAt: 50 }]);
     expect(after[0]).toEqual(course[0]);
     // the same helper again is the same probe
     expect(launchedProbe({ slice: 2, waypoints: after }, { id: 'toolu_1', description: 'Again' }, 60)).toBe(after);

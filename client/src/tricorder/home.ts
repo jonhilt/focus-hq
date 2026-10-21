@@ -42,7 +42,7 @@ export function home(ctx: HomeContext): HTMLElement {
   );
   return h('main', { class: 'home' },
     needsYouStrip(ctx, attention),
-    state.info && !state.projects.length ? h('p', { class: 'empty' }, 'No projects yet. Create one in the 3D office’s ready room.') : null,
+    state.info && !state.projects.length ? h('p', { class: 'empty' }, 'No projects yet. Create one in the 3D ship’s ready room.') : null,
     ...boards.map(({ project, cols }) => projectSection(ctx, project, cols)),
   );
 }
@@ -54,7 +54,7 @@ function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
     h('h2', { class: 'bar' }, h('span', null, 'Needs you'), h('span', { class: 'count' }, items.length)),
     items.length
       ? h('ul', null, ...items)
-      : h('p', { class: 'all-clear' }, state.info ? '✓ All clear. Nothing is waiting on you.' : 'Connecting to the office…'),
+      : h('p', { class: 'all-clear' }, state.info ? '✓ All clear. Nothing is waiting on you.' : 'Connecting to Focus…'),
   );
 }
 

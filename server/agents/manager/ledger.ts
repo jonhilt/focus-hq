@@ -6,9 +6,9 @@ import type { Agent } from '../../../shared/types';
 import { errorMessage } from '../../util';
 import { Part, Refused } from './core';
 
-/** The ledger: what the office writes down as work lands, digests of agents' sessions, and the report card. */
+/** The ledger: what Ops writes down as work lands, digests of agents' sessions, and the report card. */
 export class Ledger extends Part {
-  /** The pull requests (prKey) whose merge or close is in the ledger: the office notices some more than once. */
+  /** The pull requests (prKey) whose merge or close is in the ledger: Ops notices some more than once. */
   private landed = new Set<string>();
   /** Reads an agent session's Claude Code transcript by its id (missing in the demo, which has none). */
   readTranscript?: (sessionId: string) => Promise<string | undefined>;
@@ -19,7 +19,7 @@ export class Ledger extends Part {
   private emptyTranscripts = new Set<string>();
   /** Each session's digest in hand, so two of the same session never overlap. */
   private digesting = new Map<string, Promise<void>>();
-  /** Writes a PR the office knows (QA reviewed it, or an agent or lead opened it) merging or closing in the ledger, once. */
+  /** Writes a PR Ops knows (QA reviewed it, or an agent or lead opened it) merging or closing in the ledger, once. */
   recordLanding(repo: string, number: number, merged: boolean, by: Closer = 'github', headSha?: string): void {
     const key = prKey(repo, number);
     if (this.landed.has(key)) return;
@@ -28,7 +28,7 @@ export class Ledger extends Part {
     const projectId = review?.projectId ?? lead?.projectId ?? this.core.seating.prOwner(repo, number)?.projectId;
     if (!projectId) return;
     this.landed.add(key);
-    // merged on GitHub, the office doesn't know the final head: a goal's PR is at the commit its lead last shipped
+    // merged on GitHub, Ops doesn't know the final head: a goal's PR is at the commit its lead last shipped
     const head = headSha ?? lead?.lead?.prs.find((p) => p.repo === repo && p.number === number)?.sha;
     const qa = qaBadge(review, { headSha: head ?? '' }).state;
     // the issues it closed: as the board last saw them, and the one its developer was given
@@ -69,8 +69,8 @@ export class Ledger extends Part {
   }
 
   /**
-   * The agents' transcripts on this machine that have no digest yet: what a backfill would read. A session still in
-   * the office is left to be digested as it ends, and one a backfill found nothing in isn't counted again.
+   * The agents' transcripts on this machine that have no digest yet: what a backfill would read. A session still
+   * running is left to be digested as it ends, and one a backfill found nothing in isn't counted again.
    */
   async undigested(): Promise<Transcript[]> {
     const digested = new Set(this.store.ledger.flatMap((e) => (e.kind === 'session-digest' ? [e.sessionId] : [])));

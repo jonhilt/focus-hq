@@ -2,11 +2,11 @@
 
 ## Frame stats (`?stats=1`)
 
-Open the office with `?stats=1` to see how the 3D view is running, top left.
+Open Focus with `?stats=1` to see how the 3D view is running, top left.
 
-It's logged too: the browser sends the office a sample of its frames each second, and each hitch with what came with it, and the office keeps them in its data folder, a file per page load: `~/.focus/frame-stats/<when it opened>-<id>.jsonl`. The overlay's last line shows the file. A browser on another machine (a laptop over Tailscale) logs to the office it's looking at, so a run there can be read where the office is: walk round the rooms that feel slow, then point whoever's looking into it at the file. Each line is JSON, typed in `shared/types/frameStats.ts`.
+It's logged too: the browser sends Focus a sample of its frames each second, and each hitch with what came with it, and Focus keeps them in its data folder, a file per page load: `~/.focus/frame-stats/<when it opened>-<id>.jsonl`. The overlay's last line shows the file. A browser on another machine (a laptop over Tailscale) logs to the Focus it's looking at, so a run there can be read where that Focus runs: walk round the rooms that feel slow, then point whoever's looking into it at the file. Each line is JSON, typed in `shared/types/frameStats.ts`.
 
-Reading it: a `hitch` lists what the frame before it added, since the slow frame is the one before's doing. A `longtask` is work that kept the main thread busy between frames, which a sample's `busy` doesn't see (a burst of the office's messages, the garbage collector). The `bench` line showed sending a canvas to the GPU is cheap (a few hundredths of a ms per MB on an Apple M4, 0.1 ms on the AMD Renoir laptop whose log began this), so a screen that holds a frame up as it's sent does so drawing what was drawn on it.
+Reading it: a `hitch` lists what the frame before it added, since the slow frame is the one before's doing. A `longtask` is work that kept the main thread busy between frames, which a sample's `busy` doesn't see (a burst of Focus's messages, the garbage collector). The `bench` line showed sending a canvas to the GPU is cheap (a few hundredths of a ms per MB on an Apple M4, 0.1 ms on the AMD Renoir laptop whose log began this), so a screen that holds a frame up as it's sent does so drawing what was drawn on it.
 
 ### Telling what holds frames up
 
@@ -19,7 +19,7 @@ Two switches, for a run on a machine that stutters, to compare with a run withou
 
 ## `pnpm run perf`
 
-Walks a busy demo office on the GPU in headless Chromium, from the bridge into a holodeck's hall and on into a briefing room, twice, and prints each step's frame times, main-thread time, shader programs linked and textures sent to the GPU. The first walk shows what walking in for the first time costs, the second what it costs every time. Run it before and after a change you expect to cost or save frame time.
+Walks a busy demo ship on the GPU in headless Chromium, from the bridge into a holodeck's hall and on into a briefing room, twice, and prints each step's frame times, main-thread time, shader programs linked and textures sent to the GPU. The first walk shows what walking in for the first time costs, the second what it costs every time. Run it before and after a change you expect to cost or save frame time.
 
 ## What keeps it quick
 

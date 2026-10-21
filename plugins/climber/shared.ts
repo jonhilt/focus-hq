@@ -8,11 +8,11 @@ export const CLIMBER = 'climber';
 
 /**
  * Main engineering's climbing engineer: one for the whole ship, the same person every climb, whose job is moving the
- * office's own repo up its scorecard. Operations, like the chief engineer, but they write the code.
+ * Focus's own repo up its scorecard. Operations, like the chief engineer, but they write the code.
  */
 export const climbingEngineer = (): Planner => fixedCrew('climber', 'operations', 'lieutenant', 'Rhee');
 
-/** Every climb's branch starts with this, so the office knows a climb's pull request even after the climber has gone home. */
+/** Every climb's branch starts with this, so Ops knows a climb's pull request even after the climber has gone home. */
 export const CLIMB_BRANCH = 'focus/climb-';
 
 /** The climbing engineer's one record: every climb is theirs, a fresh session each time, so their terminal carries on. */
@@ -23,29 +23,29 @@ export const isClimbBranch = (branch: string | undefined) => !!branch?.startsWit
 export interface Climb {
   /** The captain's switch: while it's on, a new climb starts whenever none is open. */
   keepClimbing: boolean;
-  /** Where the climbs are: the project and repo the office itself runs from. */
+  /** Where the climbs are: the project and repo Focus itself runs from. */
   projectId?: string;
   repo?: string;
-  /** The climb under way: its climber (while they're in the office) and, once it's opened, its pull request. */
+  /** The climb under way: its climber (while they're aboard) and, once it's opened, its pull request. */
   agentId?: string;
   pr?: { number: number; url: string };
   /** Climbs started so far, and how the last one ended. */
   cycles: number;
   last?: { pr?: number; outcome: 'merged' | 'closed' | 'nothing' | 'failed'; at: number };
-  /** Why the office switched climbing off by itself (a climb that found nothing to do, or failed). */
+  /** Why Ops switched climbing off by itself (a climb that found nothing to do, or failed). */
   stoppedWhy?: string;
   /** The climbs that ended without a pull request, newest last (GitHub keeps the rest): the next climb's brief lists them. */
   ends?: ClimbEnd[];
 }
 
-/** A climb that ended without a pull request, and why, as the office saw it. */
+/** A climb that ended without a pull request, and why, as Ops saw it. */
 export interface ClimbEnd {
   at: number;
   outcome: 'nothing' | 'failed';
   why: string;
 }
 
-/** How many PR-less ends the office keeps. */
+/** How many PR-less ends Ops keeps. */
 export const CLIMB_ENDS_KEPT = 20;
 
 export const freshClimb = (): Climb => ({ keepClimbing: false, cycles: 0 });
