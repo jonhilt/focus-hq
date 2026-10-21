@@ -1,7 +1,7 @@
 // The ship's sounds. The console chirps when a panel opens and closes, the blips as you press its buttons, the combadge
-// for news (a brighter trill when it's good, a denied tone when it isn't) and the transporter shimmer when you teleport
-// are recorded clips from client/public/sfx/ (CC0, credited in CREDITS.md there), each with a synthesised stand-in that
-// plays until the clips have loaded or if they never do. The engines' thrum underneath everything, the doors that swoosh
+// for news (a brighter trill when it's good, a denied tone when it isn't), the transporter shimmer when you teleport and
+// the turbolift's ride are recorded clips from client/public/sfx/ (CC0, credited in CREDITS.md there), each with a
+// synthesised stand-in that plays until the clips have loaded or if they never do. The engines' thrum underneath everything, the doors that swoosh
 // and the crew tapping at their stations are synthesised with Web Audio, positioned where they happen.
 
 import * as THREE from 'three';
@@ -25,6 +25,7 @@ const CLIPS = {
   success: ['alert-success'],
   error: ['alert-error'],
   beam: ['beam'],
+  lift: ['lift'],
 } as const;
 type Clip = keyof typeof CLIPS;
 
@@ -269,8 +270,13 @@ class ShipSound {
     lfo.stop(t + 1.45);
   }
 
-  /** A turbolift ride: the car's motor winding up, air rushing past as it runs, then winding down as it arrives. */
+  /** A turbolift ride: the recorded car spooling up and running, or the synthesised motor until it loads. */
   lift(): void {
+    this.play('lift', 0.5, () => this.liftSynth());
+  }
+
+  /** The car's motor winding up, air rushing past as it runs, then winding down as it arrives. */
+  private liftSynth(): void {
     const out = this.out(0.5);
     if (!out) return;
     const { ctx, gain } = out;

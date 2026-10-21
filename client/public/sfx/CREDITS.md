@@ -13,3 +13,4 @@ their leading silence trimmed.
 | `alert-success.mp3` | [Interface Sounds](https://kenney.nl/assets/interface-sounds) by Kenney | `confirmation_003.ogg` |
 | `alert-error.mp3` | [Interface Sounds](https://kenney.nl/assets/interface-sounds) by Kenney | `question_002.ogg` |
 | `beam.mp3` | [50 CC0 Sci-Fi SFX](https://opengameart.org/content/50-cc0-sci-fi-sfx) by rubberduck | `teleport_02.ogg` |
+| `lift.mp3` | [In the spaceship elevator](https://freesound.org/people/reacthor/sounds/237790/) by reacthor | the first 2.6 s of the first ride |
