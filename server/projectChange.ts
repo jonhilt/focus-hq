@@ -34,6 +34,7 @@ export function changeProject(project: Project, patch: unknown): Project {
     autoQa: flag(p.autoQa, project.autoQa),
     autoSendBack: flag(p.autoSendBack, project.autoSendBack),
     autoMerge: flag(p.autoMerge, project.autoMerge),
+    cosAutoSend: flag(p.cosAutoSend, project.cosAutoSend),
     qaProof: flag(p.qaProof, project.qaProof),
     hidden: flag(p.hidden, project.hidden),
   };

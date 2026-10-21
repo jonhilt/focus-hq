@@ -1,5 +1,6 @@
 import { autonomyChangeLine } from '../../../shared/autonomy';
 import { goneReply } from '../../../shared/mergeGate';
+import { AUTO_SEND_MS } from '../../../shared/tricorder';
 import type { Agent, Autonomy, CosRead, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
 import { resumeChoice } from '../apiKey';
@@ -48,12 +49,26 @@ export class Comms extends Part {
     if (agent?.lead) this.update(agent, { lead: { ...agent.lead, cos: { at: Date.now() } } });
   }
 
-  /** How a plugin judged a lead's last turn: kept while that turn is still being read, dropped once their next has started. */
-  judged(id: string, judged: NonNullable<CosRead['judged']>): void {
+  /**
+   * How a plugin judged a lead's last turn: kept while that turn is still being read, dropped once their next has
+   * started or when it's a verdict on an earlier turn (its judging began, `since`, before this one ended). Words for the
+   * lead, in a project that lets the chief of staff send them itself, go after `AUTO_SEND_MS` (`Inbox.autoSend`).
+   */
+  judged(id: string, judged: NonNullable<CosRead['judged']>, since: number): void {
     const agent = this.store.agents.get(id);
     const read = agent?.lead?.cos;
-    if (!agent?.lead || !read || read.judged) return;
-    this.update(agent, { lead: { ...agent.lead, cos: { ...read, judged } } });
+    if (!agent?.lead || !read || read.judged || since < read.at) return;
+    const sends = (judged.route === 1 || judged.route === 4) && this.store.projects.find((p) => p.id === agent.projectId)?.cosAutoSend === true;
+    this.update(agent, { lead: { ...agent.lead, cos: { ...read, judged, ...(sends && { sendsAt: Date.now() + AUTO_SEND_MS }) } } });
+  }
+
+  /** The captain holds the chief of staff's words for a lead: they wait for the captain to send them, or reply. */
+  holdSend(id: string): void {
+    const agent = this.store.agent(id);
+    const read = agent.lead?.cos;
+    if (!agent.lead || read?.sendsAt === undefined) return;
+    const { sendsAt: _, ...held } = read;
+    this.update(agent, { lead: { ...agent.lead, cos: held } });
   }
 
   /**

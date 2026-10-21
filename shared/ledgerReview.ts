@@ -1,4 +1,4 @@
-import { cosAddressee, type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest } from './ledger';
+import { cosAddressee, type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, viaNote } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -203,7 +203,7 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         tag: 'Captain',
         tone: 'info',
         title: `Decided: ${e.item.what} → ${e.answer}`,
-        detail: [e.agent, e.goal, e.via === 'api' ? 'via the API' : ''].filter(Boolean).join(' · '),
+        detail: [e.agent, e.goal, viaNote(e.via)].filter(Boolean).join(' · '),
         goal: e.goal,
       };
     case 'cos-verdict':

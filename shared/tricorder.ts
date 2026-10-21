@@ -35,6 +35,9 @@ function agentAttention(agent: Agent): Attention | null {
 /** How long a lead's ended turn waits for the chief of staff's read before it hails the captain unjudged. */
 export const JUDGING_MS = 60_000;
 
+/** How long the chief of staff's words for a lead wait for the captain to hold them, where it sends them itself. */
+export const AUTO_SEND_MS = 120_000;
+
 /**
  * Where a hail goes in the captain's inbox: `needs-you` (counted, and on the badge), `ready` (a lead's turn the chief
  * of staff would carry on or send back to the lead, its words ready for the captain to send) or `judging` (a lead's

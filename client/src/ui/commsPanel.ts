@@ -4,6 +4,7 @@ import { UNIFORM } from '../../../shared/crew';
 import { type Attention, laneOf, needLine, turnRead } from '../../../shared/tricorder';
 import { type Agent, TEAM_STATIONS } from '../../../shared/types';
 import type { DecisionEvent } from '../../../shared/captainsInbox';
+import { viaNote } from '../../../shared/ledger';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
 import { state } from '../net/state';
@@ -36,7 +37,7 @@ function queueRow(a: Attention, pick: () => void): HTMLElement {
 function decidedRow(d: DecisionEvent): HTMLElement {
   const project = state.project(d.projectId);
   return h('div', { class: 'decided' },
-    h('small', { class: 'muted' }, `${timeAgo(d.at)} · ${d.agent}${d.goal ? ` · ${d.goal}` : ''}${d.via === 'api' ? ' · via the API' : ''}`,
+    h('small', { class: 'muted' }, `${timeAgo(d.at)} · ${d.agent}${d.goal ? ` · ${d.goal}` : ''}${viaNote(d.via) ? ` · ${viaNote(d.via)}` : ''}`,
       project ? h('span', { class: 'hail-project', style: `--tone:${project.color}` }, project.name) : null),
     h('div', { class: 'decided-what', title: d.item.what }, d.item.what),
     h('div', { class: 'decided-answer', title: d.answer }, `→ ${d.answer}`),
@@ -150,9 +151,9 @@ export function openCommsPanel(ui: Ui): void {
     at = i;
     picked = keyed[i];
     const a = items[i];
-    // rebuilt only when it's another item (or the chief of staff has judged it since), so a reply being written isn't
+    // rebuilt only when it's another item (or the chief of staff has judged it since, or it's held), so a reply being written isn't
     // wiped by the next update
-    const showing = `${picked}|${a.kind === 'turn' ? (a.agent.lead?.cos?.judged?.route ?? '') : ''}`;
+    const showing = `${picked}|${a.kind === 'turn' ? `${a.agent.lead?.cos?.judged?.route ?? ''}|${a.agent.lead?.cos?.sendsAt ?? ''}` : ''}`;
     if (showing === shown) return;
     shown = showing;
     if (a.kind === 'turn') markRead(a.agent);

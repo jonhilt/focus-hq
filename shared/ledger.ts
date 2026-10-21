@@ -64,10 +64,19 @@ export type LedgerEntry =
    * The captain answered something in their inbox (shared/captainsInbox.ts): `item` is what it was (its inbox id, kind and line),
    * `answer` what they decided in a few words, `via` where (the office, or a bot on the API). `agent` is who it was for.
    */
-  | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: 'office' | 'api' }
+  | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 
+
+/**
+ * Where it was decided: by the captain in the office, or through the API (a bot speaking for them), or by the chief of
+ * staff, sending its own words where the captain let it (`Project.cosAutoSend`).
+ */
+export type DecidedVia = 'office' | 'api' | 'chief-of-staff';
+
+/** Where a decision came from, said after it: nothing for the captain in the office. */
+export const viaNote = (via: DecidedVia): string => ({ office: '', api: 'via the API', 'chief-of-staff': 'sent by the chief of staff' })[via];
 
 /** Who a chief of staff's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
 export const cosAddressee = (route: CosRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');

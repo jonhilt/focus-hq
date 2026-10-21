@@ -37,10 +37,10 @@ export class ChiefOfStaff {
   turn(agent: Agent, phase: 'start' | 'end'): Promise<void> | undefined {
     if (phase !== 'end' || !this.judges(agent) || !hasLeadWork(agent) || !agent.sessionId) return undefined;
     const { sessionId } = agent;
-    return this.judgeTurn(agent, sessionId, agent.lead.title).catch((err: unknown) => console.warn(`[chief-of-staff] judging ${agent.name}’s turn failed: ${errorMessage(err)}`));
+    return this.judgeTurn(agent, sessionId, agent.lead.title, Date.now()).catch((err: unknown) => console.warn(`[chief-of-staff] judging ${agent.name}’s turn failed: ${errorMessage(err)}`));
   }
 
-  private async judgeTurn(agent: Agent, sessionId: string, goal: string): Promise<void> {
+  private async judgeTurn(agent: Agent, sessionId: string, goal: string, since: number): Promise<void> {
     const jsonl = await this.host.transcript(sessionId);
     const tail = jsonl === undefined ? undefined : turnTail(jsonl);
     // a turn the lead said nothing in, or that your plan's limit stopped (the office carries those on), isn't judged
@@ -57,7 +57,7 @@ export class ChiefOfStaff {
         ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model, version: JUDGE_VERSION,
         ...(result.costUsd !== undefined && { costUsd: result.costUsd }),
       });
-      this.host.goals.judged(agent.id, verdict);
+      this.host.goals.judged(agent.id, verdict, since);
     } finally {
       this.judging.delete(key);
     }

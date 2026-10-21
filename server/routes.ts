@@ -33,6 +33,8 @@ export function apiRouter(office: Office, store: Store): express.Router {
   const r = express.Router();
   r.use(express.json({ limit: '2mb' }));
   const inbox = new Inbox(store, office);
+  // the chief of staff's words go by themselves once due, where the captain lets it (`Inbox.autoSend`)
+  setInterval(() => void inbox.autoSend(), 5000).unref();
 
   r.get('/state', h(() => office.snapshot()));
   // how the 3D view runs in a browser opened with ?stats=1, kept here so a run on another machine can be read where the office is
@@ -115,6 +117,7 @@ export function apiRouter(office: Office, store: Store): express.Router {
   r.post('/personal-log/:id', h((req) => office.markPersonal(personalMark(param(req, 'id'), req.body))));
   // the captain's inbox: what needs them and what they decided lately, answered by id (docs/ledger.md#the-captains-inbox-api)
   r.get('/inbox', h(() => inbox.view()));
+  r.post('/inbox/:id/hold', h((req) => inbox.hold(param(req, 'id'))));
   r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), req.body.via === 'office' ? 'office' : 'api', resumeHow(req.body.how))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await office.agents.undigested()).length })));

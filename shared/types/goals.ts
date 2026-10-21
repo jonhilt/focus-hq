@@ -292,5 +292,10 @@ export interface CosRead {
     /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
     message: string;
   };
+  /**
+   * When the chief of staff sends its words to the lead itself, unless the captain holds them first: set as it judges
+   * a turn it would carry on or send back, in a project that lets it (`Project.cosAutoSend`); cleared by Hold.
+   */
+  sendsAt?: number;
 }
 

@@ -110,8 +110,10 @@ export const api = {
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain's inbox: what needs them, and what they decided lately (docs/ledger.md#the-captains-inbox-api). */
   inbox: () => call<Inbox>('GET', '/inbox'),
-  /** Answers an inbox item by its id, from the office (docs/comms.md#the-inbox-api). */
+  /** Answers an inbox item by its id, from the office (docs/ledger.md#the-captains-inbox-api). */
   decide: (id: string, decide: Decide) => call<{ ok: true } | MessageReply>('POST', `/inbox/${encodeURIComponent(id)}/decide`, { ...decide, via: 'office' }),
+  /** Holds the chief of staff's words on an inbox item, so they wait for the captain rather than going by themselves. */
+  hold: (id: string) => call('POST', `/inbox/${encodeURIComponent(id)}/hold`),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),

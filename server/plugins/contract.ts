@@ -329,9 +329,11 @@ export interface PluginGoals {
   message(agentId: string, text: string, opts?: { from?: string; how?: ResumeHow }): MessageReply;
   /**
    * How a plugin that judges turns (`judgesTurns`) judged a goal lead's last one, for the captain's inbox. Taken only
-   * while that turn is still being read: once the lead's next turn has started, it's too late, and it's dropped.
+   * while that turn is still being read: once the lead's next turn has started, it's too late, and it's dropped. `since`
+   * is when the plugin began judging (`Date.now()` as the turn ended): a verdict on a turn that ended after it is
+   * another turn's, and dropped too.
    */
-  judged(agentId: string, judged: NonNullable<CosRead['judged']>): void;
+  judged(agentId: string, judged: NonNullable<CosRead['judged']>, since: number): void;
 }
 
 /** A journal the office keeps, as a plugin has it: what it's about and its facts, oldest first. */

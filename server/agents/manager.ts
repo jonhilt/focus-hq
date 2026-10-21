@@ -258,6 +258,11 @@ export class AgentManager {
     this.core.comms.readTurn(id);
   }
 
+  /** The captain holds the chief of staff's words for a lead, so they don't go by themselves (`Comms.holdSend`). */
+  holdSend(id: string): void {
+    this.core.comms.holdSend(id);
+  }
+
   message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {
     return from === undefined ? this.core.goalTools.captainMessage(id, text, how) : this.core.comms.message(id, text, from, how);
   }

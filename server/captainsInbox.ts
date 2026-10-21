@@ -5,6 +5,7 @@ import { openQuestion } from '../shared/artifacts';
 import type { Attention } from '../shared/tricorder';
 import type { Agent, ResumeHow } from '../shared/types';
 import type { Office } from './office';
+import { errorMessage } from './util';
 import type { Store } from './store';
 
 // The captain's inbox, as the API serves it (docs/ledger.md#the-captains-inbox-api): what needs them across the shown projects,
@@ -54,6 +55,41 @@ export class Inbox {
     const reply = await this.answering(agent.id, d, via, () => this.act(agent, d, item.cos?.message ?? '', how));
     // the office asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
     return landed(reply) ? { ok: true } : reply;
+  }
+
+  /**
+   * Sends the chief of staff's words to each lead whose turn it would carry on or send back, once they're due
+   * (`CosRead.sendsAt`) and their project still lets it, recorded as decided by the chief of staff. Run every few seconds.
+   */
+  async autoSend(now = Date.now()): Promise<void> {
+    // one run at a time: a send that's slow to land isn't sent twice
+    if (this.sending) return;
+    this.sending = true;
+    try {
+      await this.sendDue(now);
+    } finally {
+      this.sending = false;
+    }
+  }
+
+  private sending = false;
+
+  private async sendDue(now: number): Promise<void> {
+    const due = this.items().filter(({ a, item }) => {
+      if (a.kind !== 'turn' || item.lane !== 'ready') return false;
+      const sendsAt = a.agent.lead?.cos?.sendsAt;
+      return sendsAt !== undefined && sendsAt <= now && this.store.projects.find((p) => p.id === a.agent.projectId)?.cosAutoSend === true;
+    });
+    for (const { item } of due) {
+      await this.decide(item.id, { send: true }, 'chief-of-staff').catch((err: unknown) => console.warn(`[inbox] sending the chief of staff’s words failed: ${errorMessage(err)}`));
+    }
+  }
+
+  /** Holds the chief of staff's words on an item, so they wait for the captain rather than going by themselves. */
+  hold(id: string): void {
+    const found = this.items().find(({ item }) => item.id === id);
+    if (!found || found.a.kind !== 'turn') throw new Error('That’s no longer waiting on you');
+    this.office.agents.holdSend(found.a.agent.id);
   }
 
   /** Does what the captain decided. `words` are the chief of staff's, for `send`. */

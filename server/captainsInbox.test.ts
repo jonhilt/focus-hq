@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { office, until } from './agents/fakeOffice';
 import type { CosRead } from '../shared/types';
 import { Inbox } from './captainsInbox';
+import { AUTO_SEND_MS } from '../shared/tricorder';
 import type { FocusPlugin } from './plugins/contract';
 
 /** An office with a lead whose first turn has ended, waiting on the captain, and its inbox. */
@@ -66,13 +67,14 @@ describe('the captain’s inbox, as the API serves it', () => {
 });
 
 /** An office whose leads' turns a plugin judges, as the chief of staff does, with `judged` for each. */
-async function judgedLead(judged: NonNullable<CosRead['judged']>) {
+async function judgedLead(judged: NonNullable<CosRead['judged']>, { autoSend = false, since = Date.now }: { autoSend?: boolean; since?: () => number } = {}) {
   const o = office();
+  o.project.cosAutoSend = autoSend;
   const judge: FocusPlugin = {
     id: 'judge',
     start: (host) => ({
       judgesTurns: (agent) => agent.task === 'lead',
-      turn: (agent, phase) => void (phase === 'end' && host.goals.judged(agent.id, judged)),
+      turn: (agent, phase) => void (phase === 'end' && host.goals.judged(agent.id, judged, since())),
     }),
   };
   o.agents.startPlugins([judge], { demo: false, ownRepo: () => undefined });
@@ -103,3 +105,45 @@ describe('the captain’s inbox, with a chief of staff reading the leads’ turn
   });
 });
 
+
+describe('the chief of staff’s words, sent by themselves where the captain lets it', () => {
+  const carryOn = { route: 1 as const, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' };
+
+  it('sends them once they’re due, recorded as sent by the chief of staff', async () => {
+    const { inbox, claude, decisions, store, id } = await judgedLead(carryOn, { autoSend: true });
+    const sendsAt = store.agent(id).lead?.cos?.sendsAt ?? 0;
+    expect(sendsAt - Date.now()).toBeGreaterThan(AUTO_SEND_MS - 5000);
+    await inbox.autoSend(sendsAt - 1);
+    expect(claude.turns).toHaveLength(1);
+    await inbox.autoSend(sendsAt);
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toContain('[Chief of Staff] Go on to the settings page.');
+    expect(decisions()).toMatchObject([{ answer: 'Sent the chief of staff’s words', via: 'chief-of-staff' }]);
+  });
+
+  it('holds them for the captain when they say so, and when the project stops letting it', async () => {
+    const held = await judgedLead(carryOn, { autoSend: true });
+    held.inbox.hold(held.inbox.view().open[0].id);
+    expect(held.store.agent(held.id).lead?.cos).toMatchObject({ judged: { route: 1 } });
+    expect(held.store.agent(held.id).lead?.cos?.sendsAt).toBeUndefined();
+    await held.inbox.autoSend(Date.now() + AUTO_SEND_MS);
+    expect(held.claude.turns).toHaveLength(1);
+
+    const off = await judgedLead(carryOn, { autoSend: true });
+    off.project.cosAutoSend = false;
+    await off.inbox.autoSend(Date.now() + AUTO_SEND_MS);
+    expect(off.claude.turns).toHaveLength(1);
+  });
+
+  it('never sends by itself what it would put to the captain, or where it isn’t let', async () => {
+    const card = await judgedLead({ route: 2, ask: 'Filters or drag-reorder?', why: 'A pick.', message: 'Filters.' }, { autoSend: true });
+    expect(card.store.agent(card.id).lead?.cos?.sendsAt).toBeUndefined();
+    const notLet = await judgedLead(carryOn);
+    expect(notLet.store.agent(notLet.id).lead?.cos?.sendsAt).toBeUndefined();
+  });
+
+  it('drops a verdict on an earlier turn, judged from before this one ended', async () => {
+    const { store, id } = await judgedLead(carryOn, { since: () => 0 });
+    expect(store.agent(id).lead?.cos?.judged).toBeUndefined();
+  });
+});

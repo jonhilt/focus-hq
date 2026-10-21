@@ -64,11 +64,32 @@ function shownBox(ui: Ui, agent: Agent): HTMLElement[] {
   ];
 }
 
-/** The chief of staff's words for a lead whose turn it would carry on or send back, sent as they are with one press. */
+/**
+ * The chief of staff's words for a lead whose turn it would carry on or send back, sent as they are with one press, or
+ * by themselves when they're due (`CosRead.sendsAt`), counted down here, unless the captain holds them.
+ */
 function sendBox(ui: Ui, a: Attention & { agent: Agent }, words: string): HTMLElement[] {
   const send = h('button', { class: 'btn small primary', title: 'Send the lead these words, from the chief of staff' }, 'Send the chief of staff’s words');
   send.onclick = () => void busy(send, answer(a.agent, () => api.decide(keyOf(a), { send: true })), ui.error);
-  return [h('small', { class: 'muted' }, `The chief of staff’s words for ${a.agent.name}:`), h('blockquote', { class: 'cos-words', innerHTML: markdownHtml(words) }), h('div', { class: 'row' }, send)];
+  const sendsAt = a.agent.lead?.cos?.sendsAt;
+  const row = h('div', { class: 'row' }, send);
+  if (sendsAt !== undefined) {
+    const hold = h('button', { class: 'btn small', title: 'Keep these words here until you send them, or reply in your own' }, 'Hold');
+    hold.onclick = () => void busy(hold, () => api.hold(keyOf(a)), ui.error);
+    const left = h('small', { class: 'muted cos-countdown' });
+    // counts down while it's on screen, and stops once it's gone from it
+    let shown = false;
+    const tick = () => {
+      const s = Math.max(0, Math.ceil((sendsAt - Date.now()) / 1000));
+      left.textContent = s ? `Sends itself in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}` : 'Sending…';
+      shown ||= left.isConnected;
+      if (shown && !left.isConnected) clearInterval(timer);
+    };
+    const timer = setInterval(tick, 1000);
+    tick();
+    row.append(hold, left);
+  }
+  return [h('small', { class: 'muted' }, `The chief of staff’s words for ${a.agent.name}:`), h('blockquote', { class: 'cos-words', innerHTML: markdownHtml(words) }), row];
 }
 
 /** What the chief of staff made of a lead's turn, when it has: why it goes where it does, and to the captain its words. */

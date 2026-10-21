@@ -30,7 +30,7 @@ const steady = async (read: () => unknown) => {
 
 interface Said {
   phase: string;
-  /** The chief of staff's read of the lead's last turn: none, being read, or the route it judged. */
+  /** The chief of staff's read of the lead's last turn: none, being read, or the route it judged (and `sends` while its words would go by themselves). */
   cos: string;
   held: boolean;
   /** What's waiting for the lead's next turn, and for the end of the one in hand. */
@@ -63,6 +63,8 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
     // the limit is the office's own, kept between tests: each run starts with it not reached
     Reflect.set(keyFallback, 'spell', undefined);
     const first = office();
+    // the chief of staff's words for the lead go by themselves, unless the captain holds them
+    first.project.cosAutoSend = true;
     // each life's chief of staff, the latest last
     const hosts: PluginHost[] = [];
     startJudging(first.agents, hosts);
@@ -83,7 +85,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
       const cos = first.store.agent(id).lead?.cos;
       return {
         phase: JSON.stringify(run.phase),
-        cos: cos ? String(cos.judged?.route ?? 'reading') : 'none',
+        cos: cos ? `${cos.judged?.route ?? 'reading'}${cos.sendsAt === undefined ? '' : ' sends'}` : 'none',
         held: !!first.store.agent(id).held,
         inbox: [...run.inbox],
         later: [...run.later],
@@ -120,7 +122,11 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
           { name: 'the office leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
           { name: 'the captain stops them', run: () => o.agents.stop(id) },
           // its verdict, whenever it comes: kept only while the turn it's on is still being read
-          { name: 'the chief of staff judges', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 2, ask: 'Slice 2?', why: 'A pick.', message: 'Shall it?' }) },
+          { name: 'the chief of staff judges', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 2, ask: 'Slice 2?', why: 'A pick.', message: 'Shall it?' }, Date.now()) },
+          { name: 'the chief of staff would carry on', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 1, ask: 'Go on', why: 'Progress.', message: 'Go on.' }, Date.now()) },
+          // judged from before the turn being read ended: it's an earlier turn's
+          { name: 'a verdict on an earlier turn comes', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 1, ask: 'Go on', why: 'Progress.', message: 'Go on.' }, 0) },
+          { name: 'the captain holds its words', run: () => o.agents.holdSend(id) },
         ] satisfies Action[]).filter((a) => !only || only.test(a.name)),
         durable: said,
         settle: () => steady(said),
@@ -169,6 +175,19 @@ describe('a goal’s lead, under the office’s rule for a restart', () => {
     }
     l.close?.();
     expect(seen).toEqual(['reading', '2', 'none', 'none', 'reading']);
+  });
+
+  // plugins/chief-of-staff/README.md: its words for the lead go by themselves where the project lets them, unless held
+  it('reaches words that would send themselves, held by the captain, and drops a verdict on an earlier turn', async () => {
+    const l = await lead.start(now);
+    const seen: string[] = [];
+    for (const name of ['the turn ends', 'a verdict on an earlier turn comes', 'the chief of staff would carry on', 'the captain holds its words', 'the captain writes']) {
+      await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await l.settle();
+      seen.push(l.durable().cos);
+    }
+    l.close?.();
+    expect(seen).toEqual(['reading', 'reading', '1 sends', '1', 'none']);
   });
 
   it('is said to be where it was, and held if it was, after the office goes down and starts again', async () => {

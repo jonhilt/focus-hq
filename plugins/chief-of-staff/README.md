@@ -4,12 +4,12 @@ A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), swi
 
 ## What it does with a turn
 
-It sends nothing itself: the captain does, from Comms or the inbox's API. What it decides is where a lead's ended turn waits for them:
+It sends nothing itself unless the captain lets it, project by project. What it decides is where a lead's ended turn waits for them:
 
 - **While it reads the turn** (up to a minute: `JUDGING_MS`, shared/tricorder.ts) the turn is held back: off the badge, no toast, a line in Comms saying how many it's reading. A turn it hasn't judged by then needs the captain as if it weren't there, so a judge that's slow, failing or switched off never hides one.
 - **A card or an interrupt** (routes 2 and 3) needs the captain: it's on the badge, headed by its one line on what's being decided, with its reason and its words to the captain on the turn. As it's judged, a toast says so: an interrupt as an error, so it sounds like one.
-- **Carry on, or back to the lead** (routes 1 and 4) are **Ready to send**: off the badge and quiet, with its words for the lead. The captain sends them with one press (the lead hears them `[Chief of Staff]`), or replies in their own words instead.
-- **Its read of a turn ends as the lead's next turn starts.** A verdict that comes after that is dropped (it's still in the ledger), and a turn the office stopped as it went down isn't read: it carries on after the restart.
+- **Carry on, or back to the lead** (routes 1 and 4) are **Ready to send**: off the badge and quiet, with its words for the lead. The captain sends them with one press (the lead hears them `[Chief of Staff]`), or replies in their own words instead. In a project set to **Auto-send ready words** (the manager's **Projects** tab) they go by themselves two minutes after the verdict (`AUTO_SEND_MS`), counted down in Comms, unless the captain holds them; recorded `via: "chief-of-staff"`.
+- **Its read of a turn ends as the lead's next turn starts.** A verdict that comes after that, or one on an earlier turn, is dropped (it's still in the ledger), and a turn the office stopped as it went down isn't read: it carries on after the restart.
 
 Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 

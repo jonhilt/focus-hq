@@ -87,8 +87,7 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
  */
 export type Decide = { allow: boolean } | { option: string; note?: string } | { text: string } | { close: true } | { send: true };
 
-/** Where the captain decided: in the office, or through the API (a bot speaking for them). */
-export type DecidedVia = 'office' | 'api';
+export type { DecidedVia } from './ledger';
 
 const SAY_HOW = 'Say how you decide: allow, option, text, close or send';
 
