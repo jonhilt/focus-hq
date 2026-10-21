@@ -86,6 +86,8 @@ state.on('agent-removed', (a) => {
   schedule();
 });
 for (const event of ['agent', 'board', 'review', 'projects', 'info', 'browser', 'connection'] as const) state.on(event, schedule);
+// the chief of staff's countdowns, and a turn it's read too long, move on without the office saying anything
+setInterval(schedule, 10_000);
 
 // iOS Safari drops the socket while the page is in the background, sometimes without a close event, so after any real
 // time away start a fresh one; its snapshot brings everything up to date.

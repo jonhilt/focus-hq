@@ -5,7 +5,8 @@ import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { mergeCheckLine } from '../../../shared/mergeCheck';
 import { prKey, qaBadge } from '../../../shared/qa';
-import { type Attention, inFlight, needLine, needsYou } from '../../../shared/tricorder';
+import { hailKey } from '../../../shared/captainsInbox';
+import { type Attention, hails, inFlight, laneOf, needLine, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -35,13 +36,12 @@ const FINISHED = ['done', 'error', 'stopped'];
 export function home(ctx: HomeContext): HTMLElement {
   const login = state.info?.github.login;
   const boards = state.shown.map((project) => ({ project, cols: columns(project, state.boards.get(project.id), state.agentsIn(project.id), login) }));
-  const attention = needsYou(
-    state.shownAgents(),
-    boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr }))),
-    state.reviews,
-  );
+  const prs = boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr })));
+  const attention = needsYou(state.shownAgents(), prs, state.reviews);
+  const now = Date.now();
   return h('main', { class: 'home' },
     needsYouStrip(ctx, attention),
+    readyStrip(ctx, hails(state.shownAgents(), prs, state.reviews).filter((a) => laneOf(a, now) === 'ready'), now),
     state.info && !state.projects.length ? h('p', { class: 'empty' }, 'No projects yet. Create one in the 3D ship’s ready room.') : null,
     ...boards.map(({ project, cols }) => projectSection(ctx, project, cols)),
   );
@@ -55,6 +55,41 @@ function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
     items.length
       ? h('ul', null, ...items)
       : h('p', { class: 'all-clear' }, state.info ? '✓ All clear. Nothing is waiting on you.' : 'Connecting to Focus…'),
+  );
+}
+
+/** When the chief of staff's words go by themselves, to the minute: the screen is drawn again at least every few seconds. */
+export function sendsIn(sendsAt: number | undefined, now: number): string {
+  if (sendsAt === undefined) return 'Waits for you to send';
+  const min = Math.ceil((sendsAt - now) / 60_000);
+  return min > 1 ? `Sends itself in ${min} min` : 'Sends itself within a minute';
+}
+
+/**
+ * The turns the chief of staff would carry on or send back, its words ready: each sent with a tap, or held when they'd
+ * otherwise go by themselves (`CosRead.sendsAt`). Out of Needs you, as in Comms' tray, and gone when there are none.
+ */
+function readyStrip(ctx: HomeContext, ready: Attention[], now: number): HTMLElement | null {
+  const turns = ready.flatMap((a) => (a.kind === 'turn' ? [a.agent] : []));
+  if (!turns.length) return null;
+  return h('section', { class: 'ready-to-send' },
+    h('h2', { class: 'bar' }, h('span', null, 'Ready to send'), h('span', { class: 'count' }, turns.length)),
+    h('ul', null, ...turns.map((lead) => {
+      const cos = lead.lead?.cos;
+      const id = hailKey({ kind: 'turn', agent: lead });
+      const key = `ready:${id}`;
+      return h('li', { attrs: { 'data-key': key } },
+        h('a', { class: 'entry', href: agentHref(lead.id), style: `--accent:${state.project(lead.projectId)?.color ?? 'var(--lcars-lilac)'}` },
+          h('span', { class: 'text' }, h('strong', null, cos?.judged?.ask ?? 'Carry on'), h('small', null, `${lead.name} · ${workLabel(lead)}`))),
+        h('blockquote', { class: 'cos-words' }, cos?.judged?.message ?? ''),
+        h('div', { class: 'actions' },
+          ctx.actions.button(`${key}:send`, '▶ Send', () => api.decide(id, { send: true }), { class: 'go' }),
+          cos?.sendsAt === undefined ? null : ctx.actions.button(`${key}:hold`, '✋ Hold', () => api.hold(id)),
+          h('small', { class: 'sends-in' }, sendsIn(cos?.sendsAt, now)),
+        ),
+        ctx.actions.errors(key),
+      );
+    })),
   );
 }
 

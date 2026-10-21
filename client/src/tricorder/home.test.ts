@@ -5,7 +5,7 @@ import { api } from '../net/api';
 import { confirmDialog } from '../ui/confirmDialog';
 import { h } from '../ui/dom';
 import { Actions, morph } from './actions';
-import { mergeButton } from './home';
+import { mergeButton, sendsIn } from './home';
 
 vi.mock('../net/api', () => ({ api: { mergePr: vi.fn(() => Promise.resolve()), mergeWhenPassed: vi.fn(() => Promise.resolve()) } }));
 vi.mock('../ui/confirmDialog', () => ({ confirmDialog: vi.fn(() => Promise.resolve(true)) }));
@@ -85,5 +85,13 @@ describe('the Tricorder’s merge button', () => {
     const queued = card(review({ status: 'passed' }), { ...pr, mergeCheck: { state: 'queued', head: HEAD, behind: 41 } });
     expect(queued.click()).toBe('⏳ Queued behind #41');
     expect(api.mergePr).not.toHaveBeenCalled();
+  });
+});
+
+describe('the Tricorder’s Ready to send strip', () => {
+  it('says when the chief of staff’s words go by themselves, or that they wait for the captain', () => {
+    expect(sendsIn(undefined, 0)).toBe('Waits for you to send');
+    expect(sendsIn(120_000, 0)).toBe('Sends itself in 2 min');
+    expect(sendsIn(30_000, 0)).toBe('Sends itself within a minute');
   });
 });

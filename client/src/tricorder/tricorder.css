@@ -123,6 +123,15 @@ a.btn { display: inline-flex; align-items: center; justify-content: center; text
 .needs-you.alert .bar { background: var(--lcars-gold); }
 .needs-you ul { list-style: none; margin: 0; padding: 0; border-left: 14px solid var(--lcars-gold); border-radius: 0 0 0 16px; }
 .needs-you li + li { border-top: 2px solid #000; }
+.ready-to-send { margin-bottom: 16px; }
+.ready-to-send .bar { background: var(--lcars-lilac); }
+.ready-to-send ul { list-style: none; margin: 0; padding: 0; border-left: 14px solid var(--lcars-lilac); border-radius: 0 0 0 16px; }
+.ready-to-send li { background: var(--surface); padding-bottom: 10px; }
+.ready-to-send li + li { border-top: 2px solid #000; }
+.ready-to-send .cos-words { margin: 0 12px 8px; padding: 8px 10px; border-left: 3px solid var(--lcars-lilac); color: var(--text); white-space: pre-wrap; }
+.ready-to-send .actions { display: flex; gap: 8px; align-items: center; padding: 0 12px; }
+.ready-to-send .actions .btn { flex: 0 0 auto; padding-inline: 22px; }
+.ready-to-send .sends-in { color: var(--muted); }
 .all-clear { margin: 0; padding: 12px 14px; border-left: 14px solid var(--lcars-green); border-radius: 0 0 0 16px; color: var(--lcars-green); background: var(--surface); }
 .entry {
   display: flex; gap: 10px; align-items: flex-start; width: 100%; min-height: var(--tap); padding: 10px 12px; border: none;
