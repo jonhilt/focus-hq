@@ -55,6 +55,16 @@ describe('qaBadge', () => {
     expect(qaBadge(review({ status: 'testing' }), { headSha: 'x' }).state).toBe('testing');
     expect(qaBadge(review({ status: 'error' }), { headSha: 'x' }).state).toBe('error');
   });
+
+  it('says QA ended without a verdict, for the captain, when the reviewer’s session was over with none', () => {
+    expect(qaBadge(review({ status: 'error', noVerdict: true, error: 'Finished without a QA report.' }), { headSha: 'x' })).toEqual({ state: 'needs-you', label: 'QA ended without a verdict' });
+  });
+
+  it('says QA couldn’t finish for any other end without a verdict: stopped, shut down, an error', () => {
+    for (const error of ['Stopped by the captain', 'Interrupted when Focus shut down. Send it to QA again.', 'Credit balance is too low']) {
+      expect(qaBadge(review({ status: 'error', error }), { headSha: 'x' })).toEqual({ state: 'error', label: 'QA couldn’t finish' });
+    }
+  });
 });
 
 describe('sameCommit', () => {

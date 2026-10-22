@@ -1,6 +1,6 @@
 import { openQuestion } from '../../../shared/artifacts';
 import { hailOf } from '../../../shared/tricorder';
-import type { Agent, GoalNote, LeadPr, LeadWork, QaStatus } from '../../../shared/types';
+import type { Agent, GoalNote, LeadPr, LeadWork, QaReview } from '../../../shared/types';
 
 // What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
 // lamps and sign at its door, the lead's note on the goal, on the board in its briefing room, and what the team's up to
@@ -133,19 +133,23 @@ export function checklistGlance(items: SliceStep[], room: number): { done: numbe
   return { done, items: shown, more: rest.length - shown.length };
 }
 
-/** How a goal's pull request stands, on the screen over its pod: merged or closed, otherwise how QA has it. */
-export type PrGlance = 'open' | 'testing' | 'passed' | 'failed' | 'merged' | 'closed';
+/**
+ * How a goal's pull request stands, on the screen over its pod: merged or closed, otherwise how QA has it (`no-verdict`:
+ * its reviewer's session ended without one, so it's the captain's).
+ */
+export type PrGlance = 'open' | 'testing' | 'passed' | 'failed' | 'no-verdict' | 'merged' | 'closed';
 
-export function prGlance(pr: Pick<LeadPr, 'outcome'>, qa: QaStatus | undefined): PrGlance {
+export function prGlance(pr: Pick<LeadPr, 'outcome'>, qa: Pick<QaReview, 'status' | 'noVerdict'> | undefined): PrGlance {
   if (pr.outcome) return pr.outcome;
-  switch (qa) {
+  switch (qa?.status) {
     case 'queued':
     case 'testing':
       return 'testing';
     case 'passed':
     case 'failed':
-      return qa;
+      return qa.status;
     case 'error':
+      return qa.noVerdict ? 'no-verdict' : 'open';
     case undefined:
       return 'open';
   }
@@ -179,10 +183,11 @@ export interface MoveClaim {
   quiet?: boolean;
 }
 
-/** A pull request of the slice's, as the move reads it: its number and how it stands. */
+/** A pull request of the slice's, as the move reads it: its number and how it stands, and why it needs the captain, when it does. */
 export interface MovePr {
   number: number;
   state: PrGlance;
+  reason?: string;
 }
 
 /**
@@ -199,7 +204,8 @@ function captainsNow(lead: Agent): string | undefined {
 /**
  * Whose move it is on `lead`'s goal, with the slice's pull requests `prs` and a plugin's `claim`, if one has a say:
  * what only the captain can answer comes first, then a plugin's claim (for itself, or handing it to the captain), then
- * the lead at work, then QA testing what they shipped, then the captain's (a pull request to merge, one QA failed, or
+ * the lead at work, then a pull request QA ended without a verdict on (the captain's), then QA testing what they
+ * shipped, then the captain's (a pull request to merge, one QA failed, or
  * the turn that's ended, quietly when a plugin's quiet claim says it asks nothing of them now).
  */
 export function goalMove(lead: Agent, prs: readonly MovePr[], claim: MoveClaim | undefined): GoalMove {
@@ -209,6 +215,9 @@ export function goalMove(lead: Agent, prs: readonly MovePr[], claim: MoveClaim |
   if (claim?.captain && !claim.quiet) return { holder: 'you', why: claim.why, sign: label };
   if (claim && !claim.captain) return { holder: claim.key, why: claim.why, sign: claim.label, ...(claim.counter !== undefined && { counter: claim.counter }) };
   if (lead.status !== 'done') return { holder: 'lead', why: leadNow(lead), sign: label };
+  // QA's session ended with no verdict: nobody's testing it, and it's the captain's to send to QA again
+  const unjudged = prs.find((p) => p.state === 'no-verdict');
+  if (unjudged) return { holder: 'you', why: `${unjudged.reason ?? `QA ended without a verdict on #${unjudged.number}`}: send it to QA again.`, sign: 'QA no verdict' };
   const testing = prs.filter((p) => p.state === 'testing').map((p) => `#${p.number}`);
   if (testing.length) return { holder: 'qa', why: `Shipped ${testing.join(', ')}; QA is testing it. Nothing asked of you.`, sign: 'QA testing' };
   const passed = prs.find((p) => p.state === 'passed');

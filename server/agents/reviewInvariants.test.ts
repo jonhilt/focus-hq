@@ -53,6 +53,9 @@ const steady = async (read: () => unknown) => {
 interface Kept {
   pr: number;
   status?: string;
+  /** Ended without a verdict, the captain's. */
+  noVerdict?: boolean;
+  followUp?: string;
   verdicts: number;
   comments: number;
 }
@@ -77,6 +80,8 @@ const reviews: Subject<Kept[]> = {
       prs.map((pr) => ({
         pr: pr.number,
         status: store.reviews.get(prKey(pr.repo, pr.number))?.status,
+        noVerdict: store.reviews.get(prKey(pr.repo, pr.number))?.noVerdict,
+        followUp: store.reviews.get(prKey(pr.repo, pr.number))?.followUp?.kind,
         verdicts: store.ledger.filter((e) => e.kind === 'qa-verdict' && e.pr === pr.number).length,
         comments: comments.get(pr.number)?.length ?? 0,
       }));
@@ -96,6 +101,7 @@ const reviews: Subject<Kept[]> = {
           ...prs.map((pr) => ({ name: `review #${pr.number} asked for`, run: () => project && o.agents.requestReview(project.id, pr.repo, pr.number, pr.title) })),
           { name: 'QA passes it', run: () => turn().end({ ok: true, summary: '', structured: report('pass') }) },
           { name: 'QA fails it', run: () => turn().end({ ok: true, summary: '', structured: report('fail') }) },
+          { name: 'QA ends with no report', run: () => turn().end({ ok: true, summary: 'Done.' }) },
         ],
         durable: () => kept(o.store),
         settle: () => steady(() => [kept(o.store), o.claude.turns.length]),
@@ -124,6 +130,17 @@ describe('QA reviews, under Focus’s two rules', () => {
     }
     r.close?.();
     expect(said).toEqual(expect.arrayContaining(['testing', 'failed', 'passed']));
+  });
+
+  it('reaches a review ended without a verdict, for the captain', async () => {
+    const r = await reviews.start(now);
+    for (const name of ['review #7 asked for', 'QA ends with no report']) {
+      await Promise.resolve(r.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await r.settle();
+    }
+    const said = r.durable();
+    r.close?.();
+    expect(said).toEqual(expect.arrayContaining([expect.objectContaining({ status: 'error', noVerdict: true, followUp: 'needs-you' })]));
   });
 
   it('end a restart as if what was under way had never started, or had finished', async () => {

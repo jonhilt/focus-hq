@@ -344,7 +344,11 @@ export class ProjectRoom {
         () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
       // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's in the room, and
       // the station's screen over its pod, with how the slice's pull requests stand
-      const prs = lead?.lead?.prs.map((pr) => ({ label: `${pr.repo.split('/')[1]} #${pr.number}`, number: pr.number, state: prGlance(pr, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
+      const prs = lead?.lead?.prs.map((pr) => {
+        const review = state.reviews.get(prKey(pr.repo, pr.number));
+        const reason = review?.followUp?.kind === 'needs-you' ? review.followUp.reason : undefined;
+        return { label: `${pr.repo.split('/')[1]} #${pr.number}`, number: pr.number, state: prGlance(pr, review), ...(reason && { reason }) };
+      });
       station.show(lead, next, prs);
       station.showWorkflows(lead, performance.now());
       station.showBackground(lead);
@@ -524,7 +528,7 @@ export class ProjectRoom {
 
   /** Lays the pull requests waiting on the rack: a pile of PADDs each, the top one's cap lit in how QA has it. */
   private rebuildPadds(board: Board | undefined): void {
-    const prs = (board?.prs ?? []).map((pr) => ({ number: pr.number, glance: prGlance({}, state.reviews.get(prKey(pr.repo, pr.number))?.status) }));
+    const prs = (board?.prs ?? []).map((pr) => ({ number: pr.number, glance: prGlance({}, state.reviews.get(prKey(pr.repo, pr.number))) }));
     const key = prs.map((p) => `${p.number}:${p.glance}`).join(',');
     if (key === this.paddKey) return;
     this.paddKey = key;

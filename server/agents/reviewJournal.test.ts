@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport, QaReview } from '../../shared/types';
-import { foldReview, resumedFacts, REVIEW_INTERRUPTED, type ReviewFact, reviewRecovery, reviewView } from './reviewJournal';
+import { foldReview, leftWithoutVerdict, resumedFacts, REVIEW_INTERRUPTED, type ReviewFact, reviewRecovery, reviewView } from './reviewJournal';
 
 const report: QaReport = { verdict: 'pass', summary: 'Works.', checks: [], commands: [] } as unknown as QaReport;
 const reported = (verdict: 'pass' | 'fail'): ReviewFact => ({ kind: 'reported', verdict, officer: 'Lt. Quintero', body: 'QA passed', failedRounds: verdict === 'pass' ? 0 : 1, report, screenshots: [], sha: 'abc' });
@@ -88,6 +88,49 @@ describe('the board’s review, from the journal', () => {
     for (const status of ['queued', 'testing', 'failed', 'error'] as const) expect(foldReview([{ kind: 'imported', review: { ...saved, status } }]).phase).toBe(status);
     // and goes on from there like any other
     expect(foldReview([{ kind: 'imported', review: saved }, asked, { kind: 'prechecking' }, { kind: 'precheck-skipped' }]).view).toMatchObject({ status: 'passed', report });
+  });
+});
+
+describe('a review ended without a verdict', () => {
+  const unjudged: ReviewFact = { kind: 'ended', error: 'Finished without a QA report.', noVerdict: true };
+
+  it('says so on the board, for the captain, and a re-test asks for it afresh', () => {
+    expect(view([...tested, unjudged])).toMatchObject({ status: 'error', error: 'Finished without a QA report.', noVerdict: true });
+    expect(view([...tested, { kind: 'ended', error: 'Stopped' }])?.noVerdict).toBeUndefined();
+    const again = view([...tested, unjudged, { kind: 'follow-up', followUp: { kind: 'needs-you', reason: 'r' } }, asked]);
+    expect(again).toMatchObject({ status: 'queued' });
+    expect(again?.noVerdict).toBeUndefined();
+    expect(again?.followUp).toBeUndefined();
+  });
+});
+
+describe('leftWithoutVerdict', () => {
+  const testing = foldReview(tested);
+  const reviewer = { id: 'qa_p', status: 'working' as const };
+  const at = { closing: false, over: false };
+
+  it('is a review under test once its reviewer’s session is over: Ops done with their last turn, or they’re done or failed', () => {
+    expect(leftWithoutVerdict(testing, reviewer, { ...at, over: true })).toBe(true);
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'done' }, at)).toBe(true);
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'error' }, at)).toBe(true);
+  });
+
+  it('isn’t while they’re at work, or held for the plan’s limit', () => {
+    expect(leftWithoutVerdict(testing, reviewer, at)).toBe(false);
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'stopped', held: { until: 5 } }, { ...at, over: true })).toBe(false);
+  });
+
+  it('isn’t once the captain stopped them, the PR’s gone, or while Focus shuts down', () => {
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'stopped' }, { ...at, over: true })).toBe(false);
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'done', prGone: 'merged' }, { ...at, over: true })).toBe(false);
+    expect(leftWithoutVerdict(testing, { ...reviewer, status: 'done' }, { closing: true, over: true })).toBe(false);
+  });
+
+  it('isn’t a review that isn’t under test, or is under test by someone else', () => {
+    for (const facts of [[asked], tested.slice(0, 2), [...tested, reported('pass')], [...tested, { kind: 'ended', error: 'x' } as ReviewFact]]) {
+      expect(leftWithoutVerdict(foldReview(facts), { ...reviewer, status: 'done' }, { ...at, over: true })).toBe(false);
+    }
+    expect(leftWithoutVerdict(testing, { id: 'qa_other', status: 'done' }, { ...at, over: true })).toBe(false);
   });
 });
 

@@ -182,17 +182,22 @@ describe('checklistGlance', () => {
 
 describe('prGlance', () => {
   it('is how it ended, once it has', () => {
-    expect(prGlance({ outcome: 'merged' }, 'failed')).toBe('merged');
+    expect(prGlance({ outcome: 'merged' }, { status: 'failed' })).toBe('merged');
     expect(prGlance({ outcome: 'closed' }, undefined)).toBe('closed');
   });
 
   it('is how QA has it while it’s open', () => {
-    expect(prGlance({}, 'queued')).toBe('testing');
-    expect(prGlance({}, 'testing')).toBe('testing');
-    expect(prGlance({}, 'passed')).toBe('passed');
-    expect(prGlance({}, 'failed')).toBe('failed');
-    expect(prGlance({}, 'error')).toBe('open');
+    expect(prGlance({}, { status: 'queued' })).toBe('testing');
+    expect(prGlance({}, { status: 'testing' })).toBe('testing');
+    expect(prGlance({}, { status: 'passed' })).toBe('passed');
+    expect(prGlance({}, { status: 'failed' })).toBe('failed');
+    expect(prGlance({}, { status: 'error' })).toBe('open');
     expect(prGlance({}, undefined)).toBe('open');
+  });
+
+  it('is no verdict once QA’s session ended without one', () => {
+    expect(prGlance({}, { status: 'error', noVerdict: true })).toBe('no-verdict');
+    expect(prGlance({ outcome: 'merged' }, { status: 'error', noVerdict: true })).toBe('merged');
   });
 });
 
@@ -248,6 +253,15 @@ describe('goalMove', () => {
     for (const prs of [[pr(44, 'testing')], [pr(44, 'passed')], []]) expect(goalMove(lead('done'), prs, card)).toEqual({ holder: 'you', why: 'A card for you: Which colours?', sign: 'Your turn' });
     // what only the captain can answer still says so
     expect(goalMove(lead('error', { error: 'No repos' }), [], card)).toMatchObject({ holder: 'you', why: 'Hit a problem: No repos' });
+  });
+
+  it('is the captain’s, with its reason, once QA ended without a verdict, even while QA tests another of the slice’s', () => {
+    const reason = 'Lt. Reyes ended QA on #35 without a verdict';
+    expect(goalMove(lead('done'), [{ number: 35, state: 'no-verdict', reason }], undefined)).toEqual({ holder: 'you', why: `${reason}: send it to QA again.`, sign: 'QA no verdict' });
+    expect(goalMove(lead('done'), [pr(34, 'testing'), { number: 35, state: 'no-verdict', reason }], undefined)).toMatchObject({ holder: 'you', why: `${reason}: send it to QA again.` });
+    expect(goalMove(lead('done'), [pr(35, 'no-verdict')], undefined).why).toBe('QA ended without a verdict on #35: send it to QA again.');
+    // the lead at work still holds it
+    expect(goalMove(lead('working'), [pr(35, 'no-verdict')], undefined).holder).toBe('lead');
   });
 
   it('is the captain’s otherwise: a pass to merge, then a fail, then the turn that’s ended', () => {

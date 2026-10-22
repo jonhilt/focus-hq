@@ -205,7 +205,12 @@ export class Core {
    * queued gets a look in (the agent themselves included, once their fiber has gone).
    */
   runFor(id: string, work: Effect.Effect<void, never, ManagerServices>): Fiber.Fiber<void> {
-    const after = Effect.sync(() => this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.seating.schedule())))));
+    const after = Effect.sync(() => {
+      // a reviewer's work over, done or failed, with their review still under test: it ends without a verdict
+      const agent = this.store.agents.get(id);
+      if (agent) this.reviews.sessionOver(agent);
+      this.background(Effect.yieldNow.pipe(Effect.andThen(Effect.sync(() => this.seating.schedule()))));
+    });
     return this.runtime.runSync(FiberMap.run(this.runs, id, work.pipe(Effect.ensuring(after)), { onlyIfMissing: true }));
   }
 

@@ -15,7 +15,7 @@ import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { PROOF_MS, prove } from '../qaProof';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
-import { type Reported, type ReviewFact, type ReviewRecovery, resumedFacts, reviewRecovery } from '../reviewJournal';
+import { leftWithoutVerdict, type Reported, type ReviewFact, type ReviewRecovery, resumedFacts, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
 import { QaChat, Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
@@ -348,13 +348,25 @@ export class Reviews extends Part {
     });
   }
 
-  /** Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. */
+  /**
+   * Records the QA officer's verdict, posts it on the pull request, and moves on to the next review. Their session's
+   * over: a review it leaves under test, with no report, or with Ops failing part way through finishing it, ends
+   * without a verdict and goes to the captain (`leftWithoutVerdict`).
+   */
   finishReview(agent: Agent, structured: unknown, text: string): Effect.Effect<void, never, ManagerServices> {
+    return this.takeReport(agent, structured, text).pipe(
+      Effect.catchDefect((defect) => Effect.sync(() => this.endWithoutVerdict(agent, `Ops couldn't finish their report: ${errorMessage(defect)}`))),
+      Effect.tap(() => Effect.sync(() => this.sessionOver(agent, true))),
+    );
+  }
+
+  /** Takes the QA officer's report: proves it, keeps their screenshots, and records and delivers the verdict. */
+  private takeReport(agent: Agent, structured: unknown, text: string): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       const number = agent.issue.number;
       const said = parseQaReport(structured, text);
       if (!said) {
-        this.core.sessions.fail(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
+        this.endWithoutVerdict(agent, 'Finished without a QA report. Send them a message to ask for one, or send the PR to QA again.');
         return;
       }
       // the PR merged or closed while they were at it: a verdict now would land on a PR that's gone
@@ -577,6 +589,26 @@ export class Reviews extends Part {
   fixEnded(agent: Agent, outcome: Extract<QaLoopEvent, { kind: 'fix-ended' }>['outcome']): void {
     const review = this.fixing(agent);
     if (review) this.background(this.qaNext(review, { kind: 'fix-ended', by: agent.name, outcome }));
+  }
+
+  /**
+   * Ends the review `agent` left under test without a verdict, now their session's over (`over`: Ops is done with their
+   * last turn), and hands it to the captain: their station says why, and the next review in line starts.
+   */
+  sessionOver(agent: Agent, over = false): void {
+    if (agent.task !== 'review') return;
+    if (!leftWithoutVerdict(this.store.review(prKey(agent.repo, agent.issue.number)), agent, { closing: this.core.closing, over })) return;
+    this.endWithoutVerdict(agent, 'Their session ended without a QA report. Send the PR to QA again.');
+  }
+
+  /** The review under test ends without a verdict, the captain's to send to QA again: in a 🙋 toast naming the PR and the reviewer. */
+  private endWithoutVerdict(agent: Agent, error: string): void {
+    const key = prKey(agent.repo, agent.issue.number);
+    const review = this.store.review(key).phase === 'testing' ? this.record(key, { kind: 'ended', error, noVerdict: true }) : undefined;
+    if (review) this.core.triages.needsYou(review, `${agent.name} ended QA on #${review.number} without a verdict`);
+    // their station: failed, saying why (or as it was, if it already says so), and the next review in line starts
+    if (agent.status === 'error') this.reviewEnded(agent, error);
+    else this.core.sessions.fail(agent, error);
   }
 
   /** A review that ended without a verdict (stopped, failed, or its PR went away). */

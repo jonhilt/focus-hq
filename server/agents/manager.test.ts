@@ -284,6 +284,95 @@ describe('AgentManager', () => {
     await until(() => store.reviews.get(prKey(other.repo, other.number))?.status === 'testing');
   });
 
+  // docs/qa.md: "A review its reviewer's session leaves without a verdict … goes to the captain"
+  describe('a QA review left without a verdict', () => {
+    const pass = { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] };
+    async function underTest(workspace: WorkspaceOps = demoWorkspace) {
+      const o = focus(workspace);
+      const [pr] = await Effect.runPromise(Effect.gen(function* () {
+        return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+      }).pipe(Effect.provide(demoLayer)));
+      const key = prKey(pr.repo, pr.number);
+      const toasts = vi.spyOn(Hub.prototype, 'toast');
+      o.agents.requestReview(o.project.id, pr.repo, pr.number, pr.title);
+      await until(() => o.claude.turns.length === 1 && o.store.reviews.get(key)?.status === 'testing');
+      const qa = o.store.agent(o.store.reviews.get(key)!.agentId!);
+      const raised = () => toasts.mock.calls.filter(([, text]) => typeof text === 'string' && text.startsWith(`🙋 ${pr.repo.split('/')[1]}#${pr.number} needs you`));
+      return { ...o, pr, key, qa, toasts, raised };
+    }
+    /** The board's review, and what the captain hears, once it's ended without a verdict. */
+    const expectRaised = (o: Awaited<ReturnType<typeof underTest>>) => {
+      const reason = `${o.qa.name} ended QA on #${o.pr.number} without a verdict`;
+      expect(o.store.reviews.get(o.key)).toMatchObject({ status: 'error', noVerdict: true, followUp: { kind: 'needs-you', reason } });
+      expect(o.raised().map(([, text]) => text)).toEqual([`🙋 ${o.pr.repo.split('/')[1]}#${o.pr.number} needs you: ${reason}`]);
+    };
+
+    it('ends when the reviewer’s turn ends with no report, and goes to the captain', async () => {
+      const o = await underTest();
+      o.claude.turns[0].end({ ok: true, summary: 'All done here.' });
+      await until(() => o.store.reviews.get(o.key)?.status === 'error');
+      expectRaised(o);
+      expect(o.store.agent(o.qa.id).status).toBe('error');
+      o.toasts.mockRestore();
+    });
+
+    it('ends when Ops dies finishing a report it parsed, before the verdict’s recorded', async () => {
+      const o = await underTest({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts']) });
+      // reading which files QA opened throws: a bug part way through finishing the report
+      o.agents.readTranscript = () => {
+        throw new Error('transcript gone');
+      };
+      o.claude.turns[0].end({ ok: true, summary: '', structured: { ...pass, files: [{ file: 'src/cart.ts', tests: 'none', checked: 'read it' }] } });
+      await until(() => o.store.reviews.get(o.key)?.status === 'error');
+      expectRaised(o);
+      expect(o.store.reviews.get(o.key)?.error).toContain('transcript gone');
+      expect(o.store.review(o.key).reported).toBeUndefined();
+      o.toasts.mockRestore();
+    });
+
+    it('ends when its reviewer is done or failed with it still under test', async () => {
+      const o = await underTest();
+      const core = Reflect.get(o.agents, 'core') as { update(agent: Agent, patch: Partial<Agent>): void; reviews: { sessionOver(agent: Agent): void } };
+      core.update(o.qa, { status: 'done' });
+      core.reviews.sessionOver(o.store.agent(o.qa.id));
+      expectRaised(o);
+      o.toasts.mockRestore();
+    });
+
+    it('is sent to QA afresh by a re-test, whose verdict clears what the captain was asked', async () => {
+      const o = await underTest();
+      o.claude.turns[0].end({ ok: true, summary: '' });
+      await until(() => o.store.reviews.get(o.key)?.status === 'error');
+      o.agents.requestReview(o.project.id, o.pr.repo, o.pr.number, o.pr.title, undefined, true);
+      expect(o.store.reviews.get(o.key)).toMatchObject({ status: 'queued' });
+      await until(() => o.claude.turns.length === 2);
+      o.claude.turns[1].end({ ok: true, summary: '', structured: pass });
+      await until(() => o.store.reviews.get(o.key)?.status === 'passed');
+      const review = o.store.reviews.get(o.key);
+      expect(review?.followUp).toBeUndefined();
+      expect(review?.noVerdict).toBeUndefined();
+      o.toasts.mockRestore();
+    });
+
+    it('isn’t the captain’s when they stopped it, or its PR merged meanwhile', async () => {
+      const stopped = await underTest();
+      stopped.agents.stop(stopped.qa.id);
+      await until(() => stopped.store.reviews.get(stopped.key)?.status === 'error');
+      expect(stopped.store.reviews.get(stopped.key)).toMatchObject({ error: 'Stopped by the captain' });
+      expect(stopped.store.reviews.get(stopped.key)?.noVerdict).toBeUndefined();
+      expect(stopped.raised()).toEqual([]);
+      stopped.toasts.mockRestore();
+
+      const merged = await underTest();
+      merged.agents.prClosed(merged.pr.repo, merged.pr.number, true, 'captain', merged.pr.headSha);
+      await until(() => merged.store.agent(merged.qa.id).status !== 'working');
+      await new Promise((r) => setTimeout(r, 20));
+      expect(merged.store.reviews.get(merged.key)).toBeUndefined();
+      expect(merged.raised()).toEqual([]);
+      merged.toasts.mockRestore();
+    });
+  });
+
   it('tests a goal’s PR with its slice’s other PRs checked out beside it, and clears them all away once it merges', async () => {
     const checkouts: string[] = [];
     const removed: string[] = [];

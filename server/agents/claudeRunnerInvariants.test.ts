@@ -77,8 +77,8 @@ const steady = async (read: () => unknown) => {
   }
 };
 
-/** A session; `only`, the actions offered, by name, when a check is after one thing. */
-const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
+/** A session; `only`, the actions offered, by name, when a check is after one thing; `asked`, asked for an answer, as QA's is for its report. */
+const sessionOf = (only?: RegExp, except?: RegExp, asked = false): Subject<Said> => ({
   name: 'session',
   start: (start) => {
     const taken: string[] = [];
@@ -105,7 +105,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
           if (e.kind === 'ended') told.delete(e.id);
         },
       };
-      const session: AgentSession = new ClaudeRunner(new BrowserPool()).start(request(resume), hooks);
+      const session: AgentSession = new ClaudeRunner(new BrowserPool()).start({ ...request(resume), ...(asked && { outputSchema: { type: 'object' } }) }, hooks);
       void session.done.then((o) => (ended = o.ok ? 'done' : (o.error ?? 'failed')));
       const said = (): Said => ({
         taken: sorted(taken),
@@ -136,6 +136,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
             },
           },
           { name: 'the turn ends', run: claude('the turn ends', (c) => c.endTurn()) },
+          ...(asked ? [{ name: 'the turn ends with its answer', run: claude('the turn ends', (c) => c.endTurn({ verdict: 'pass' })) }] : []),
           { name: 'the turn starts a command in the background', run: claude('a command starts', (c) => c.startTask('local_bash')) },
           { name: 'the turn starts a workflow', run: claude('a workflow starts', (c) => c.startTask('local_workflow')) },
           { name: 'a background task reports', run: claude('a task reports', (c) => c.taskEnds(true)) },
@@ -251,6 +252,30 @@ describe('a Claude Code session, under Focus’s rule for two things at once', (
 
   it('ends two things at once as one after the other would', async () => {
     await checkAtOnce(session, { runs: 40, prefix: 5 });
+  });
+
+  // docs/qa.md: "A reviewer's session is over once its report is in, whatever it left running in the background"
+  it('ends a session asked for an answer once the answer’s in, and what it left in the background with it', async () => {
+    const s = await sessionOf(undefined, undefined, true).start(now);
+    for (const name of ['the turn starts a command in the background', 'the turn ends with its answer']) {
+      await Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await s.settle();
+    }
+    const said = s.durable();
+    s.close?.();
+    expect(said).toMatchObject({ running: [], ended: 'done' });
+  });
+
+  it('keeps a session listening past an answerless turn while a command it left runs, asked for an answer or not', async () => {
+    const s = await sessionOf(undefined, undefined, true).start(now);
+    for (const name of ['the turn starts a command in the background', 'the turn ends']) {
+      await Promise.resolve().then(() => s.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await s.settle();
+    }
+    const said = s.durable();
+    s.close?.();
+    expect(said).toMatchObject({ running: ['local_bash'], listening: true });
+    expect(said.ended).toBeUndefined();
   });
 
   // Found on main by the check above (docs/invariants.md): the turn's result says nothing's queued, as the message is

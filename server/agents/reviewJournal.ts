@@ -1,5 +1,5 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
-import type { FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
+import type { AgentStatus, FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
 import type { Recovery } from './runJournal';
 
 // A QA review's journal, pure: the facts Ops records about one pull request's review (data/runs/reviews/<pr>.jsonl),
@@ -43,8 +43,11 @@ export type ReviewFact =
   | { kind: 'posted'; url?: string }
   /** Everyone who hears of a verdict has: the ledger, the PR's lead, and whoever fixes a failed one. */
   | { kind: 'announced' }
-  /** It ended without a verdict: stopped, failed, or interrupted when it couldn't carry on. */
-  | { kind: 'ended'; error: string }
+  /**
+   * It ended without a verdict: stopped, failed, or interrupted when it couldn't carry on. `noVerdict`: its reviewer's
+   * session was over without one (no report, or Ops couldn't finish it), so it's the captain's (`leftWithoutVerdict`).
+   */
+  | { kind: 'ended'; error: string; noVerdict?: boolean }
   /** What Ops is doing about a failed PR: a developer fixing it, or you wanted (none: nothing now). */
   | { kind: 'follow-up'; followUp?: Exclude<QaFollowUp, { kind: 'triaging' }> }
   /** The PR's stuck: the room's operations officer comes over to look. */
@@ -127,6 +130,11 @@ function requested(e: Event<'requested'>, last: QaReview | undefined): QaReview 
   };
 }
 
+/** The board's review once it's ended without a verdict. */
+function endedView(view: QaReview, e: Event<'ended'>): QaReview {
+  return { ...view, status: 'error', error: e.error, finishedAt: e.t ?? 0, ...(e.noVerdict && { noVerdict: true }) };
+}
+
 /** The board's review once the verdict's posted. */
 function verdictView(view: QaReview, r: Reported & { url?: string }, t: number): QaReview {
   return { ...view, status: r.verdict === 'pass' ? 'passed' : 'failed', report: r.report, screenshots: r.screenshots, commentUrl: r.url, files: r.files, failedRounds: r.failedRounds, finishedAt: t, error: undefined };
@@ -182,7 +190,7 @@ export const reviewMachine = setup({
       on: {
         prechecking: 'precheck',
         seated: { target: 'seated', actions: [assign(({ event }) => ({ agent: event.agent, error: undefined })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, agentId: e.agent })))] },
-        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => endedView(v, e)))] },
       },
     },
     precheck: {
@@ -208,14 +216,14 @@ export const reviewMachine = setup({
         restarted: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
         unseated: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
         testing: { target: 'testing', actions: [assign(({ event }) => ({ sha: event.sha })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'testing', sha: e.sha, title: e.title ?? v.title, error: undefined })))] },
-        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => endedView(v, e)))] },
       },
     },
     testing: {
       on: {
         unseated: { target: 'queued', actions: assign(({ context }) => onView(context, (v) => ({ ...v, status: 'queued', agentId: undefined }))) },
         reported: { target: 'reported', actions: assign(({ event: { type: _, kind: __, t: ___, ...reported } }) => ({ reported })) },
-        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => ({ ...v, status: 'error', error: e.error, finishedAt: e.t ?? 0 })))] },
+        ended: { target: 'error', actions: [assign(({ event }) => ({ error: event.error })), assign(({ context, event: e }) => onView(context, (v) => endedView(v, e)))] },
       },
     },
     reported: {
@@ -290,6 +298,29 @@ export function resumedFacts(review: ReviewState, agent: string): ReviewFact[] {
   if (review.phase !== 'error') return [];
   const { projectId, repo, number, title, openedByOffice } = view;
   return [{ kind: 'requested', projectId, repo, number, title, ...(openedByOffice !== undefined && { openedByOffice }) }, { kind: 'seated', agent }, testing];
+}
+
+/** A reviewer as `leftWithoutVerdict` reads them. */
+export interface Reviewer {
+  id: string;
+  status: AgentStatus;
+  /** On hold for your plan's usage limit: their turn carries on once it resets. */
+  held?: unknown;
+  /** Their pull request merged or closed: the review's gone with it. */
+  prGone?: string;
+}
+
+/**
+ * Whether a review is left under test without a verdict by `reviewer`, whose session is over: `over` once Ops has
+ * done all it does with their last turn (finishing their report included), or once they're done or failed. Then it
+ * ends without a verdict and goes to the captain. Not while they're at work or held for your plan's limit, nor once
+ * the captain stopped them (that ends it already), its pull request's gone, or Focus is shutting down (`reviewRecovery`
+ * picks it up). Seen on jonhilt/ops#35: the reviewer said they were done, and the PR said QA testing for good.
+ */
+export function leftWithoutVerdict(review: ReviewState, reviewer: Reviewer, { closing, over }: { closing: boolean; over: boolean }): boolean {
+  if (review.phase !== 'testing' || review.agent !== reviewer.id || closing || reviewer.prGone || reviewer.held) return false;
+  if (reviewer.status === 'stopped') return false;
+  return over || reviewer.status === 'done' || reviewer.status === 'error';
 }
 
 /** What Ops does at startup with a review its journal says was under way. */

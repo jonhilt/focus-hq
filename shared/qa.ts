@@ -11,7 +11,8 @@ export interface QaBadge {
 
 /**
  * What a PR card shows about QA. A verdict on an older commit than the PR's head is stale. A fail says who it went back
- * to, that the room's operations officer is looking into why it's stuck, or that Ops gave up on it.
+ * to, that the room's operations officer is looking into why it's stuck, or that Ops gave up on it. A review whose
+ * reviewer's session ended without a verdict needs the captain; one stopped or cut off otherwise couldn't finish.
  */
 export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>): QaBadge {
   if (!review) return { state: 'none', label: 'not tested' };
@@ -21,6 +22,8 @@ export function qaBadge(review: QaReview | undefined, pr: Pick<PullRequest, 'hea
     case 'testing':
       return { state: 'testing', label: 'QA testing' };
     case 'error':
+      // its reviewer's session was over with no verdict: the captain's to send to QA again
+      if (review.noVerdict) return { state: 'needs-you', label: 'QA ended without a verdict' };
       return { state: 'error', label: 'QA couldn’t finish' };
     case 'passed':
     case 'failed': {

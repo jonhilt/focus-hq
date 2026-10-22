@@ -55,16 +55,18 @@ export class StandInClaude {
     private readonly later: Later,
     private readonly plays: Plays = {},
   ) {
-    options.abortController?.signal.addEventListener('abort', () => {
-      // the process is killed, and what it had running in the background and waiting for a turn with it
-      this.dead = true;
-      this.inputEnded = true;
-      this.turn = false;
-      this.tasks = [];
-      this.queue = [];
-      this.wake?.();
-    });
+    options.abortController?.signal.addEventListener('abort', () => this.kill());
     void this.read(prompt);
+  }
+
+  /** The process is killed, and what it had running in the background and waiting for a turn with it. */
+  private kill(): void {
+    this.dead = true;
+    this.inputEnded = true;
+    this.turn = false;
+    this.tasks = [];
+    this.queue = [];
+    this.wake?.();
   }
 
   get busy(): number {
@@ -119,9 +121,10 @@ export class StandInClaude {
     if (!this.dead) this.emit({ type: 'user', parent_tool_use_id: null, message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: id, is_error: answer?.behavior !== 'allow', content: answer?.behavior === 'allow' ? 'ok' : 'declined' }] } });
   }
 
-  endTurn(): void {
+  /** The turn ends; with `answer`, the answer to a session asked for one (`outputFormat`), as its result carries it. */
+  endTurn(answer?: unknown): void {
     if (this.dead || !this.turn) throw new Error('no turn under way');
-    this.emit({ type: 'result', subtype: 'success', result: 'Done', is_error: false, duration_ms: 1000, num_turns: 1, total_cost_usd: 0, queued_turn_count: this.queue.length });
+    this.emit({ type: 'result', subtype: 'success', result: 'Done', is_error: false, duration_ms: 1000, num_turns: 1, total_cost_usd: 0, queued_turn_count: this.queue.length, ...(answer !== undefined && this.options.outputFormat && { structured_output: answer }) });
     this.turn = false;
     if (this.queue.length) this.startTurn(this.queue.splice(0));
     else this.idle();
@@ -199,12 +202,17 @@ export class StandInClaude {
   }
 
   async *messages(): AsyncGenerator<Record<string, unknown>> {
-    for (;;) {
-      if (this.dead) throw new Error('Claude Code process aborted by user');
-      const m = this.out.shift();
-      if (m) yield m;
-      else if (this.exited) return;
-      else await new Promise<void>((resolve) => (this.wake = resolve));
+    try {
+      for (;;) {
+        if (this.dead) throw new Error('Claude Code process aborted by user');
+        const m = this.out.shift();
+        if (m) yield m;
+        else if (this.exited) return;
+        else await new Promise<void>((resolve) => (this.wake = resolve));
+      }
+    } finally {
+      // the runner leaving the stream ends the process, as the SDK's cleanup does
+      if (!this.exited) this.kill();
     }
   }
 

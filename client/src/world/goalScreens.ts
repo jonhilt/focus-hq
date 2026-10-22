@@ -43,7 +43,7 @@ export interface StationView {
   crew?: { who: CrewView; role: string }[];
   next?: string;
   /** The slice's pull requests and how each stands (the screen over its pod's). */
-  prs?: { label: string; number: number; state: PrGlance }[];
+  prs?: { label: string; number: number; state: PrGlance; reason?: string }[];
   /** Whose move it is on its goal, while it has one (`whoseMove`). */
   whose?: Whose;
 }
@@ -300,6 +300,7 @@ export const PR_LOOK: Record<PrGlance, { color: string; word: string }> = {
   testing: { color: TONE['in-session'], word: 'QA testing' },
   passed: { color: TONE['your-turn'], word: 'QA passed' },
   failed: { color: TONE.stopped, word: 'QA failed' },
+  'no-verdict': { color: TONE['needs-you'], word: 'QA no verdict' },
   merged: { color: LCARS.lilac, word: 'merged' },
   closed: { color: TONE.free, word: 'closed' },
 };

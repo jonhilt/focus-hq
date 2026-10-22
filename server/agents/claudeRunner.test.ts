@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy, TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, answerEnds, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { WorkflowPermits } from './workflows';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
@@ -124,6 +124,21 @@ describe('holdsInput', () => {
 
   it('doesn’t once nothing does', () => {
     expect(holdsInput([])).toBe(false);
+  });
+});
+
+describe('answerEnds', () => {
+  const answer = { isError: false, queued: 0, structured: { verdict: 'pass' } };
+
+  it('ends a session asked for an answer once its turn gives it, with nothing waiting', () => {
+    expect(answerEnds(true, answer)).toBe(true);
+  });
+
+  it('doesn’t without the answer, with a message waiting, on an error, or when no answer was asked for', () => {
+    expect(answerEnds(true, { ...answer, structured: undefined })).toBe(false);
+    expect(answerEnds(true, { ...answer, queued: 1 })).toBe(false);
+    expect(answerEnds(true, { ...answer, isError: true })).toBe(false);
+    expect(answerEnds(false, answer)).toBe(false);
   });
 });
 

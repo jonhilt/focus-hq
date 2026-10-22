@@ -77,6 +77,16 @@ export function runningInBackground(listed: string[], workflows: number): string
  */
 export const showsHeard = (msg: { type: string }): boolean => msg.type === 'assistant';
 
+/**
+ * Whether a turn's result ends a session asked for an answer (`expects`, QA's report): the answer's in and nothing
+ * waits for another turn. Nothing it left in the background matters then. On jonhilt/ops#35 a QA officer's `docker
+ * build` hung in the background, so after the report the session kept listening for it forever and the review stayed
+ * under test (jonhilt/focus#629).
+ */
+export function answerEnds(expects: boolean, result: Pick<TurnResult, 'isError' | 'queued' | 'structured'>): boolean {
+  return expects && !result.isError && result.queued === 0 && result.structured !== undefined;
+}
+
 /** How long a session that's done waits, once its last background task ends, for the turn that takes its result. */
 export const REPORT_TURN_GRACE_MS = 60_000;
 
@@ -412,6 +422,8 @@ export class ClaudeRunner implements AgentRunner {
             so = withResult(so, result);
             // how full the context is now, asked while the session's still there to answer
             if (!cloud) await reportContext(q, hooks);
+            // leaving the stream ends the session, and whatever it still runs in the background with it
+            if (answerEnds(!!req.outputSchema, result)) break;
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
             // CLI has nothing queued. Anything still in our queue is delivered before the input reports it is done.
             listening.turnEnded(result.queued > 0);

@@ -157,6 +157,8 @@ export interface QaReview {
   /** The QA officer's session for this review, while their record is around. */
   agentId?: string;
   error?: string;
+  /** It ended without a verdict once its reviewer's session was over (no report, or Ops couldn't finish it): the captain's. */
+  noVerdict?: boolean;
   /** One of Focus's agents opened the PR, so a failed verdict may go back to a developer. Teammates' PRs never do. */
   openedByOffice?: boolean;
   /** Rounds of QA this PR has failed so far, this one included once it's in (missing = none). */
