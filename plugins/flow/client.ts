@@ -7,6 +7,16 @@ import { flowTag } from './tags';
 
 const flow: ClientPlugin = {
   id: FLOW,
+  about: {
+    name: 'Flow',
+    summary: 'Shows where each open goal’s time has gone so far, and what it’s waiting on now.',
+    adds: [
+      'A readout on each goal’s card, a tag in Comms',
+      'A strip along the bottom of each goal board',
+    ],
+    cost: 'free',
+    costDetail: 'No model calls: it works from the ledger and the goals’ turns.',
+  },
   goal: { tag: flowTag, board: flowStrip },
 };
 

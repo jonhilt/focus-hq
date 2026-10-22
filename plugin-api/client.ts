@@ -6,7 +6,7 @@ import { api } from '../client/src/net/api';
 
 export * from './shared';
 export * from './browser';
-export type { ClientPlugin, EngineeringGo, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HudStat, HallScreen, PluginSpace, ScreenPart, ScreenView, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
+export type { ClientPlugin, EngineeringGo, PluginAbout, PluginCost, EngineeringPart, EngineeringView, GoalPart, GoalStrip, GoalTagPlace, HallHost, HudStat, HallScreen, PluginSpace, ScreenPart, ScreenView, ShipHost, ShipPart, StationSays } from '../client/src/plugins';
 export { goalTags, pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';

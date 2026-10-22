@@ -38,6 +38,20 @@ function climbNow(ui: Ui, now: NonNullable<ClimbCard['now']>, pr: ClimbCard['pr'
     : h('div', { class: 'row' }, h('span', { class: 'grow' }, now.line), link);
 }
 
-const climber: ClientPlugin = { id: CLIMBER, engineering: { card: climberView } };
+const climber: ClientPlugin = {
+  id: CLIMBER,
+  about: {
+    name: 'Climber',
+    summary: 'Main engineering’s climbing engineer moves Focus’s own repo up its scorecard, one pull request at a time.',
+    adds: [
+      'The climber’s card on the engineering panel, with Keep climbing',
+      'Pull requests on Focus’s own repo, each waiting for you to merge',
+      'Needs the scorecard plugin',
+    ],
+    cost: 'background',
+    costDetail: 'While Keep climbing is on, it runs a full agent session for each climb, one after another: the most tokens of any plugin. Off, it spends nothing.',
+  },
+  engineering: { card: climberView },
+};
 
 export default climber;

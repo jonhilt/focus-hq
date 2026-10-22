@@ -12,6 +12,16 @@ const usage = (): Usage | null => pluginState<Usage>(USAGE) ?? null;
 
 const plugin: ClientPlugin = {
   id: USAGE,
+  about: {
+    name: 'Plan usage',
+    summary: 'Your Claude plan’s usage, on the HUD wherever you are.',
+    adds: [
+      'A usage stat on the HUD',
+      'A readout on the engineering panel and gauges on the MSD',
+    ],
+    cost: 'free',
+    costDetail: 'Asks Claude Code for your usage every few minutes without sending it a prompt, so it spends no tokens.',
+  },
   hud: () => {
     const stat = usageStat(usage());
     return stat && { text: `◔ ${stat.text}`, ...(stat.tone !== 'ok' && { tone: stat.tone }), title: 'Your Claude plan’s usage' };

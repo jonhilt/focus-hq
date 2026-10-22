@@ -61,6 +61,17 @@ function writerCard(ui: Ui): HTMLElement {
 
 const briefings: ClientPlugin = {
   id: BRIEFINGS,
+  about: {
+    name: 'Briefings',
+    summary: 'Leads can walk you through a concept with an animated, narrated explainer on their station’s screen.',
+    adds: [
+      'The leads’ explain tool, in projects it’s on for',
+      'A voice-over for explainers up close',
+      'The writer’s model setting on the engineering panel',
+    ],
+    cost: 'per-turn',
+    costDetail: 'Its explain tool’s long description is read on every turn of every lead in the projects it’s on for. When a lead sends a brief instead of writing the explainer, Ops’ writer writes it on the model you set.',
+  },
   project: { label: 'Briefings', about: 'Leads can walk you through a concept with an animated explainer on their station’s screen, narrated in their voice.' },
   screen: (view) => new BriefingScreen(view),
   engineering: { card: writerCard },

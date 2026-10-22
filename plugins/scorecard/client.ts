@@ -17,6 +17,16 @@ const now = () => glance(scorecards()?.history ?? []);
 
 const scorecard: ClientPlugin = {
   id: SCORECARD,
+  about: {
+    name: 'Scorecard',
+    summary: 'Main engineering’s scorecards of Focus’s own repo: its checks, fences, complexity and Ops’ numbers.',
+    adds: [
+      'Code and Ops views on the engineering panel',
+      'The scorecard on main engineering’s MSD',
+    ],
+    cost: 'free',
+    costDetail: 'No model calls, but it runs Focus’s checks (pnpm run scorecard) after start and on your word, which takes CPU for a few minutes.',
+  },
   engineering: {
     readout: () => {
       const g = now();

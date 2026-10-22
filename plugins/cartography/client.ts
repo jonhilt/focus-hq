@@ -139,6 +139,17 @@ function ship(host: ShipHost): ShipPart | null {
 
 const cartography: ClientPlugin = {
   id: CARTOGRAPHY,
+  about: {
+    name: 'Architecture map',
+    summary: 'Maps each project’s architecture from its code, and lets leads show you the parts a question takes.',
+    adds: [
+      'Maps on the engineering station, and a stellar cartography space in the holodeck',
+      'The leads’ map and statechart tools, in projects it’s on for',
+      'What each goal’s slice does to the map, worked out as a lead’s turn ends',
+    ],
+    cost: 'per-turn',
+    costDetail: 'Its map and statechart tools are read on every turn of every lead in the projects it’s on for. Mapping itself is static analysis; drawing a kept diagram again, when you ask, runs a read-only session.',
+  },
   project: {
     label: 'Architecture map',
     about: `Maps the project's architecture from the model each repo keeps in ${MODEL_FILE}: on the engineering station, in a space you reach through the stellar cartography screen in its holodeck, and its leads' map tool`,

@@ -39,6 +39,17 @@ function toastTurns(ui: Ui): void {
 
 const chiefOfStaff: ClientPlugin = {
   id: CHIEF_OF_STAFF,
+  about: {
+    name: 'Chief of staff',
+    summary: 'Judges each of a goal lead’s turns as it ends, and puts what needs you in Comms, with words ready for you to send.',
+    adds: [
+      'Comms, your inbox (C, the bridge chair)',
+      'A badge on the HUD, and toasts',
+      'Auto-send, per project: its words go to leads without you',
+    ],
+    cost: 'background',
+    costDetail: 'A Haiku call at the end of every lead turn in the projects it’s on for, about a tenth of a cent each: small, but it adds up across busy leads.',
+  },
   project: {
     label: 'Chief of staff',
     about: 'Judges each of a goal lead’s turns as it ends: a card for you, an interrupt, or words for the lead (carry on, or back to them) ready for you to send from Comms. It sends nothing itself',

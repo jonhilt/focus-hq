@@ -17,6 +17,7 @@ import { demoPaceField } from './demoPace';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
+import { pluginsTab } from './pluginsTab';
 import { personalEntries, personalLogTab } from './personalLogTab';
 import { personalLogView } from '../../../shared/personalLog';
 
@@ -53,10 +54,12 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     { key: 'personal-log' as const, label: 'Personal log', readout: String(personalLogView(state.personalLog, Date.now()).open.length) },
     { key: 'new-project' as const, label: 'New project' },
     { key: 'issue' as const, label: 'New issue' },
+    { key: 'plugins' as const, label: 'Plugins', readout: String(state.info?.plugins.length ?? 0) },
     { key: 'settings' as const, label: 'Settings' },
   ];
   let current = tab;
   let selected: string | undefined;
+  let plugin: string | undefined;
   const show = (t: ManagerTab) => {
     current = t;
     nav.show(navItems(), t);
@@ -65,6 +68,7 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
         : t === 'personal-log' ? personalLogTab(ui)
         : t === 'new-project' ? newProjectTab(ui, openProject)
         : t === 'issue' ? issueForm(ui)
+        : t === 'plugins' ? pluginsTab(ui, plugin, openPlugin)
         : settingsTab(ui),
     );
   };
@@ -72,16 +76,20 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     selected = id;
     show('projects');
   };
+  const openPlugin = (id: string) => {
+    plugin = id;
+    show('plugins');
+  };
   ui.panels.open({ title: 'Ready room', body, nav, accent: LCARS.lilac, wide: true });
   show(tab);
   // keep the projects list fresh, but never wipe a form the manager is typing into
-  ui.panels.own(state.on('projects', () => current === 'projects' && !body.contains(document.activeElement) && show('projects')));
+  ui.panels.own(state.on('projects', () => (current === 'projects' || current === 'plugins') && !body.contains(document.activeElement) && show(current)));
   // the personal log's count, and its entries under the jot box, which keeps what's being typed
   ui.panels.own(state.on('personal-log', () => {
     nav.show(navItems(), current);
     body.querySelector('.personal-entries')?.replaceChildren(...personalEntries(ui));
   }));
-  ui.panels.own(state.on('info', () => current === 'settings' && !body.contains(document.activeElement) && show('settings')));
+  ui.panels.own(state.on('info', () => (current === 'settings' || current === 'plugins') && !body.contains(document.activeElement) && show(current)));
 }
 
 /** One project at a time, picked from a list, so the console stays navigable however many projects there are. */

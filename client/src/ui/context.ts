@@ -4,7 +4,7 @@ import type { Place } from '../world/ship';
 import type { Hud } from './hud';
 import type { Panels } from './panels';
 
-export type ManagerTab = 'projects' | 'personal-log' | 'new-project' | 'issue' | 'settings';
+export type ManagerTab = 'projects' | 'personal-log' | 'new-project' | 'issue' | 'plugins' | 'settings';
 export type BoardTab = 'todo' | 'doing' | 'prs';
 
 /** What panels can ask of the app. */

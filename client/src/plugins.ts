@@ -15,6 +15,8 @@ import type { Box } from './world/msd';
 export interface ClientPlugin {
   /** The plugin's id, as the server knows it. */
   id: string;
+  /** What it is and what it costs, in the captain's words, for the ready room's Plugins tab: every plugin of Focus's own has one. */
+  about?: PluginAbout;
   /** What it adds to the engineering station on deck 5. */
   engineering?: EngineeringPart;
   /** What it draws on main engineering's MSD beside the ship, while it's put up there (`ui.showOnMsd({ plugin })`). */
@@ -83,6 +85,28 @@ export interface ClientPlugin {
    * plugin's narrator and ask bar round an explainer), or nothing to add to that page.
    */
   screen?(view: ScreenView): ScreenPart | undefined;
+}
+
+/**
+ * What a plugin's being on costs in tokens, roughly, from least to most to keep an eye on:
+ * - `free`: no model calls at all.
+ * - `on-demand`: model calls only when the captain asks for them (a retro, a chat).
+ * - `per-turn`: it puts lead tools in front of the leads of the projects it's on for, so every turn of theirs reads them.
+ * - `background`: it calls a model by itself, as work goes on, without the captain asking.
+ */
+export type PluginCost = 'free' | 'on-demand' | 'per-turn' | 'background';
+
+/** A plugin, described for the captain choosing whether to switch it on. */
+export interface PluginAbout {
+  /** Its name, in a few words. */
+  name: string;
+  /** What it does for the captain, in a sentence. */
+  summary: string;
+  /** What switching it on adds to the ship: panels, keys, lead tools, what it does by itself. */
+  adds: string[];
+  cost: PluginCost;
+  /** What the cost is spent on, and when, in a sentence: what the captain weighs before switching it on. */
+  costDetail: string;
 }
 
 /** A page a goal's lead put on their station's screen, open up close, as a plugin's `screen` sees it. */
@@ -328,10 +352,13 @@ export type EngineeringGo = (view: string, at?: { anchor?: string; key?: string 
 
 const found = import.meta.glob<{ default: ClientPlugin }>('../../plugins/*/client.ts', { eager: true });
 
+/** Every plugin of Focus's own, switched on or not: the client's built with all of them. */
+export const everyPlugin = (): ClientPlugin[] => Object.values(found).map((module) => module.default);
+
 /** The plugins switched on that have a part in the browser. */
 export function clientPlugins(): ClientPlugin[] {
   const on = new Set(state.info?.plugins ?? []);
-  return Object.values(found).map((module) => module.default).filter((plugin) => on.has(plugin.id));
+  return everyPlugin().filter((plugin) => on.has(plugin.id));
 }
 
 /**

@@ -155,6 +155,16 @@ function ship(host: ShipHost): ShipPart | null {
 
 const astrometrics: ClientPlugin = {
   id: ASTROMETRICS,
+  about: {
+    name: 'State machines',
+    summary: 'Draws Ops’ state machines on a screen in each project’s holodeck, lit where that project’s runs of them are now.',
+    adds: [
+      'A state-machine screen in the holodeck of each project it’s on for',
+      'Up close (E): a tab for each machine',
+    ],
+    cost: 'free',
+    costDetail: 'No model calls: it lays the machines out from Ops’ own code and follows their journals.',
+  },
   project: {
     label: 'State machines',
     about: 'Draws Ops’ state machines (a crew member’s run, what follows a turn, a goal’s slices, QA’s review) on a screen in the project’s holodeck, with where its runs of each are now',

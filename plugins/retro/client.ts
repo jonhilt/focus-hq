@@ -7,6 +7,16 @@ import './retro.css';
 
 const retro: ClientPlugin = {
   id: RETRO,
+  about: {
+    name: 'Retro',
+    summary: 'The chief engineer looks back over frictions in the agents’ sessions and drafts an issue for each that keeps coming back.',
+    adds: [
+      'The Retro view on the engineering panel',
+      'Draft issues for you to accept or reject',
+    ],
+    cost: 'on-demand',
+    costDetail: 'Reads sessions on Opus when you start a retro: a big read each time, nothing in between.',
+  },
   engineering: {
     card: retroCard,
     views: [{

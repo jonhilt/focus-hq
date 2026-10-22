@@ -15,6 +15,16 @@ const talk = (ui: Ui) => {
 
 const numberOne: ClientPlugin = {
   id: NUMBER_ONE,
+  about: {
+    name: 'Number One',
+    summary: 'The ship’s first officer in the ready room, who talks anything through with you and takes your calls hands-free.',
+    adds: [
+      'Number One in the ready room, and their chat (1)',
+      'Hands-free calls, with an OpenAI or TypeSafe key',
+    ],
+    cost: 'on-demand',
+    costDetail: 'A session turn for each message you send them; calls use your OpenAI or TypeSafe key. Nothing while you’re not talking.',
+  },
   legend: [{ key: '1', label: 'Number One' }],
   start({ ui }) {
     // a reply can take a while: say so when it lands while you're elsewhere
