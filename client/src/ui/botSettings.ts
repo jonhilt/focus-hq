@@ -47,6 +47,12 @@ export function botSection(ui: Ui): HTMLElement {
       const keep = bot.token && !(await confirmDialog({ title: 'Make a new bot token?', message: 'The bot’s current token stops working at once: give it the new one.', confirmLabel: 'Make a new one', danger: true }));
       if (!keep) await busy(make, async () => void (madeToken = (await api.newBotToken()).token), ui.error).then(() => latest?.());
     };
+    // or the bot's own token, the one it already sends: pasted here, it's never shown again
+    const ownToken = h('input', { type: 'password', autocomplete: 'off', placeholder: bot.token ? 'or paste a new one of your own' : 'or paste your own', style: 'flex:1' });
+    ownToken.addEventListener('change', () => {
+      madeToken = undefined;
+      sent(ownToken, () => api.changeBot({ token: ownToken.value }));
+    });
     const clearToken = h('button', { class: 'btn small' }, 'Clear');
     clearToken.onclick = () => sent(null, () => api.clearBotToken());
     const copy = h('button', { class: 'btn small' }, 'Copy');
@@ -62,7 +68,7 @@ export function botSection(ui: Ui): HTMLElement {
     fill(el,
       h('div', { class: 'row' }, h('strong', { class: 'label' }, 'Bot'), bot.token && bot.webhook.by ? h('span', { class: 'chip ok' }, 'on') : h('span', { class: 'chip' }, 'off')),
       h('p', { class: 'muted' }, 'A bot speaking for you (the chief of staff’s inbox, on the API): it calls Focus with the token, and hears what changes on its webhook, each delivery signed with the token. Kept on this machine, in secrets.env in Focus’s data folder: never sent back to a browser or handed to agents.'),
-      h('div', { class: 'voice-row' }, h('span', null, 'Token'), setByChip(bot.token, 'FOCUS_BOT_TOKEN'), bot.token === 'env' ? null : make, bot.token === 'captain' ? clearToken : null),
+      h('div', { class: 'voice-row' }, h('span', null, 'Token'), setByChip(bot.token, 'FOCUS_BOT_TOKEN'), bot.token === 'env' ? null : [make, ownToken], bot.token === 'captain' ? clearToken : null),
       madeToken
         ? h('div', { class: 'voice-row' }, h('span', null, ''), h('code', { style: 'user-select:all;word-break:break-all' }, madeToken), copy, h('small', { class: 'muted' }, 'Shown this once: give it to your bot.'))
         : null,

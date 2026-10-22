@@ -44,7 +44,7 @@ What waits on the captain (Comms' queue) is also served to anything outside Focu
 
 ### A bot speaking for the captain
 
-A bot (Grok Bot, over Tailscale) gets the same inbox with a token of its own (`server/bot.ts` guards the routes, the chief of staff serves them). Each of these is set in the ready room's **Settings → Bot** (which makes the token), taking effect at once, or by the environment variable named, which wins ([settings](settings.md)):
+A bot (Grok Bot, over Tailscale) gets the same inbox with a token of its own (`server/bot.ts` guards the routes, the chief of staff serves them). Each of these is set in the ready room's **Settings → Bot** (which makes the token, or takes the bot's own), taking effect at once, or by the environment variable named, which wins ([settings](settings.md)):
 
 - The token (`FOCUS_BOT_TOKEN`): the bot sends it as `Authorization: Bearer <token>` to `GET /api/bot/inbox`, `POST /api/bot/inbox/:id/decide` and `POST /api/bot/inbox/:id/hold`, which work as the routes above; its answers are recorded `via: "api"`. Without the token they answer 401, and with no token set, 404.
 - The webhook (`FOCUS_BOT_WEBHOOK`): a URL Focus posts each change to, within a few seconds, as JSON with `event` and `at`:

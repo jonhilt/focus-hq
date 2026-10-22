@@ -15,8 +15,10 @@ export interface BotStatus {
   publicUrl: { by: SetBy; url?: string };
 }
 
-/** What the captain changes from Settings: a string sets it, null clears it, missing leaves it be. */
+/** What the captain changes from Settings: a string sets it, null (or an empty one) clears it, missing leaves it be. */
 export interface BotChange {
+  /** A token of the captain's own (the bot's they already have), rather than one Focus makes. */
+  token?: string | null;
   webhook?: string | null;
   auth?: string | null;
 }

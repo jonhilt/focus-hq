@@ -31,6 +31,7 @@ function secretsSubject(keep: Keeper): Subject<Kept> {
         return {
           actions: () => [
             { name: 'make a token', run: () => bot.newToken() },
+            { name: 'set a token of my own', run: () => bot.change({ token: 'a-token-of-my-own-1234' }) },
             { name: 'clear the token', run: () => bot.clearToken() },
             { name: 'set the webhook', run: () => bot.change({ webhook: 'https://hook.example/a' }) },
             { name: 'set another webhook', run: () => bot.change({ webhook: 'https://hook.example/b' }) },

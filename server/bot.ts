@@ -44,13 +44,16 @@ export function httpUrl(raw: string): string | undefined {
   }
 }
 
-/** The captain's change to the bot (PATCH /api/settings/bot, any JSON): each of `webhook` and `auth` a string or null, anything else ignored. */
+/** The captain's change to the bot (PATCH /api/settings/bot, any JSON): each of `token`, `webhook` and `auth` a string or null, anything else ignored. */
 export function botChange(body: unknown): BotChange {
   const b: Partial<Record<keyof BotChange, unknown>> = body !== null && typeof body === 'object' ? body : {};
   const one = (v: unknown) => (typeof v === 'string' || v === null ? v : undefined);
-  const [webhook, auth] = [one(b.webhook), one(b.auth)];
-  return { ...(webhook !== undefined && { webhook }), ...(auth !== undefined && { auth }) };
+  const [token, webhook, auth] = [one(b.token), one(b.webhook), one(b.auth)];
+  return { ...(token !== undefined && { token }), ...(webhook !== undefined && { webhook }), ...(auth !== undefined && { auth }) };
 }
+
+/** Shorter than this, a token of the captain's own is refused: it's all that keeps the bot routes closed. */
+export const MIN_TOKEN_LENGTH = 16;
 
 /** A new bot token: 32 random bytes, as base64url. */
 export const newBotToken = (): string => crypto.randomBytes(32).toString('base64url');
@@ -104,14 +107,20 @@ export class BotSetup {
     return { token: this.secret('token').by, webhook: { by: webhook.by, ...(host && { host }) }, auth: this.secret('auth').by, publicUrl: this.publicUrl() };
   }
 
-  /** The captain's change to the webhook or its Authorization header: refused for one an environment variable sets. */
+  /**
+   * The captain's change to the token (one of their own), the webhook or its Authorization header: null or nothing but
+   * spaces clears it. Refused for one an environment variable sets, a webhook that isn't an http(s) address, and a
+   * token shorter than MIN_TOKEN_LENGTH or with spaces in it.
+   */
   change(change: BotChange): BotStatus {
-    if (change.webhook !== undefined && change.webhook !== null && !httpUrl(change.webhook)) throw new Error('The webhook has to be an http(s) address');
-    for (const key of ['webhook', 'auth'] as const) {
-      const value = change[key];
-      if (value === undefined) continue;
-      this.mayChange(key);
-      this.kept.secrets.set(ENV_OF[key], value === null ? undefined : key === 'webhook' ? httpUrl(value) : value);
+    const [token, webhook, auth] = [change.token, change.webhook, change.auth].map((v) => (v === undefined ? undefined : v?.trim() || null));
+    if (webhook && !httpUrl(webhook)) throw new Error('The webhook has to be an http(s) address');
+    if (token && (token.length < MIN_TOKEN_LENGTH || /\s/.test(token))) throw new Error(`A bot token needs at least ${MIN_TOKEN_LENGTH} characters, and no spaces`);
+    const changes = { token, webhook: webhook && httpUrl(webhook), auth };
+    for (const key of ['token', 'webhook', 'auth'] as const) if (changes[key] !== undefined) this.mayChange(key);
+    for (const key of ['token', 'webhook', 'auth'] as const) {
+      const value = changes[key];
+      if (value !== undefined) this.kept.secrets.set(ENV_OF[key], value ?? undefined);
     }
     return this.status();
   }

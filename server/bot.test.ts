@@ -62,6 +62,31 @@ describe('the bot’s setup', () => {
     expect(kept.get('FOCUS_BOT_TOKEN')).toBe('saved');
   });
 
+  it('takes a token of the captain’s own, refusing a short one or one with spaces', () => {
+    const { bot } = setup();
+    bot.change({ token: '  the-bots-own-token-123  ' });
+    expect(bot.config().token).toBe('the-bots-own-token-123');
+    expect(bot.status().token).toBe('captain');
+    expect(() => bot.change({ token: 'short' })).toThrow('at least 16');
+    expect(() => bot.change({ token: 'has a space in it, so no' })).toThrow('no spaces');
+    expect(bot.config().token).toBe('the-bots-own-token-123');
+    bot.change({ token: null });
+    expect(bot.config().token).toBeUndefined();
+  });
+
+  it('refuses the captain’s own token where FOCUS_BOT_TOKEN is set, changing nothing else in that change', () => {
+    const { bot } = setup({ FOCUS_BOT_TOKEN: 'from-the-environment' });
+    expect(() => bot.change({ token: 'a-token-of-my-own-here', webhook: 'https://h/x' })).toThrow('FOCUS_BOT_TOKEN');
+    expect(bot.config()).toEqual({ token: 'from-the-environment' });
+  });
+
+  it('clears a field left empty, as Clear does', () => {
+    const { bot } = setup();
+    bot.change({ webhook: 'https://h/x', auth: 'a' });
+    bot.change({ webhook: '', auth: '  ' });
+    expect(bot.config()).toEqual({});
+  });
+
   it('clears the webhook and its header with null, and refuses a webhook that isn’t an http(s) address', () => {
     const { bot } = setup();
     bot.change({ webhook: 'https://h/x', auth: 'a' });
@@ -74,7 +99,7 @@ describe('the bot’s setup', () => {
 
 describe('the captain’s change to the bot', () => {
   it('takes a string or null for each, and nothing else', () => {
-    expect(botChange({ webhook: 'https://h', auth: null, token: 'x' })).toEqual({ webhook: 'https://h', auth: null });
+    expect(botChange({ webhook: 'https://h', auth: null, token: 'x', other: 'y' })).toEqual({ token: 'x', webhook: 'https://h', auth: null });
     expect(botChange({ webhook: 3 })).toEqual({});
     expect(botChange(null)).toEqual({});
   });
