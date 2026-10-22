@@ -2,6 +2,7 @@
 // from the preferences' localStorage, so the layout is testable outside the browser.
 
 import { openQuestion } from '../../../shared/artifacts';
+import { fieldsOf, keysOf, recordOf } from '../../../shared/records';
 import type { Agent } from '../../../shared/types';
 import type { Interaction } from './builder';
 
@@ -92,10 +93,18 @@ export function paneUse(pane: Pane, lead: Agent): { interaction: Interaction; la
 const KEY = 'focus.screenPanes';
 const DEFAULTS: PanePrefs = { browser: true, artifacts: true, tasks: true };
 
+/** A viewer's saved choice of panes, as parsed: a pane they haven't chosen on or off is on. */
+export function panePrefsOf(saved: unknown): PanePrefs {
+  const fields = fieldsOf(saved);
+  return recordOf(keysOf(DEFAULTS), (pane) => {
+    const on = fields[pane];
+    return typeof on === 'boolean' ? on : DEFAULTS[pane];
+  });
+}
+
 function load(): PanePrefs {
   try {
-    const saved = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<PanePrefs>;
-    return { ...DEFAULTS, ...saved };
+    return panePrefsOf(JSON.parse(localStorage.getItem(KEY) ?? '{}'));
   } catch {
     return { ...DEFAULTS };
   }

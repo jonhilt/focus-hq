@@ -254,4 +254,9 @@ describe('transcriptLines', () => {
     expect(text).toMatch(/It printed hi/);
     expect(text).not.toMatch(/hmm/);
   });
+
+  it('skips a line or a block that isn’t one, and reads the rest', () => {
+    const damaged = ['null', '"text"', JSON.stringify({ type: 'assistant', message: { content: [null, 'x', { type: 'text', text: 7 }, { type: 'text', text: 'Still here' }] } })].join('\n');
+    expect(transcriptLines(damaged).map((l) => l.text).join('\n')).toMatch(/Still here/);
+  });
 });

@@ -5,6 +5,8 @@ import type { Workflow, WorkflowAgent, WorkflowPhase, WorkflowResult, WorkflowRo
 import type { WorkflowEvent } from './types';
 import { truncate } from '../util';
 import { renderText, renderToolResult, renderToolUse } from './render';
+import { contentBlocks, transcriptLines as messagesIn } from './transcript';
+import { fieldsOf } from '../../shared/records';
 import type { TermLine } from '../../shared/types';
 
 /** How long a finished workflow's away team stays in the briefing room, so you see how it went before it goes. */
@@ -294,34 +296,25 @@ export function workflowAsk(input: Record<string, unknown>): string {
   return `Run workflow ${name}: its agents run their commands without asking, for this run`;
 }
 
-type Block = { type: string; text?: string; name?: string; input?: Record<string, unknown>; content?: unknown };
-
 /**
  * A workflow agent's transcript (the agent-<agentId>.jsonl Claude Code writes as it works) as terminal lines, the way
  * a session's own read: what it was asked, then what it said, the tools it used and what came back. What it thought,
- * and Claude Code's own attachments, are left out; so is any line that isn't JSON (one still being written).
+ * and Claude Code's own attachments, are left out; so is any line or block that isn't one (a line still being written).
  */
 export function transcriptLines(jsonl: string): Omit<TermLine, 't'>[] {
   const lines: Omit<TermLine, 't'>[] = [];
   let asked = false;
-  for (const raw of jsonl.split('\n')) {
-    let entry: { type?: string; message?: { content?: unknown } };
-    try {
-      entry = JSON.parse(raw) as typeof entry;
-    } catch {
-      continue;
-    }
+  for (const entry of messagesIn(jsonl)) {
     const content = entry.message?.content;
     if (entry.type === 'user' && !asked && typeof content === 'string') {
       asked = true;
       lines.push({ kind: 'manager', text: `▶ ${truncate(content.trim(), 1500)}` });
       continue;
     }
-    if (!Array.isArray(content)) continue;
-    for (const block of content as Block[]) {
+    for (const block of contentBlocks(content)) {
       if (entry.type === 'assistant' && block.type === 'text' && block.text?.trim()) lines.push(...renderText(block.text.trim()));
-      else if (entry.type === 'assistant' && block.type === 'tool_use' && block.name) lines.push(...renderToolUse(block.name, block.input ?? {}, '').lines);
-      else if (entry.type === 'user' && block.type === 'tool_result') lines.push(...renderToolResult(block));
+      else if (entry.type === 'assistant' && block.type === 'tool_use' && block.name) lines.push(...renderToolUse(block.name, fieldsOf(block.input), '').lines);
+      else if (entry.type === 'user' && block.type === 'tool_result') lines.push(...renderToolResult({ ...block, type: block.type }));
     }
   }
   return lines;

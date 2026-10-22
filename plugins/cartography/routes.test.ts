@@ -39,6 +39,8 @@ public class OwnerController {
   it('reads an OpenAPI spec\'s paths, YAML or JSON', () => {
     expect(specPaths('openapi: 3.0.1\npaths:\n  /owners:\n    get:\n      tags: [owner]\n  /owners/{ownerId}:\n    get: {}\ncomponents:\n  /not: {}\n')).toEqual(['/owners', '/owners/{ownerId}']);
     expect(specPaths('{"paths": {"/vets": {}}}')).toEqual(['/vets']);
+    expect(specPaths('{"paths": "/vets"}')).toEqual([]);
+    expect(specPaths('{"paths": ["/vets"]}')).toEqual([]);
     expect(apisImplemented('public class OwnerRestController implements OwnersApi, Serializable {')).toEqual(['OwnersApi']);
   });
 });

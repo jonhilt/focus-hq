@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { paths } from '../config';
-import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, mergeCheckCommands, missingPackageManager, type PackageFacts, packageJsonScripts, packageManagerFor, packageManagerIn } from '../packageManager';
+import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, mergeCheckCommands, missingPackageManager, type PackageFacts, packageJsonScripts, packageManagerFor, packageManagerIn, packageScriptsIn } from '../packageManager';
 import { CommandError, errorMessage, KeyedLock, run, sleep } from '../util';
 import { type MergeHeads, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheck';
 import { sameCommit } from '../../shared/qa';
@@ -293,14 +293,9 @@ export function runChecks(repo: string, number: number, head: string): Promise<C
   return checksLock.with(repo, async () => {
     const sha = await checkoutDetached(repo, dir, `refs/pull/${number}/head`, 'refs/focus/checks');
     if (!sameCommit(sha, head)) return { sha, results: [{ command: 'git checkout', ok: false, output: `the PR moved on to ${sha.slice(0, 7)}` }] };
-    const results = await installAndRun(dir, checkCommands(packageScripts(dir), packageManagerIn(dir)));
+    const results = await installAndRun(dir, checkCommands(packageScriptsIn(dir), packageManagerIn(dir)));
     return results && { sha, results };
   });
-}
-
-function packageScripts(dir: string): Record<string, unknown> | undefined {
-  const pkg = path.join(dir, 'package.json');
-  return fs.existsSync(pkg) ? (JSON.parse(fs.readFileSync(pkg, 'utf8')) as { scripts?: Record<string, unknown> }).scripts : undefined;
 }
 
 /**
@@ -361,7 +356,7 @@ function typecheckMerge(repo: string, sha: string): Promise<{ command: string; o
   const dir = path.join(paths.checks, repo.replace('/', '__'));
   return checksLock.with(repo, async () => {
     await lock.with(repo, () => detachAt(mirrorDir(repo), dir, sha));
-    const results = await installAndRun(dir, checkCommands(packageScripts(dir), packageManagerIn(dir), ['typecheck']));
+    const results = await installAndRun(dir, checkCommands(packageScriptsIn(dir), packageManagerIn(dir), ['typecheck']));
     return results?.find((r) => !r.ok);
   });
 }
@@ -390,7 +385,7 @@ export function tryMerge(repo: string, heads: MergeHeads, chosen?: readonly stri
     const merged = await lock.with(repo, () => mergeCommit(mirror, heads));
     if ('files' in merged) return { kind: 'conflicts', ...heads, files: merged.files };
     await lock.with(repo, () => detachAt(mirror, dir, merged.sha));
-    const results = await installAndRun(dir, mergeCheckCommands(packageScripts(dir), lockfilesIn(dir), chosen));
+    const results = await installAndRun(dir, mergeCheckCommands(packageScriptsIn(dir), lockfilesIn(dir), chosen));
     return { kind: 'checked', ...heads, merge: merged.sha, results: results ?? [] };
   });
 }

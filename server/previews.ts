@@ -7,7 +7,7 @@ import type { Preview, PreviewCheckout, PreviewConfig, PreviewLink, PreviewLog, 
 import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
-import { packageManagerIn } from './packageManager';
+import { packageManagerIn, packageScriptsIn } from './packageManager';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
 import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
@@ -777,13 +777,8 @@ function previewEnv(port: number, auto: boolean): NodeJS.ProcessEnv {
 
 /** The repo's own way of running itself: install, then its dev (or start) script. */
 function detectCommand(dir: string): string | null {
-  let pkg: { scripts?: Record<string, string> };
-  try {
-    pkg = JSON.parse(fs.readFileSync(path.join(dir, 'package.json'), 'utf8')) as typeof pkg;
-  } catch {
-    return null;
-  }
-  const script = ['dev', 'start', 'serve', 'preview'].find((s) => pkg.scripts?.[s]);
+  const scripts = packageScriptsIn(dir);
+  const script = ['dev', 'start', 'serve', 'preview'].find((s) => scripts?.[s]);
   if (!script) return null;
   const pm = packageManagerIn(dir);
   return `${pm} install && ${pm} run ${script}`;

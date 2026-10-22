@@ -3,6 +3,7 @@
 // controller's mappings, an Express-style handler or an OpenAPI spec; a path is called by a string in a file that makes
 // HTTP calls, however its URL's glued together (`REST_API_URL + 'owners'`, `` `owners/${id}/pets` ``), so a called path
 // matches a route when one ends with the other. Pure: map.ts reads the files.
+import { fieldsOf, isRecord } from '../../plugin-api/shared';
 import type { CrossCall } from './shared';
 
 /** A path's segments, its parameters (`{id}`, `:id`, `${id}`, `*`) as `*`, without a scheme, host or query. */
@@ -60,8 +61,8 @@ export function specPaths(text: string): string[] {
   const json = /^\s*\{/.test(text);
   if (json) {
     try {
-      const paths = (JSON.parse(text) as { paths?: Record<string, unknown> }).paths;
-      return paths ? Object.keys(paths) : [];
+      const paths = fieldsOf(JSON.parse(text)).paths;
+      return isRecord(paths) ? Object.keys(paths) : [];
     } catch {
       return [];
     }

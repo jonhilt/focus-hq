@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../../shared/types';
-import { paneAt, paneUse, screenPanes } from './screenPanes';
+import { paneAt, panePrefsOf, paneUse, screenPanes } from './screenPanes';
 
 const H = 600;
 const layout = (width: number, has: { browser: boolean; artifact?: boolean; progress: boolean }) =>
@@ -94,5 +94,20 @@ describe('paneUse', () => {
 
   it('opens the lead’s panel from the terminal', () => {
     expect(paneUse('terminal', lead()).interaction).toEqual({ kind: 'agent', id: 'lead_p1_a' });
+  });
+});
+
+describe('panePrefsOf', () => {
+  const all = { browser: true, artifacts: true, tasks: true };
+
+  it('reads the viewer’s saved choices, with every pane on that they haven’t chosen', () => {
+    expect(panePrefsOf({ browser: false })).toEqual({ ...all, browser: false });
+    expect(panePrefsOf({ browser: false, artifacts: false, tasks: false })).toEqual({ browser: false, artifacts: false, tasks: false });
+  });
+
+  it('leaves out what isn’t a choice of a pane, on or off', () => {
+    expect(panePrefsOf({ browser: 'no', tasks: 0, other: false })).toEqual(all);
+    expect(panePrefsOf('browser')).toEqual(all);
+    expect(panePrefsOf(null)).toEqual(all);
   });
 });

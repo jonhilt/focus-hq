@@ -1,5 +1,8 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { dependenciesChanged, installable, installCommand, installFailedNote, installStamp, mergeCheckCommands, packageJsonScripts, packageManagerFor, scriptCommand } from './packageManager';
+import { dependenciesChanged, installable, installCommand, installFailedNote, installStamp, mergeCheckCommands, packageJsonScripts, packageManagerFor, packageScriptsIn, scriptCommand } from './packageManager';
 
 describe('packageManagerFor', () => {
   it('follows the lockfile', () => {
@@ -46,6 +49,19 @@ describe('packageJsonScripts', () => {
     expect(packageJsonScripts(undefined)).toBeUndefined();
     expect(packageJsonScripts('{ not json')).toBeUndefined();
     expect(packageJsonScripts('{"name":"x"}')).toBeUndefined();
+    expect(packageJsonScripts('null')).toBeUndefined();
+    expect(packageJsonScripts('{"scripts":"vitest run"}')).toBeUndefined();
+  });
+});
+
+describe('packageScriptsIn', () => {
+  it('reads the scripts of the package.json in a folder, and none when there is none or it is no package.json', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-package-'));
+    expect(packageScriptsIn(dir)).toBeUndefined();
+    fs.writeFileSync(path.join(dir, 'package.json'), 'null');
+    expect(packageScriptsIn(dir)).toBeUndefined();
+    fs.writeFileSync(path.join(dir, 'package.json'), '{"scripts":{"dev":"vite"}}');
+    expect(packageScriptsIn(dir)).toEqual({ dev: 'vite' });
   });
 });
 

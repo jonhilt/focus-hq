@@ -104,6 +104,15 @@ export function packageJsonScripts(pkg: string | undefined): Record<string, unkn
   }
 }
 
+/** The scripts of the package.json in `dir`, read as `packageJsonScripts` reads them: none when it can't be read. */
+export function packageScriptsIn(dir: string): Record<string, unknown> | undefined {
+  try {
+    return packageJsonScripts(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'));
+  } catch {
+    return undefined;
+  }
+}
+
 /**
  * The commands of the merge check (`mergeCheckScripts`, from the project's `chosen` scripts) for a repo with these
  * package.json `scripts` and `lockfiles`, run with its package manager. QA is told to run the same ones.
