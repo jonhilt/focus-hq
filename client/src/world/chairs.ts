@@ -29,13 +29,13 @@ export function standingSpot(seat: Seat, places: readonly THREE.Vector3[]): THRE
   return best;
 }
 
-/** What a chair puts to hand, opened with E while you're sat in it: Comms' inbox, the ready room's console, your personal log. */
-export type ChairUse = { kind: 'comms' } | { kind: 'manager'; tab?: ManagerTab };
-
-export const CHAIR_USE: Record<Chair, { use: ChairUse; label: string }> = {
-  bridge: { use: { kind: 'comms' }, label: 'Comms: what needs you' },
-  'ready-room': { use: { kind: 'manager' }, label: 'Use the ready room console' },
-  lounge: { use: { kind: 'manager', tab: 'personal-log' }, label: 'Your personal log' },
+/**
+ * What the core puts to hand in a chair, opened with E while you're sat in it: the ready room's console, your personal
+ * log. The bridge's is a plugin's to fill (`ClientPlugin.chair`), or nothing.
+ */
+export const CHAIR_USE: Partial<Record<Chair, { tab?: ManagerTab; label: string }>> = {
+  'ready-room': { label: 'Use the ready room console' },
+  lounge: { tab: 'personal-log', label: 'Your personal log' },
 };
 
 /** Whether a movement key stands you up out of a chair. */

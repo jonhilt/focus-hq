@@ -1,29 +1,38 @@
 import express from 'express';
 import type { AddressInfo } from 'node:net';
-import { expect, it, vi } from 'vitest';
+import { expect, it } from 'vitest';
+import type { PluginRoute } from './plugins/contract';
 import { apiRouter } from './routes';
 
-// hoisted above the imports by vitest, so the routes get this inbox
-vi.mock('./captainsInbox', () => ({
-  Inbox: class {
-    autoSend() {}
-    view() {
-      return { open: [{ id: 't1', kind: 'turn', projectId: 'p', who: 'R', goal: 'G', what: 'W', lane: 'needs-you', shown: [{ title: 'T', html: '/api/artifacts/a/t.html?v=1', image: '/api/artifacts/a/t.jpg?v=1' }] }], decided: [] };
-    }
-  },
-}));
-
-it('GET /api/bot/inbox serves absolute links when FOCUS_PUBLIC_URL is set', async () => {
+/** Focus's API with one plugin's routes, a bot token of `k`, and a request to it. */
+async function withRoutes(routes: PluginRoute[], ask: (url: (path: string) => string) => Promise<void>) {
   const app = express();
-  app.use('/api', apiRouter({ agents: { plugins: { routes: () => [] } } } as never, { projects: [], agents: new Map() } as never, { token: 'k', webhook: undefined, publicUrl: 'https://mac.ts.net:4477' }));
+  app.use('/api', apiRouter({ agents: { plugins: { routes: () => routes.map((route) => ({ plugin: 'inbox', route })) } } } as never, { projects: [], agents: new Map() } as never, { token: 'k', webhook: undefined, publicUrl: undefined }));
   const server = app.listen(0);
   try {
     const port = (server.address() as AddressInfo).port;
-    const res = await fetch(`http://127.0.0.1:${port}/api/bot/inbox`, { headers: { authorization: 'Bearer k' } });
-    const body = (await res.json()) as { open: { shown: { html: string; image: string }[] }[] };
-    expect(body.open[0].shown[0].html).toBe('https://mac.ts.net:4477/api/artifacts/a/t.html?v=1');
-    expect(body.open[0].shown[0].image).toBe('https://mac.ts.net:4477/api/artifacts/a/t.jpg?v=1');
+    await ask((path) => `http://127.0.0.1:${port}${path}`);
   } finally {
     server.close();
   }
+}
+
+const echo = (bot: boolean): PluginRoute => ({ method: 'post', path: '/items/:id/decide', bot, handle: ({ params, body }) => ({ id: params.id, body }) });
+
+it('mounts a plugin’s route for bots at /api/bot<path>, open only to the bot token, with its path’s named parts', async () => {
+  await withRoutes([echo(true)], async (url) => {
+    const post = (headers: Record<string, string>) => fetch(url('/api/bot/items/t1/decide'), { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: '{"send":true}' });
+    expect((await post({})).status).toBe(401);
+    const res = await post({ authorization: 'Bearer k' });
+    expect(await res.json()).toEqual({ id: 't1', body: { send: true } });
+    // not under the plugin's own prefix
+    expect((await fetch(url('/api/plugins/inbox/items/t1/decide'), { method: 'POST' })).status).toBe(404);
+  });
+});
+
+it('mounts a plugin’s other routes under /api/plugins/<id>, with their named parts', async () => {
+  await withRoutes([echo(false)], async (url) => {
+    const res = await fetch(url('/api/plugins/inbox/items/t2/decide'), { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
+    expect(await res.json()).toEqual({ id: 't2', body: {} });
+  });
 });

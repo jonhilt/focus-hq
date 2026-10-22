@@ -154,6 +154,49 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead?.readTurn).toBe(first);
   });
 
+  it('keeps a plugin’s mark on a lead’s turn, for a lead alone, until their next turn starts', async () => {
+    const { agents, claude, store, project } = focus();
+    let host: PluginHost | undefined;
+    agents.startPlugins([{ id: 'marker', start: (h) => ((host = h), {}) }], { demo: false, ownRepo: () => undefined });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
+    await until(() => store.agent(lead.id).status === 'done');
+    const dev = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Header' });
+    const ended = Date.now();
+    expect(host?.goals.mark(dev.id, { seen: true }, ended)).toBe(false);
+    expect(host?.goals.mark(lead.id, { seen: true }, ended)).toBe(true);
+    expect(store.agent(lead.id).lead?.marks).toEqual({ marker: { seen: true } });
+    expect(host?.agent(lead.id)?.lead?.marks).toEqual({ marker: { seen: true } });
+    expect(host?.goals.mark(lead.id, undefined)).toBe(true);
+    expect(store.agent(lead.id).lead?.marks).toBeUndefined();
+    host?.goals.mark(lead.id, 'again', ended);
+
+    await new Promise((r) => setTimeout(r, 5));
+    agents.message(lead.id, 'Go ahead');
+    await until(() => store.agent(lead.id).status === 'working');
+    expect(store.agent(lead.id).lead?.marks).toBeUndefined();
+    // one about the turn before is too late, and the turn under way isn't over to mark
+    await until(() => !!store.run(lead.id).open);
+    expect(host?.goals.mark(lead.id, 'late', ended)).toBe(false);
+    expect(host?.goals.mark(lead.id, 'mid-turn')).toBe(false);
+    expect(store.agent(lead.id).lead?.marks).toBeUndefined();
+  });
+
+  it('tells the plugins of the captain’s answer once it’s gone through, with the agent as it stood before it', async () => {
+    const { agents, claude, store, project } = focus();
+    const heard: { status: string; answer: unknown }[] = [];
+    agents.startPlugins([{ id: 'ears', start: () => ({ captainAnswered: (before, answer) => void heard.push({ status: before.status, answer }) }) }], { demo: false, ownRepo: () => undefined });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].end({ ok: true, summary: 'Shall I start slice 2?' });
+    await until(() => store.agent(lead.id).status === 'done');
+    await agents.captainAnswers(lead.id, { text: 'Not yet' }, () => ({ costly: { usd: 3 } }));
+    expect(heard).toEqual([]);
+    await agents.captainAnswers(lead.id, { text: 'Go on' }, () => agents.message(lead.id, 'Go on'));
+    expect(heard).toEqual([{ status: 'done', answer: { text: 'Go on' } }]);
+  });
+
   it('sends a QA report that leaves changed files out back to QA once, naming them, then takes the verdict', async () => {
     const { agents, claude, store, project } = focus({ ...demoWorkspace, changedFiles: () => Promise.resolve(['src/cart.ts', 'scripts/sync.ts']) });
     const [pr] = await Effect.runPromise(Effect.gen(function* () {
@@ -1034,6 +1077,20 @@ describe('AgentManager', () => {
     expect(leads()[0].sent).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/), 'And the header']);
     expect(store.run(lead.id).notes).toEqual([]);
     expect(store.run(lead.id).open?.sent).toEqual(leads()[0].sent);
+  });
+
+  it('counts a lead’s notes heard once they’re in, even when the message after them isn’t', async () => {
+    const { agents, claude, store, project } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    leads()[0].refusing.push('And the header');
+    agents.message(lead.id, 'And the header');
+    expect(leads()[0].sent).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/)]);
+    expect(store.run(lead.id).notes).toEqual([]);
+    expect(store.run(lead.id).inbox).toEqual(['And the header']);
   });
 
   it('lets a plugin wake a goal’s lead for a note, which goes ahead of its message', async () => {

@@ -1,11 +1,11 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { PullRequest, QaReview } from '../../../shared/types';
+import type { Agent, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { confirmDialog } from '../ui/confirmDialog';
 import { h } from '../ui/dom';
 import { Actions, morph } from './actions';
-import { mergeButton, sendsIn } from './home';
+import { mergeButton, needsYouStrip } from './home';
 
 vi.mock('../net/api', () => ({ api: { mergePr: vi.fn(() => Promise.resolve()), mergeWhenPassed: vi.fn(() => Promise.resolve()) } }));
 vi.mock('../ui/confirmDialog', () => ({ confirmDialog: vi.fn(() => Promise.resolve(true)) }));
@@ -88,10 +88,18 @@ describe('the Tricorder’s merge button', () => {
   });
 });
 
-describe('the Tricorder’s Ready to send strip', () => {
-  it('says when the chief of staff’s words go by themselves, or that they wait for the captain', () => {
-    expect(sendsIn(undefined, 0)).toBe('Waits for you to send');
-    expect(sendsIn(120_000, 0)).toBe('Sends itself in 2 min');
-    expect(sendsIn(30_000, 0)).toBe('Sends itself within a minute');
+describe('the Tricorder’s own Needs you', () => {
+  it('lists what waits on the captain, a line each, and links each agent to its screen', () => {
+    const lead = { id: 'a1', name: 'Lt. Vale', projectId: 'p', status: 'done', task: 'lead', issue: { number: 0, title: 'W', url: '' }, lead: { title: 'Wishlist' } } as Agent;
+    const strip = needsYouStrip({ showPr: () => undefined }, [{ kind: 'turn', agent: lead }]);
+    expect(strip.classList.contains('alert')).toBe(true);
+    expect(strip.querySelector('.count')?.textContent).toBe('1');
+    expect(strip.querySelector('a.entry')?.getAttribute('href')).toBe('#agent/a1');
+    expect(strip.querySelector('.entry strong')?.textContent).toBe('Waiting for your reply');
+  });
+
+  it('is all clear when nothing waits', () => {
+    const strip = needsYouStrip({ showPr: () => undefined }, []);
+    expect(strip.classList.contains('clear')).toBe(true);
   });
 });

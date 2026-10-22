@@ -1,17 +1,14 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { isAutonomy } from '../shared/autonomy';
 import { closedGoals } from '../shared/ledger';
-import { shownProjects } from '../shared/hidden';
-import { decideOf } from '../shared/captainsInbox';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
 import { replay } from './agents/runJournal';
 import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
-import { botGuard, BotHook, itemWithLinks } from './bot';
+import { botGuard } from './bot';
 import { config, paths } from './config';
 import { appendFrameStats } from './frameStats';
-import { Inbox } from './captainsInbox';
 import type { Focus } from './focus';
 import type { Store } from './store';
 import { errorMessage } from './util';
@@ -31,22 +28,12 @@ const h = (fn: Handler) => async (req: Request, res: Response, next: NextFunctio
 
 const param = (req: Request, name: string) => str(req.params[name]);
 
+/** A route's named path parts, each as text. */
+const pathParams = (req: Request): Record<string, string> => Object.fromEntries(Object.keys(req.params).map((name) => [name, param(req, name)]));
+
 export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = config.bot): express.Router {
   const r = express.Router();
   r.use(express.json({ limit: '2mb' }));
-  const inbox = new Inbox(store, focus);
-  // the chief of staff's words go by themselves once due, where the captain lets it (`Inbox.autoSend`)
-  setInterval(() => void inbox.autoSend(), 5000).unref();
-  // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook
-  if (bot.token && bot.webhook) {
-    const leads = () => {
-      const shown = new Set(shownProjects(store.projects).map((p) => p.id));
-      return [...store.agents.values()].filter((a) => a.task === 'lead' && shown.has(a.projectId));
-    };
-    const hook = new BotHook(() => ({ ...inbox.view(), leads: leads() }), { token: bot.token, webhook: bot.webhook, publicUrl: bot.publicUrl });
-    setInterval(() => void hook.tick(), 3000).unref();
-  }
-
   r.get('/state', h(() => focus.snapshot()));
   // how the 3D view runs in a browser opened with ?stats=1, kept here so a run on another machine can be read where Focus is
   r.post('/frame-stats', h((req) => appendFrameStats(paths.frameStats, req.body.session, req.body.lines)));
@@ -126,18 +113,6 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.get('/personal-log', h(() => store.personalEntries));
   r.post('/personal-log', h((req) => focus.notePersonal(req.body.text, logFrom(req.body.from))));
   r.post('/personal-log/:id', h((req) => focus.markPersonal(personalMark(param(req, 'id'), req.body))));
-  // the captain's inbox: what needs them and what they decided lately, answered by id (docs/ledger.md#the-captains-inbox-api)
-  r.get('/inbox', h(() => inbox.view()));
-  r.post('/inbox/:id/hold', h((req) => inbox.hold(param(req, 'id'))));
-  r.post('/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), req.body.via === 'office' ? 'office' : 'api', resumeHow(req.body.how))));
-  // the same, for a bot speaking for the captain with Focus's bot token (server/bot.ts), its answers recorded via the API
-  r.use('/bot', botGuard(bot.token));
-  r.get('/bot/inbox', h(() => {
-    const view = inbox.view();
-    return { ...view, open: view.open.map((i) => itemWithLinks(i, bot.publicUrl)) };
-  }));
-  r.post('/bot/inbox/:id/hold', h((req) => inbox.hold(param(req, 'id'))));
-  r.post('/bot/inbox/:id/decide', h((req) => inbox.decide(param(req, 'id'), decideOf(req.body), 'api', resumeHow(req.body.how))));
   r.get('/ledger', h((req) => ledgerWindow(store.ledger, Date.now(), Number(req.query.days ?? 14))));
   r.get('/digests/backfill', h(async () => ({ sessions: (await focus.agents.undigested()).length })));
   r.post('/digests/backfill', h(() => focus.agents.backfill()));
@@ -190,15 +165,16 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.get('/agents/:id/workflows/:workflow/script', h((req) => focus.agents.workflowScript(param(req, 'id'), param(req, 'workflow'))));
   r.get('/agents/:id/workflows/:workflow/agents/:agent/lines', h((req) => focus.agents.workflowAgentLines(param(req, 'id'), param(req, 'workflow'), param(req, 'agent'))));
   // on your API key, picking a long conversation back up costs enough that the captain says how first (`how`)
-  // the captain's answers, each recorded when it answers something in their inbox (`Inbox.answering`)
+  // the captain's answers, which the plugins hear of once they've gone through (`AgentManager.captainAnswers`)
   r.post('/agents/:id/message', h((req) => {
     const text = str(req.body.text);
-    return inbox.answering(param(req, 'id'), { text: text.trim() }, 'office', () => focus.agents.message(param(req, 'id'), text, undefined, resumeHow(req.body.how)));
+    return focus.agents.captainAnswers(param(req, 'id'), { text: text.trim() }, () => focus.agents.message(param(req, 'id'), text, undefined, resumeHow(req.body.how)));
   }));
   r.post('/agents/:id/answer', h((req) => {
-    const d = decideOf(req.body);
+    const option = str(req.body.option);
     const note = typeof req.body.note === 'string' ? req.body.note : undefined;
-    return inbox.answering(param(req, 'id'), d, 'office', () => focus.agents.answer(param(req, 'id'), str(req.body.question), str(req.body.option), note, resumeHow(req.body.how)));
+    const answer = { option, ...(note?.trim() && { note: note.trim() }) };
+    return focus.agents.captainAnswers(param(req, 'id'), answer, () => focus.agents.answer(param(req, 'id'), str(req.body.question), option, note, resumeHow(req.body.how)));
   }));
   r.post('/agents/:id/read', h((req) => focus.agents.readTurn(param(req, 'id'))));
   r.post('/agents/:id/spot-checks', h((req) => focus.agents.tickSpotCheck(param(req, 'id'), Number(req.body.slice), Number(req.body.index), req.body.checked === true)));
@@ -206,7 +182,7 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.post('/agents/:id/ideas/spin-off', h((req) => focus.agents.spinOffIdea(param(req, 'id'), str(req.body.idea), str(req.body.text))));
   r.post('/agents/:id/permission', h((req) => {
     const allow = req.body.allow === true;
-    return inbox.answering(param(req, 'id'), { allow }, 'office', () => focus.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), allow));
+    return focus.agents.captainAnswers(param(req, 'id'), { allow }, () => focus.agents.resolvePermission(param(req, 'id'), str(req.body.requestId), allow));
   }));
   r.post('/agents/:id/stop', h((req) => focus.agents.stop(param(req, 'id'))));
   r.post('/agents/:id/compact', h((req) => focus.agents.compactNow(param(req, 'id'))));
@@ -214,7 +190,7 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.post('/agents/:id/cloud/terminal', h((req) => focus.agents.openCloudTerminal(param(req, 'id'))));
   r.post('/agents/:id/cloud/attach', h((req) => focus.agents.attachCloud(param(req, 'id'), str(req.body.link))));
   r.post('/agents/:id/cloud/stay', h((req) => focus.agents.stayLocal(param(req, 'id'))));
-  r.post('/agents/:id/close', h((req) => inbox.answering(param(req, 'id'), { close: true }, 'office', () => focus.agents.closeGoal(param(req, 'id'), req.body.force === true))));
+  r.post('/agents/:id/close', h((req) => focus.agents.captainAnswers(param(req, 'id'), { close: true }, () => focus.agents.closeGoal(param(req, 'id'), req.body.force === true))));
   r.post('/agents/:id/effort', h((req) => {
     const level = effort(req.body.effort);
     if (!level) throw new Error('Pick an effort level');
@@ -247,9 +223,12 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
     res.type('audio/wav').send(await focus.voice.speak(text.slice(0, 1000), req.body.voice, urgency, gone.signal));
   }));
 
-  // each plugin's own routes (docs/plugins.md), under its id
+  // each plugin's own routes (docs/plugins.md), under its id; those for a bot speaking for the captain under /bot, open
+  // only to Focus's bot token (server/bot.ts)
+  r.use('/bot', botGuard(bot.token));
   for (const { plugin, route } of focus.agents.plugins.routes()) {
-    r[route.method](`/plugins/${plugin}${route.path}`, h((req) => route.handle({ body: req.body ?? {}, query: req.query })));
+    const handle = h((req) => route.handle({ body: req.body ?? {}, query: req.query, params: pathParams(req) }));
+    r[route.method](route.bot ? `/bot${route.path}` : `/plugins/${plugin}${route.path}`, handle);
   }
 
   r.use((_req, res) => res.status(404).json({ error: 'Not found' }));

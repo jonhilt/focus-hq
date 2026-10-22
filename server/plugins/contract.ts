@@ -6,7 +6,8 @@ import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
-import type { Agent, CosRead, Issue, MessageReply, Planner, Project, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
+import type { CaptainAnswer } from '../../shared/captainAnswer';
+import type { Agent, Issue, MessageReply, Planner, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -82,11 +83,11 @@ export interface PluginParts {
    */
   signInChanged?(signIn: SignIn): void;
   /**
-   * Whether it judges this goal lead's turns for the captain's inbox (the chief of staff, where it's switched on). As such
-   * a turn ends, Ops marks it as being read (`lead.cos`), and the captain's inbox holds it back, unhailing, until
-   * the plugin says how it judged it (`host.goals.judged`) or `JUDGING_MS` passes (shared/tricorder.ts).
+   * The captain answered an agent from its panel (a message, a question's pick, a raised hand, closing a goal), and it
+   * went through: not sent back asking about the cost of picking the conversation up, nor warning before a close.
+   * `before` is the agent as it stood before the answer changed it, so a plugin can tell what it answered.
    */
-  judgesTurns?(agent: Readonly<Agent>): boolean;
+  captainAnswered?(before: Readonly<Agent>, answer: CaptainAnswer): void;
   /** Tools it adds to the Ops tools of every goal lead whose project it's switched on for, beside ship, note and show (`mcp__office__<name>`). */
   leadTools?: LeadTool[];
 }
@@ -192,10 +193,18 @@ export interface BriefSpec {
 
 export interface PluginRoute {
   method: 'get' | 'post';
-  /** Under `/api/plugins/<id>`, like `/keep-climbing`. */
+  /** Under `/api/plugins/<id>`, like `/keep-climbing`; a part like `:id` is named, its value in `params`. */
   path: string;
-  /** Its answer, sent as JSON; a throw becomes a 400 with the error's message. `body` is a POST's JSON body, `query` the query string. */
-  handle(req: { body: Record<string, unknown>; query: Record<string, unknown> }): unknown;
+  /**
+   * A route for a bot speaking for the captain: mounted at `/api/bot<path>` instead, open only to Focus's bot token
+   * (`FOCUS_BOT_TOKEN`; with none set, there are no bot routes). Its path is what the bot calls, so keep it as it is.
+   */
+  bot?: boolean;
+  /**
+   * Its answer (or a promise of it), sent as JSON; a throw becomes a 400 with the error's message. `body` is a POST's
+   * JSON body, `query` the query string, `params` the path's named parts.
+   */
+  handle(req: { body: Record<string, unknown>; query: Record<string, unknown>; params: Record<string, string> }): unknown;
 }
 
 /**
@@ -220,6 +229,18 @@ export interface PluginHost {
   agent(id: string): Readonly<Agent> | undefined;
   /** An agent's last `count` terminal lines, oldest first. */
   recentLines(agentId: string, count: number): readonly Readonly<TermLine>[];
+  /**
+   * The pull requests a project's board shows (its "only my PRs" filter applied), each with whose it is (`agent`) and
+   * who's resolving its conflicts (`resolver`), as Focus last read them from GitHub.
+   */
+  boardPrs(projectId: string): readonly Readonly<PullRequest & { agent?: Agent; resolver?: Agent }>[];
+  /** QA's reviews of the pull requests on the boards, by `prKey`. */
+  reviews(): ReadonlyMap<string, Readonly<QaReview>>;
+  /**
+   * A bot speaking for the captain, as Focus was started with: its `token` (`FOCUS_BOT_TOKEN`), which signs what's
+   * sent to its `webhook` (`FOCUS_BOT_WEBHOOK`), and Focus's address as the bot reaches it (`FOCUS_PUBLIC_URL`).
+   */
+  readonly bot: Readonly<{ token?: string; webhook?: string; publicUrl?: string }>;
   /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */
   artifact(leadId: string, file: string): Promise<Uint8Array | undefined>;
   /** Every agent aboard now, of every project. */
@@ -354,13 +375,24 @@ export interface PluginGoals {
    * key, picking a long conversation back up can cost: then it comes back `costly`, for the captain to say `how`.
    */
   message(agentId: string, text: string, opts?: { from?: string; how?: ResumeHow }): MessageReply;
+  /** Answers an agent's raised hand (`requestId`, its permission's id), as the captain would: allowed or not. */
+  resolvePermission(agentId: string, requestId: string, allow: boolean): void;
   /**
-   * How a plugin that judges turns (`judgesTurns`) judged a goal lead's last one, for the captain's inbox. Taken only
-   * while that turn is still being read: once the lead's next turn has started, it's too late, and it's dropped. `since`
-   * is when the plugin began judging (`Date.now()` as the turn ended): a verdict on a turn that ended after it is
-   * another turn's, and dropped too.
+   * Picks `option` of a lead's open question (`questionId`), with what the captain adds (`note`), as the captain would.
+   * Like `message`, it can come back `costly`, for the captain to say `how`.
    */
-  judged(agentId: string, judged: NonNullable<CosRead['judged']>, since: number): void;
+  answer(agentId: string, questionId: string, option: string, note?: string, how?: ResumeHow): Agent | MessageReply;
+  /** Closes a goal, as the captain would: it warns first (`warn`) about work that would be lost, unless `force`. */
+  closeGoal(agentId: string, force?: boolean): Promise<{ closed: true } | { warn: string[] }>;
+  /**
+   * Notes something of a goal lead's latest turn, in the plugin's own shape (`data`, read back from the lead's
+   * `lead.marks[<plugin id>]`), replacing what it noted before; `undefined` takes it away. It's kept with the lead and
+   * sent to the browser, until the lead's next turn starts, which clears it. Refused (false) for anyone but a goal's
+   * lead, while their turn is under way (from `turn('end')` on, it's over), while Focus goes down (a turn it stops then
+   * carries on after the restart), and, given `since` (when the plugin first heard of the turn, as it ended), once a
+   * later turn has started: what it says is an earlier turn's.
+   */
+  mark(agentId: string, data: unknown, since?: number): boolean;
 }
 
 /** A journal Ops keeps, as a plugin has it: what it's about and its facts, oldest first. */

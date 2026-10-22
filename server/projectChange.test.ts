@@ -37,7 +37,6 @@ describe('changeProject', () => {
       autoQa: false,
       autoSendBack: false,
       autoMerge: true,
-      cosAutoSend: true,
       qaProof: false,
       qaBrief: 'Check checkout.',
       hidden: true,
@@ -55,7 +54,6 @@ describe('changeProject', () => {
       autoQa: false,
       autoSendBack: false,
       autoMerge: true,
-      cosAutoSend: true,
       qaProof: false,
       qaBrief: 'Check checkout.',
       hidden: true,
@@ -164,12 +162,11 @@ describe('projectChangeFollowUps', () => {
     expect(projectChangeFollowUps({ maxAgents: 1 }).schedule).toBe(true);
     expect(projectChangeFollowUps({ autoAssign: false, autoMerge: false }).schedule).toBe(false);
     expect(projectChangeFollowUps({ autoAssign: 'no' }).schedule).toBe(false);
-    expect(projectChangeFollowUps(null)).toEqual({ plugins: false, schedule: false, holdSends: false });
+    expect(projectChangeFollowUps(null)).toEqual({ plugins: false, schedule: false });
   });
 
-  it('holds the chief of staff’s words counting down to go by themselves once auto-send goes off', () => {
-    expect(projectChangeFollowUps({ cosAutoSend: false }).holdSends).toBe(true);
-    expect(projectChangeFollowUps({ cosAutoSend: true }).holdSends).toBe(false);
-    expect(projectChangeFollowUps({ name: 'x' }).holdSends).toBe(false);
+  it('keeps what an older Focus saved on the project that it no longer knows, for a plugin to carry over', () => {
+    const saved = Object.assign({}, project, { retired: true });
+    expect(changeProject(saved, { name: 'x' })).toMatchObject({ name: 'x', retired: true });
   });
 });

@@ -199,15 +199,17 @@ export interface LeadWork {
   /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */
   closing?: { reason: string; at: number };
   /**
-   * The turn of the lead's the captain last read (its `finishedAt`), on whichever screen: it stops hailing them in Comms
-   * and the Tricorder until their next turn ends.
+   * The turn of the lead's the captain last read (its `finishedAt`), on whichever screen: it stops hailing them
+   * (`needsYou`) on every screen until their next turn ends.
    */
   readTurn?: number;
   /**
-   * The chief of staff's read of the lead's last turn, for the captain's inbox (`laneOf` in shared/tricorder.ts): from the
-   * turn's end (`at`) until it's `judged`, by a plugin that judges turns (`PluginParts.judgesTurns`). Cleared as the next starts.
+   * What plugins noted of the lead's latest turn, by plugin id (`PluginGoals.mark`), each in a shape of its own that
+   * only it reads: kept with the lead, sent to the browser, and cleared as the lead's next turn starts.
    */
-  cos?: CosRead;
+  marks?: Record<string, unknown>;
+  /** When the lead's latest turn started: a plugin's mark on an earlier one is refused (`PluginGoals.mark`). */
+  turnStarted?: number;
   /**
    * Each repo, checked out at ./<folder> in the lead's workspace, and the branch it ships into. `branch` is the one it's
    * on when that isn't the goal's (`Agent.branch`): Ops starts a repo a fresh one from its base when it ships
@@ -274,28 +276,5 @@ export interface GoalArtifact {
   at: number;
   /** There's a picture of it for the screen. Missing when Ops couldn't render one (no browser to hand). */
   image?: boolean;
-}
-
-/** Where the chief of staff sends a turn: 1 carry on, 2 a card for the captain, 3 interrupt the captain, 4 back to the lead. */
-export type CosRoute = 1 | 2 | 3 | 4;
-
-/** A lead's turn as the chief of staff judged it, or is judging it. */
-export interface CosRead {
-  /** When the turn ended. */
-  at: number;
-  judged?: {
-    route: CosRoute;
-    /** What's being decided, in a line: the captain's inbox leads with it. */
-    ask: string;
-    /** Why the turn goes where it does. */
-    why: string;
-    /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
-    message: string;
-  };
-  /**
-   * When the chief of staff sends its words to the lead itself, unless the captain holds them first: set as it judges
-   * a turn it would carry on or send back, in a project that lets it (`Project.cosAutoSend`); cleared by Hold.
-   */
-  sendsAt?: number;
 }
 

@@ -5,7 +5,7 @@ import { leftOn } from '../../../shared/goalLog';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { clientPlugin, goalTags } from '../plugins';
+import { clientPlugin, everyGoalButtons, goalTags } from '../plugins';
 import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
@@ -217,9 +217,8 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     hint.textContent = startsNow ? 'Ctrl+Enter starts' : 'Ctrl+Enter adds it to the line';
     fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
-  // back out to every goal on the ship, and whoever's waiting on you
-  const comms = h('button', { class: 'btn small', title: 'Comms: who’s waiting on you, and every goal under way on the ship (C)', onclick: () => ui.openComms() }, '◂ Comms');
-  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color, headerExtra: [comms] });
+  // back out to a plugin's view of every goal on the ship, when one offers it
+  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color, headerExtra: everyGoalButtons(ui) });
   render();
   if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));

@@ -30,7 +30,6 @@ async function captain(page: Page): Promise<void> {
     await page.getByRole('button', { name: 'Map again' }).first().click().catch(() => undefined);
   });
   await step('the ledger', () => page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.openLedger()));
-  await step('comms', () => page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.openComms()));
 }
 
 async function main(): Promise<void> {

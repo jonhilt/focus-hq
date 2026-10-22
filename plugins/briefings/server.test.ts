@@ -11,7 +11,7 @@ function writerRoute() {
   const host = { state, settings: () => ({ model: 'claude-opus-5-5', leadEffort: 'high' }), dataDir: () => '/data' } as unknown as PluginHost;
   const route = briefings.start(host).routes?.find((r) => r.path === '/writer');
   if (!route) throw new Error('no /writer route');
-  return (body: Record<string, unknown>) => route.handle({ body, query: {} });
+  return (body: Record<string, unknown>) => route.handle({ body, query: {}, params: {} });
 }
 
 describe('the writer setting', () => {

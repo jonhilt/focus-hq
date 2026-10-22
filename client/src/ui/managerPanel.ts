@@ -1,8 +1,7 @@
 import { pluginOn } from '../../../shared/projectPlugins';
-import { projectPlugins } from '../plugins';
+import { projectPlugins, projectSettings } from '../plugins';
 import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import { AUTO_SEND_MS } from '../../../shared/tricorder';
 import type { Autonomy, Effort, MergeMethod, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
@@ -200,16 +199,14 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
     title: 'Merges a PR the crew opened once QA passed its latest commit and its checks are green',
     changed: (on) => void api.updateProject(p.id, { autoMerge: on }).catch((e: Error) => ui.error(e.message)),
   });
-  const cosAutoSend = new Switch('Auto-send ready words', p.cosAutoSend === true, {
-    title: `A lead’s turn the chief of staff would carry on, or send back to the lead, gets its words by itself after ${AUTO_SEND_MS / 60_000} minutes, unless you hold them in Comms`,
-    changed: (on) => void api.updateProject(p.id, { cosAutoSend: on }).catch((e: Error) => ui.error(e.message)),
-  });
-  // the plugins that work per project, each off until it's switched on here
-  const plugins = projectPlugins().map((plugin) =>
+  // the plugins that work per project, each off until it's switched on here, and its own settings beside it once it's on
+  const plugins = projectPlugins().flatMap((plugin) => [
     new Switch(plugin.project.label, pluginOn(p, plugin.id), {
       title: plugin.project.about,
       changed: (on) => void api.updateProject(p.id, { plugin: { id: plugin.id, on } }).catch((e: Error) => ui.error(e.message)),
-    }).el);
+    }).el,
+    ...projectSettings(plugin, p, ui),
+  ]);
   const theme = themeSelect(roomTheme(p));
   theme.addEventListener('change', () => void api.updateProject(p.id, { theme: theme.value as RoomTheme }).catch((e: Error) => ui.error(e.message)));
 
@@ -244,7 +241,6 @@ function projectCard(ui: Ui, p: Project): HTMLElement {
       auto.el,
       h('label', { class: 'row label', style: 'gap:6px' }, 'with label', label),
       autoMerge.el,
-      cosAutoSend.el,
       h('span', { class: 'grow' }),
       hide,
       remove,

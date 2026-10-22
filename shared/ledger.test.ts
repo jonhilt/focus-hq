@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkLedger, closedGoals, fixEffects, frictionGroups, frictionName, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests } from './ledger';
+import { checkLedger, closedGoals, fixEffects, frictionGroups, frictionName, knownSignatures, type LedgerEvent, ledgerLine, reportCard, reportLines, type SessionFacts, unreadDigests, viaNote } from './ledger';
 
 const DAY = 24 * 60 * 60 * 1000;
 const NOW = 100 * DAY;
@@ -181,5 +181,13 @@ describe('frictionName', () => {
     expect(frictionName('shell: bash exit code 1')).toEqual({ kind: 'shell', signature: 'bash exit code 1' });
     expect(frictionName('captain-nudge: agent stopped: says continue')).toEqual({ kind: 'captain-nudge', signature: 'agent stopped: says continue' });
     expect(frictionName('no kind')).toEqual({ kind: '', signature: 'no kind' });
+  });
+});
+
+describe('viaNote', () => {
+  it('says nothing for the captain in Focus, the API for a bot, and a plugin that acted itself by its id in words', () => {
+    expect(viaNote('office')).toBe('');
+    expect(viaNote('api')).toBe('via the API');
+    expect(viaNote('quarter-master')).toBe('sent by the quarter master');
   });
 });

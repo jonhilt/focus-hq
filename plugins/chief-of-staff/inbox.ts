@@ -1,14 +1,12 @@
-import { artifactUrl, openQuestion } from './artifacts';
-import { lastWords, shownThisTurn } from './leadWords';
-import type { LedgerEvent } from './ledger';
-import { isRecord } from './records';
-import { type Attention, hails, type Lane, laneOf, needLine, turnRead } from './tricorder';
-import type { Agent, PullRequest, QaReview, CosRead, TermLine } from './types';
+import type { Agent, Attention, CaptainAnswer, DecidedVia, LedgerEvent, PullRequest, QaReview, TermLine } from '../../plugin-api/shared';
+import { artifactUrl, isRecord, lastWords, needsYou, openQuestion, shownThisTurn, turnRead } from '../../plugin-api/shared';
+import { type Lane, laneOf, lineOf } from './lanes';
+import { readOf, SENT_WORDS, type Verdict } from './shared';
 
-// The captain's inbox, as Focus keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now, each with an id that
-// stays the same from look to look, and what they decided lately, from the ledger's `captain-decision` lines. Comms and
-// anything outside Focus (a bot on the API) read the same list and answer it the same way. Pure, so it's tested
-// (shared/inbox.test.ts).
+// The captain's inbox, as the chief of staff keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now,
+// each with an id that stays the same from look to look, and what they decided lately, from the ledger's
+// `captain-decision` lines. Comms and anything outside Focus (a bot on the API) read the same list and answer it the
+// same way. Pure, so it's tested (inbox.test.ts).
 
 /** What a hail is about, the same hail from look to look. A lead's turn keeps its key once it's read. */
 export function hailKey(a: Attention): string {
@@ -30,11 +28,11 @@ export function hailKey(a: Attention): string {
 }
 
 /**
- * Everything waiting on the captain: what needs them (`needsYou`), most urgent first, then the leads whose turn they've
- * read but not answered, then the turns the chief of staff has words ready for or is still reading (`laneOf`).
+ * Everything waiting on the captain: what needs them (`needsYou`, in the `needs-you` lane), most urgent first, then the
+ * leads whose turn they've read but not answered, then the turns it has words ready for or is still reading (`laneOf`).
  */
 export function waiting(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, leads: Agent[], now: number): Attention[] {
-  const all = hails(agents, prs, reviews);
+  const all = needsYou(agents, prs, reviews);
   const hailing = new Set(all.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
   const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l)).map((agent): Attention => ({ kind: 'turn', agent }));
   return [...all.filter((a) => laneOf(a, now) === 'needs-you'), ...read, ...all.filter((a) => laneOf(a, now) !== 'needs-you')];
@@ -62,7 +60,7 @@ export interface InboxItem {
   /** Whether it needs the captain, or is a lead's turn the chief of staff has words ready for, or is reading (`laneOf`). */
   lane: Lane;
   /** A lead's turn as the chief of staff judged it: its route, the line on what's decided, why, and its words. */
-  cos?: NonNullable<CosRead['judged']>;
+  cos?: Verdict;
   /** What the agent said last (`lastWords`), to read before deciding. */
   said?: string;
   /** What a lead showed on their screen this turn (`shownThisTurn`): its live page and its picture, served by the API. */
@@ -71,10 +69,10 @@ export interface InboxItem {
 
 /** An item as the API serves it; given the agent's terminal `lines`, with what they said and showed. */
 export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, now: number, lines?: readonly TermLine[]): InboxItem {
-  const { what } = needLine(a, reviews);
+  const { what } = lineOf(a, reviews);
   const lane = laneOf(a, now);
   if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane };
-  const cos = a.kind === 'turn' ? a.agent.lead?.cos?.judged : undefined;
+  const cos = a.kind === 'turn' ? readOf(a.agent)?.judged : undefined;
   const { agent } = a;
   const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
   const q = a.kind === 'question' ? openQuestion(agent) : undefined;
@@ -95,9 +93,9 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
  * How the captain answers an item: approve or decline a hand, pick a question's option, say something, close the goal,
  * or send the chief of staff's words to the lead (a turn in the `ready` lane).
  */
-export type Decide = { allow: boolean } | { option: string; note?: string } | { text: string } | { close: true } | { send: true };
+export type Decide = CaptainAnswer | { send: true };
 
-export type { DecidedVia } from './ledger';
+export type { DecidedVia };
 
 const SAY_HOW = 'Say how you decide: allow, option, text, close or send';
 
@@ -128,7 +126,7 @@ export function answerText(d: Decide): string {
   if ('allow' in d) return d.allow ? 'Approved' : 'Declined';
   if ('option' in d) return `Picked ${d.option.toUpperCase()}${d.note ? `: ${d.note}` : ''}`;
   if ('close' in d) return 'Closed the goal';
-  if ('send' in d) return 'Sent the chief of staff’s words';
+  if ('send' in d) return SENT_WORDS;
   return d.text;
 }
 
@@ -156,21 +154,15 @@ export interface Inbox {
   decided: DecisionEvent[];
 }
 
-/**
- * Whether an answer went through, from what Ops replied: not when it came back to ask about the cost of picking
- * a conversation back up (`costly`), or warning before closing a goal (`warn`).
- */
-export const landed = (reply: unknown): boolean => !(isRecord(reply) && ('costly' in reply || 'warn' in reply));
-
 /** Where a goal's lead's turn stands for the captain: at work, being read, or ended and judged (or not judged at all). */
 export type TurnStage = 'working' | 'reading' | 'ready' | 'card' | 'interrupt' | 'waiting';
 
 export function turnStage(lead: Pick<Agent, 'status' | 'lead'>): TurnStage {
   if (lead.status !== 'done') return 'working';
-  const cos = lead.lead?.cos;
-  if (!cos) return 'waiting';
-  if (!cos.judged) return 'reading';
-  return ({ 1: 'ready', 2: 'card', 3: 'interrupt', 4: 'ready' } as const)[cos.judged.route];
+  const read = readOf(lead);
+  if (!read) return 'waiting';
+  if (!read.judged) return 'reading';
+  return ({ 1: 'ready', 2: 'card', 3: 'interrupt', 4: 'ready' } as const)[read.judged.route];
 }
 
 /**
@@ -180,7 +172,7 @@ export function turnStage(lead: Pick<Agent, 'status' | 'lead'>): TurnStage {
 export function turnNews(before: TurnStage | undefined, lead: Pick<Agent, 'name' | 'status' | 'lead'>): { level: 'info' | 'error'; text: string } | null {
   const now = turnStage(lead);
   if (!before || before === now) return null;
-  const ask = lead.lead?.cos?.judged?.ask ?? '';
+  const ask = readOf(lead)?.judged?.ask ?? '';
   if (now === 'interrupt') return { level: 'error', text: `🚨 ${lead.name}: ${ask}` };
   if (now === 'card') return { level: 'info', text: `🗂 ${lead.name}: ${ask}` };
   if (now === 'waiting' && before === 'working') return { level: 'info', text: `🖖 ${lead.name} is waiting for you` };

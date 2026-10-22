@@ -1,5 +1,5 @@
-import type { CosRoute } from '../../shared/ledger';
-import type { JournalEntry, TurnKind } from './runJournal';
+import type { JournalEntry, TurnKind, VerdictRoute } from '../../plugin-api/server';
+import { CHIEF_OF_STAFF, SENDER, SENT_WORDS } from './shared';
 
 // The life of every card the captain was owed, replayed from what Focus kept (`pnpm run card-replay`): each work
 // turn a goal lead ends opens one, the chief of staff's verdict on it says how much it needed the captain, and it closes
@@ -23,7 +23,7 @@ export type Sender =
 
 // Ops opened them with [Office] and "The office" before it had its name: old journals still say so.
 const OPENINGS: [RegExp, Sender][] = [
-  [/^\[Chief of Staff\]/, 'chief-of-staff'],
+  [new RegExp(`^\\[${SENDER}\\]`), 'chief-of-staff'],
   [/^\[QA officer /, 'qa'],
   [/^\[(?:Ops|Office)\] Slice \d+ has landed/, 'slice-landed'],
   [/^\[(?:Ops|Office)\] \S+ had merge conflicts/, 'conflict'],
@@ -49,7 +49,7 @@ export const captainVoiced = (sender: Sender): boolean => sender === 'captain' |
 /** A `cos-verdict` from the ledger, as much as the replay needs. */
 export interface VerdictFact {
   sessionId: string;
-  route: CosRoute;
+  route: VerdictRoute;
   why: string;
   message?: string;
   at: number;
@@ -93,7 +93,7 @@ export interface Card {
   turn: string;
   session?: string;
   openedAt: number;
-  route: CosRoute | 'unjudged';
+  route: VerdictRoute | 'unjudged';
   why?: string;
   verdictAt?: number;
   outcome: CardOutcome;
@@ -142,8 +142,8 @@ export function outcomeOf(waker: CardMessage | undefined, decisions: readonly De
   if (!waker) return { outcome: 'superseded', by: 'none' };
   if (captainVoiced(waker.sender)) return { outcome: 'captain', by: waker.sender };
   if (waker.sender !== 'chief-of-staff') return { outcome: 'superseded', by: waker.sender };
-  const sent = decisions.find((d) => d.answer.startsWith('Sent the chief of staff'));
-  return { outcome: 'cos-sent', by: waker.sender, ...(sent && { cosSentBy: sent.via === 'chief-of-staff' ? 'auto' : 'captain' }) };
+  const sent = decisions.find((d) => d.answer === SENT_WORDS);
+  return { outcome: 'cos-sent', by: waker.sender, ...(sent && { cosSentBy: sent.via === CHIEF_OF_STAFF ? 'auto' : 'captain' }) };
 }
 
 function close(open: Open, at: number, decisions: readonly DecisionFact[], ended: boolean): Card {
@@ -252,7 +252,7 @@ export function leadCards(lead: LeadInfo, entries: readonly JournalEntry[], { ve
   return cards;
 }
 
-export type RouteKey = CosRoute | 'unjudged';
+export type RouteKey = VerdictRoute | 'unjudged';
 export const OUTCOMES: readonly CardOutcome[] = ['captain', 'cos-sent', 'superseded', 'ended', 'open'];
 export const ROUTES: readonly RouteKey[] = [1, 2, 3, 4, 'unjudged'];
 

@@ -31,8 +31,9 @@ export const config = {
    */
   plugins: (process.env.FOCUS_PLUGINS ?? (demo ? 'all' : '')).split(',').map((name) => name.trim()).filter(Boolean),
   /**
-   * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the inbox's /api/bot routes to it, and signs
-   * what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (Focus as the bot reaches it) makes the links in it whole.
+   * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the /api/bot routes (the plugins' routes for
+   * bots) to it, and signs what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (Focus as the bot reaches it) makes the
+   * links in it whole. A plugin is lent all three (`PluginHost.bot`).
    */
   bot: { token: process.env.FOCUS_BOT_TOKEN?.trim() || undefined, webhook: process.env.FOCUS_BOT_WEBHOOK?.trim() || undefined, publicUrl: process.env.FOCUS_PUBLIC_URL?.trim().replace(/\/+$/, '') || undefined },
 };

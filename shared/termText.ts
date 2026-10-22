@@ -40,7 +40,7 @@ export function plainTermLine(line: TermLine): string {
   return part ? `${part.start ? REPLY : '  '}${plainMarkdown(part.text)}` : line.text;
 }
 
-/** The last of Claude's replies in a terminal, as plain text: what a lead last said, for the Comms panel to quote. */
+/** The last of Claude's replies in a terminal, as plain text: what a lead last said, to quote it. */
 export function lastReply(lines: readonly TermLine[]): string {
   const start = lines.findLastIndex((l) => replyPart(l)?.start);
   if (start < 0) return '';

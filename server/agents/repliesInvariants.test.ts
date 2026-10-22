@@ -44,7 +44,7 @@ const replies: Subject<Kept> = {
       agents.transcripts = () => Promise.resolve(Object.entries(transcripts).map(([sessionId, text]) => ({
         name: sessionId, kind: sessionId === 'dev' ? 'agent' as const : 'lead' as const, sessionId, read: () => later('read', () => Promise.resolve(text)),
       })));
-      // as Focus starts again, it keeps what a backfill cut off left (server/index.ts)
+      // as Focus starts, it keeps the older replies (server/index.ts): again after a restart, what a backfill cut off left
       let going: Promise<unknown> = starting ? agents.backfillReplies() : Promise.resolve();
       return {
         actions: () => [{ name: 'Focus keeps older replies', run: () => (going = Promise.all([going, agents.backfillReplies()])) }],
@@ -57,7 +57,8 @@ const replies: Subject<Kept> = {
         },
       };
     };
-    return life(first.agents, later);
+    // Focus keeps them every time it starts, the first time too: a restart with nothing under way does no more
+    return life(first.agents, later, true);
   },
 };
 

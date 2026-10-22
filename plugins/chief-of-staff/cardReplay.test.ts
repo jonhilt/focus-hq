@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
+import type { JournalEntry, RunFact } from '../../plugin-api/server';
+import { CARRY_ON_AFTER_LIMIT, conflictsResolvedNote } from '../../plugin-api/testing';
 import { type DecisionFact, itemAgent, landedBy, leadCards, median, missed, senderOf, summarize, type VerdictFact } from './cardReplay';
-import type { JournalEntry, RunFact } from './runJournal';
-import { conflictsResolvedNote } from './lead';
-import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
+import { answerText } from './inbox';
+import { SENDER } from './shared';
 
 const lead = { id: 'lead_p_1', projectId: 'p', name: 'Lt. Reyes', goal: 'A goal' };
 
@@ -36,7 +37,7 @@ describe('senderOf', () => {
     expect(senderOf('[Ops] jonhilt/focus#588 had merge conflicts with `main`: Ensign X merged')).toBe('conflict');
     expect(senderOf('[Ops] something else')).toBe('ops');
     expect(senderOf('[Office] something else')).toBe('ops');
-    expect(senderOf('[Chief of Staff] Show the captain the mockup first')).toBe('chief-of-staff');
+    expect(senderOf(`[${SENDER}] Show the captain the mockup first`)).toBe('chief-of-staff');
     expect(senderOf('[Quick answerer] While you were busy, the captain asked')).toBe('quick-answerer');
     expect(senderOf('Focus restarted while you were working, so your last turn was cut off')).toBe('restart');
     expect(senderOf('The office paused you mid-turn when its Claude usage limit was reached.')).toBe('plan-limit');
@@ -102,10 +103,11 @@ describe('leadCards', () => {
   });
 
   it('the chief of staff’s words sent tell who pressed send', () => {
-    const words = { kind: 'queued' as const, text: '[Chief of Staff] Check legibility first', at: 'end' as const, t: 50_000 };
-    const auto = leadCards(lead, journal(...turn('t1', 10_000), words, { kind: 'waiting' }, next('t2', 52_000)), { verdicts: [verdict(4, 11_000)], decisions: [{ kind: 'turn', answer: 'Sent the chief of staff’s words', via: 'chief-of-staff', at: 50_000 }] });
+    // the words and the decision line as the chief of staff sends and records them
+    const words = { kind: 'queued' as const, text: `[${SENDER}] Check legibility first`, at: 'end' as const, t: 50_000 };
+    const auto = leadCards(lead, journal(...turn('t1', 10_000), words, { kind: 'waiting' }, next('t2', 52_000)), { verdicts: [verdict(4, 11_000)], decisions: [{ kind: 'turn', answer: answerText({ send: true }), via: 'chief-of-staff', at: 50_000 }] });
     expect(auto[0]).toMatchObject({ outcome: 'cos-sent', cosSentBy: 'auto', route: 4 });
-    const pressed = leadCards(lead, journal(...turn('t1', 10_000), words, { kind: 'waiting' }, next('t2', 52_000)), { verdicts: [], decisions: [{ kind: 'turn', answer: 'Sent the chief of staff’s words', via: 'office', at: 50_000 }] });
+    const pressed = leadCards(lead, journal(...turn('t1', 10_000), words, { kind: 'waiting' }, next('t2', 52_000)), { verdicts: [], decisions: [{ kind: 'turn', answer: answerText({ send: true }), via: 'office', at: 50_000 }] });
     expect(pressed[0]).toMatchObject({ outcome: 'cos-sent', cosSentBy: 'captain', route: 'unjudged' });
   });
 

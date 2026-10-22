@@ -137,6 +137,8 @@ stateDiagram-v2
 - a developer's, a fixer's, a conflict resolver's, a brief's, a lead's or QA's turn carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan (QA's review carries on with it: [QA](qa.md#the-review-journal-picking-a-review-up-after-a-restart));
 - on your API key, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
 
+A turn the captain stops, whether it ends or a restart finds it, leaves what was sent into it as a note for the agent's next message, in case it never arrived (`runJournal.test.ts`): otherwise a stop would lose what a restart keeps.
+
 An agent sent home has a `reset` in their journal, so an id that comes back (a reopened goal, QA's next review) starts from nothing.
 
 ## Scratch dirs

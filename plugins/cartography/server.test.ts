@@ -74,7 +74,7 @@ describe('cartography, switched on per project', () => {
   it('won\'t map again a project it\'s off for', () => {
     const { lent } = host([{ id: 'shop', name: 'Shop', repos: ['o/shop'] }]);
     const route = cartography.start(lent).routes?.find((r) => r.path === '/map');
-    expect(() => route?.handle({ body: { projectId: 'shop' }, query: {} })).toThrow('isn’t switched on for that project');
+    expect(() => route?.handle({ body: { projectId: 'shop' }, query: {}, params: {} })).toThrow('isn’t switched on for that project');
   });
 });
 
@@ -139,7 +139,7 @@ describe('the diagrams leads draw', () => {
     expect(kept.files).toEqual([{ repo: 'o/shop', path: 'plugins/cartography/diagrams.ts', hash: expect.stringMatching(/^[0-9a-f]{40}$/) }]);
     // a browser reads its page and picture through the plugin's route
     const route = parts.routes?.find((r) => r.path === '/diagram');
-    expect(route?.handle({ body: { project: 'shop', id: kept.id }, query: {} })).toEqual({ html: '<p>it</p>', image: 'data:image/jpeg;base64,AQI=' });
+    expect(route?.handle({ body: { project: 'shop', id: kept.id }, query: {}, params: {} })).toEqual({ html: '<p>it</p>', image: 'data:image/jpeg;base64,AQI=' });
     // and Focus starting again finds it
     const again = host([shop], [lead], data);
     cartography.start(again.lent);
@@ -169,14 +169,14 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     const { lent, diagrams, seed } = host([shop]);
     const parts = cartography.start(lent);
     seed({ diagrams: { shop: [old] } });
-    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} });
     await until(() => diagrams().shop?.[0]?.by === 'Ops');
     const [again] = diagrams().shop ?? [];
     expect(again).toMatchObject({ id: 'd', question: 'Q?', goal: 'Wishlist', by: 'Ops' });
     expect(again.stale).toBeUndefined();
     expect(again.redrawing).toBeUndefined();
     expect(again.files).toEqual([{ repo: 'o/shop', path: 'plugins/cartography/keeper.ts', hash: expect.any(String) }]);
-    expect(parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'd' }, query: {} })).toEqual({ html: '<p>again</p>' });
+    expect(parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} })).toEqual({ html: '<p>again</p>' });
   });
 
   it('says why when it can’t, and keeps the one it had', async () => {
@@ -186,7 +186,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
       const { lent, diagrams, seed } = host([shop]);
       const parts = cartography.start(lent);
       seed({ diagrams: { shop: [old] } });
-      parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+      parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} });
       await until(() => !!diagrams().shop?.[0]?.failed);
       expect(diagrams().shop?.[0]).toMatchObject({ id: 'd', by: 'Lt. Okafor', failed: 'no session to hand' });
       expect(diagrams().shop?.[0]?.redrawing).toBeUndefined();
@@ -199,7 +199,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     const { lent, seed } = host([shop]);
     const parts = cartography.start(lent);
     seed({ diagrams: { shop: [{ ...old, id: 'gone', image: true }] } });
-    const read = parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'gone' }, query: {} }) as { html: string; image?: string };
+    const read = parts.routes?.find((r) => r.path === '/diagram')?.handle({ body: { project: 'shop', id: 'gone' }, query: {}, params: {} }) as { html: string; image?: string };
     expect(read.html).toContain('Its page is gone');
     expect(read.image).toBeUndefined();
   });
@@ -212,7 +212,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     const parts = cartography.start(lent);
     expect(diagrams().shop?.[0]?.redrawing).toBeUndefined();
     // so it can be drawn again
-    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    parts.routes?.find((r) => r.path === '/redraw')?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} });
     await until(() => diagrams().shop?.[0]?.by === 'Ops');
     expect(diagrams().shop?.[0]?.by).toBe('Ops');
   });
@@ -225,7 +225,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
       const { lent, diagrams, seed } = host([shop]);
       const parts = cartography.start(lent);
       seed({ diagrams: { shop: [old] } });
-      const route = (p: string) => parts.routes?.find((r) => r.path === p)?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+      const route = (p: string) => parts.routes?.find((r) => r.path === p)?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} });
       route('/redraw');
       // the drawing's asked for, and not back yet
       await until(() => !!finish);
@@ -242,7 +242,7 @@ describe('drawing a kept diagram again, and forgetting it', () => {
     const { lent, diagrams, seed } = host([shop]);
     const parts = cartography.start(lent);
     seed({ diagrams: { shop: [old] } });
-    parts.routes?.find((r) => r.path === '/forget')?.handle({ body: { project: 'shop', id: 'd' }, query: {} });
+    parts.routes?.find((r) => r.path === '/forget')?.handle({ body: { project: 'shop', id: 'd' }, query: {}, params: {} });
     expect(diagrams().shop).toEqual([]);
   });
 });

@@ -12,3 +12,7 @@ export const FOCUS_DIR = config.root;
 export { type Action, checkAtOnce, checkRestart, type Later, type Running, type Subject } from '../server/agents/invariants';
 /** Ops' state machines as data, as `PluginHost.machines` lends them: to lay out and draw in a test. */
 export { MACHINES } from '../server/agents/machines';
+
+// Ops' own words to a lead, for a plugin's tests that tell who a message is from
+export { conflictsResolvedNote } from '../server/agents/lead';
+export { CARRY_ON_AFTER_LIMIT } from '../server/agents/manager/planLimit';

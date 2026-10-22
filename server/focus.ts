@@ -153,7 +153,6 @@ export class Focus {
     this.broadcastProjects();
     // a plugin switched on (or off) for the project starts (or stops) its work there
     if (followUps.plugins) this.agents.plugins.projectChanged(id);
-    if (followUps.holdSends) for (const agent of this.store.agentsIn(id)) this.agents.holdSend(agent.id);
     if (followUps.schedule) {
       this.agents.schedule();
       this.boardChanged(id, 0);
@@ -400,7 +399,7 @@ export class Focus {
   /** Starts the plugins switched on (docs/plugins.md), lending them Focus's own repo, and in the demo its agents' transcripts. */
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
   startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, ...more });
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, ...more });
     this.info.plugins = this.agents.plugins.ids();
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
     for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);

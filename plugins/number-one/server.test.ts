@@ -11,7 +11,7 @@ function aboard(opts: { demo?: boolean; saved?: NumberOneChat } = {}) {
   const route = (path: string) => {
     const found = o.agents.plugins.routes().find((r) => r.route.path === path)?.route;
     if (!found) throw new Error(`no route ${path}`);
-    return (body: Record<string, unknown> = {}) => found.handle({ body, query: {} });
+    return (body: Record<string, unknown> = {}) => found.handle({ body, query: {}, params: {} });
   };
   const state = () => o.agents.plugins.stateOf(NUMBER_ONE) as NumberOneState;
   return { ...o, route, state };

@@ -35,8 +35,10 @@ export interface Ui {
   /** The room's goals: each one's lead, and a box to start another. */
   /** `station`: the free team station the captain walked up to, where a goal they start goes. */
   openGoals(projectId: string, station?: number): void;
-  /** Comms: whatever waits on the captain across the ship, and every goal under way. */
-  openComms(): void;
+  /** Plugin `id`'s own panel (`ClientPlugin.panel`), while it's switched on; nothing otherwise. */
+  openPlugin(id: string): void;
+  /** The panels of the plugins switched on, by plugin id: what `openPlugin` opens (the tools that shoot the ship go through each). */
+  pluginPanels(): { id: string; label: string }[];
   /** The engineering station: the chief engineer's panel, with the ledger's report card and the plugins' parts. */
   openEngineering(): void;
   /** Main engineering's master systems table: the ledger's log, and a trace of a pull request or goal. */

@@ -69,11 +69,6 @@ export interface Project {
   autoQa?: boolean;
   /** A PR Ops opened that fails QA goes back to a developer to fix (missing = on; a new project starts off). */
   autoSendBack?: boolean;
-  /**
-   * The chief of staff's words for a lead whose turn it would carry on or send back go to them by themselves, after
-   * `AUTO_SEND_MS` (shared/tricorder.ts) unless the captain holds them (missing = off: the captain sends them).
-   */
-  cosAutoSend?: boolean;
   /** PRs Ops opened merge by themselves once QA passed their head commit and checks are green (missing = off). */
   autoMerge?: boolean;
   /**

@@ -26,6 +26,12 @@ describe('fromBeforePlugins', () => {
     expect(raw).toEqual({ plugins: {}, agents: [{ task: 'lead', lead: {} }, { task: 'issue' }] });
   });
 
+  it('drops the mark the core kept on a lead’s turn for a plugin to judge: the turn then waits on the captain', () => {
+    const raw: SavedBeforePlugins = { agents: [{ task: 'lead', lead: { cos: { at: 1, judged: { route: 1 }, sendsAt: 2 } } }] };
+    fromBeforePlugins(raw);
+    expect(raw).toEqual({ plugins: {}, agents: [{ task: 'lead', lead: {} }] });
+  });
+
   it('moves a retro that ran into the retro plugin’s slot, and drops one that never did', () => {
     const ran = { status: 'thinking', activity: 'Drafting', days: 14, sessions: 3, drafts: [], watch: [], costUsd: 0.2 };
     const raw: SavedBeforePlugins = { retro: ran };

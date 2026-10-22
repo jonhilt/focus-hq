@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { crossings, importsOf, pluginOf, project, refusal } from './boundary';
+import { crossings, importsOf, pluginOf, pluginsNamed, project, refusal } from './boundary';
 
 const root = path.resolve(import.meta.dirname, '..');
 
@@ -61,4 +61,19 @@ describe('the line between the core and its plugins', () => {
     for (const plugin of plugins) expect(say(found.filter((c) => pluginOf(c.file) === plugin)), `${plugin} imports only through plugin-api/ and other plugins' api.ts`).toEqual([]);
     // it parses every file in the repo: a second or two, longer while the rest of the suite runs beside it
   }, 30_000);
+
+  it('finds the core reaching a plugin by its id written out', () => {
+    expect(pluginsNamed('ui.openPlugin("maps");\nconst on = pluginOn(project, \'maps\');')).toEqual([{ line: 1, id: 'maps' }, { line: 2, id: 'maps' }]);
+    expect(pluginsNamed("await shot(page, 'x', 'ui.openPlugin(`scores`)');\nfetch('/api/plugins/scores/inbox');")).toEqual([{ line: 1, id: 'scores' }, { line: 2, id: 'scores' }]);
+    expect(pluginsNamed('const s = pluginState<Scores>(\'scores\');')).toEqual([{ line: 1, id: 'scores' }]);
+    // by a variable, as `Plugins` does, or a word that only looks like one
+    expect(pluginsNamed('openPlugin(id); pluginOn(p, plugin.id); fetch(`/api/plugins/${id}${path}`); const flow = \'flow\';')).toEqual([]);
+  });
+
+  it('holds in the repo: no core file reaches a plugin by its id', () => {
+    const { files } = project(root);
+    const core = files.map((f) => path.relative(root, f).split(path.sep).join('/')).filter((f) => !pluginOf(f) && !f.endsWith('.test.ts'));
+    const named = core.flatMap((f) => pluginsNamed(fs.readFileSync(path.join(root, f), 'utf8')).map((n) => `${f}:${n.line} ${n.id}`));
+    expect(named).toEqual([]);
+  });
 });

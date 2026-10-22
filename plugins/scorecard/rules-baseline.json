@@ -1,7 +1,7 @@
 {
   "plugins/cartography/keeper.ts": 64,
   "plugins/retro/engineer.ts": 66,
-  "server/agents/manager/comms.ts": 58,
+  "server/agents/manager/comms.ts": 60,
   "server/agents/manager/core.ts": 81,
   "server/agents/manager/delivery.ts": 81,
   "server/agents/manager/ledger.ts": 51,

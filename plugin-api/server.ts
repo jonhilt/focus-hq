@@ -2,12 +2,14 @@
 // it (`PluginHost`), and the helpers it may share with the core. Anything Focus does for a plugin (files,
 // checkouts, GitHub) goes on the host, so the core decides what a plugin can do and a test can lend it a fake.
 export * from './shared';
-export type { BriefSpec, BriefWork, FocusPlugin, LeadNews, LeadNote, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
+export type { BriefSpec, BriefWork, FocusPlugin, LeadNews, LeadNote, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, ModelShown, PageFrames, PluginGoals, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
 export { ARTIFACT_LIMITS } from '../server/agents/lead';
 /** Reads a file a lead cites, as the model tool checks a cite: its lines, or undefined if it's missing or outside `roots` (their checkouts). */
 export { sourceReader } from '../server/agents/sourceReader';
 export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/util';
+/** A route's say on picking a conversation back up on your API key (`how`: now, or once your plan's limit resets). */
+export { resumeHow } from '../server/apiRequests';
 export { demoPace } from '../server/demoPace';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
 export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
@@ -25,7 +27,7 @@ export type { PastPullRequest } from '../server/github/provider';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** Focus on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */
-export { focusLedger, focusMirror, focusTranscript } from './focus';
+export { focusLedger, focusMirror, focusRunJournals, focusSavedState, focusTranscript } from './focus';
 /** Reading an agent: whether it's a goal's lead (a `LeadAgent`), and its goal as the ledger would record it. */
 export { goalRecord, hasLeadWork, pickStation } from '../server/agents/lead';
 /** The demo's made-up files, by repo, for a plugin's scripted stand-in to talk about. */
@@ -36,7 +38,7 @@ export { type Block, blocks, clip, type Line, messageFrom, resultText, transcrip
 export { leadTail } from '../server/agents/sessionDigest';
 /** Reading Ops' journals (`host.journals`): a fact and what a journal adds up to, fact by fact, and a run's fact in words. */
 export type { Stamped } from '../server/journals';
-export { factLine, type JournalEntry, type RunFact } from '../server/agents/runJournal';
+export { factLine, type JournalEntry, type RunFact, type TurnKind } from '../server/agents/runJournal';
 export { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact } from '../server/agents/reviewJournal';
 export { EMPTY_SLICE, evolveSlice, type SliceFact } from '../server/agents/sliceJournal';
 /** QA's catch rate (docs/qa-catch.md): Focus's latest run, and its totals. */

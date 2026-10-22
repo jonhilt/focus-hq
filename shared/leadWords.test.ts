@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { TermKind } from '../../../shared/types';
-import { focusIndex, keptOrder, lastWords, shownThisTurn } from './briefing';
+import type { TermKind } from './types';
+import { lastWords, shownThisTurn } from './leadWords';
 
 const line = (kind: TermKind, text: string) => ({ t: 0, kind, text });
 
@@ -26,47 +26,6 @@ describe('lastWords', () => {
   it('keeps the end of a long one, from a whole line', () => {
     const said = lastWords([line('text', 'a'.repeat(50)), line('text', 'b'.repeat(10)), line('text', 'c'.repeat(10))], 25);
     expect(said).toBe(`…\n${'b'.repeat(10)}\n${'c'.repeat(10)}`);
-  });
-});
-
-describe('focusIndex', () => {
-  it('is nothing with nothing left', () => {
-    expect(focusIndex([], 'a', 0)).toBe(-1);
-  });
-
-  it('stays on the item it showed while it’s there, wherever it moved', () => {
-    expect(focusIndex(['x', 'a', 'b'], 'a', 0)).toBe(1);
-  });
-
-  it('moves on to what took an answered item’s place', () => {
-    expect(focusIndex(['a', 'c'], 'b', 1)).toBe(1);
-  });
-
-  it('falls back to the last when the answered item was last', () => {
-    expect(focusIndex(['a', 'b'], 'c', 2)).toBe(1);
-  });
-
-  it('starts at the top', () => {
-    expect(focusIndex(['a', 'b'], null, 0)).toBe(0);
-  });
-});
-
-describe('keptOrder', () => {
-  it('keeps what it had where it was, though it moved', () => {
-    // a lead's turn, read, goes from the hails to the end of the needs
-    expect(keptOrder(['turn', 'hand', 'pick'], ['hand', 'pick', 'turn'])).toEqual(['turn', 'hand', 'pick']);
-  });
-
-  it('adds what’s new at the end, in the order it came', () => {
-    expect(keptOrder(['a', 'b'], ['c', 'a', 'd', 'b'])).toEqual(['a', 'b', 'c', 'd']);
-  });
-
-  it('drops what’s gone', () => {
-    expect(keptOrder(['a', 'b', 'c'], ['c', 'a'])).toEqual(['a', 'c']);
-  });
-
-  it('is the order it came in, to start', () => {
-    expect(keptOrder([], ['b', 'a'])).toEqual(['b', 'a']);
   });
 });
 

@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { api } from './net/api';
 import { state } from './net/state';
 import { Player } from './player';
-import { agentPanelOpen, openAgentPanel } from './ui/agentPanel';
+import { openAgentPanel } from './ui/agentPanel';
 import { openHelperPanel } from './ui/helperPanel';
 import { openWorkflowAgentPanel } from './ui/workflowAgentPanel';
 import { openWorkflowScriptPanel } from './ui/workflowScriptPanel';
@@ -16,7 +16,6 @@ import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { stepDemoPace } from './ui/demoPace';
 import { openGoalsPanel } from './ui/goalsPanel';
-import { openCommsPanel } from './ui/commsPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
@@ -30,7 +29,6 @@ import { type Interaction, REACH } from './world/builder';
 import { CHAIR_USE, chairInHand, seatedView } from './world/chairs';
 import type { Chair } from './world/deckExtras';
 import { OVERLAY_LAYER } from './world/frame';
-import { type TurnStage, turnNews, turnStage } from '../../shared/captainsInbox';
 import { toastShows } from '../../shared/hidden';
 import { previewIncludes } from '../../shared/previewSet';
 import { sound } from './sound';
@@ -55,8 +53,9 @@ import { gpuFrame } from './world/gpuTimer';
 import { canvasTest } from './world/canvas';
 import { newFrame, screenTest } from './world/screenRedraw';
 import type { MsdBoard } from './world/msd';
-import { clientPlugin, clientPlugins, startedParts, stationSays } from './plugins';
+import { clientPlugin, clientPlugins, everyGoal, goalsFor, openPluginPanel, pluginChair, pluginPanels, startedParts, stationSays } from './plugins';
 import { isMesh } from './world/isMesh';
+import { toastHails } from './ui/hails';
 
 /** A plugin's board for main engineering's MSD (the scorecard's), while the plugin's on and draws one. */
 function pluginBoard(id: string): MsdBoard | undefined {
@@ -199,7 +198,8 @@ async function main() {
         ? pluginBoard(what.plugin) ?? { kind: 'report', card: state.report }
         : what ? { kind: 'trace', trace: what } : { kind: 'report', card: state.report },
     ),
-    openComms: () => openCommsPanel(ui),
+    openPlugin: (id) => openPluginPanel(id, ui),
+    pluginPanels: () => pluginPanels().map(({ id, label }) => ({ id, label })),
     openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
@@ -363,19 +363,12 @@ async function main() {
     world.markPanels();
   };
   state.on('agent', agentChanged);
-  // news for the captain: a toast (anything in it that needs them stays in Comms' Needs you)
+  // a toast as an agent comes to need the captain, unless a plugin says it its own way
+  toastHails(ui);
+  // news for the captain: a toast
   const notify = (level: 'info' | 'success' | 'error', text: string, link?: NewsLink) => {
     hud.toast(level, text, link && linkAction(ui, link));
   };
-  // a goal's lead's turn coming to you, unless you're already looking at them: as it ends, or as the chief of staff
-  // judges it a card or an interrupt (`turnNews`); what it would carry on or send back stays quiet, in Comms
-  const leadTurns = new Map<string, TurnStage>();
-  state.on('agent', (a) => {
-    if (a.task !== 'lead' || state.isHidden(a.projectId)) return;
-    const news = turnNews(leadTurns.get(a.id), a);
-    leadTurns.set(a.id, turnStage(a));
-    if (news && !agentPanelOpen(a.id)) notify(news.level, news.text, { kind: 'agent', id: a.id, talk: true });
-  });
   // crew working their consoles: a few blips from a station as its terminal scrolls, now and then rather than per line
   const chatter = new Map<string, number>();
   state.on('agent-removed', (a) => {
@@ -500,7 +493,7 @@ async function main() {
     }
     aimAt(aiming);
     const chair = chairInHand(sittingIn(), target?.interaction ?? null);
-    hud.setHint(chair ? CHAIR_USE[chair].label : target ? target.label() : null);
+    hud.setHint(chair ? chairUse(chair)?.label ?? null : target ? target.label() : null);
   };
 
   // the captain's chair you're sat in, if you're still sat
@@ -511,11 +504,14 @@ async function main() {
     seatedIn = chair;
     player.sit(eye, lookAt);
   };
-  const useChair = (chair: Chair) => {
-    const { use } = CHAIR_USE[chair];
-    if (use.kind === 'comms') ui.openComms();
-    else ui.openManager(use.tab);
+  // what a chair puts to hand: the core's (the ready room's console, the personal log), or a plugin's (the bridge's)
+  const chairUse = (chair: Chair): { label: string; use: () => void } | undefined => {
+    const own = CHAIR_USE[chair];
+    if (own) return { label: own.label, use: () => ui.openManager(own.tab) };
+    const plugin = pluginChair(chair);
+    return plugin && { label: plugin.label, use: () => plugin.use(ui) };
   };
+  const useChair = (chair: Chair) => chairUse(chair)?.use();
 
   const interact = () => {
     const chair = chairInHand(sittingIn(), target?.interaction ?? null);
@@ -632,7 +628,6 @@ async function main() {
       // jot a thought down in the personal log, wherever you are
       KeyI: () => ui.openManager('personal-log'),
       KeyN: () => ui.openNewIssue(world.locationOf(camera.position).projectId),
-      KeyC: () => ui.openComms(),
       KeyH: () => record(!document.body.classList.contains('recording')),
       KeyB: () => {
         forced = null;
@@ -641,11 +636,12 @@ async function main() {
         dark = wantNight();
         hud.toast('info', dark ? 'Night: the ship dims until morning' : 'Lights up until evening');
       },
-      // the goals of the holodeck you're in; anywhere else, every goal's in Comms
+      // the goals of the holodeck you're in; anywhere else, a plugin's view of every goal, or the first shown project's
       KeyL: () => {
-        const projectId = world.locationOf(camera.position).projectId;
-        if (projectId) ui.openGoals(projectId);
-        else ui.openComms();
+        const every = everyGoal();
+        const goals = goalsFor(world.locationOf(camera.position).projectId, state.shown[0]?.id, !!every);
+        if (goals === 'every') every?.open(ui);
+        else if (goals) ui.openGoals(goals.projectId);
       },
     };
     const run = hotkeys[e.code];

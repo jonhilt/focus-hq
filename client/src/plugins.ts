@@ -3,10 +3,11 @@
 // Only the plugins Focus has switched on (`info.plugins`) show.
 import type * as THREE from 'three';
 import { pluginOn } from '../../shared/projectPlugins';
-import type { Agent, AgentStatus, GoalArtifact } from '../../shared/types';
+import type { Agent, AgentStatus, GoalArtifact, Project } from '../../shared/types';
 import { state } from './net/state';
+import { h } from './ui/dom';
 import type { Ui } from './ui/context';
-import type { Crew } from './world/deckExtras';
+import type { Chair, Crew } from './world/deckExtras';
 import type { Box2, Seat } from './world/layout';
 import type { Box } from './world/msd';
 
@@ -34,7 +35,34 @@ export interface ClientPlugin {
    * It works per project: a switch for it in each project's settings (the manager's Projects tab), off until it's
    * switched on there (`Project.plugins`). Its holodeck screens and its lead tools come only to projects it's on for.
    */
-  project?: { label: string; about: string };
+  project?: {
+    label: string;
+    about: string;
+    /** Its own settings for a project it's switched on for, shown beside its switch there. */
+    settings?: (project: Readonly<Project>, ui: Ui) => HTMLElement[];
+  };
+  /**
+   * A panel of its own, opened with `ui.openPlugin(id)`: from the pause panel's buttons, and whatever of the plugin's
+   * opens it (its key, its chair).
+   */
+  panel?: { label: string; open(ui: Ui): void };
+  /**
+   * What it puts to hand in one of the captain's chairs the core puts nothing in (the bridge's), used with E while
+   * the captain's sat there: `label` is the hint. The first plugin's wins.
+   */
+  chair?: { at: Chair; label: string; use(ui: Ui): void };
+  /**
+   * Its view of every shown project's goals at once: L opens it away from a holodeck, and a project's goals panel has
+   * a button back out to it (`◂ label`). The first plugin's wins; without one, L away from a holodeck opens the first
+   * shown project's goals, and the goals panel has no such button.
+   */
+  everyGoal?: { label: string; title?: string; open(ui: Ui): void };
+  /**
+   * It puts what waits on the captain in front of them its own way (a badge of its own, toasts of its own): while it's
+   * on, the core's plain count of what needs the captain on the HUD (`needsYou`) and its toast as an agent comes to
+   * need them (`hailNews`) step aside.
+   */
+  hails?: true;
   /** Keys it adds to the lists of controls, on the splash screen and the HUD: `{ key: 'G', label: 'the gallery' }`, say. */
   legend?: { key: string; label: string }[];
   /**
@@ -106,11 +134,13 @@ export interface HudStat {
   tone?: 'warn' | 'bad';
   /** What it is, on hover. */
   title?: string;
+  /** Drawn as this element of the plugin's own (its look from its CSS) in place of a plain stat: `text` is then what it says. */
+  el?: HTMLElement;
 }
 
 /** The stats the plugins switched on add to the HUD, in the order they're switched on. A plugin whose `hud` throws is left out. */
-export function hudStats(): HudStat[] {
-  return clientPlugins().flatMap((plugin) => {
+export function hudStats(plugins = clientPlugins()): HudStat[] {
+  return plugins.flatMap((plugin) => {
     try {
       return plugin.hud?.() ?? [];
     } catch (err) {
@@ -127,26 +157,10 @@ export interface ClientParts {
    * own keys: true when the plugin used it. Use only keys of its own (its legend's), and check `ui.panels.isOpen`.
    */
   keydown?(e: KeyboardEvent): boolean;
-  /**
-   * The captain answered a goal's lead from Comms (approved or declined a tool, picked an option, replied, closed the
-   * goal), as it stood when they did: after they've decided, never before.
-   */
-  answered?(lead: Agent): void;
 }
 
 /** The parts of each plugin switched on, as its `start` returned them, by id. */
 export const startedParts = new Map<string, ClientParts>();
-
-/** Tells every plugin started that the captain answered `lead` from Comms. One that throws is logged and skipped. */
-export function answeredLead(lead: Agent): void {
-  for (const [id, parts] of startedParts) {
-    try {
-      parts.answered?.(lead);
-    } catch (err) {
-      console.error(`The ${id} plugin's word on an answer failed`, err);
-    }
-  }
-}
 
 /** What the World lends a plugin as it builds the ship. */
 export interface ShipHost {
@@ -228,15 +242,15 @@ export const projectPlugins = (): (ClientPlugin & Required<Pick<ClientPlugin, 'p
 
 /**
  * A plugin's word on a goal under way, which the core places on the goal's surfaces: its card in the goals list and
- * its lines in Comms, drawn again as the plugin's state changes, and the goal board in its briefing room. Every part is
- * optional.
+ * a line about it in a plugin's list (`goalTags`), drawn again as the plugin's state changes, and the goal board in its
+ * briefing room. Every part is optional.
  */
 export interface GoalPart {
   /**
-   * A word on the goal by its lead: a readout under `label` on its card in the goals list (`card`), or a tag on its
-   * line in Comms (`line`); null for nothing. The core gives the element its look (`goal-readout`, `goal-tag`), in
-   * the colour of its `--tone`. Comms keeps a line from render to render, so a line's element should keep itself up
-   * to date.
+   * A word on the goal by its lead: a readout under `label` on its card in the goals list (`card`), or a tag on a
+   * line about it in a plugin's list (`line`); null for nothing. The core gives the element its look (`goal-readout`,
+   * `goal-tag`), in the colour of its `--tone`. A list may keep a line from render to render, so a line's element
+   * should keep itself up to date.
    */
   tag?: (lead: Agent, where: GoalTagPlace) => { label: string; el: HTMLElement } | null;
   /** A strip along the bottom of the goal board, or null for none. */
@@ -327,4 +341,40 @@ export const goalStrips = (lead: Agent): GoalStrip[] => clientPlugins().flatMap(
 export const stationSays = (): StationSays | null => clientPlugins().map((plugin) => plugin.engineering?.station?.() ?? null).find((says) => says !== null) ?? null;
 
 /** The plugin `id`'s part in the browser, while it's switched on. */
-export const clientPlugin = (id: string): ClientPlugin | undefined => clientPlugins().find((p) => p.id === id);
+export const clientPlugin = (id: string, plugins = clientPlugins()): ClientPlugin | undefined => plugins.find((p) => p.id === id);
+
+/** Opens the plugin `id`'s panel (`ui.openPlugin`): nothing while it's off, or when it has none. */
+export const openPluginPanel = (id: string, ui: Ui, plugins = clientPlugins()): void => clientPlugin(id, plugins)?.panel?.open(ui);
+
+/** The plugins switched on with a panel of their own, for the pause panel's buttons. */
+export const pluginPanels = (plugins = clientPlugins()): { id: string; label: string; open(ui: Ui): void }[] =>
+  plugins.flatMap((plugin) => (plugin.panel ? [{ id: plugin.id, ...plugin.panel }] : []));
+
+/** What a plugin puts to hand in chair `at`, if one does: the first plugin's. */
+export const pluginChair = (at: Chair, plugins = clientPlugins()): { label: string; use(ui: Ui): void } | undefined => plugins.find((plugin) => plugin.chair?.at === at)?.chair;
+
+/** The view of every shown project's goals a plugin offers (`ClientPlugin.everyGoal`), if one does: the first plugin's. */
+export const everyGoal = (plugins = clientPlugins()): ClientPlugin['everyGoal'] => plugins.find((plugin) => plugin.everyGoal)?.everyGoal;
+
+/**
+ * What L opens: the goals of the holodeck the captain's in (`here`); anywhere else, a plugin's view of every goal (when
+ * one offers it: `every`), or else the first shown project's goals (`firstShown`); nothing with no project shown.
+ */
+export function goalsFor(here: string | undefined, firstShown: string | undefined, every: boolean): { projectId: string } | 'every' | null {
+  if (here) return { projectId: here };
+  if (every) return 'every';
+  return firstShown ? { projectId: firstShown } : null;
+}
+
+/** A project's goals panel's way back out to a plugin's view of every goal, in its header: none without one. */
+export function everyGoalButtons(ui: Ui, plugins = clientPlugins()): HTMLElement[] {
+  const every = everyGoal(plugins);
+  return every ? [h('button', { class: 'btn small', title: every.title ?? every.label, onclick: () => every.open(ui) }, `◂ ${every.label}`)] : [];
+}
+
+/** Whether a plugin switched on puts what waits on the captain in front of them itself (`ClientPlugin.hails`), so the core's plain count and toast step aside. */
+export const pluginHails = (plugins = clientPlugins()): boolean => plugins.some((plugin) => plugin.hails);
+
+/** A per-project plugin's settings in `project`'s card: shown only while it's switched on there. */
+export const projectSettings = (plugin: ClientPlugin, project: Readonly<Project>, ui: Ui): HTMLElement[] =>
+  pluginOn(project, plugin.id) ? plugin.project?.settings?.(project, ui) ?? [] : [];

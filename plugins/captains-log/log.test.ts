@@ -103,7 +103,7 @@ describe('the captain’s log of a real ship', () => {
     await until(() => claude.turns.length === 1);
     await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
     await until(() => [...store.reviews.values()].some((r) => r.status === 'testing'));
-    const log = route.handle({ body: {}, query: {} }) as LogLine[];
+    const log = route.handle({ body: {}, query: {}, params: {} }) as LogLine[];
     expect(log.find((l) => l.kind === 'shipped')).toMatchObject({ who: agent.name, goal: 'Saved items', projectId: project.id, text: expect.stringMatching(/^Shipped slice 1: Saved items, first slice → /) });
     const testing = log.find((l) => l.kind === 'testing');
     expect(testing?.who).toBe(store.agent([...store.reviews.values()].find((r) => r.status === 'testing')!.agentId!).name);

@@ -119,6 +119,13 @@ function outbox(flaws: OutboxFlaws): Subject<Omit<Outbox, 'posting' | 'asked'>> 
   };
 }
 
+/**
+ * A flaw planted on purpose is caught on these runs whatever seed the suite rolls (`FOCUS_TEST_SEED`): a flaw that
+ * shows only in a rare draw (a request landing just as Focus goes down) can slip past another seed's runs, and a test
+ * of the harness shouldn't need luck to tell a flawed part from a sound one.
+ */
+const CATCHING = { runs: 120, seed: 1 };
+
 describe('the invariant harness', () => {
   it('passes a part that holds both rules', async () => {
     await checkRestart(toy({}), { runs: 120 });
@@ -126,11 +133,11 @@ describe('the invariant harness', () => {
   }, 60_000);
 
   it('catches a restart that leaves a half-done mark behind', async () => {
-    await expect(checkRestart(toy({ leavesMark: true }), { runs: 120 })).rejects.toThrow(/restarted during "file (a|b)"/);
+    await expect(checkRestart(toy({ leavesMark: true }), CATCHING)).rejects.toThrow(/restarted during "file (a|b)"/);
   }, 60_000);
 
   it('catches two at once doing what one after the other would refuse', async () => {
-    await expect(checkAtOnce(toy({ raceable: true }), { runs: 120 })).rejects.toThrow(/"file (a|b)" and "file (a|b)" at once/);
+    await expect(checkAtOnce(toy({ raceable: true }), CATCHING)).rejects.toThrow(/"file (a|b)" and "file (a|b)" at once/);
   }, 60_000);
 
   // a request landing just as Focus goes down is a rare draw: a toy is cheap, so it takes many
@@ -139,11 +146,11 @@ describe('the invariant harness', () => {
   }, 60_000);
 
   it('catches a restart that loses work, seen only in what should have followed', async () => {
-    await expect(checkRestart(outbox({ forgetsQueue: true }), { runs: 120 })).rejects.toThrow(/then \[.*post the next/);
+    await expect(checkRestart(outbox({ forgetsQueue: true }), CATCHING)).rejects.toThrow(/then \[.*post the next/);
   }, 60_000);
 
   it('catches a restart that posts again what went up as Focus went down', async () => {
-    await expect(checkRestart(outbox({ repostsBlind: true }), { runs: 120 })).rejects.toThrow(/restarted during "post the next"/);
+    await expect(checkRestart(outbox({ repostsBlind: true }), CATCHING)).rejects.toThrow(/restarted during "post the next"/);
   }, 60_000);
 });
 

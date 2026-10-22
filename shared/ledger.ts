@@ -1,7 +1,6 @@
 import type { QaBadgeState } from './qa';
 import { isRecord } from './records';
-import type { AgentTask, ArchivedGoal, GoalRecord, CosRoute, TriageAction } from './types';
-export type { CosRoute } from './types';
+import type { AgentTask, ArchivedGoal, GoalRecord, TriageAction } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
 // closed goals, and a digest of each agent session as it ends. Ops appends to it as things happen and never
@@ -55,14 +54,15 @@ export type LedgerEntry =
    */
   | { kind: 'captain-replies'; key: string; sessionId: string; agent: string; goal?: string; replies: CaptainReply[]; backfilled?: boolean }
   /**
-   * Where the chief of staff (plugins/chief-of-staff) would have sent a lead's turn as it ended (`turnUuid` is its
-   * transcript's last line), in shadow mode: it acted on none of them, so they're checked against `captain-replies`.
-   * `message` is what it would have said to the lead (route 4); `version` is its prompt's.
+   * Where a plugin that judges goal leads' turns would send a lead's turn as it ended (`turnUuid` is its transcript's
+   * last line), to check against `captain-replies`: a journal format the core reads (the ledger's review) but never
+   * writes. `message` is what it would say (to the lead on routes 1 and 4); `version` is its prompt's.
    */
-  | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: CosRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
+  | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: VerdictRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
   /**
-   * The captain answered something in their inbox (shared/captainsInbox.ts): `item` is what it was (its inbox id, kind and line),
-   * `answer` what they decided in a few words, `via` where (Focus, or a bot on the API). `agent` is who it was for.
+   * The captain answered something waiting on them (in a plugin's inbox, or an agent's panel, as that plugin records
+   * it): `item` is what it was (its inbox id, kind and line), `answer` what they decided in a few words, `via` where
+   * (`DecidedVia`). `agent` is who it was for.
    */
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
@@ -70,16 +70,19 @@ export type LedgerEntry =
 
 
 /**
- * Where it was decided: by the captain in Focus, or through the API (a bot speaking for them), or by the chief of
- * staff, sending its own words where the captain let it (`Project.cosAutoSend`).
+ * Where it was decided: by the captain in Focus (`office`), through the API (`api`: a bot speaking for them), or by a
+ * plugin acting on its own where the captain let it (the plugin's id).
  */
-export type DecidedVia = 'office' | 'api' | 'chief-of-staff';
+export type DecidedVia = string;
 
-/** Where a decision came from, said after it: nothing for the captain in Focus. */
-export const viaNote = (via: DecidedVia): string => ({ office: '', api: 'via the API', 'chief-of-staff': 'sent by the chief of staff' })[via];
+/** Where a decision came from, said after it: nothing for the captain in Focus, and a plugin by its id in words. */
+export const viaNote = (via: DecidedVia): string => (via === 'office' ? '' : via === 'api' ? 'via the API' : `sent by the ${via.replace(/-/g, ' ')}`);
 
-/** Who a chief of staff's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
-export const cosAddressee = (route: CosRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');
+/** Where a `cos-verdict` line says a lead's turn goes: 1 carry on, 2 a card for the captain, 3 interrupt the captain, 4 back to the lead. */
+export type VerdictRoute = 1 | 2 | 3 | 4;
+
+/** Who a verdict's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
+export const verdictAddressee = (route: VerdictRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');
 
 /** The captain's message to a lead, in full, and the end of what the lead had said since the last message to it. */
 export interface CaptainReply {

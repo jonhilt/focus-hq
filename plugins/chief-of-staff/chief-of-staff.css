@@ -1,0 +1,78 @@
+/* The chief of staff's styles in the 3D ship's page (client.ts imports them; bundled whether it's on or not, so its class names are its own). */
+
+/* Comms on the HUD (its `hud` stat): an LCARS pill that lights up and counts whatever waits on the captain */
+.cos-badge {
+  display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-weight: 600; letter-spacing: 0.08em;
+  background: #000d; color: var(--lcars-peach); border-left: 14px solid var(--lcars-orange);
+  box-sizing: border-box; height: var(--hud-pill); line-height: 1;
+}
+.cos-badge > * { display: flex; align-items: center; padding: 0 10px; }
+.cos-badge b { min-width: 1.6em; justify-content: center; color: var(--muted); }
+.cos-badge kbd { background: var(--lcars-lilac); color: var(--ink); font-family: var(--ui); margin: 0; border-radius: 0; }
+.cos-badge.hailing > span { background: var(--lcars-orange); color: var(--ink); }
+.cos-badge.hailing b { background: var(--lcars-red); color: var(--ink); animation: cos-hail 1.2s steps(1) infinite; }
+@keyframes cos-hail { 50% { background: var(--lcars-gold); } }
+
+/* Comms (comms.ts) */
+.cos-comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
+.cos-comms h3:first-child { margin-top: 0; }
+.cos-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
+/* Needs you: a line each, what's needed in bold, who and where under it, the buttons that answer it on the right */
+.cos-needs { display: flex; flex-direction: column; gap: 6px; }
+.cos-need { --tone: var(--lcars-orange); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; }
+.cos-need-what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cos-need-from { display: block; color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cos-need-sends { display: block; color: var(--lcars-lilac); }
+.cos-need-sends:empty { display: none; }
+/* a lead's turn you've read: still waiting for your reply, but quieter */
+.cos-need.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); opacity: 0.75; }
+/* Comms' inbox: the projects along the top, the list on the left, the one picked on the right, each scrolling on its own */
+.cos-comms { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; grid-template-rows: auto 1fr; gap: 14px 18px; height: 100%; min-height: 0; }
+.cos-comms-tabs { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 8px; }
+.cos-comms-tab { --tone: var(--lcars-orange); font: inherit; font-size: 15px; color: var(--text); background: var(--surface-2); border: 2px solid transparent; border-radius: 999px; padding: 3px 12px; cursor: pointer; }
+.cos-comms-tab:hover { border-color: color-mix(in srgb, var(--tone) 60%, transparent); }
+.cos-comms-tab.on { border-color: var(--tone); color: var(--tone); }
+.cos-comms-tab b { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 6px; margin-left: 6px; }
+.cos-comms-tab.goals { margin-left: auto; }
+.cos-inbox-left, .cos-inbox-right { overflow-y: auto; min-height: 0; padding-right: 6px; }
+.cos-inbox-left { display: flex; flex-direction: column; gap: 6px; }
+.cos-inbox-left h3 { margin: 6px 0 0; }
+.cos-comms-keys { margin-top: auto; padding-top: 10px; font-size: 11px; }
+.cos-inbox-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 0; }
+.cos-inbox-row:hover { background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
+.cos-inbox-row.sel { background: color-mix(in srgb, var(--tone) 22%, var(--surface-2)); outline: 2px solid var(--tone); outline-offset: -2px; }
+.cos-inbox-row .cos-need-what { font-weight: 400; margin-top: 3px; }
+.cos-inbox-row-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.cos-inbox-row-head small { white-space: nowrap; flex-shrink: 0; }
+.cos-inbox-tag { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
+.cos-inbox-goal { color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.cos-decided-list { display: flex; flex-direction: column; gap: 6px; }
+.cos-decided { background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 8px solid var(--muted); padding: 6px 10px; opacity: 0.7; }
+.cos-decided-answer { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.cos-tray-line { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
+.cos-tray-line:hover { color: var(--text); }
+.cos-tray:empty { display: none; }
+@media (max-width: 760px) { .cos-comms { grid-template-columns: 1fr; height: auto; } .cos-comms-tabs { grid-column: 1; } .cos-inbox-left, .cos-inbox-right { overflow: visible; } }
+/* the one picked, large (needCard.ts): what to read to decide, and the answers */
+.cos-need-title { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--lcars-peach); }
+.cos-need-trail { font-size: 14px; color: var(--muted); margin-top: -8px; }
+.cos-need-then { color: var(--muted); }
+.cos-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px; }
+.cos-card-what { font-size: 20px; font-weight: 600; line-height: 1.2; display: flex; gap: 12px; }
+.cos-card-context { white-space: normal; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }
+.cos-card-context > :first-child { margin-top: 0; }
+.cos-card-context > :last-child { margin-bottom: 0; }
+.cos-card-context p, .cos-card-context ul, .cos-card-context ol, .cos-card-context pre, .cos-card-context table, .cos-card-context blockquote { margin: 0 0 0.6em; }
+.cos-card-context h1, .cos-card-context h2, .cos-card-context h3, .cos-card-context h4 { font-size: 1.05em; margin: 0.8em 0 0.3em; }
+.cos-card-context ul, .cos-card-context ol { padding-left: 2.2ch; }
+.cos-card-context code { font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
+.cos-card-context pre { white-space: pre-wrap; }
+.cos-card-context table { border-collapse: collapse; }
+.cos-card-context th, .cos-card-context td { border: 1px solid var(--line); padding: 2px 8px; text-align: left; }
+a.cos-card-option { color: inherit; text-decoration: none; }
+.cos-card-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+.cos-card-option { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px; }
+.cos-card-option img { width: 100%; max-height: 170px; object-fit: cover; object-position: top; border-radius: calc(var(--radius) / 2); }
+.cos-card-reply, .cos-card-note { width: 100%; box-sizing: border-box; }
+/* text to read, in the agents' sessions' font like the core's (styles.css) */
+.cos-card-note, .cos-card-context, .cos-card-option small { font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0; }

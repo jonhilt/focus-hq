@@ -5,19 +5,19 @@ import { assignWarning, waitsLabel } from '../../../shared/dependencies';
 import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
 import { mergeCheckLine } from '../../../shared/mergeCheck';
 import { prKey, qaBadge } from '../../../shared/qa';
-import { hailKey } from '../../../shared/captainsInbox';
-import { type Attention, hails, inFlight, laneOf, needLine, needsYou } from '../../../shared/tricorder';
+import { type Attention, inFlight, needLine, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { h } from '../ui/dom';
 import type { Actions } from './actions';
+import { type PhoneHost, phoneHails, phoneSections } from './phonePlugins';
 
 export interface HomeContext {
   actions: Actions;
   /** Whether a collapsible section is open, by key; sections the manager never touched use their default. */
   expanded: Map<string, boolean>;
-  /** The PR card the Needs you strip just pointed at. */
+  /** The PR card a plugin's section just pointed at (`PhoneHost.showPr`). */
   highlight: string | null;
   showPr(projectId: string, pr: PullRequest): void;
 }
@@ -32,64 +32,39 @@ export const workLabel = (a: Agent) =>
 
 const FINISHED = ['done', 'error', 'stopped'];
 
-/** The home screen: what needs you, then each shown project's agents in flight, PRs and issues. */
+/** What the home screen lends the plugins' sections at its top. */
+const phoneHost = (ctx: HomeContext): PhoneHost => ({
+  button: (key, label, run, opts) => ctx.actions.button(key, label, run, opts),
+  errors: (scope) => ctx.actions.errors(scope),
+  agentHref,
+  workLabel,
+  showPr: (projectId, pr) => ctx.showPr(projectId, pr),
+});
+
+/**
+ * The home screen: what needs you (the core's plain list, unless a plugin shows it its own way), what the plugins put
+ * at the top, then each shown project's agents in flight, PRs and issues.
+ */
 export function home(ctx: HomeContext): HTMLElement {
   const login = state.info?.github.login;
   const boards = state.shown.map((project) => ({ project, cols: columns(project, state.boards.get(project.id), state.agentsIn(project.id), login) }));
   const prs = boards.flatMap(({ project, cols }) => cols.prs.map((pr) => ({ projectId: project.id, pr })));
-  const attention = needsYou(state.shownAgents(), prs, state.reviews);
-  const now = Date.now();
   return h('main', { class: 'home' },
-    needsYouStrip(ctx, attention),
-    readyStrip(ctx, hails(state.shownAgents(), prs, state.reviews).filter((a) => laneOf(a, now) === 'ready'), now),
+    phoneHails() ? null : needsYouStrip(ctx, needsYou(state.shownAgents(), prs, state.reviews)),
+    ...phoneSections(phoneHost(ctx)),
     state.info && !state.projects.length ? h('p', { class: 'empty' }, 'No projects yet. Create one in the 3D ship’s ready room.') : null,
     ...boards.map(({ project, cols }) => projectSection(ctx, project, cols)),
   );
 }
 
-function needsYouStrip(ctx: HomeContext, attention: Attention[]): HTMLElement {
-  // the same line as Comms says (`needLine`), most urgent first
+/** What waits on the captain, a line each (`needLine`), most urgent first; all clear when nothing does. */
+export function needsYouStrip(ctx: Pick<HomeContext, 'showPr'>, attention: Attention[]): HTMLElement {
   const items = attention.map((a) => ('agent' in a ? agentEntry(a.agent, needLine(a, state.reviews)) : prEntry(ctx, a.projectId, a.pr, needLine(a, state.reviews))));
   return h('section', { class: `needs-you ${items.length ? 'alert' : 'clear'}` },
     h('h2', { class: 'bar' }, h('span', null, 'Needs you'), h('span', { class: 'count' }, items.length)),
     items.length
       ? h('ul', null, ...items)
       : h('p', { class: 'all-clear' }, state.info ? '✓ All clear. Nothing is waiting on you.' : 'Connecting to Focus…'),
-  );
-}
-
-/** When the chief of staff's words go by themselves, to the minute: the screen is drawn again at least every few seconds. */
-export function sendsIn(sendsAt: number | undefined, now: number): string {
-  if (sendsAt === undefined) return 'Waits for you to send';
-  const min = Math.ceil((sendsAt - now) / 60_000);
-  return min > 1 ? `Sends itself in ${min} min` : 'Sends itself within a minute';
-}
-
-/**
- * The turns the chief of staff would carry on or send back, its words ready: each sent with a tap, or held when they'd
- * otherwise go by themselves (`CosRead.sendsAt`). Out of Needs you, as in Comms' tray, and gone when there are none.
- */
-function readyStrip(ctx: HomeContext, ready: Attention[], now: number): HTMLElement | null {
-  const turns = ready.flatMap((a) => (a.kind === 'turn' ? [a.agent] : []));
-  if (!turns.length) return null;
-  return h('section', { class: 'ready-to-send' },
-    h('h2', { class: 'bar' }, h('span', null, 'Ready to send'), h('span', { class: 'count' }, turns.length)),
-    h('ul', null, ...turns.map((lead) => {
-      const cos = lead.lead?.cos;
-      const id = hailKey({ kind: 'turn', agent: lead });
-      const key = `ready:${id}`;
-      return h('li', { attrs: { 'data-key': key } },
-        h('a', { class: 'entry', href: agentHref(lead.id), style: `--accent:${state.project(lead.projectId)?.color ?? 'var(--lcars-lilac)'}` },
-          h('span', { class: 'text' }, h('strong', null, cos?.judged?.ask ?? 'Carry on'), h('small', null, `${lead.name} · ${workLabel(lead)}`))),
-        h('blockquote', { class: 'cos-words' }, cos?.judged?.message ?? ''),
-        h('div', { class: 'actions' },
-          ctx.actions.button(`${key}:send`, '▶ Send', () => api.decide(id, { send: true }), { class: 'go' }),
-          cos?.sendsAt === undefined ? null : ctx.actions.button(`${key}:hold`, '✋ Hold', () => api.hold(id)),
-          h('small', { class: 'sends-in' }, sendsIn(cos?.sendsAt, now)),
-        ),
-        ctx.actions.errors(key),
-      );
-    })),
   );
 }
 
@@ -101,7 +76,7 @@ function agentEntry(agent: Agent, { icon, what }: { icon: string; what: string }
   ));
 }
 
-function prEntry(ctx: HomeContext, projectId: string, pr: PullRequest, { icon, what }: { icon: string; what: string }): HTMLElement {
+function prEntry(ctx: Pick<HomeContext, 'showPr'>, projectId: string, pr: PullRequest, { icon, what }: { icon: string; what: string }): HTMLElement {
   const project = state.project(projectId);
   return h('li', null, h('button', { class: 'entry', type: 'button', style: `--accent:${project?.color ?? 'var(--lcars-gold)'}`, attrs: { 'data-key': prCardId(projectId, pr) }, onclick: () => ctx.showPr(projectId, pr) },
     h('span', { class: 'icon' }, icon),

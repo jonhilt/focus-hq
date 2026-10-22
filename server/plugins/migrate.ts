@@ -8,7 +8,7 @@ export interface SavedBeforePlugins {
   retro?: unknown;
   numberOne?: unknown;
   plugins?: PluginStates;
-  agents?: { task: string; brief?: Brief; lead?: { flow?: unknown } }[];
+  agents?: { task: string; brief?: Brief; lead?: { flow?: unknown; cos?: unknown } }[];
 }
 
 /** The climber's climbs, from before it was a plugin (the climber plugin, plugins/climber). */
@@ -48,6 +48,9 @@ export function fromBeforePlugins(raw: SavedBeforePlugins): void {
   for (const agent of raw.agents ?? []) {
     // a goal's flow (the flow plugin, plugins/flow) is worked out again as Focus starts, so there's nothing to move
     delete agent.lead?.flow;
+    // a lead's last turn as the core once marked it for a plugin to judge: a plugin marks its own now (`lead.marks`),
+    // so the turn waits on the captain as if it was never marked, never hidden
+    delete agent.lead?.cos;
     if (agent.task !== 'climb') continue;
     agent.task = 'brief';
     agent.brief = CLIMB;

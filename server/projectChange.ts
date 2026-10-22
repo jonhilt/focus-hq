@@ -34,7 +34,6 @@ export function changeProject(project: Project, patch: unknown): Project {
     autoQa: flag(p.autoQa, project.autoQa),
     autoSendBack: flag(p.autoSendBack, project.autoSendBack),
     autoMerge: flag(p.autoMerge, project.autoMerge),
-    cosAutoSend: flag(p.cosAutoSend, project.cosAutoSend),
     qaProof: flag(p.qaProof, project.qaProof),
     hidden: flag(p.hidden, project.hidden),
   };
@@ -62,15 +61,11 @@ function previewAfter(p: Fields): PreviewConfig {
   return { command: text(p.command), stopCommand: text(p.stopCommand), statusCommand: text(p.statusCommand) };
 }
 
-/**
- * What Ops does once a change is saved: tell the plugins one was switched, seat agents again, and hold the
- * chief of staff's words that were counting down to go by themselves, once that's switched off.
- */
-export function projectChangeFollowUps(patch: unknown): { plugins: boolean; schedule: boolean; holdSends: boolean } {
+/** What Ops does once a change is saved: tell the plugins one was switched, and seat agents again. */
+export function projectChangeFollowUps(patch: unknown): { plugins: boolean; schedule: boolean } {
   const p = fields(patch);
   return {
     plugins: p.plugin !== undefined,
-    holdSends: p.cosAutoSend === false,
     schedule: p.autoAssign === true || p.autoMerge === true || typeof p.maxAgents === 'number',
   };
 }

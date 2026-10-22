@@ -1,7 +1,7 @@
 import type { GoalArtifact, TermLine } from './types';
 
-// What a lead said and showed in the turn that's waiting on the captain, from their terminal: Comms' reading pane and
-// the inbox's API both put it in front of them. Pure, so it's tested (client/src/ui/briefing.test.ts).
+// What a lead said and showed in the turn that's waiting on the captain, from their terminal, for whatever puts it in
+// front of them (a plugin, through plugin-api). Pure, so it's tested (leadWords.test.ts).
 
 /**
  * What an agent said last, from its terminal: its last run of text lines, past whatever came after (Ops' log

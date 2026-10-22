@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { prKey } from './qa';
-import { inFlight, needLine, needsYou } from './tricorder';
+import { hailNews, hailOf, inFlight, needLine, needsYou } from './tricorder';
 import type { Agent, PullRequest, QaReview } from './types';
 import { QA_DESK } from './types';
 
@@ -154,5 +154,27 @@ describe('inFlight', () => {
     const qa = agent({ id: 'qa', task: 'review', desk: QA_DESK, status: 'testing' });
     expect(inFlight('p', [qa]).map((a) => a.id)).toEqual(['qa']);
     expect(inFlight('p', [{ ...qa, status: 'done' }])).toEqual([]);
+  });
+});
+
+describe('hailNews: the core’s toast as an agent comes to need the captain', () => {
+  const lead = (a: Partial<Agent> = {}) => agent({ task: 'lead', name: 'Lt. Vale', finishedAt: 5, lead: { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] }, ...a });
+
+  it('says a lead’s turn has come to the captain as it ends, and a raised hand as it’s raised', () => {
+    const working = lead();
+    const done = lead({ status: 'done' });
+    expect(hailNews(hailOf(working), done, new Map())).toBe('🖖 Lt. Vale is waiting for you');
+    const hand = agent({ status: 'waiting', permission: { id: 'r1', tool: 'Bash', summary: 'npm i', at: 0 } });
+    expect(hailNews(hailOf(agent()), hand, new Map())).toBe('✋ Ada: Approve: npm i');
+  });
+
+  it('says nothing the first time it sees an agent, while the hail stands, once it’s gone, or for an error', () => {
+    const done = lead({ status: 'done' });
+    expect(hailNews(undefined, done, new Map())).toBeNull();
+    expect(hailNews('turn', done, new Map())).toBeNull();
+    expect(hailNews('turn', lead(), new Map())).toBeNull();
+    expect(hailNews(null, agent({ status: 'error', error: 'boom' }), new Map())).toBeNull();
+    // a turn the captain has read hails nobody
+    expect(hailNews(null, lead({ status: 'done', lead: { title: 'W', station: 0, repos: [], slice: 1, prs: [], readTurn: 5 } }), new Map())).toBeNull();
   });
 });

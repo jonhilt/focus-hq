@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
 import { focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
-import { CHIEF_OF_STAFF } from './shared';
+import { CHIEF_OF_STAFF, readOf } from './shared';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
 const said = (uuid: string, text: string) => ({ type: 'assistant', uuid, message: { content: [{ type: 'text', text }] } });
@@ -24,7 +24,7 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
     start: (host) => {
       const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.');
       chief = c;
-      return { judgesTurns: (agent) => c.judges(agent), turn: (agent, phase) => void c.turn(agent, phase), leadNoted: (lead, note) => c.noted(lead, note) };
+      return { turn: (agent, phase) => void c.turn(agent, phase), leadNoted: (lead, note) => c.noted(lead, note) };
     },
   };
   o.agents.startPlugins([plugin], { demo: false, ownRepo: () => undefined, transcript: () => Promise.resolve(transcript.jsonl) });
@@ -32,7 +32,8 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
   await until(() => o.claude.turns.length === 1 && !!o.store.agents.get(agent.id)?.sessionId);
   const lead = (): Agent => o.store.agents.get(agent.id)!;
   const verdicts = () => o.store.ledger.filter((e) => e.kind === 'cos-verdict');
-  return { ...o, asked, transcript, chief: chief!, lead, verdicts };
+  const read = () => readOf(lead());
+  return { ...o, asked, transcript, chief: chief!, lead, verdicts, read };
 }
 
 describe('the chief of staff', () => {
@@ -53,13 +54,13 @@ describe('the chief of staff', () => {
   it('holds the lead’s ended turn back from the captain while it reads it, then files it by its verdict', async () => {
     const o = await aboard();
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
-    await until(() => !!o.lead().lead?.cos);
-    await until(() => !!o.lead().lead?.cos?.judged);
-    expect(o.lead().lead?.cos?.judged).toEqual({ route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
+    await until(() => !!o.read());
+    await until(() => !!o.read()?.judged);
+    expect(o.read()?.judged).toEqual({ route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
     // the lead's next turn starts: what it read of the last is over
     o.agents.message(o.lead().id, 'Go on');
     await until(() => o.claude.turns.length === 2);
-    expect(o.lead().lead?.cos).toBeUndefined();
+    expect(o.read()).toBeUndefined();
   });
 
   it('drops a verdict that comes after the lead’s next turn has started', async () => {
@@ -67,12 +68,12 @@ describe('the chief of staff', () => {
     const o = await aboard(undefined, new Promise((resolve) => (answer = resolve)));
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
     await until(() => o.asked.length === 1 && o.lead().status === 'done');
-    expect(o.lead().lead?.cos).toMatchObject({ at: expect.any(Number) });
+    expect(o.read()).toMatchObject({ at: expect.any(Number) });
     o.agents.message(o.lead().id, 'Go on');
     await until(() => o.claude.turns.length === 2);
     answer();
     await until(() => o.verdicts().length === 1);
-    expect(o.lead().lead?.cos).toBeUndefined();
+    expect(o.read()).toBeUndefined();
   });
 
   it('marks nothing as read for a project it’s off for', async () => {
@@ -80,7 +81,7 @@ describe('the chief of staff', () => {
     o.project.plugins = [];
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
     await until(() => o.lead().status === 'done');
-    expect(o.lead().lead?.cos).toBeUndefined();
+    expect(o.read()).toBeUndefined();
   });
 
   it('judges a turn once, however often it ends', async () => {
@@ -125,15 +126,19 @@ describe('the chief of staff', () => {
   });
 
   describe('waking a lead for a note Ops left them', () => {
-    /** The lead ships its slice and ends its turn: the captain's to read. */
-    async function shipped() {
-      const o = await aboard();
+    /** The lead ships its slice and ends its turn, which the judge sends back to them (or `answer`s) once `held` is over. */
+    async function shipped(answer?: unknown, held?: Promise<void>) {
+      const o = await aboard(answer, held);
       o.project.autoSendBack = true;
       await o.claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
       o.claude.turns[0].end({ ok: true, summary: 'Shipped' });
-      await until(() => o.lead().status === 'done');
+      await until(() => o.lead().status === 'done' && (!!held || !!o.read()?.judged));
       return o;
     }
+    const land = (o: Awaited<ReturnType<typeof shipped>>) => {
+      for (const pr of o.lead().lead!.prs) o.agents.prClosed(pr.repo, pr.number, true);
+    };
+    const card = { route: 2, ask: 'Slice 2: filters or drag-reorder first?', why: 'A pick.', message: 'Filters, the lead says.' };
 
     it('carries a lead on once their slice has landed, the note ahead of its words', async () => {
       const o = await shipped();
@@ -161,6 +166,50 @@ describe('the chief of staff', () => {
       verdict(1);
       await until(() => o.claude.turns.length === 2);
       expect(o.claude.turns[1].req.prompt).toBe("[QA officer Ada] Fix acme/api#7 and ship again (QA's verdict is just above), or tell the captain why not.");
+    });
+
+    it('leaves a lead the captain owes a card: the landing goes with the captain’s next message', async () => {
+      const o = await shipped(card);
+      land(o);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
+      expect(o.read()?.judged).toMatchObject({ route: 2 });
+      o.agents.message(o.lead().id, 'Filters first');
+      await until(() => o.claude.turns.length === 2);
+      expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*Filters first$/s);
+    });
+
+    it('sends no QA fail back to a lead the captain owes a card, nor one whose turn has ended unjudged', async () => {
+      const o = await shipped(card);
+      const fail = { from: 'QA officer Ada', text: 'QA failed acme/api#7', inTurn: false, about: { kind: 'qa-verdict' as const, repo: 'acme/api', number: 7, verdict: 'fail' as const, advisory: false, failedRounds: 1, behind: false } };
+      o.chief.noted(o.lead(), fail);
+      // a turn it never judged, a minute on, needs the captain too
+      o.chief.noted({ ...o.lead(), lead: { ...o.lead().lead!, marks: { [CHIEF_OF_STAFF]: { at: 0 } } } }, fail);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
+    });
+
+    it('waits for its verdict on the turn it’s still reading, and wakes the lead then if the captain owes them nothing', async () => {
+      let answer = () => undefined as void;
+      const o = await shipped(undefined, new Promise((resolve) => (answer = resolve)));
+      await until(() => o.asked.length === 1);
+      land(o);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
+      answer();
+      await until(() => o.claude.turns.length === 2);
+      expect(o.claude.turns[1].req.prompt).toMatch(/Slice 1 has landed: carry on with what's next, unless it's the captain's call\.$/);
+    });
+
+    it('drops the news it waited with once a verdict makes the turn the captain’s', async () => {
+      let answer = () => undefined as void;
+      const o = await shipped(card, new Promise((resolve) => (answer = resolve)));
+      await until(() => o.asked.length === 1);
+      land(o);
+      answer();
+      await until(() => !!o.read()?.judged);
+      await new Promise((r) => setTimeout(r, 30));
+      expect(o.claude.turns).toHaveLength(1);
     });
   });
 });

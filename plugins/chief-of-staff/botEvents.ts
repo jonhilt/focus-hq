@@ -1,10 +1,10 @@
-import { artifactUrl } from './artifacts';
-import type { DecisionEvent, InboxItem } from './captainsInbox';
-import type { Agent } from './types';
+import type { Agent } from '../../plugin-api/shared';
+import { artifactUrl } from '../../plugin-api/shared';
+import type { DecisionEvent, InboxItem } from './inbox';
 
 // What Focus tells a bot speaking for the captain (Grok, over its webhook: docs/ledger.md#the-captains-inbox-api),
 // worked out by comparing what's waiting, and what the leads have shown, with how it stood before. Pure, so it's
-// tested (botEvents.test.ts); server/bot.ts sends them.
+// tested (botEvents.test.ts); botHook.ts sends them.
 
 export type BotEvent =
   /** Something needs the captain, or a lead's turn has the chief of staff's words ready: as soon as it's judged. */

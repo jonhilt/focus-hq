@@ -1,7 +1,5 @@
-export { lastWords, shownThisTurn } from '../../../shared/leadWords';
-
-// Comms' inbox (commsPanel.ts, needCard.ts), what needs the captain: what it says a lead said last,
-// and which item it keeps in front of them as the list changes. Pure, so it's tested (briefing.test.ts).
+// Comms (comms.ts): which item it keeps in front of the captain as the list changes. Pure, so it's tested
+// (briefing.test.ts).
 
 /**
  * Which of `keys` the briefing shows: the one it showed (`current`) while it's still there; once it's gone (answered),

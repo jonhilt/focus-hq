@@ -30,8 +30,10 @@ const steady = async (read: () => unknown) => {
 
 interface Said {
   phase: string;
-  /** The chief of staff's read of the lead's last turn: none, being read, or the route it judged (and `sends` while its words would go by themselves). */
-  cos: string;
+  /** A plugin's mark on the lead's latest turn: none, or what it noted. */
+  mark: string;
+  /** The captain has read the lead's latest turn (`readTurn`): it stops hailing them until the next ends. */
+  read: boolean;
   held: boolean;
   /**
    * What's waiting for the lead's next turn, and for the end of the one in hand. Not their notes: a turn a restart
@@ -49,16 +51,19 @@ interface Said {
 const noteForLead = (agents: ReturnType<typeof focus>['agents'], lead: Agent, text: string) =>
   (Reflect.get(agents, 'core') as { leads: { noteForLead(lead: Agent, from: string, text: string): void } }).leads.noteForLead(lead, 'Ops', text);
 
-/** A plugin that judges the leads' turns, as the chief of staff does: it says how when the description has it say. */
-const judging = (hosts: PluginHost[]): FocusPlugin => ({
+/**
+ * A plugin that marks the leads' turns, as one judging them would: `ended` as each ends, from then (`since`), and
+ * whatever the description has it note later.
+ */
+const marking = (hosts: PluginHost[]): FocusPlugin => ({
   id: 'judge',
   start: (host) => {
     hosts.push(host);
-    return { judgesTurns: (agent) => agent.task === 'lead' };
+    return { turn: (agent, phase) => void (phase === 'end' && agent.task === 'lead' && host.goals.mark(agent.id, 'ended', Date.now())) };
   },
 });
-const startJudging = (agents: ReturnType<typeof focus>['agents'], hosts: PluginHost[]) =>
-  agents.startPlugins([judging(hosts)], { demo: false, ownRepo: () => undefined });
+const startMarking = (agents: ReturnType<typeof focus>['agents'], hosts: PluginHost[]) =>
+  agents.startPlugins([marking(hosts)], { demo: false, ownRepo: () => undefined });
 
 /** The latest lead's notes waiting now. */
 let notesNow: () => string[] = () => [];
@@ -70,11 +75,9 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
     // the limit is Ops' own, kept between tests: each run starts with it not reached
     Reflect.set(keyFallback, 'spell', undefined);
     const first = focus();
-    // the chief of staff's words for the lead go by themselves, unless the captain holds them
-    first.project.cosAutoSend = true;
-    // each life's chief of staff, the latest last
+    // each life's plugin, the latest last
     const hosts: PluginHost[] = [];
-    startJudging(first.agents, hosts);
+    startMarking(first.agents, hosts);
     const started = first.agents.startGoal(first.project.id, 'Saved items');
     if (!('agent' in started)) throw new Error('the goal was queued');
     const id = started.agent.id;
@@ -89,10 +92,11 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
       const heard = claudes.flatMap((c) => c.turns.flatMap((t) => [t.req.prompt, ...(t.stopped ? [] : t.sent)]));
       // not what was just taken for a turn that was never asked for: once settled, nothing will hear that
       const waiting = [...run.inbox, ...run.later, ...run.notes];
-      const cos = first.store.agent(id).lead?.cos;
+      const mark = first.store.agent(id).lead?.marks?.judge;
       return {
         phase: JSON.stringify(run.phase),
-        cos: cos ? `${cos.judged?.route ?? 'reading'}${cos.sendsAt === undefined ? '' : ' sends'}` : 'none',
+        mark: typeof mark === 'string' ? mark : 'none',
+        read: first.store.agent(id).lead?.readTurn !== undefined && first.store.agent(id).lead?.readTurn === first.store.agent(id).finishedAt,
         held: !!first.store.agent(id).held,
         inbox: [...run.inbox],
         later: [...run.later],
@@ -129,12 +133,12 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
           // news that goes with what they hear next
           { name: 'Ops leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
           { name: 'the captain stops them', run: () => o.agents.stop(id) },
-          // its verdict, whenever it comes: kept only while the turn it's on is still being read
-          { name: 'the chief of staff judges', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 2, ask: 'Slice 2?', why: 'A pick.', message: 'Shall it?' }, Date.now()) },
-          { name: 'the chief of staff would carry on', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 1, ask: 'Go on', why: 'Progress.', message: 'Go on.' }, Date.now()) },
-          // judged from before the turn being read ended: it's an earlier turn's
-          { name: 'a verdict on an earlier turn comes', run: () => hosts[hosts.length - 1]?.goals.judged(id, { route: 1, ask: 'Go on', why: 'Progress.', message: 'Go on.' }, 0) },
-          { name: 'the captain holds its words', run: () => o.agents.holdSend(id) },
+          // its mark on the lead's turn, whenever it comes: kept until their next turn starts
+          { name: 'the plugin marks the turn', run: () => hosts[hosts.length - 1]?.goals.mark(id, 'judged', Date.now()) },
+          // about a turn from before the lead's latest started: it's an earlier turn's
+          { name: 'a mark on an earlier turn comes', run: () => hosts[hosts.length - 1]?.goals.mark(id, 'late', 0) },
+          { name: 'the plugin takes its mark away', run: () => hosts[hosts.length - 1]?.goals.mark(id, undefined) },
+          { name: 'the captain reads the turn', run: () => o.agents.readTurn(id) },
         ] satisfies Action[]).filter((a) => !only || only.test(a.name)),
         durable: said,
         settle: () => steady(said),
@@ -142,7 +146,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
         restart: () => {
           o.agents.shutDown();
           const after = restarted(first.store);
-          startJudging(after.agents, hosts);
+          startMarking(after.agents, hosts);
           claudes.push(after.claude);
           after.agents.recover();
           return life(after);
@@ -190,30 +194,17 @@ describe('a goal’s lead, under Focus’s rule for a restart', () => {
     expect(notesNow()).toHaveLength(3);
   });
 
-  // docs/comms.md: a lead's ended turn is the chief of staff's to read until it's judged, and its read ends with the next turn
-  it('reaches a turn being read, judged, and its read ended by the next, and drops a verdict that comes too late', async () => {
+  // docs/plugins.md: a plugin's mark on a lead's turn lasts until their next turn starts, and one on an earlier turn is refused
+  it('reaches a turn marked as it ends and again later, its mark ended by the next turn, and refuses a mark on an earlier turn', async () => {
     const l = await lead.start(now);
     const seen: string[] = [];
-    for (const name of ['the turn ends', 'the chief of staff judges', 'the captain writes', 'the chief of staff judges', 'the turn ends']) {
+    for (const name of ['the turn ends', 'a mark on an earlier turn comes', 'the plugin marks the turn', 'the plugin takes its mark away', 'the plugin marks the turn', 'the captain writes', 'the turn ends']) {
       await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
       await l.settle();
-      seen.push(l.durable().cos);
+      seen.push(l.durable().mark);
     }
     l.close?.();
-    expect(seen).toEqual(['reading', '2', 'none', 'none', 'reading']);
-  });
-
-  // plugins/chief-of-staff/README.md: its words for the lead go by themselves where the project lets them, unless held
-  it('reaches words that would send themselves, held by the captain, and drops a verdict on an earlier turn', async () => {
-    const l = await lead.start(now);
-    const seen: string[] = [];
-    for (const name of ['the turn ends', 'a verdict on an earlier turn comes', 'the chief of staff would carry on', 'the captain holds its words', 'the captain writes']) {
-      await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
-      await l.settle();
-      seen.push(l.durable().cos);
-    }
-    l.close?.();
-    expect(seen).toEqual(['reading', 'reading', '1 sends', '1', 'none']);
+    expect(seen).toEqual(['ended', 'ended', 'judged', 'none', 'judged', 'none', 'ended']);
   });
 
   it('is said to be where it was, and held if it was, after Focus goes down and starts again', async () => {

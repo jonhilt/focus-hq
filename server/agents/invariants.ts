@@ -93,6 +93,8 @@ async function take<D>(running: Running<D>, pick: number, alive = { now: true })
  *  by name (the actions under test, as they were offered when they were taken: the list can reorder in between). */
 async function inTurn<D>(subject: Subject<D>, picks: number[], named: string[] = []): Promise<{ state: D; names: (string | undefined)[] }> {
   const running = await subject.start(now);
+  // what the part does as it starts (Focus starting does work of its own) settles first, as a restart's does
+  await running.settle();
   const names: (string | undefined)[] = [];
   for (const pick of picks) {
     names.push((await take(running, pick)).name);

@@ -1,4 +1,7 @@
-import { type CosRoute, isOneOf, isRecord } from '../../plugin-api/shared';
+import { isOneOf, isRecord } from '../../plugin-api/shared';
+import { ROUTES, type Verdict } from './shared';
+
+export type { Verdict } from './shared';
 
 // The chief of staff's judge (README.md): the prompt it judges a lead's turn by, the shape of its answer, and the
 // check on what came back. The captain's standing orders are theirs, not the repo's: they're read from the plugin's
@@ -9,8 +12,6 @@ export const JUDGE_VERSION = 'v7';
 
 /** The captain's standing orders, in the plugin's own folder (`host.dataDir()`): private, never in the repo. */
 export const STANDING_ORDERS = 'standing-orders.txt';
-
-export const ROUTES: readonly CosRoute[] = [1, 2, 3, 4];
 
 /** The rules of the four routes, as the backtest scored them. */
 const RULES = `You are the Chief of Staff aboard a software "ship". A goal's lead (an AI coding agent) has just ended its turn. You see the end of what it said, and the goal's title. Decide where this turn goes. The captain is the human who owns every goal.
@@ -53,14 +54,6 @@ export function judgeSystemPrompt(standingOrders?: string): string {
 
 /** What the judge reads: the goal, and the end of what the lead said this turn. */
 export const judgePrompt = (goal: string | undefined, tail: string): string => `Goal: ${goal || '(untitled)'}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
-
-/** Where the judge would send the turn, its headline, why, and what it would say: to the lead (routes 1 and 4) or the captain (2 and 3). */
-export interface Verdict {
-  route: CosRoute;
-  ask: string;
-  why: string;
-  message: string;
-}
 
 export const VERDICT_SCHEMA = {
   type: 'object',

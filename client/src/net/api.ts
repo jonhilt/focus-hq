@@ -1,5 +1,4 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
-import type { Decide, Inbox } from '../../../shared/captainsInbox';
 import type { PersonalEntry } from '../../../shared/personalLog';
 import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
@@ -64,6 +63,8 @@ export const api = {
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
   /** A plugin's own route (docs/plugins.md), under `/api/plugins/<id>`. */
   plugin: <T>(id: string, path: string, body?: unknown) => call<T>('POST', `/plugins/${encodeURIComponent(id)}${path}`, body),
+  /** Reads one of a plugin's own routes (a GET), under `/api/plugins/<id>`. */
+  pluginGet: <T>(id: string, path: string) => call<T>('GET', `/plugins/${encodeURIComponent(id)}${path}`),
   /** The ledger's events of the last `days` days, for reviewing at the master systems table. */
   ledger: (days: number) => call<LedgerEvent[]>('GET', `/ledger?days=${days}`),
   /** Jots a thought down in the captain's personal log. */
@@ -108,12 +109,6 @@ export const api = {
   message: (id: string, text: string, how?: ResumeHow) => call<MessageReply>('POST', `/agents/${id}/message`, { text, how }),
   answer: (id: string, question: string, option: string, note?: string, how?: ResumeHow) =>
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
-  /** The captain's inbox: what needs them, and what they decided lately (docs/ledger.md#the-captains-inbox-api). */
-  inbox: () => call<Inbox>('GET', '/inbox'),
-  /** Answers an inbox item by its id, from Focus (docs/ledger.md#the-captains-inbox-api). */
-  decide: (id: string, decide: Decide) => call<{ ok: true } | MessageReply>('POST', `/inbox/${encodeURIComponent(id)}/decide`, { ...decide, via: 'office' }),
-  /** Holds the chief of staff's words on an inbox item, so they wait for the captain rather than going by themselves. */
-  hold: (id: string) => call('POST', `/inbox/${encodeURIComponent(id)}/hold`),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
   spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),

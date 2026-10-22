@@ -81,3 +81,19 @@ export function project(root: string): { files: string[]; options: ts.CompilerOp
   const parsed = ts.parseJsonConfigFileContent(config, ts.sys, root);
   return { files: parsed.fileNames.filter((f) => f.endsWith('.ts')), options: parsed.options };
 }
+
+/**
+ * The calls that reach a plugin by its id (its panel, its routes, its state, whether it's on) and the routes it's
+ * mounted at, written out with the id: the core reaches plugins only through `Plugins`, never naming one, so a core
+ * file has none.
+ */
+const REACHES = [
+  /\b(?:openPlugin|openPluginPanel|clientPlugin|callPlugin|pluginState|pluginOn|uses)\s*(?:<[^>()]*>)?\(\s*(?:[^,()'"`]+,\s*)?(['"`])([a-z][a-z0-9-]*)\1/g,
+  /\/api\/plugins\/([a-z][a-z0-9-]*)/g,
+];
+
+/** Where `text` reaches a plugin by its id written out (`REACHES`): the line, and the id. */
+export function pluginsNamed(text: string): { line: number; id: string }[] {
+  return text.split('\n').flatMap((line, i) =>
+    REACHES.flatMap((re) => [...line.matchAll(re)].map((m) => ({ line: i + 1, id: m[2] ?? m[1] ?? '' }))));
+}

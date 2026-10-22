@@ -1,6 +1,6 @@
-import type { DecisionEvent, InboxItem } from '../../../shared/captainsInbox';
+import type { DecisionEvent, InboxItem } from './inbox';
 
-// Comms' list, from the captain's inbox as Focus keeps it (shared/captainsInbox.ts): what the chief of staff flags
+// Comms' list, from the captain's inbox as Focus keeps it (inbox.ts): what the chief of staff flags
 // for the captain, a line each, and what they decided lately. Pure, so it's unit tested (commsList.test.ts).
 
 /** What an item asks of the captain, in a word, for its tag on the list. */
@@ -47,3 +47,26 @@ export const decidedBy = (d: Pick<DecisionEvent, 'via'>): string => (d.via === '
 /** How many of the chief of staff's words went by themselves since `since`, for its tray's line. */
 export const sentByCos = (decided: readonly Pick<DecisionEvent, 'via' | 'at'>[], since: number): number =>
   decided.filter((d) => d.via === 'chief-of-staff' && d.at >= since).length;
+
+/** Where a step through the list lands from `at`, round from the end to the start and back; `at` itself for no step. */
+export const stepped = (at: number, step: number, length: number): number => (step && length ? (((at + step) % length) + length) % length : at);
+
+/** The line under the list while the chief of staff reads turns, or nothing when it reads none. */
+export const readingLine = (n: number): string => (n ? `The chief of staff is reading ${n === 1 ? '1 turn' : `${n} turns`}…` : '');
+
+/** Its tray's line: how many turns it has words ready for, and how many it sent by itself today; nothing for neither. */
+export function trayLine(ready: number, sentToday: number, open: boolean): string {
+  const said = [ready ? `${ready} ready to send` : '', sentToday ? `sent ${sentToday} by itself today` : ''].filter(Boolean).join(' · ');
+  return said ? `Chief of staff: ${said} ${open ? '‹' : '›'}` : '';
+}
+
+/** What the captain decided lately themselves (not the chief of staff by itself), in the project picked if one is, the latest `max`. */
+export const decidedByCaptain = (decided: readonly DecisionEvent[], project: string | null, max: number): DecisionEvent[] =>
+  decided.filter((d) => d.via !== 'chief-of-staff' && (!project || d.projectId === project)).slice(0, max);
+
+/** When its words go by themselves, on a row: to the minute, as the row is redrawn every few seconds; nothing when they wait. */
+export function sendsIn(sendsAt: number | undefined, now: number): string {
+  if (sendsAt === undefined) return '';
+  const min = Math.ceil((sendsAt - now) / 60_000);
+  return min > 1 ? `⏱ sends itself in ${min} min` : '⏱ sends itself within a minute';
+}

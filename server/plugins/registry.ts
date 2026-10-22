@@ -1,4 +1,5 @@
 import { lend } from './lend';
+import type { CaptainAnswer } from '../../shared/captainAnswer';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates, SignIn } from '../../shared/types';
 import { errorMessage } from '../util';
@@ -110,13 +111,9 @@ export class Plugins {
     this.each('turn', (parts) => parts.turn?.(lend(agent), phase));
   }
 
-  /** Whether a plugin judges this goal lead's turns for the captain's inbox (`PluginParts.judgesTurns`). */
-  judgesTurns(agent: Agent): boolean {
-    let judges = false;
-    this.each('judgesTurns', (parts) => {
-      judges ||= parts.judgesTurns?.(lend(agent)) === true;
-    });
-    return judges;
+  /** The captain's answer to an agent went through: each plugin hears of its own copy of the agent as it stood before. */
+  captainAnswered(before: Agent, answer: CaptainAnswer): void {
+    this.each('captainAnswered', (parts) => parts.captainAnswered?.(lend(before), lend(answer)));
   }
 
   /** A lead drew a model: each plugin hears of its own copy of it. */

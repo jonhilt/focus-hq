@@ -176,6 +176,21 @@ function queuedAt(context: JournalContext, at: QueuedAt, text: string): Partial<
   }
 }
 
+/**
+ * The notes once the open turn's over: a turn the captain stopped may never have read what went into its session, so
+ * that goes with the next message they hear, as a note (it doesn't start a turn), in case. A restart picks a turn it cut
+ * off back up with them for the same reason (`resumedNote`), so a stop loses no more than a restart does.
+ */
+function unheardAfterStop(context: JournalContext): string[] {
+  const sent = context.open?.stopped ? (context.open.sent ?? []) : [];
+  return sent.length ? [...context.notes, stoppedNote(sent)] : context.notes;
+}
+
+/** What an agent hears, with their next message, of what went into a turn the captain stopped. */
+export function stoppedNote(sent: readonly string[]): string {
+  return `[Ops] These messages were sent to you during the turn the captain stopped, in case they didn't reach you before it was stopped:\n\n${sent.join('\n\n')}`;
+}
+
 /** The open turn, changed. */
 const onOpen = (context: JournalContext, f: (t: JournalTurn) => JournalTurn): Partial<JournalContext> => (context.open ? { open: f(context.open) } : {});
 
@@ -248,12 +263,12 @@ export const journalMachine = setup({
         'turn-ended': {
           guard: 'this turn',
           target: 'ended',
-          actions: assign(({ context, event }) => ({ open: undefined, asking: undefined, last: context.open && { ...context.open, outcome: event.outcome } })),
+          actions: assign(({ context, event }) => ({ open: undefined, asking: undefined, last: context.open && { ...context.open, outcome: event.outcome }, notes: unheardAfterStop(context) })),
         },
         interrupted: {
           guard: 'this turn',
           target: 'interrupted',
-          actions: assign(({ context }) => ({ open: undefined, last: context.open && { ...context.open, outcome: { ok: false, error: INTERRUPTED_ERROR } } })),
+          actions: assign(({ context }) => ({ open: undefined, last: context.open && { ...context.open, outcome: { ok: false, error: INTERRUPTED_ERROR } }, notes: unheardAfterStop(context) })),
         },
       },
       states: {

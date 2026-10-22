@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { config, paths } from '../../config';
+import { columns } from '../../../shared/board';
 import { pluginOn } from '../../../shared/projectPlugins';
 import type { Issue, PluginStates, SignIn, Snapshot } from '../../../shared/types';
 import { keyFallback } from '../apiKey';
@@ -35,6 +36,10 @@ export interface Lent {
   personalLog?: { entries: () => readonly PersonalEntry[]; note: (text: string, via: string) => PersonalEntry };
   /** How Focus's sessions sign in: Focus's own `keyFallback` unless a test lends another. */
   signIn?: () => SignIn;
+  /** The GitHub account Focus works as, for a board's "only my PRs" (`Focus.githubLogin`): none in a test that doesn't need it. */
+  githubLogin?: () => string | undefined;
+  /** A bot speaking for the captain: Focus's own (`config.bot`) unless a test lends another. */
+  bot?: PluginHost['bot'];
 }
 
 /** What a test (one without it) is told of something Focus lends. */
@@ -83,6 +88,12 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     },
     agents: () => lend([...core.store.agents.values()]),
     recentLines: (agentId, count) => lend(core.store.recentLines(agentId, count)),
+    boardPrs: (projectId) => {
+      const project = core.store.projects.find((p) => p.id === projectId);
+      return project ? lend(columns(project, core.store.boards.get(projectId), core.store.agentsIn(projectId), lent.githubLogin?.()).prs) : [];
+    },
+    reviews: () => lend(core.store.reviews),
+    bot: lend(lent.bot ?? config.bot),
     // both become a path: only an agent's own id, and a file's plain name
     artifact: (leadId, file) => (core.store.agents.has(leadId) && PLAIN_FILE.test(file) ? core.store.readArtifact(leadId, file) : Promise.resolve(undefined)),
     // read as it's asked for: Focus sets the manager's reader once the plugins have started
@@ -106,7 +117,10 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     goals: {
       start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
       startQueued: (projectId, queueId, station) => core.leads.startQueued(projectId, queueId, { station }),
-      judged: (agentId, judged, since) => core.comms.judged(agentId, judged, since),
+      resolvePermission: (agentId, requestId, allow) => core.comms.resolvePermission(agentId, requestId, allow),
+      answer: (agentId, questionId, option, note, how) => core.goalTools.answer(agentId, questionId, option, note, how),
+      closeGoal: (agentId, force) => core.leads.closeGoal(agentId, force),
+      mark: (agentId, data, since) => core.comms.mark(agentId, id, lend(data), since),
       message: (agentId, text, opts) => (opts?.from === undefined ? core.goalTools.captainMessage(agentId, text, opts?.how) : core.comms.message(agentId, text, opts.from, opts.how)),
     },
     fileIssue: (projectId, repo, title, body) => {

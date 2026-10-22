@@ -352,16 +352,12 @@ export class AgentSessions extends Part {
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
-      // a new turn: the chief of staff's read of the last one is over
-      this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined, ...(agent.lead?.cos && { lead: { ...agent.lead, cos: undefined } }) });
+      // a new turn: what the plugins noted of the last one is over, and a mark on it that comes later is refused
+      this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined, ...(agent.lead && { lead: { ...agent.lead, marks: undefined, turnStarted: Date.now() } }) });
       this.core.plugins.turn(agent, 'start');
       // a turn that's interrupted (sent home, moved to the cloud) still ends, for the plugins
       const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true).pipe(
-        Effect.ensuring(Effect.sync(() => {
-          // not a turn Ops stopped as it went down: it carries on after the restart
-          if (lead && !this.core.closing && this.core.plugins.judgesTurns(agent)) this.core.comms.reading(agent.id);
-          this.core.plugins.turn(agent, 'end');
-        })),
+        Effect.ensuring(Effect.sync(() => this.core.plugins.turn(agent, 'end'))),
       );
       rt.busy = false;
       // Focus is shutting down: what follows waits for it to start again (`recover`)

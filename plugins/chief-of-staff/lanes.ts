@@ -1,0 +1,77 @@
+import type { Agent, Attention, PullRequest, QaReview } from '../../plugin-api/shared';
+import { ACTIVE_STATUSES, needLine, needsYou } from '../../plugin-api/shared';
+import { AUTO_SEND_MS, type CosRead, forLead, JUDGING_MS, readOf, type Verdict } from './shared';
+
+// Where a hail goes in the captain's inbox once the chief of staff reads the leads' turns (README.md), and its read of a
+// turn as it changes: being read, judged, its words held. Pure, so it's tested (lanes.test.ts).
+
+/**
+ * Where a hail goes: `needs-you` (counted, and on the badge), `ready` (a lead's turn it would carry on or send back to
+ * the lead, its words ready for the captain to send) or `judging` (a lead's turn it's reading, for up to `JUDGING_MS`;
+ * then it needs the captain, judged or not). Only a lead's turn has its read; everything else needs the captain.
+ */
+export type Lane = 'needs-you' | 'ready' | 'judging';
+
+export function laneOf(a: Attention, now: number): Lane {
+  const read = a.kind === 'turn' ? readOf(a.agent) : undefined;
+  if (!read) return 'needs-you';
+  if (!read.judged) return now - read.at < JUDGING_MS ? 'judging' : 'needs-you';
+  return forLead(read.judged) ? 'ready' : 'needs-you';
+}
+
+/** What needs the captain now: every hail (`needsYou`) but the turns it's reading or has words ready for. */
+export function needingYou(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, now: number): Attention[] {
+  return needsYou(agents, prs, reviews).filter((a) => laneOf(a, now) === 'needs-you');
+}
+
+/** What a hail needs, in a line: a lead's turn as it judged it (an interrupt, a card, or its words ready), when it has. */
+export function lineOf(a: Attention, reviews: ReadonlyMap<string, QaReview>): { icon: string; what: string } {
+  const judged = a.kind === 'turn' ? readOf(a.agent)?.judged : undefined;
+  if (!judged) return needLine(a, reviews);
+  return { icon: { 1: '▶', 2: '🗂', 3: '🚨', 4: '↩' }[judged.route], what: judged.ask };
+}
+
+/** Whether Ops' news for a lead can wake them: `now`, `once-judged` (it's still reading their turn) or `no`. */
+export type Waking = 'now' | 'once-judged' | 'no';
+
+/**
+ * Whether Ops' news can wake a goal's lead, or the captain owes them an answer: their turn has ended waiting on the
+ * captain (a card, an interrupt, a turn it hasn't judged, a question, a goal ready to close, an error) and nobody's
+ * answered it, read or not, or the captain stopped them. Waking them then would start their next turn, and what waited
+ * would go from the captain's inbox unanswered (or the stop be undone), so the news waits for the captain's next
+ * message. A turn it would carry on or send back owes the captain nothing, read or not; one it's still reading may yet
+ * be a card, so the news waits until it's judged.
+ */
+export function waking(lead: Agent, now: number): Waking {
+  // at work or about to be (a raised hand mid-turn included), a message goes into their turn: nothing of the captain's goes
+  if (lead.status === 'queued' || ACTIVE_STATUSES.includes(lead.status)) return 'now';
+  // stopped by the captain (or a plan's limit), or in error: only the captain carries them on
+  if (lead.status !== 'done') return 'no';
+  // a question, a goal ready to close: the captain's whatever it made of the turn
+  const [hail] = needsYou([lead], [], new Map());
+  if (hail && hail.kind !== 'turn') return 'no';
+  // its read of the turn, whether the captain has read the turn or not (`needsYou` leaves a read turn out)
+  const read = readOf(lead);
+  if (read?.judged) return forLead(read.judged) ? 'now' : 'no';
+  return read && now - read.at < JUDGING_MS ? 'once-judged' : 'no';
+}
+
+/** Its read of a turn that's just ended, at `now`: being read. */
+export const reading = (now: number): CosRead => ({ at: now });
+
+/**
+ * Its read once it's judged the turn, or nothing when the verdict comes too late: the turn's already judged, or it's
+ * an earlier turn's (its judging began, `since`, before this one ended). Words for the lead, in a project where it
+ * sends them itself (`autoSend`), go after `AUTO_SEND_MS`.
+ */
+export function judged(read: CosRead | undefined, verdict: Verdict, since: number, autoSend: boolean, now: number): CosRead | undefined {
+  if (!read || read.judged || since < read.at) return undefined;
+  return { ...read, judged: verdict, ...(autoSend && forLead(verdict) && { sendsAt: now + AUTO_SEND_MS }) };
+}
+
+/** Its read with its words held for the captain, or nothing when they weren't going by themselves. */
+export function held(read: CosRead | undefined): CosRead | undefined {
+  if (read?.sendsAt === undefined) return undefined;
+  const { sendsAt: _, ...rest } = read;
+  return rest;
+}

@@ -1,6 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { UNIFORM } from '../../../shared/crew';
 import { state } from '../net/state';
+import { pluginPanels } from '../plugins';
 import { sound } from '../sound';
 import type { Place } from '../world/ship';
 import { LCARS } from '../world/starship';
@@ -67,7 +68,7 @@ export function openPausePanel(ui: Ui, resume: () => void): void {
     h('p', { style: 'margin-top:0' }, 'The crew keeps working while you’re away.'),
     h('div', { class: 'row' },
       h('button', { class: 'btn primary', onclick: resume }, 'Back to work'),
-      h('button', { class: 'btn', onclick: () => ui.openComms() }, 'Comms'),
+      ...pluginPanels().map((panel) => h('button', { class: 'btn', onclick: () => panel.open(ui) }, panel.label)),
       h('button', { class: 'btn', onclick: () => ui.openTeleport() }, 'Teleport'),
       h('button', { class: 'btn', onclick: () => ui.openManager() }, 'Ready room'),
       sounds.el,

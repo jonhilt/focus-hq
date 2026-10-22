@@ -5,7 +5,7 @@ import type { Agent as CoreAgent, LeadAgent as CoreLeadAgent, Project as CorePro
 import type { LedgerEvent as CoreLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, Effort, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, SystemModel, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, Effort, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, PullRequest, QaReview, ResumeCost, ResumeHow, TermLine, ModelCite, ModelKind, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, SystemModel, Waypoint,
 } from '../shared/types';
 /** A time of day, with the day when it isn't today (`14:05`, `Tue 09:30`). */
 export { clock } from '../shared/clock';
@@ -18,7 +18,12 @@ export { ACTIVE_STATUSES, AWAY_DESK, EFFORT_LEVELS, MODEL_KINDS } from '../share
 /** Reading the ship as it stands: the projects the captain hasn't hidden, a project's board, what needs the captain, a pull request's QA badge, a goal's title, what the ledger says of something. */
 export { shownProjects } from '../shared/hidden';
 export { columns } from '../shared/board';
-export { type Attention, inFlight, needsYou } from '../shared/tricorder';
+export { type Attention, inFlight, needLine, needsYou, turnRead } from '../shared/tricorder';
+/** How the captain answers an agent from its panel (`PluginParts.captainAnswered`), and whether Ops' reply says it went through. */
+export { type CaptainAnswer, landed } from '../shared/captainAnswer';
+/** A lead's open question, what an agent said last, and what a lead showed on their screen this turn. */
+export { openQuestion } from '../shared/artifacts';
+export { lastWords, shownThisTurn } from '../shared/leadWords';
 export { autoSendBackFor, prKey, qaBadge } from '../shared/qa';
 export { goalTitle } from '../shared/goalTitle';
 /** The ledger as Focus reads it out: a line of it, and lines grouped by day. */
@@ -26,7 +31,9 @@ export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview'
 /** The crew's voices, and what a reply says aloud. */
 export { type CrewVoice, forSpeech, linesToSpeak, sentences, spokenLine } from '../shared/voice';
 export { leadVoice } from '../shared/crew';
-export type { CosRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
+/** Where a captain's decision came from, said after it (nothing for the captain in Focus). */
+export { viaNote } from '../shared/ledger';
+export type { DecidedVia, VerdictRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts } from '../shared/ledger';
 /** The ledger read as Focus reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
 /** The ship's permanent crew a plugin speaks for (the chief engineer), and a crew member of its own, always the same person. */
@@ -40,4 +47,4 @@ export type { PersonalEntry } from '../shared/personalLog';
 export { FLOWS_FILE } from '../shared/flows';
 export { pluginOn } from '../shared/projectPlugins';
 /** Where a lead's page (or its picture) is served, and the size it's laid out for. */
-export { ARTIFACT_SIZE, artifactUrl } from '../shared/artifacts';
+export { ARTIFACT_SIZE, artifactUrl, optionUrl } from '../shared/artifacts';

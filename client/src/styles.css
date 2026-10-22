@@ -84,25 +84,13 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .stat {
   background: #000d; color: var(--lcars-sky); border-right: 10px solid var(--lcars-periwinkle); border-radius: 0 999px 999px 0;
   padding: 0 14px 0 12px; font-weight: 600; letter-spacing: 0.05em; white-space: nowrap;
-  /* every HUD pill the same height, whatever its emoji or key: matches .comms-badge */
+  /* every HUD pill the same height, whatever its emoji or key: a plugin's own pill (`HudStat.el`) takes --hud-pill too */
   box-sizing: border-box; height: var(--hud-pill); line-height: 1; display: flex; align-items: center;
 }
 .stat.alert { background: var(--lcars-gold); color: var(--ink); border-color: var(--lcars-peach); animation: blink 1s steps(1) infinite; }
 .stat.warn { color: var(--lcars-gold); }
 .stat.bad { background: var(--lcars-red); color: var(--ink); border-color: var(--lcars-orange); }
 @keyframes blink { 50% { background: var(--lcars-peach); border-color: var(--lcars-gold); } }
-/* Comms on the HUD: an LCARS pill that lights up and counts whatever waits on the captain */
-.comms-badge {
-  display: flex; align-items: stretch; border-radius: 999px; overflow: hidden; font-weight: 600; letter-spacing: 0.08em;
-  background: #000d; color: var(--lcars-peach); border-left: 14px solid var(--lcars-orange);
-  box-sizing: border-box; height: var(--hud-pill); line-height: 1;
-}
-.comms-badge > * { display: flex; align-items: center; padding: 0 10px; }
-.comms-badge b { min-width: 1.6em; justify-content: center; color: var(--muted); }
-.comms-badge kbd { background: var(--lcars-lilac); color: var(--ink); font-family: var(--ui); margin: 0; border-radius: 0; }
-.comms-badge.hailing > span { background: var(--lcars-orange); color: var(--ink); }
-.comms-badge.hailing b { background: var(--lcars-red); color: var(--ink); animation: hail 1.2s steps(1) infinite; }
-@keyframes hail { 50% { background: var(--lcars-gold); } }
 .controls {
   position: absolute; left: 16px; bottom: 16px; font-size: 13px; color: var(--lcars-peach); letter-spacing: 0.06em;
   text-shadow: 0 1px 2px #000; display: flex; gap: 14px; flex-wrap: wrap;
@@ -845,73 +833,11 @@ select.effort { width: auto; padding: 2px 6px; border-radius: 10px; font-size: 1
 .voice-progress progress { flex: 1; accent-color: var(--lcars-gold); }
 .frame-stats { position: fixed; left: 16px; top: 72px; z-index: 6; pointer-events: none; white-space: pre; font: 12px/1.4 'JetBrains Mono', monospace; color: #e8f4ff; background: rgba(10, 12, 20, 0.7); padding: 6px 10px; border-radius: 6px; }
 
-/* ------------------------------------------------------------------ Comms */
-
-.comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
-.comms h3:first-child { margin-top: 0; }
-.hail-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
-/* a plugin's word on a goal (goalTags in client/src/plugins.ts): a readout on its card, a tag on its line in Comms, outlined in its --tone */
+/* a plugin's word on a goal (goalTags in client/src/plugins.ts): a readout on its card, a tag on a line about it in a plugin's list, outlined in its --tone */
 .goal-readout { color: var(--tone); }
 .goal-tag { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--tone); border: 1px solid var(--tone); border-radius: 999px; padding: 0 8px; vertical-align: 1px; white-space: nowrap; }
-/* Needs you: a line each, what's needed in bold, who and where under it, the buttons that answer it on the right */
-.needs { display: flex; flex-direction: column; gap: 6px; }
-.need { --tone: var(--lcars-orange); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; }
-.need .grow { min-width: 0; }
-.need-icon { font-size: 18px; }
-.need-what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.need-from { display: block; color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.need-sends { display: block; color: var(--lcars-lilac); }
-.need-sends:empty { display: none; }
-/* a lead's turn you've read: still waiting for your reply, but quieter */
-.need.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); opacity: 0.75; }
-/* the briefing (ui/briefingPanel.ts): one thing that needs you at a time, large, with what to read and the answers */
-/* Comms' inbox (commsPanel.ts): the projects along the top, the list on the left, the one picked on the right, each scrolling on its own */
-.comms.inbox { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; grid-template-rows: auto 1fr; gap: 14px 18px; height: 100%; min-height: 0; }
-.comms-tabs { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 8px; }
-.comms-tab { --tone: var(--lcars-orange); font: inherit; font-size: 15px; color: var(--text); background: var(--surface-2); border: 2px solid transparent; border-radius: 999px; padding: 3px 12px; cursor: pointer; }
-.comms-tab:hover { border-color: color-mix(in srgb, var(--tone) 60%, transparent); }
-.comms-tab.on { border-color: var(--tone); color: var(--tone); }
-.comms-tab b { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 6px; margin-left: 6px; }
-.comms-tab.goals { margin-left: auto; }
-.inbox-left, .inbox-right { overflow-y: auto; min-height: 0; padding-right: 6px; }
-.inbox-left { display: flex; flex-direction: column; gap: 6px; }
-.inbox-left h3 { margin: 6px 0 0; }
-.comms-keys { margin-top: auto; padding-top: 10px; font-size: 11px; }
-.inbox-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 0; }
-.inbox-row:hover { background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
-.inbox-row.sel { background: color-mix(in srgb, var(--tone) 22%, var(--surface-2)); outline: 2px solid var(--tone); outline-offset: -2px; }
-.inbox-row .need-what { font-weight: 400; margin-top: 3px; }
-.inbox-row-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
-.inbox-row-head small { white-space: nowrap; flex-shrink: 0; }
-.inbox-tag { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
-.inbox-goal { color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.decided-list { display: flex; flex-direction: column; gap: 6px; }
-.decided { background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 8px solid var(--muted); padding: 6px 10px; opacity: 0.7; }
-.decided-answer { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.cos-tray-line { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
-.cos-tray-line:hover { color: var(--text); }
-.cos-tray:empty { display: none; }
-@media (max-width: 760px) { .comms.inbox { grid-template-columns: 1fr; height: auto; } .comms-tabs { grid-column: 1; } .inbox-left, .inbox-right { overflow: visible; } }
-.need-title { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--lcars-peach); }
-.need-trail { font-size: 14px; color: var(--muted); margin-top: -8px; }
-.need-then { color: var(--muted); }
-.briefing-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px; }
-.briefing-what { font-size: 20px; font-weight: 600; line-height: 1.2; display: flex; gap: 12px; }
-.briefing-context { white-space: normal; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }
-.briefing-context > :first-child { margin-top: 0; }
-.briefing-context > :last-child { margin-bottom: 0; }
-.briefing-context p, .briefing-context ul, .briefing-context ol, .briefing-context pre, .briefing-context table, .briefing-context blockquote { margin: 0 0 0.6em; }
-.briefing-context h1, .briefing-context h2, .briefing-context h3, .briefing-context h4 { font-size: 1.05em; margin: 0.8em 0 0.3em; }
-.briefing-context ul, .briefing-context ol { padding-left: 2.2ch; }
-.briefing-context code { font-family: 'JetBrains Mono', monospace; font-size: 0.9em; }
-.briefing-context pre { white-space: pre-wrap; }
-.briefing-context table { border-collapse: collapse; }
-.briefing-context th, .briefing-context td { border: 1px solid var(--line); padding: 2px 8px; text-align: left; }
-a.briefing-option { color: inherit; text-decoration: none; }
-.briefing-options { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-.briefing-option { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px; }
-.briefing-option img { width: 100%; max-height: 170px; object-fit: cover; object-position: top; border-radius: calc(var(--radius) / 2); }
-.briefing-reply, .briefing-note { width: 100%; box-sizing: border-box; }
+/* a note under a panel’s chat spans it */
+.briefing-note { width: 100%; box-sizing: border-box; }
 
 /* recording (H, or ?record=1): only the ship, and errors */
 body.recording .hud, body.recording .toast:not(.error) { display: none; }
@@ -969,7 +895,7 @@ body.recording .hud, body.recording .toast:not(.error) { display: none; }
    it's laid out around it. Headings, labels, buttons and one-line rows stay in Antonio. A plugin's own reading text
    takes the same: font-family var(--mono), font-size var(--read-size), line-height var(--read-leading). */
 .panel-body p, .panel-body li, .panel-body blockquote, .panel-body textarea, .compose input, .compose textarea, .briefing-note,
-.briefing-context, .briefing-option small, .question-context, .goal-note, .goal-queued-text, .chart-log section,
+.question-context, .goal-note, .goal-queued-text, .chart-log section,
 .field small, .toast > span, .dialog-message, .splash p, .personal-text, .qa-report details {
   font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0;
 }

@@ -22,7 +22,7 @@ function climbing(workspace: WorkspaceOps = demoWorkspace, ownRepo: string | nul
   return {
     ...o,
     climb: () => o.store.plugins.climber as Climb,
-    keepClimbing: (on: boolean) => keep?.route.handle({ body: { on }, query: {} }),
+    keepClimbing: (on: boolean) => keep?.route.handle({ body: { on }, query: {}, params: {} }),
     // Ops looks at the climb each time a board's read again
     settle: () => o.agents.plugins.boardRefreshed(o.project.id),
   };

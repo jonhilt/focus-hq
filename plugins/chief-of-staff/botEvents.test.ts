@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { botEvents, heard, shownBy } from './botEvents';
-import type { DecisionEvent, InboxItem } from './captainsInbox';
-import type { Agent } from './types';
+import type { Agent } from '../../plugin-api/shared';
+import type { DecisionEvent, InboxItem } from './inbox';
 
 const item = (id: string, lane: InboxItem['lane'] = 'needs-you'): InboxItem => ({ id, kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. Reyes', goal: 'Saved items', what: 'Slice 2?', lane });
 const lead = (artifacts: { id: string; at: number; image?: boolean }[]) =>

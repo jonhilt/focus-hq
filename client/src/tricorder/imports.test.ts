@@ -22,10 +22,18 @@ function imports(file: string, seen = new Set<string>()): Set<string> {
   return seen;
 }
 
+const threeOrWorld = (all: string[]) => all.filter((f) => f === 'three' || f.startsWith('three/') || f.includes(`${path.sep}world${path.sep}`));
+
 describe('the Tricorder bundle', () => {
   it('imports nothing from three.js or client/src/world/', () => {
     const all = [...imports(path.resolve(__dirname, 'main.ts'))];
     expect(all.some((f) => f.endsWith('net/state.ts'))).toBe(true);
-    expect(all.filter((f) => f === 'three' || f.startsWith('three/') || f.includes(`${path.sep}world${path.sep}`))).toEqual([]);
+    expect(threeOrWorld(all)).toEqual([]);
+  });
+
+  it('nor does any plugin’s part of it (its phone.ts, found as the Tricorder’s built)', () => {
+    const plugins = path.resolve(__dirname, '../../../plugins');
+    const phones = fs.existsSync(plugins) ? fs.readdirSync(plugins).map((d) => path.join(plugins, d, 'phone.ts')).filter((f) => fs.existsSync(f)) : [];
+    for (const phone of phones) expect(threeOrWorld([...imports(phone)]), phone).toEqual([]);
   });
 });

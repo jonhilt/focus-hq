@@ -1,7 +1,6 @@
 import { autonomyChangeLine } from '../../../shared/autonomy';
 import { goneReply } from '../../../shared/mergeGate';
-import { AUTO_SEND_MS } from '../../../shared/tricorder';
-import type { Agent, Autonomy, CosRead, Effort, MessageReply, ResumeHow } from '../../../shared/types';
+import type { Agent, Autonomy, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
 import { resumeChoice } from '../apiKey';
 import { backgroundStop } from '../lead';
@@ -10,7 +9,7 @@ import { FINISHED, Part, Refused } from './core';
 
 const SENT: MessageReply = { sent: true };
 
-/** The captain's word with an agent: messages, approvals, stopping them, their effort and autonomy, and reading a lead's turn. */
+/** The captain's word with an agent: messages, approvals, stopping them, their effort and autonomy, reading a lead's turn, and the plugins' marks on it. */
 export class Comms extends Part {
   /** How hard the agent thinks from now on: from its next request if it's working, else from its next turn. */
   setEffort(id: string, effort: Effort): Agent {
@@ -43,32 +42,21 @@ export class Comms extends Part {
     this.update(agent, { lead: { ...agent.lead, readTurn: agent.finishedAt } });
   }
 
-  /** A lead's turn ended, and a plugin judges it for the captain's inbox: it's being read from now (`lead.cos`). */
-  reading(id: string): void {
-    const agent = this.store.agents.get(id);
-    if (agent?.lead) this.update(agent, { lead: { ...agent.lead, cos: { at: Date.now() } } });
-  }
-
   /**
-   * How a plugin judged a lead's last turn: kept while that turn is still being read, dropped once their next has
-   * started or when it's a verdict on an earlier turn (its judging began, `since`, before this one ended). Words for the
-   * lead, in a project that lets the chief of staff send them itself, go after `AUTO_SEND_MS` (`Inbox.autoSend`).
+   * Plugin `plugin`'s mark on a lead's latest turn (`PluginGoals.mark`): kept until their next turn starts. Refused for
+   * anyone but a goal's lead, while a turn is under way (its journal has it open: one a restart cuts off starts again,
+   * clearing what was marked) or Focus goes down (a turn it stops then carries on after the restart), and, given
+   * `since`, once a turn later than the one it's about has started.
    */
-  judged(id: string, judged: NonNullable<CosRead['judged']>, since: number): void {
+  mark(id: string, plugin: string, data: unknown, since?: number): boolean {
     const agent = this.store.agents.get(id);
-    const read = agent?.lead?.cos;
-    if (!agent?.lead || !read || read.judged || since < read.at) return;
-    const sends = (judged.route === 1 || judged.route === 4) && this.store.projects.find((p) => p.id === agent.projectId)?.cosAutoSend === true;
-    this.update(agent, { lead: { ...agent.lead, cos: { ...read, judged, ...(sends && { sendsAt: Date.now() + AUTO_SEND_MS }) } } });
-  }
-
-  /** The captain holds the chief of staff's words for a lead: they wait for the captain to send them, or reply. */
-  holdSend(id: string): void {
-    const agent = this.store.agent(id);
-    const read = agent.lead?.cos;
-    if (!agent.lead || read?.sendsAt === undefined) return;
-    const { sendsAt: _, ...held } = read;
-    this.update(agent, { lead: { ...agent.lead, cos: held } });
+    const started = agent?.lead?.turnStarted;
+    if (!agent?.lead || this.core.closing || this.store.run(id).open) return false;
+    if (since !== undefined && started !== undefined && started > since) return false;
+    const { [plugin]: _, ...others } = agent.lead.marks ?? {};
+    const marks = data === undefined ? others : { ...others, [plugin]: data };
+    this.update(agent, { lead: { ...agent.lead, marks: Object.keys(marks).length ? marks : undefined } });
+    return true;
   }
 
   /**
@@ -105,14 +93,7 @@ export class Comms extends Part {
       this.print(agent, [{ kind: 'system', text: `✻ ${agent.name} will read it once their cloud session has started` }]);
       return SENT;
     }
-    // a lead's notes go with it, ahead of it
-    const notes = rt.inbox.notes;
-    if (rt.session && [...notes, text].every((m) => rt.session?.send(m))) {
-      if (rt.turn) rt.inbox.notesSent(rt.turn);
-      if (rt.turn) this.store.journal(id, { kind: 'sent', turn: rt.turn, text });
-      if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
-      return SENT;
-    }
+    if (this.sendInto(agent, text)) return SENT;
     if (agent.status === 'queued' || rt.busy || agent.status === 'setting-up') {
       rt.inbox.push(text);
       return SENT;
@@ -121,6 +102,20 @@ export class Comms extends Part {
     if (choice === 'hold') this.core.planLimit.hold(agent, cost);
     else this.pickUp(agent);
     return SENT;
+  }
+
+  /**
+   * Sends a message into the agent's session, if one's listening: a lead's notes go with it, ahead of it, and count as
+   * heard once they're in, even if the message then isn't. Whether the message went in.
+   */
+  private sendInto(agent: Agent, text: string): boolean {
+    const rt = this.rt(agent.id);
+    const notesIn = rt.session && rt.inbox.notes.every((m) => rt.session?.send(m));
+    if (notesIn && rt.turn) rt.inbox.notesSent(rt.turn);
+    if (!notesIn || !rt.session?.send(text)) return false;
+    if (rt.turn) this.store.journal(agent.id, { kind: 'sent', turn: rt.turn, text });
+    if (!rt.permission) this.update(agent, { activity: 'Reading your message' });
+    return true;
   }
 
   /**

@@ -141,7 +141,7 @@ describe('the retro plugin', () => {
     expect(o.agents.plugins.stateOf(RETRO)).toMatchObject({ status: 'failed', activity: 'Interrupted' });
     const route = (p: string) => o.agents.plugins.routes().find((r) => r.route.path === p)?.route;
     expect(o.agents.plugins.routes().map((r) => `${r.route.method} ${r.route.path}`)).toEqual(['post /preview', 'post /start', 'post /stop', 'post /decide']);
-    expect(route('/preview')?.handle({ body: { days: 7 }, query: {} })).toEqual({ unread: 0, costUsd: 0 });
-    await expect(route('/decide')?.handle({ body: { id: 'nope', accept: false }, query: {} })).rejects.toThrow('That draft isn’t in the latest retro');
+    expect(route('/preview')?.handle({ body: { days: 7 }, query: {}, params: {} })).toEqual({ unread: 0, costUsd: 0 });
+    await expect(route('/decide')?.handle({ body: { id: 'nope', accept: false }, query: {}, params: {} })).rejects.toThrow('That draft isn’t in the latest retro');
   });
 });

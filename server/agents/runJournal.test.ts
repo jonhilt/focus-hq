@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { evolve, factLine, fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, replay, RESUMED_NOTE, type RunFact, runView, signInMismatch } from './runJournal';
+import { evolve, factLine, fold, INTERRUPTED_ACTIVITY, journalLine, readJournal, recovery, replay, RESUMED_NOTE, type RunFact, runView, signInMismatch, stoppedNote } from './runJournal';
 
 const requested = (turn: string, prompt = 'Fix the flaky test', resumes?: string): RunFact => ({ kind: 'turn-requested', turn, turnKind: 'work', prompt, resumes });
 const issue = { task: 'issue' };
@@ -31,6 +31,19 @@ describe('fold', () => {
     expect(fold([requested('t1'), { kind: 'queued', text: 'note', at: 'note' }, { kind: 'notes-sent', turn: 't0' }]).notes).toEqual(['note']);
     expect(fold([{ kind: 'queued', text: 'note', at: 'note' }, { kind: 'cleared' }]).notes).toEqual([]);
     expect(factLine({ kind: 'queued', text: 'QA passed it', at: 'note' })).toBe('Note for them, heard with their next message: QA passed it');
+  });
+
+  // docs/invariants.md#found-on-main: a stop lost what was written into the turn, where a restart kept it
+  it('keeps what went into a turn the captain stopped as a note for their next message, in case it never reached them', () => {
+    const into = [requested('t1'), { kind: 'turn-started', turn: 't1', session: 's1' }, { kind: 'queued', text: 'QA passed', at: 'note' }, { kind: 'notes-sent', turn: 't1' }, { kind: 'sent', turn: 't1', text: 'And the header' }] satisfies RunFact[];
+    const unheard = [stoppedNote(['QA passed', 'And the header'])];
+    expect(fold([...into, { kind: 'stop-requested', turn: 't1' }, { kind: 'turn-ended', turn: 't1', outcome: { ok: false, aborted: true } }])).toMatchObject({ notes: unheard, inbox: [] });
+    // stopped, then Focus went down before the turn ended
+    expect(fold([...into, { kind: 'stop-requested', turn: 't1' }, { kind: 'interrupted', turn: 't1' }])).toMatchObject({ notes: unheard, inbox: [] });
+    // a turn that ran on heard it; one Focus cut off is picked back up with it (`resumedNote`)
+    expect(fold([...into, { kind: 'turn-ended', turn: 't1', outcome: { ok: true } }]).notes).toEqual([]);
+    expect(fold([...into, { kind: 'interrupted', turn: 't1' }]).notes).toEqual([]);
+    expect(stoppedNote(['a'])).toMatch(/^\[Ops\] /);
   });
 
   it('starts from nothing when the agent was sent home, numbering on', () => {

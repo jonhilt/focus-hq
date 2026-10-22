@@ -16,7 +16,7 @@ import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, Ru
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped, what it was sent and which background tasks it stopped. */
 export class FakeClaude implements AgentRunner {
-  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; modes: Autonomy[]; stoppedTasks: string[] }[] = [];
+  turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; refusing: string[]; modes: Autonomy[]; stoppedTasks: string[] }[] = [];
   /** The terminals opened to start cloud sessions, and what they show. */
   terminals: CloudTerminalRequest[] = [];
   shown = '';
@@ -31,13 +31,13 @@ export class FakeClaude implements AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     let end!: (outcome: RunOutcome) => void;
     const done = new Promise<RunOutcome>((resolve) => (end = resolve));
-    const stoppedTasks: string[] = [];
-    const turn = { req, hooks, end, stopped: false, sent: [] as string[], modes: [] as Autonomy[], stoppedTasks };
+    const turn: FakeClaude['turns'][number] = { req, hooks, end, stopped: false, sent: [], refusing: [], modes: [], stoppedTasks: [] };
     this.turns.push(turn);
     // a new cloud session's id comes once it's started, which Claude Code may refuse to do first
     if (!req.cloud || req.resumeSessionId) hooks.session(req.resumeSessionId ?? 'session-1');
     return {
-      send: (text) => (turn.sent.push(text), true),
+      // a message the test has it refuse is one its input closed on
+      send: (text) => !turn.refusing.includes(text) && (turn.sent.push(text), true),
       // a session whose input has closed can't stop one
       stopTask: (taskId) => Promise.resolve(!this.deaf && (turn.stoppedTasks.push(taskId), true)),
       // a cloud session's mode waits for its next turn

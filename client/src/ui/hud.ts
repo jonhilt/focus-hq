@@ -1,9 +1,9 @@
 import { ACTIVE_STATUSES } from '../../../shared/types';
-import { attention } from '../net/attention';
 import { state } from '../net/state';
-import { hudStats } from '../plugins';
+import { hudStats, pluginHails } from '../plugins';
 import { sound } from '../sound';
 import { fill, h } from './dom';
+import { hailStat, waitingOnYou } from './hails';
 
 export type ToastAction = { label: string; run: () => void };
 
@@ -31,7 +31,6 @@ export class Hud {
         h('span', null, h('kbd', null, 'WASD'), 'move'),
         h('span', null, h('kbd', null, 'Shift'), 'run'),
         h('span', null, h('kbd', null, 'E'), 'interact'),
-        h('span', null, h('kbd', null, 'C'), 'comms'),
         h('span', null, h('kbd', null, 'I'), 'jot an idea'),
         h('span', null, h('kbd', null, 'T'), 'teleport'),
         h('span', null, h('kbd', null, 'M'), 'ready room'),
@@ -52,7 +51,7 @@ export class Hud {
     state.on('preview', refresh);
     state.on('review', refresh);
     state.on('plugin', refresh);
-    // a lead's turn the chief of staff hasn't judged in a minute comes onto the badge by itself (`laneOf`)
+    // a plugin's stat can move on with time alone
     setInterval(refresh, 5000);
   }
 
@@ -123,7 +122,6 @@ export class Hud {
     const agents = state.shownAgents();
     const working = agents.filter((a) => ACTIVE_STATUSES.includes(a.status) && a.status !== 'waiting').length;
     const queued = agents.filter((a) => a.status === 'queued').length;
-    const hails = attention().length;
     const prs = state.shown.reduce((n, p) => n + (state.boards.get(p.id)?.prs.length ?? 0), 0);
     const previews = [...state.previews.keys()].filter((id) => !state.isHidden(id)).length;
     fill(
@@ -134,11 +132,10 @@ export class Hud {
       queued ? h('div', { class: 'stat' }, `⏳ ${queued} queued`) : null,
       h('div', { class: 'stat' }, `👀 ${prs} PR${prs === 1 ? '' : 's'}`),
       previews ? h('div', { class: 'stat' }, `▶ ${previews} preview${previews === 1 ? '' : 's'}`) : null,
+      // what waits on you, unless a plugin counts it its own way
+      hailStat(waitingOnYou(), pluginHails()),
       // what the plugins add, wherever you are on the ship
-      ...hudStats().map((stat) => h('div', { class: `stat${stat.tone ? ` ${stat.tone}` : ''}`, title: stat.title }, stat.text)),
-      // whatever waits on the captain, anywhere on the ship: C opens Comms to answer it
-      h('div', { class: `comms-badge${hails ? ' hailing' : ''}`, title: hails ? `${hails} waiting on you: press C` : 'Nobody is waiting on you' },
-        h('span', null, 'Comms'), h('b', null, hails), h('kbd', null, 'C')),
+      ...hudStats().map((stat) => stat.el ?? h('div', { class: `stat${stat.tone ? ` ${stat.tone}` : ''}`, title: stat.title }, stat.text)),
     );
   }
 

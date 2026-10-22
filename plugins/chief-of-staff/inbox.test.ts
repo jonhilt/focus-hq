@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { answerText, decideOf, decideRefusal, hailKey, inboxItem, landed, recentDecisions, turnNews, turnStage, waiting } from './captainsInbox';
-import type { LedgerEvent } from './ledger';
-import type { Attention } from './tricorder';
-import type { Agent, PullRequest } from './types';
+import type { Agent, Attention, LedgerEvent, PullRequest } from '../../plugin-api/shared';
+import { answerText, decideOf, decideRefusal, hailKey, inboxItem, recentDecisions, turnNews, turnStage, waiting } from './inbox';
+import { CHIEF_OF_STAFF } from './shared';
 
 const agent = (a: Partial<Agent> = {}): Agent => ({
   id: 'a1', name: 'Ada', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' },
@@ -52,13 +51,6 @@ describe('deciding an inbox item', () => {
     expect(answerText({ close: true })).toBe('Closed the goal');
     expect(answerText({ text: 'Go on' })).toBe('Go on');
     expect(answerText({ send: true })).toBe('Sent the chief of staff’s words');
-  });
-
-  it('counts an answer as given unless Ops came back to ask about cost, or warn before closing', () => {
-    expect(landed({ sent: true })).toBe(true);
-    expect(landed(undefined)).toBe(true);
-    expect(landed({ costly: { usd: 3 } })).toBe(false);
-    expect(landed({ warn: ['unmerged PR'] })).toBe(false);
   });
 });
 
@@ -117,7 +109,7 @@ describe('an inbox item', () => {
 
 describe('a lead’s turn and the chief of staff', () => {
   const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1000, judged: { route, ask: route === 3 ? 'Spend $40 on paid runs?' : 'Carry on to the settings page', why: 'w', message: 'Go on to the settings page.' } });
-  const lead = (id: string, cos?: object, more: Partial<Agent> = {}) => agent({ id, finishedAt: 1000, lead: { title: id, ...(cos && { cos }) } as never, ...more });
+  const lead = (id: string, cos?: object, more: Partial<Agent> = {}) => agent({ id, finishedAt: 1000, lead: { title: id, ...(cos && { marks: { [CHIEF_OF_STAFF]: cos } }) } as never, ...more });
 
   it('holds a turn back while it’s being read, for a minute, then lets it hail unjudged', () => {
     const reading = lead('a', { at: 1000 });
@@ -146,7 +138,7 @@ describe('a lead’s turn and the chief of staff', () => {
 });
 
 describe('the toast as a lead’s turn comes to the captain', () => {
-  const at = (status: Agent['status'], cos?: object) => agent({ name: 'Lt. Vale', status, lead: { title: 'g', ...(cos && { cos }) } as never });
+  const at = (status: Agent['status'], cos?: object) => agent({ name: 'Lt. Vale', status, lead: { title: 'g', ...(cos && { marks: { [CHIEF_OF_STAFF]: cos } }) } as never });
   const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1, judged: { route, ask: 'Spend $40?', why: 'w', message: 'm' } });
 
   it('says a turn no chief of staff reads is waiting, as it ends', () => {

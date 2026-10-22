@@ -30,7 +30,7 @@ What each part caught and found goes in the sections below, with every live bug 
 
 | part | test | rules |
 | --- | --- | --- |
-| a goal's lead (held for the plan's limit, its run, its inbox and notes) | `server/agents/managerInvariants.test.ts` | restart |
+| a goal's lead (held for the plan's limit, its run, its inbox and notes, the turn the captain read, plugins' marks on its turn) | `server/agents/managerInvariants.test.ts` | restart |
 | a goal lead's slices | `server/agents/sliceInvariants.test.ts` | both |
 | the cartography plugin's kept diagrams | `plugins/cartography/invariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
@@ -77,6 +77,7 @@ Live bugs the checks found on today's code, each now held in a plain test.
 - **A restart as a developer's turn ended left their work off GitHub** (fixed; the delivery's restart check, `runJournal.test.ts`, `deliveryInvariants.test.ts`).
 - **A message sent while a developer's work went up was never heard when the delivery failed** (fixed; a delivery promise).
 - **A follow-up that came as the work went up wasn't asked to commit what it left** (fixed; a delivery promise).
+- **A message written into a turn the captain then stopped was lost, where a restart kept it** (fixed; the lead's restart check on seed 11, `runJournal.test.ts`): a restart picks the cut-off turn back up with what went into it, in case it never arrived, but a stop dropped it. Now what went into a stopped turn waits as a note for the agent's next message.
 - **A developer asked to commit, whose turn a restart cut off, was asked again** (fixed; the delivery's restart check). A second restart inside that same picked-up turn would still ask again.
 - **A lead's turn Ops stopped as it went down was left being read by the chief of staff after the restart** (caught before it merged; the lead's restart check, `managerInvariants.test.ts`): it looked like a turn ended, so it came back hidden from the captain while the lead carried on. A turn ends for the chief of staff only when the office isn't going down.
 

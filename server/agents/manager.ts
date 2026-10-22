@@ -1,4 +1,5 @@
 import type { Layer } from 'effect';
+import { type CaptainAnswer, landed } from '../../shared/captainAnswer';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
 import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
@@ -258,9 +259,16 @@ export class AgentManager {
     this.core.comms.readTurn(id);
   }
 
-  /** The captain holds the chief of staff's words for a lead, so they don't go by themselves (`Comms.holdSend`). */
-  holdSend(id: string): void {
-    this.core.comms.holdSend(id);
+  /**
+   * The captain answers an agent from its panel (`act`, answered `answer`): once it's gone through (`landed`), the
+   * plugins hear of it, with the agent as it stood before it (`PluginParts.captainAnswered`).
+   */
+  async captainAnswers<T>(id: string, answer: CaptainAnswer, act: () => T | Promise<T>): Promise<T> {
+    const agent = this.core.store.agents.get(id);
+    const before = agent && structuredClone(agent);
+    const reply = await act();
+    if (before && landed(reply)) this.core.plugins.captainAnswered(before, answer);
+    return reply;
   }
 
   message(id: string, text: string, from?: string, how?: ResumeHow): MessageReply {

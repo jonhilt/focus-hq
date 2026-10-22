@@ -1,4 +1,4 @@
-import { cosAddressee, type CosRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, viaNote } from './ledger';
+import { verdictAddressee, type VerdictRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, viaNote } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -102,7 +102,7 @@ const MERGE_CHECK: Record<string, string> = {
   overridden: 'merged past the check',
 };
 /** Where the chief of staff would have sent a lead's turn, in a word or two. */
-const COS_ROUTE: Record<CosRoute, string> = { 1: 'carry on', 2: 'card', 3: 'interrupt', 4: 'back to the lead' };
+const VERDICT_ROUTE: Record<VerdictRoute, string> = { 1: 'carry on', 2: 'card', 3: 'interrupt', 4: 'back to the lead' };
 const TRIAGE: Record<string, string> = {
   'retry-qa': 'ran QA again',
   'send-back': 'sent it back',
@@ -211,9 +211,9 @@ export function ledgerRow(e: LedgerEvent): LedgerRow {
         ...base,
         tag: 'CoS',
         tone: e.route === 3 ? 'warn' : 'info',
-        title: `CoS: ${COS_ROUTE[e.route]} — ${e.why}`,
+        title: `CoS: ${VERDICT_ROUTE[e.route]} — ${e.why}`,
         detail: [e.agent, e.goal].filter(Boolean).join(' · '),
-        ...(e.message && { quotes: [`To the ${cosAddressee(e.route)}: “${e.message}”`] }),
+        ...(e.message && { quotes: [`To the ${verdictAddressee(e.route)}: “${e.message}”`] }),
         goal: e.goal,
       };
     case 'session-frictions':

@@ -1,0 +1,25 @@
+/* The chief of staff's styles on the phone (phone.ts imports them, into the Tricorder's bundle alone): its strips at the
+   top of the home screen, under the phone's own LCARS bars (`.bar`). */
+.cos-needs-you { margin-bottom: 16px; }
+.cos-needs-you.clear .bar { background: var(--lcars-green); }
+.cos-needs-you.alert .bar { background: var(--lcars-gold); }
+.cos-needs-you ul { list-style: none; margin: 0; padding: 0; border-left: 14px solid var(--lcars-gold); border-radius: 0 0 0 16px; }
+.cos-needs-you li + li { border-top: 2px solid #000; }
+.cos-ready { margin-bottom: 16px; }
+.cos-ready .bar { background: var(--lcars-lilac); }
+.cos-ready ul { list-style: none; margin: 0; padding: 0; border-left: 14px solid var(--lcars-lilac); border-radius: 0 0 0 16px; }
+.cos-ready li { background: var(--surface); padding-bottom: 10px; }
+.cos-ready li + li { border-top: 2px solid #000; }
+.cos-ready .cos-words { margin: 0 12px 8px; padding: 8px 10px; border-left: 3px solid var(--lcars-lilac); color: var(--text); white-space: pre-wrap; }
+.cos-ready .actions { display: flex; gap: 8px; align-items: center; padding: 0 12px; }
+.cos-ready .actions .btn { flex: 0 0 auto; padding-inline: 22px; }
+.cos-ready .sends-in { color: var(--muted); }
+.cos-all-clear { margin: 0; padding: 12px 14px; border-left: 14px solid var(--lcars-green); border-radius: 0 0 0 16px; color: var(--lcars-green); background: var(--surface); }
+.cos-entry {
+  display: flex; gap: 10px; align-items: flex-start; width: 100%; min-height: var(--tap); padding: 10px 12px; border: none;
+  border-right: 6px solid var(--accent); background: var(--surface); color: var(--text); font: inherit; text-align: left; text-decoration: none; cursor: pointer;
+}
+.cos-entry .icon { font-size: 20px; line-height: 1.2; }
+.cos-entry .text { display: flex; flex-direction: column; min-width: 0; }
+.cos-entry strong { color: var(--lcars-peach); }
+.cos-entry small { color: var(--muted); }
