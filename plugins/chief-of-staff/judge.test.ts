@@ -10,11 +10,18 @@ describe('the judge', () => {
     expect(prompt).toContain('message: always the actual words you would send');
     expect(judgeSystemPrompt(undefined)).toContain('past replies:\nNone yet');
     expect(judgeSystemPrompt('  \n')).toContain('past replies:\nNone yet');
-    expect(JUDGE_VERSION).toBe('v8');
+    expect(JUDGE_VERSION).toBe('v9');
     expect(prompt).toContain('- replies: buttons for the captain');
     expect(prompt).toContain('3 at most');
     expect(prompt).toContain('Spending money is always 3');
     expect(prompt).toContain('- ask: the headline');
+  });
+
+  it('reasons from principles, the routes following from them, and leans towards the captain when unsure', () => {
+    const prompt = judgeSystemPrompt();
+    for (const p of ['P1. The captain’s attention', 'P2. Direction is the captain’s', 'P3. Never decide for the captain', 'P4. Prepare, don’t pass through', 'P5.', 'P6.', 'P7. The costs are lopsided']) expect(prompt.replaceAll("'", '’')).toContain(p);
+    expect(prompt).toContain('Unsure between 4 and 2: choose 2 (P7)');
+    expect(prompt).toContain('Never use 1 or 4 for something under ALWAYS THE CAPTAIN\'S');
   });
 
   it('reads the goal and the end of what the lead said, as the backtest did', () => {

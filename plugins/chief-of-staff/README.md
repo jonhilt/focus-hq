@@ -44,12 +44,24 @@ Only the captain starts a goal lead's next turn in the core: Ops' and QA's news 
 
 It never wakes a lead the captain owes an answer: a turn it judged a card or an interrupt, one it never judged, a question, a goal ready to close, an error, read or not; nor one the captain stopped. A turn it would carry on or send back wakes them, read or not, and so does one the captain acknowledged (Got it: they're owed nothing). Waking them would start their next turn and take what waited on the captain from their inbox unanswered, so the note waits for the captain's next message instead. News for a turn it's still reading waits for its verdict: it wakes the lead then if the turn is one it would carry on or send back.
 
-## The four routes
+## The four routes, from its principles
 
-1. **Carry on.** Nothing's being decided: progress within the slice under way, with the next step stated, or waiting on something that isn't the captain.
-2. **A card** for the captain's queue, with the lead's recommendation as the default: a real decision of the captain's, explained well, with a pick. Starting a new slice, shipping one, or proposing the goal closes is a card.
-3. **Interrupt the captain.** Facts only the captain has; options with no recommendation; production, permissions, money, licences, security or anything outward-facing not already approved; the lead contradicting the captain; the goal's direction in question.
-4. **Back to the lead**: the lead can find out for itself, its message needs restating with options and a pick, it's stuck on something it can unblock, or a standing order covers how to work.
+It reasons from seven principles, and the routes follow from them (`judge.ts`):
+
+- **P1.** The captain's attention is the scarcest thing aboard: spend it where their judgement changes what gets built.
+- **P2.** Direction is the captain's, craft the lead's: what to build, for whom, what users see, the scope, the next slice and whether it's done are theirs; how it's built, tested and merged is the lead's.
+- **P3.** Never decide for the captain: carry on only inside a direction they've set. Anything that starts, widens, narrows, redirects or ends work is theirs, standing orders or not.
+- **P4.** Prepare, don't pass through: a decision reaches them answerable in seconds, with options and a pick.
+- **P5.** What can't be undone, or reaches beyond the ship (money, production data, permissions, security, licences, people outside), needs them first and now.
+- **P6.** The lead contradicting them, or the goal's direction in doubt, is news they need now.
+- **P7.** The costs are lopsided: a turn wrongly handed to them costs a minute, one wrongly kept from them a slice of wrong work. Unsure, hand it to them.
+
+1. **Carry on.** Progress inside the direction already set, the next step stated, or waiting on something that isn't the captain.
+2. **A card** for the captain's queue, the lead's pick as the default: a decision of theirs the lead has prepared. Starting a new slice, shipping one, or proposing the goal closes is a card.
+3. **Interrupt the captain.** P5 and P6, facts only the captain has, options no one can recommend, anything always the captain's. Spending money is always an interrupt.
+4. **Back to the lead**: the lead can find it out or unblock itself, its message isn't ready for the captain (P4), or a standing order covers how to work. Its words never approve, pick or start anything.
+
+**Why principles, and how they scored.** v8 was a list of rules, and lists miss what they don't name. The backtest (`~/.focus/chief-of-staff/backtest`: the 242 held-out lead turns labelled by what the captain's reply showed they needed, and the captain's own blind picks) ran Haiku on v8 and on v9, twice each, on 22 October 2026. Of the 200 turns that needed the captain, v8 kept 44 and 46 from them (10 of them carried on silently both times), and v9 kept 31 and 26 (5 and 6 silently). The price is the other way: of the 42 turns that didn't need them, v8 put 20 and 22 in front of them, v9 24 both times. P7 chooses that trade. On the captain's blind sample both reached the captain where they would have about as often (v8 19 and 19 of 28, v9 21 and 19).
 
 ## How it judges a turn
 
