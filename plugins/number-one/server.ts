@@ -9,11 +9,13 @@ import { type FocusPlugin } from '../../plugin-api/server';
 
 const text = (v: unknown): string => (typeof v === 'string' ? v : '');
 
-/** The keys calls need, from where Focus starts: OpenAI's for gpt-live-1, TypeSafe's for Jev. */
-const callKeys = () => ({ openai: process.env.OPENAI_API_KEY || undefined, typesafe: process.env.TYPESAFE_API_KEY || undefined });
-
 const numberOnePlugin: FocusPlugin = {
   id: NUMBER_ONE,
+  // the keys calls need: OpenAI's for gpt-live-1, TypeSafe's for Jev
+  secrets: [
+    { name: 'OPENAI_API_KEY', label: 'OpenAI API key', hint: 'For calls: the voice (gpt-live-1).' },
+    { name: 'TYPESAFE_API_KEY', label: 'TypeSafe API key', hint: 'For calls: Jev, who works out what you asked for.' },
+  ],
   start(host) {
     const saved = host.state<NumberOneSaved>(() => ({ chat: freshChat() }));
     const live = host.state<NumberOneLive>(() => ({ activity: '', call: { call: null } }), { saved: false });
@@ -38,9 +40,11 @@ const numberOnePlugin: FocusPlugin = {
       startQueued: (projectId, queueId, station) => host.goals.startQueued(projectId, queueId, station),
       startGoal: (projectId, goal) => host.goals.start(projectId, goal, { from: 'a call' }),
       message: (agentId, said) => host.goals.message(agentId, said),
-    }, callKeys(), host.demo);
+    }, () => ({ openai: host.secret('OPENAI_API_KEY'), typesafe: host.secret('TYPESAFE_API_KEY') }), host.demo);
     live.set({ call: calls.status() });
     return {
+      // a key the captain set or cleared: the Call button says at once whether calls can be taken
+      secretChanged: () => live.set({ call: calls.status() }),
       routes: [
         { method: 'post', path: '/say', handle: ({ body }) => numberOne.say(text(body.text)) },
         { method: 'post', path: '/new', handle: () => numberOne.newConversation() },

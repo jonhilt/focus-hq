@@ -7,7 +7,7 @@ import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { BotStatus } from './bot';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
-import type { PluginStates } from './plugins';
+import type { PluginSecretStatus, PluginStates } from './plugins';
 import type { Preview, PreviewLog } from './previews';
 import type { PinnedSettings, Project, Settings } from './projects';
 import type { QaReview } from './qa';
@@ -29,6 +29,8 @@ export interface ServerInfo {
   shipPlugins: ShipPlugins;
   /** A bot speaking for the captain: where each of its settings comes from (none of its secrets). */
   bot: BotStatus;
+  /** The secrets each plugin switched on needs, by plugin id: where each is set, never its value. */
+  pluginSecrets: Record<string, PluginSecretStatus[]>;
   /** In a demo ship, how fast its pretend agents go (1 is `pnpm run demo`'s; shared/demoPace.ts). */
   demoPace?: number;
 }

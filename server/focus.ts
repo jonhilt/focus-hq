@@ -1,4 +1,4 @@
-import type { Board, BotChange, BotStatus, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
+import type { Board, BotChange, BotStatus, ConflictsOutcome, PluginSecretStatus, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM } from '../shared/types';
 import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
@@ -18,7 +18,7 @@ import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
-import { Secrets } from './secrets';
+import { Secrets, secretSetBy } from './secrets';
 import { changeSettings, pinnedSettings, settingsInForce } from './settings';
 import { projectChangeFollowUps } from './projectChange';
 import { issueRefusal, previewTarget } from './focusRequests';
@@ -43,7 +43,9 @@ export class Focus {
   /** Shuts Focus down for its supervisor to start it again (server/supervise.ts), once Focus can. */
   restart?: () => Promise<void>;
   /** A bot speaking for the captain: its settings as they are now, and the captain's changes to them. */
-  readonly bot = new BotSetup({ secrets: new Secrets(paths.secrets), publicUrl: () => this.store.settings.publicUrl });
+  /** What the captain sets that mustn't reach a browser or an agent: the bot's secrets and the plugins' (server/secrets.ts). */
+  private readonly secrets = new Secrets(paths.secrets);
+  readonly bot = new BotSetup({ secrets: this.secrets, publicUrl: () => this.store.settings.publicUrl });
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
@@ -71,6 +73,7 @@ export class Focus {
       plugins: [],
       shipPlugins: { pinnedBy: null, startedWith: [], available: [], canRestart: false },
       bot: this.bot.status(),
+      pluginSecrets: {},
     };
   }
 
@@ -93,7 +96,7 @@ export class Focus {
 
   /** What Focus says of itself now: its settings, the bot's, and in a demo ship the pace its agents go at. */
   private served(): ServerInfo {
-    return { ...this.info, settings: settingsInForce(this.store.settings), settingsPinned: pinnedSettings(), bot: this.bot.status(), ...(config.demo && { demoPace: demoPace() }) };
+    return { ...this.info, settings: settingsInForce(this.store.settings), settingsPinned: pinnedSettings(), bot: this.bot.status(), pluginSecrets: this.pluginSecrets(), ...(config.demo && { demoPace: demoPace() }) };
   }
 
   /** Tells every browser what Focus says of itself now, as after the demo's pace changes. */
@@ -415,7 +418,7 @@ export class Focus {
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
   /** `ship`: how they were chosen, for the captain to change them from the ready room. */
   startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>, ship: ShipPlugins): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, bot: () => this.bot.config(), ...more });
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, bot: () => this.bot.config(), secret: (plugin, name) => this.pluginSecret(plugin, name), ...more });
     this.info.plugins = this.agents.plugins.ids();
     this.info.shipPlugins = ship;
     // FOCUS_PLUGINS's plugins carry over as the captain's choice the first time, so taking it away later changes nothing
@@ -600,6 +603,32 @@ export class Focus {
     const status = this.bot.change(change);
     this.infoChanged();
     return status;
+  }
+
+  /** Each started plugin's secrets, for the browser: where each is set, never its value. */
+  private pluginSecrets(): Record<string, PluginSecretStatus[]> {
+    const plugins = this.agents?.plugins;
+    if (!plugins) return {};
+    return Object.fromEntries(plugins.ids().flatMap((id) => {
+      const secrets = plugins.secrets(id);
+      return secrets.length ? [[id, secrets.map((s) => ({ ...s, by: secretSetBy(s.name, process.env, this.secrets) }))]] : [];
+    }));
+  }
+
+  /** Plugin `plugin`'s secret `name` as it is now: its environment variable where set, else the captain's; only one it declared. */
+  pluginSecret(plugin: string, name: string): string | undefined {
+    if (!this.agents.plugins.secrets(plugin).some((s) => s.name === name)) return undefined;
+    return process.env[name]?.trim() || this.secrets.get(name);
+  }
+
+  /** The captain's change to a plugin's secret, from the Plugins tab: a string sets it, null or empty clears it. Refused where its environment variable sets it. */
+  changePluginSecret(plugin: string, name: string, value: string | null): Record<string, PluginSecretStatus[]> {
+    if (!this.agents.plugins.secrets(plugin).some((s) => s.name === name)) throw new Error(`${plugin} keeps no secret called ${name}`);
+    if (process.env[name]?.trim()) throw new Error(`${name} is set in Focus's environment: change it there, or unset it to change it here`);
+    this.secrets.set(name, value?.trim() || undefined);
+    this.agents.plugins.secretChanged(plugin, name);
+    this.infoChanged();
+    return this.pluginSecrets();
   }
 
   /** A new bot token, for the captain to give the bot: told them this once. */

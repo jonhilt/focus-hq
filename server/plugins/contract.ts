@@ -8,7 +8,7 @@ import type { Lane } from '../../shared/mergeLane';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
-import type { Agent, Issue, MessageReply, Planner, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, PluginSecret, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -25,6 +25,11 @@ export interface FocusPlugin {
    * them), and reaches what each provides through `host.uses`; otherwise it's left out, saying why.
    */
   requires?: string[];
+  /**
+   * The secrets it needs (API keys, say), each set in the Plugins tab or by its environment variable, which wins.
+   * Focus keeps them in secrets.env, never hands them to anything it starts, and lends them through `host.secret`.
+   */
+  secrets?: readonly PluginSecret[];
   /** Called once as Focus starts, with what Focus lends it; returns what it adds. */
   start(host: PluginHost): PluginParts;
 }
@@ -41,6 +46,8 @@ export interface PluginParts {
   boardRefreshed?(projectId: string): void;
   /** Ops opened, or updated, the pull request of an agent on one of this plugin's briefs. */
   prOpened?(agent: Readonly<Agent>, pr: { number: number; url: string }): void;
+  /** The captain set or cleared one of its secrets (`FocusPlugin.secrets`) in the Plugins tab: `host.secret` has it now. */
+  secretChanged?(name: string): void;
   /** A project's settings changed: a plugin switched on or off for it, say (`host.on`). */
   projectChanged?(projectId: string): void;
   /**
@@ -235,6 +242,11 @@ export interface PluginHost {
    * (`FOCUS_PUBLIC_URL`). Each one missing is unset.
    */
   readonly bot: Readonly<{ token?: string; webhook?: string; auth?: string; publicUrl?: string }>;
+  /**
+   * One of its own secrets (`FocusPlugin.secrets`) as it is now: its environment variable where that's set, else what
+   * the captain set in the Plugins tab. Undefined when it's set nowhere, or isn't one the plugin declared.
+   */
+  secret(name: string): string | undefined;
   /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */
   artifact(leadId: string, file: string): Promise<Uint8Array | undefined>;
   /** Every agent aboard now, of every project. */

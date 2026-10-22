@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
 
 const PAGE_SANDBOX = 'sandbox allow-scripts allow-popups';
 const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
@@ -79,5 +79,14 @@ describe('artifactServing', () => {
     for (const file of ['../a.html', 'A.html', '-a.html', 'a.svg', 'q1.e.html', 'a.html.jpg.js', 'shot-A.png']) {
       expect(artifactServing('lead_1', file)).toBeUndefined();
     }
+  });
+});
+
+describe('a change to a plugin’s secret', () => {
+  it('takes a string to set it or null to clear it, and refuses anything else', () => {
+    expect(pluginSecretChange({ plugin: 'number-one', name: 'OPENAI_API_KEY', value: 'sk' })).toEqual({ plugin: 'number-one', name: 'OPENAI_API_KEY', value: 'sk' });
+    expect(pluginSecretChange({ plugin: 'number-one', name: 'OPENAI_API_KEY', value: null })).toMatchObject({ value: null });
+    expect(() => pluginSecretChange({ plugin: 'p', name: 'N', value: 3 })).toThrow('as a string, or null');
+    expect(() => pluginSecretChange(undefined)).toThrow('as a string, or null');
   });
 });

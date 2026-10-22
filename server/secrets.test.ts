@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseSecrets, Secrets, withoutSecrets, withSecret } from './secrets';
+import { keepSecrets, parseSecrets, Secrets, secretSetBy, withoutSecrets, withSecret } from './secrets';
 
 describe('the secrets file’s text', () => {
   it('starts with a line saying what it is, and adds a name at the end', () => {
@@ -63,5 +63,32 @@ describe('what Focus hands what it starts', () => {
     const env = { FOCUS_BOT_TOKEN: 't', FOCUS_BOT_WEBHOOK: 'https://h/s3cret', FOCUS_BOT_WEBHOOK_AUTH: 'Bearer x', FOCUS_PUBLIC_URL: 'https://f', PATH: '/bin', HOME: '/h' };
     expect(withoutSecrets(env)).toEqual({ FOCUS_PUBLIC_URL: 'https://f', PATH: '/bin', HOME: '/h' });
     expect(env.FOCUS_BOT_TOKEN).toBe('t');
+  });
+});
+
+describe('a plugin’s secrets', () => {
+  it('are kept only when named like an API key, so a plugin can’t keep PATH from what Focus starts', () => {
+    expect(() => keepSecrets(['PATH'])).toThrow('named like an API key');
+    expect(() => keepSecrets(['openai_key'])).toThrow(`"openai_key" isn't`);
+    keepSecrets(['ACME_API_KEY']);
+    expect(withoutSecrets({ ACME_API_KEY: 'k', PATH: '/bin' })).toEqual({ PATH: '/bin' });
+  });
+
+  it('are read from the file though the plugin starts after it’s read, and only once it’s kept', () => {
+    const at = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'secrets-')), 'secrets.env');
+    fs.writeFileSync(at, "LATER_API_KEY='k1'\nUNKEPT_API_KEY='k2'\n");
+    const secrets = new Secrets(at);
+    expect(secrets.get('LATER_API_KEY')).toBeUndefined();
+    keepSecrets(['LATER_API_KEY']);
+    expect(secrets.get('LATER_API_KEY')).toBe('k1');
+    expect(secrets.get('UNKEPT_API_KEY')).toBeUndefined();
+    expect(() => secrets.set('UNKEPT_API_KEY', 'x')).toThrow('keeps no secret called UNKEPT_API_KEY');
+  });
+
+  it('say where each is set: the environment winning over the file', () => {
+    const file = { get: (n: string) => (n === 'A_API_KEY' ? 'saved' : undefined) };
+    expect(secretSetBy('A_API_KEY', {}, file)).toBe('captain');
+    expect(secretSetBy('A_API_KEY', { A_API_KEY: 'env' }, file)).toBe('env');
+    expect(secretSetBy('B_API_KEY', { B_API_KEY: ' ' }, file)).toBeNull();
   });
 });

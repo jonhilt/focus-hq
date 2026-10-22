@@ -46,7 +46,7 @@ function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true 
       return messageReply;
     },
   };
-  const calls = new Calls((status) => void events.push(status), focus, { openai: 'sk', typesafe: 'ts' }, false, Layer.mergeAll(live, jev));
+  const calls = new Calls((status) => void events.push(status), focus, () => ({ openai: 'sk', typesafe: 'ts' }), false, () => Layer.mergeAll(live, jev));
   /** The captain says something, and the voice model hands it over. */
   const say = async (text: string, delegation: string) => {
     for (const e of [
@@ -140,15 +140,15 @@ describe('Calls', () => {
   });
 
   it("won't take a call without both keys", async () => {
-    const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, { openai: 'sk' }, false);
-    expect(calls.status()).toEqual({ missing: 'Calls need TYPESAFE_API_KEY set where Focus starts', call: null });
-    await expect(calls.start('v=0 offer')).rejects.toThrow('TYPESAFE_API_KEY');
+    const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, () => ({ openai: 'sk' }), false);
+    expect(calls.status()).toEqual({ missing: 'Calls need a TypeSafe API key, set in the ready room\'s Plugins tab', call: null });
+    await expect(calls.start('v=0 offer')).rejects.toThrow('TypeSafe API key');
   });
 });
 
 describe('callsMissing', () => {
   it('names each missing key, and needs none in the demo', () => {
-    expect(callsMissing({}, false)).toBe('Calls need OPENAI_API_KEY and TYPESAFE_API_KEY set where Focus starts');
+    expect(callsMissing({}, false)).toBe('Calls need an OpenAI API key and a TypeSafe API key, set in the ready room\'s Plugins tab');
     expect(callsMissing({ openai: 'a', typesafe: 'b' }, false)).toBeUndefined();
     expect(callsMissing({}, true)).toBeUndefined();
   });

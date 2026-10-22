@@ -37,6 +37,8 @@ export interface Lent {
   signIn?: () => SignIn;
   /** The GitHub account Focus works as, for a board's "only my PRs" (`Focus.githubLogin`): none in a test that doesn't need it. */
   githubLogin?: () => string | undefined;
+  /** A plugin's secret as it is now (`Focus.pluginSecret`): none in a test that doesn't need it. */
+  secret?: (plugin: string, name: string) => string | undefined;
   /** A bot speaking for the captain, as it is now (`Focus.bot`): none in a test that doesn't need it. */
   bot?: () => PluginHost['bot'];
 }
@@ -92,6 +94,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       return project ? lend(columns(project, core.store.boards.get(projectId), core.store.agentsIn(projectId), lent.githubLogin?.()).prs) : [];
     },
     reviews: () => lend(core.store.reviews),
+    secret: (name) => lent.secret?.(id, name),
     // read afresh each time, as the captain changes it in Settings
     get bot() {
       return lend(lent.bot?.() ?? {});

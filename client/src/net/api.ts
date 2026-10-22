@@ -44,6 +44,8 @@ export const api = {
   /** A new bot token, told this once. */
   newBotToken: () => call<{ token: string }>('POST', '/settings/bot/token'),
   clearBotToken: () => call<BotStatus>('DELETE', '/settings/bot/token'),
+  /** A plugin's secret (an API key): a string sets it, null clears it. */
+  changePluginSecret: (plugin: string, name: string, value: string | null) => call('PATCH', '/settings/plugin-secret', { plugin, name, value }),
   /** Restarts Focus, under its supervisor: the page reconnects once it's back. */
   restart: () => call<{ restarting: true }>('POST', '/restart'),
 

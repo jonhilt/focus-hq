@@ -4,7 +4,7 @@
 import { pluginOn } from '../../../shared/projectPlugins';
 import { isHidden } from '../../../shared/hidden';
 import { restartPending, switchShipPlugin } from '../../../shared/shipPlugins';
-import type { Project, ServerInfo } from '../../../shared/types';
+import type { PluginSecretStatus, Project, ServerInfo } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { COST_BADGE, type PluginEntry, pluginEntries, shipStatus } from '../pluginList';
@@ -79,15 +79,38 @@ function pluginCard(ui: Ui, info: ServerInfo, e: PluginEntry, entries: readonly 
     needs(info, e, entries),
     h('div', { class: 'plugin-cost' }, h('div', { class: 'row' }, h('span', { class: 'label' }, 'Cost'), costChip(e)), h('p', { class: 'muted' }, about.costDetail)),
     about.adds.length ? [h('div', { class: 'label' }, 'Adds'), h('ul', { class: 'plugin-adds' }, ...about.adds.map((a) => h('li', null, a)))] : null,
-    e.on ? ownSettings(ui, e) : null,
+    e.on ? ownSettings(ui, info, e) : null,
     e.on ? whereItWorks(ui, e) : h('p', { class: 'muted' }, 'Off for the whole ship.'),
   );
 }
 
-/** The plugin's own settings for the whole ship, while it's on. */
-function ownSettings(ui: Ui, e: PluginEntry): HTMLElement[] {
-  const settings = pluginSettings(e.plugin, ui);
+/** The plugin's own settings for the whole ship, while it's on: the secrets it needs first. */
+function ownSettings(ui: Ui, info: ServerInfo, e: PluginEntry): HTMLElement[] {
+  const settings = [...secretFields(ui, info.pluginSecrets[e.plugin.id] ?? [], e.plugin.id), ...pluginSettings(e.plugin, ui)];
   return settings.length ? [h('div', { class: 'label' }, 'Settings'), h('div', { class: 'plugin-settings' }, ...settings)] : [];
+}
+
+/**
+ * A field for each secret the plugin needs (an API key): typing one and leaving the field saves it, Clear forgets it.
+ * Focus never sends one back, only where it's set; one its environment variable sets can't be changed here.
+ */
+function secretFields(ui: Ui, secrets: readonly PluginSecretStatus[], plugin: string): HTMLElement[] {
+  return secrets.map((s) => {
+    const send = (value: string | null) => api.changePluginSecret(plugin, s.name, value).catch((err: Error) => ui.error(err.message));
+    const input = h('input', { type: 'password', autocomplete: 'off', placeholder: s.by ? 'Paste a new one to replace it' : `Paste your ${s.label}`, style: 'flex:1' });
+    input.addEventListener('change', () => void send(input.value).then(() => (input.value = '')));
+    const clear = h('button', { class: 'btn small' }, 'Clear');
+    clear.onclick = () => void busy(clear, () => send(null), ui.error);
+    const chip =
+      s.by === 'env' ? h('span', { class: 'chip warn', title: `Unset ${s.name} and restart Focus to change it here` }, `from ${s.name}`)
+      : s.by ? h('span', { class: 'chip ok' }, 'set')
+      : h('span', { class: 'chip' }, 'not set');
+    return h('div', { class: 'field' },
+      h('label', null, s.label),
+      h('div', { class: 'row' }, chip, s.by === 'env' ? null : input, s.by === 'captain' ? clear : null),
+      s.hint ? h('small', null, `${s.hint} Kept on this machine, in secrets.env: never sent back to a browser or handed to agents.`) : null,
+    );
+  });
 }
 
 /** The plugin's switch for the whole ship, from Focus's next start: locked while FOCUS_PLUGINS decides. */

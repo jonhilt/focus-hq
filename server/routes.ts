@@ -5,7 +5,7 @@ import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
 import { replay } from './agents/runJournal';
-import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
 import { botChange, botGuard } from './bot';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
@@ -60,6 +60,11 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
   r.patch('/settings/bot', h((req) => focus.changeBot(botChange(req.body))));
   r.post('/settings/bot/token', h(() => focus.newBotToken()));
   r.delete('/settings/bot/token', h(() => focus.clearBotToken()));
+  // a plugin's secret (an API key), set in the Plugins tab: in, never out
+  r.patch('/settings/plugin-secret', h((req) => {
+    const { plugin, name, value } = pluginSecretChange(req.body);
+    return focus.changePluginSecret(plugin, name, value);
+  }));
   r.post('/restart', h(() => focus.restartFocus()));
 
   // projects (rooms)

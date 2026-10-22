@@ -20,10 +20,10 @@ const numberOne: ClientPlugin = {
     summary: 'The ship’s first officer in the ready room, who talks anything through with you and takes your calls hands-free.',
     adds: [
       'Number One in the ready room, and their chat (1)',
-      'Hands-free calls, with an OpenAI or TypeSafe key',
+      'Hands-free calls, with an OpenAI key and a TypeSafe key (set below)',
     ],
     cost: 'on-demand',
-    costDetail: 'A session turn for each message you send them; calls use your OpenAI or TypeSafe key. Nothing while you’re not talking.',
+    costDetail: 'A session turn for each message you send them; calls use your OpenAI and TypeSafe keys. Nothing while you’re not talking.',
   },
   legend: [{ key: '1', label: 'Number One' }],
   start({ ui }) {

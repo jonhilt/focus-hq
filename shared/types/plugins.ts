@@ -12,5 +12,23 @@ export interface Brief {
   icon: string;
 }
 
+/**
+ * A secret a plugin needs (an API key, say), set in the Plugins tab or by its environment variable: kept in
+ * secrets.env like Focus's own, never sent to a browser (docs/settings.md).
+ */
+export interface PluginSecret {
+  /** Its environment variable's name, also its name in secrets.env: ending in _KEY, _TOKEN or _SECRET. */
+  name: string;
+  /** What it is, for the Plugins tab: "OpenAI API key". */
+  label: string;
+  /** What it's for, or where to get one. */
+  hint?: string;
+}
+
+/** A plugin's secret as the browser hears of it: where it's set (an environment variable, the Plugins tab, or nowhere), never its value. */
+export interface PluginSecretStatus extends PluginSecret {
+  by: 'env' | 'captain' | null;
+}
+
 /** Each plugin's state (its slot in Focus's saved state), by plugin id: only the plugins switched on. */
 export type PluginStates = Record<string, unknown>;

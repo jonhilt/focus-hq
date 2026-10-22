@@ -4,17 +4,18 @@ import { freshChat, NUMBER_ONE, type NumberOneChat, type NumberOneState } from '
 import { focus, until } from '../../plugin-api/testing';
 
 /** Focus with Number One switched on: its routes, and its state as the browser has it. */
-function aboard(opts: { demo?: boolean; saved?: NumberOneChat } = {}) {
+function aboard(opts: { demo?: boolean; saved?: NumberOneChat; keys?: Record<string, string> } = {}) {
   const o = focus();
   if (opts.saved) o.store.plugins[NUMBER_ONE] = { chat: opts.saved };
-  o.agents.startPlugins([numberOnePlugin], { demo: opts.demo ?? false, ownRepo: () => undefined, shipStatus: () => Promise.resolve({ projects: [] }) });
+  const keys = opts.keys ?? {};
+  o.agents.startPlugins([numberOnePlugin], { demo: opts.demo ?? false, ownRepo: () => undefined, shipStatus: () => Promise.resolve({ projects: [] }), secret: (_plugin, name) => keys[name] });
   const route = (path: string) => {
     const found = o.agents.plugins.routes().find((r) => r.route.path === path)?.route;
     if (!found) throw new Error(`no route ${path}`);
     return (body: Record<string, unknown> = {}) => found.handle({ body, query: {}, params: {} });
   };
   const state = () => o.agents.plugins.stateOf(NUMBER_ONE) as NumberOneState;
-  return { ...o, route, state };
+  return { ...o, route, state, keys };
 }
 
 afterEach(() => vi.unstubAllEnvs());
@@ -48,11 +49,21 @@ describe('the number-one plugin', () => {
     expect(o.route('/new')()).toMatchObject({ messages: [] });
   });
 
+  it('declares the keys calls need, for the Plugins tab', () => {
+    expect(numberOnePlugin.secrets?.map((s) => s.name)).toEqual(['OPENAI_API_KEY', 'TYPESAFE_API_KEY']);
+  });
+
+  it('can take a call once the captain sets both keys, saying so at once', () => {
+    const o = aboard();
+    expect(o.state().call.missing).toMatch(/an OpenAI API key and a TypeSafe API key/);
+    Object.assign(o.keys, { OPENAI_API_KEY: 'sk', TYPESAFE_API_KEY: 'ts' });
+    o.agents.plugins.secretChanged(NUMBER_ONE, 'TYPESAFE_API_KEY');
+    expect(o.state().call.missing).toBeUndefined();
+  });
+
   it('says why it can’t take a call without the keys, and takes the demo’s', async () => {
-    vi.stubEnv('OPENAI_API_KEY', '');
-    vi.stubEnv('TYPESAFE_API_KEY', '');
     const live = aboard();
-    expect(live.state().call.missing).toMatch(/Calls need OPENAI_API_KEY and TYPESAFE_API_KEY/);
+    expect(live.state().call.missing).toMatch(/Calls need an OpenAI API key and a TypeSafe API key/);
     expect(() => live.route('/call')({})).toThrow('Send the WebRTC offer');
     await expect(live.route('/call')({ sdp: 'v=0' })).rejects.toThrow(/Calls need/);
 

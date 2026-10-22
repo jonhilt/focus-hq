@@ -11,6 +11,13 @@ export const picks = (v: unknown): PreviewSet | undefined => {
 };
 
 /** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
+/** The captain's change to a plugin's secret (PATCH /api/settings/plugin-secret): `value` a string to set it, null to clear it. */
+export function pluginSecretChange(body: unknown): { plugin: string; name: string; value: string | null } {
+  const b: Record<string, unknown> = body !== null && typeof body === 'object' ? { ...body } : {};
+  if (b.value !== null && typeof b.value !== 'string') throw new Error('Send the secret as a string, or null to clear it');
+  return { plugin: str(b.plugin), name: str(b.name), value: b.value };
+}
+
 export const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
 
 /** Missing or empty = the model's default effort; anything else that isn't a level is refused. */

@@ -1,7 +1,8 @@
 import { lend } from './lend';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
 import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent, Brief, PluginStates, PullRequest, SignIn } from '../../shared/types';
+import type { Agent, Brief, PluginSecret, PluginStates, PullRequest, SignIn } from '../../shared/types';
+import { keepSecrets } from '../secrets';
 import { errorMessage } from '../util';
 import type { BriefSpec, FocusPlugin, LeadNote, LeadTool, PluginHost, PluginParts, PluginRoute } from './contract';
 
@@ -13,6 +14,8 @@ export class Plugins {
   private readonly parts = new Map<string, PluginParts>();
   /** What each started plugin requires, by id. */
   private readonly required = new Map<string, string[]>();
+  /** The secrets each started plugin declared (`FocusPlugin.secrets`). */
+  private readonly secretsOf = new Map<string, readonly PluginSecret[]>();
   /** Each plugin's state that isn't saved, by id: read again as Focus starts (`PluginHost.state` with `saved: false`). */
   readonly unsaved: PluginStates = {};
 
@@ -28,9 +31,29 @@ export class Plugins {
     for (const out of leftOut) console.error(`Plugin ${out.id} is left out: ${out.why}`);
     this.leftOut.push(...leftOut);
     for (const plugin of order) {
+      // its secrets are kept from now (and out of what Focus starts), so its host can read them as it starts
+      try {
+        keepSecrets((plugin.secrets ?? []).map((s) => s.name));
+      } catch (err) {
+        const why = errorMessage(err);
+        console.error(`Plugin ${plugin.id} is left out: ${why}`);
+        this.leftOut.push({ id: plugin.id, why });
+        continue;
+      }
       this.required.set(plugin.id, plugin.requires ?? []);
+      this.secretsOf.set(plugin.id, plugin.secrets ?? []);
       this.parts.set(plugin.id, plugin.start(lend(plugin)));
     }
+  }
+
+  /** The secrets started plugin `id` declared. */
+  secrets(id: string): readonly PluginSecret[] {
+    return this.secretsOf.get(id) ?? [];
+  }
+
+  /** Tells plugin `id` the captain changed its secret `name`. */
+  secretChanged(id: string, name: string): void {
+    this.parts.get(id)?.secretChanged?.(name);
   }
 
   /** Whether the started plugin `id` declared that it requires `other`. */

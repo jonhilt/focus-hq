@@ -34,8 +34,8 @@ export interface CallKeys {
 /** Why Ops can't take a call, worded for the Call button; undefined when it can. */
 export function callsMissing(keys: CallKeys, demo: boolean): string | undefined {
   if (demo) return undefined;
-  const missing = [!keys.openai && 'OPENAI_API_KEY', !keys.typesafe && 'TYPESAFE_API_KEY'].filter(Boolean);
-  return missing.length ? `Calls need ${missing.join(' and ')} set where Focus starts` : undefined;
+  const missing = [!keys.openai && 'an OpenAI API key', !keys.typesafe && 'a TypeSafe API key'].filter(Boolean);
+  return missing.length ? `Calls need ${missing.join(' and ')}, set in the ready room's Plugins tab` : undefined;
 }
 
 /** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
@@ -194,23 +194,38 @@ const capturing = (capture: Capture) => (capture.kind === 'new-goal' ? `What sho
 /** Ops' calls: whether it can take one, and the one under way (or the last, once it's ended). */
 export class Calls {
   private call: Call | null = null;
-  private readonly runtime: Runtime | null;
-  private readonly missing: string | undefined;
+  /** OpenAI and Jev on the keys they were made with: made again when the captain changes a key (a call under way keeps its own). */
+  private made: { keys: string; runtime: Runtime } | null = null;
 
-  /** `publish` tells every screen how the calls stand; `layer`: OpenAI and Jev, or the demo's stand-ins for them (tests bring their own). */
+  /**
+   * `publish` tells every screen how the calls stand; `keys` are read as each call starts, so a key the captain sets
+   * applies to the next; `layer`: OpenAI and Jev on those keys, or the demo's stand-ins for them (tests bring their own).
+   */
   constructor(
     private readonly publish: (status: CallStatus) => void,
     private readonly focus: CallHost,
-    keys: CallKeys,
-    demo: boolean,
-    layer: Layer.Layer<Jev | Live> = demo ? Layer.mergeAll(DemoJev.layer, DemoLive.layer) : Layer.mergeAll(Jev.layer(keys.typesafe ?? ''), Live.layer(keys.openai ?? '')),
-  ) {
-    this.missing = callsMissing(keys, demo);
-    this.runtime = this.missing ? null : ManagedRuntime.make(layer);
+    private readonly keys: () => CallKeys,
+    private readonly demo: boolean,
+    private readonly layer: (keys: CallKeys) => Layer.Layer<Jev | Live> = (k) =>
+      demo ? Layer.mergeAll(DemoJev.layer, DemoLive.layer) : Layer.mergeAll(Jev.layer(k.typesafe ?? ''), Live.layer(k.openai ?? '')),
+  ) {}
+
+  private get missing(): string | undefined {
+    return callsMissing(this.keys(), this.demo);
+  }
+
+  /** OpenAI and Jev on the keys as they are now, or null while one's missing. */
+  private get runtime(): Runtime | null {
+    const keys = this.keys();
+    if (callsMissing(keys, this.demo)) return null;
+    const id = JSON.stringify([keys.openai, keys.typesafe]);
+    if (this.made?.keys !== id) this.made = { keys: id, runtime: ManagedRuntime.make(this.layer(keys)) };
+    return this.made.runtime;
   }
 
   status(): CallStatus {
-    return { ...(this.missing && { missing: this.missing }), call: this.call?.state() ?? null };
+    const missing = this.missing;
+    return { ...(missing && { missing }), call: this.call?.state() ?? null };
   }
 
   /** Starts a call from the browser's WebRTC offer (hanging up one under way): the session's id and the answer. */
