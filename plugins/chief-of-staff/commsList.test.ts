@@ -1,11 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import type { DecisionEvent, InboxItem } from './inbox';
-import { decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine, waited } from './commsList';
+import { agentOfDecision, byGoal, decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine, waited } from './commsList';
 
 const item = (over: Partial<InboxItem>): InboxItem => ({ id: 'x', kind: 'turn', projectId: 'p', who: 'Ada', goal: 'Wishlist', what: 'w', lane: 'needs-you', ...over });
 const cos = (route: 1 | 2 | 3 | 4) => ({ route, ask: 'a', why: 'w', message: 'm' });
 
 describe('Comms list', () => {
+  it('groups the list by goal, each where its most urgent item is, a pull request without a lead its own', () => {
+    const list = [
+      item({ id: '1', agentId: 'a', goal: 'Wishlist' }),
+      item({ id: '2', agentId: 'b', goal: 'Stock', who: 'Bo' }),
+      item({ id: '3', kind: 'qa', goal: 'Fix badges', who: 'acme/shop#5' }),
+      item({ id: '4', agentId: 'a', goal: 'Wishlist' }),
+    ];
+    expect(byGoal(list).map((g) => [g.goal, g.who, g.items.map((i) => i.id)])).toEqual([
+      ['Wishlist', 'Ada', ['1', '4']],
+      ['Stock', 'Bo', ['2']],
+      ['Fix badges', 'acme/shop#5', ['3']],
+    ]);
+  });
+
+  it('finds the agent a decision was about from its item, and none for a pull request', () => {
+    expect(agentOfDecision({ item: { id: 'turn:lead_1:1000', kind: 'turn', what: '' } })).toBe('lead_1');
+    expect(agentOfDecision({ item: { id: 'question:lead_2:q1', kind: 'question', what: '' } })).toBe('lead_2');
+    expect(agentOfDecision({ item: { id: 'qa:p:acme/shop#5', kind: 'qa', what: '' } })).toBeUndefined();
+  });
+
   it('tags a turn by how the chief of staff judged it, and anything else by what it asks', () => {
     expect(tagOf(item({ cos: cos(3) }))).toBe('Interrupt');
     expect(tagOf(item({ cos: cos(2) }))).toBe('Card');

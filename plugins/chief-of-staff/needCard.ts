@@ -1,6 +1,7 @@
-import { allowTool, answerLead, artifactUrl, busy, closeGoal, confirmDialog, focus, goalTags, h, LCARS, lastWords, markdownHtml, mergeAction, mergePr, mergeWhenPassed, messageAgent, openQuestion, optionUrl, prKey, qaBadge, shownThisTurn, timeAgo, type Ui } from '../../plugin-api/client';
+import { allowTool, answerLead, artifactUrl, busy, closeGoal, confirmDialog, focus, goalTags, h, LCARS, lastWords, markdownHtml, mergeAction, mergePr, mergeWhenPassed, messageAgent, openQuestion, optionUrl, prKey, qaBadge, shownThisTurn, timeAgo, type Ui, viaNote } from '../../plugin-api/client';
 import type { Agent, Attention } from '../../plugin-api/shared';
-import { hailKey as keyOf } from './inbox';
+import { decidedBy, waited } from './commsList';
+import { type DecisionEvent, hailKey as keyOf } from './inbox';
 import { inbox } from './inboxApi';
 import { lineOf } from './lanes';
 import { type BoardPr, mergePress, openPrsOf } from './merging';
@@ -273,6 +274,25 @@ export function needCard(ui: CardUi, a: Attention, go: OpenAgent): HTMLElement {
     h('div', { class: 'cos-card-what' }, h('span', null, icon), what),
     context ? h('div', { class: 'cos-card-context', innerHTML: markdownHtml(context) }) : null,
     ...folds,
+    ...answers,
+  );
+}
+
+/**
+ * Something the captain decided lately, brought back up from Recently decided: what was asked, what they answered and
+ * when, and while its agent is aboard, the way to their room and a reply to follow it up. What was sent stays sent.
+ */
+export function decidedCard(ui: CardUi, d: DecisionEvent, agentId: string | undefined, go: OpenAgent): HTMLElement {
+  const agent = agentId ? focus.agent(agentId) : undefined;
+  const project = focus.project(d.projectId)?.name;
+  const via = viaNote(d.via);
+  const answers = agent ? replyBox(ui, agent, go) : [];
+  return h('div', { class: 'cos-card cos-card-decided', style: `--tone:${LCARS.lilac}` },
+    h('div', { class: 'cos-need-title' }, d.goal ?? d.agent),
+    h('div', { class: 'cos-need-trail' }, [project, d.agent, `decided ${waited(d.at, Date.now())} ago`, via].filter(Boolean).join(' · '),
+      ...(agent?.lead ? [h('button', { class: 'btn small cos-beam', title: 'Beam to their team room (B)', attrs: { 'data-act': 'beam' }, onclick: () => ui.goToAgent(agent.id) }, 'Beam to their room')] : [])),
+    h('div', { class: 'cos-card-what' }, h('span', null, '✓'), d.item.what),
+    h('div', { class: 'cos-card-context' }, `${decidedBy(d)}: “${d.answer}”`),
     ...answers,
   );
 }

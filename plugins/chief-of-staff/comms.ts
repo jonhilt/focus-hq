@@ -2,13 +2,13 @@ import { fill, focus, h, LCARS, type Ui, viaNote } from '../../plugin-api/client
 import type { Attention } from '../../plugin-api/shared';
 import { focusIndex, keptOrder } from './briefing';
 import { COMMS_KEYS, commsKey } from './commsKeys';
-import { decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine as trayLineText, waited } from './commsList';
+import { agentOfDecision, byGoal, decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine as trayLineText, waited } from './commsList';
 import { waitingNow } from './here';
 import { type DecisionEvent, hailKey as keyOf, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import type { LandedItem } from './landed';
 import { landedCard, landedRow } from './landedCard';
-import { needCard, TONE } from './needCard';
+import { decidedCard, needCard, TONE } from './needCard';
 import { readOf } from './shared';
 
 /** How many of the captain's recent decisions Comms lists. */
@@ -28,23 +28,32 @@ const showingOf = (id: string, a: Attention): string => `${id}|${readOfHail(a)?.
 /** The colour down an item's edge: an interrupt is red, a card gold, anything else its kind's. */
 const toneOf = (i: InboxItem): string => (i.cos?.route === 3 ? LCARS.red : i.cos?.route === 2 ? LCARS.gold : TONE[i.kind]);
 
-/** One line of the list: what it asks in a word, the goal, who and how long it's waited, then what's needed. */
+/** Who, as the list says it: a lead without their rank. */
+const shortWho = (who: string): string => who.replace(/^Lt\. /, '');
+
+/** One line of the list, under its goal: what it asks in a word, what's needed, and how long it's waited. */
 function itemRow(i: InboxItem, pick: () => void): HTMLElement {
   return h('button', { class: 'cos-need cos-inbox-row', style: `--tone:${toneOf(i)}`, onclick: pick },
     h('div', { class: 'cos-inbox-row-head' },
       h('span', { class: 'cos-inbox-tag' }, tagOf(i)),
-      h('span', { class: 'cos-inbox-goal', title: i.goal }, i.goal),
-      h('small', { class: 'muted' }, `· ${i.who.replace(/^Lt\. /, '')}${i.since ? ` · ${waited(i.since, Date.now())}` : ''}`),
+      h('span', { class: 'cos-need-what', title: i.what }, i.what),
+      i.since ? h('small', { class: 'muted' }, waited(i.since, Date.now())) : null,
     ),
-    h('div', { class: 'cos-need-what', title: i.what }, i.what),
     h('small', { class: 'cos-need-sends' }),
   );
 }
 
-/** Something decided lately: the goal and when, then what was said, and who said it. */
-function decidedRow(d: DecisionEvent): HTMLElement {
+/** The list's rows under a heading each for their goal and who's on it. */
+const grouped = (list: readonly InboxItem[], rowOf: (it: InboxItem) => HTMLElement | undefined): HTMLElement[] =>
+  byGoal(list).flatMap((g) => [
+    h('div', { class: 'cos-inbox-goal-head', title: g.goal }, h('span', { class: 'cos-inbox-goal' }, g.goal), h('small', { class: 'muted' }, ` · ${shortWho(g.who)}`)),
+    ...g.items.flatMap((it) => rowOf(it) ?? []),
+  ]);
+
+/** Something decided lately: the goal and when, then what was said, and who said it; pressed, it's brought back up. */
+function decidedRow(d: DecisionEvent, pick: () => void): HTMLElement {
   const via = viaNote(d.via);
-  return h('div', { class: 'cos-decided', title: `${d.item.what}${via ? ` (${via})` : ''}` },
+  return h('button', { class: 'cos-decided', title: `${d.item.what}${via ? ` (${via})` : ''}: press to bring it back up`, onclick: pick },
     h('div', { class: 'cos-inbox-row-head' }, h('span', { class: 'cos-inbox-goal' }, d.goal ?? d.agent), h('small', { class: 'muted' }, `· ${waited(d.at, Date.now())}`)),
     h('div', { class: 'cos-decided-answer' }, `${decidedBy(d)}: “${d.answer}”`),
   );
@@ -59,8 +68,8 @@ const typingIn = (target: EventTarget | null): boolean => target instanceof HTML
 /**
  * Comms, opened from anywhere with C and from the captain's chair with E: the captain's inbox (inbox.ts),
  * read from Focus as a bot reads it, so both see the same. Along the top each project with what waits there, to
- * narrow the list to it. On the left what the chief of staff flags for the captain, most urgent first, then what they
- * decided lately, then its tray: the turns it has words ready for, and what it sent by itself today. On the right the
+ * narrow the list to it. On the left what the chief of staff flags for the captain, under a heading each for its goal,
+ * the most urgent goal first, then what they decided lately (each brought back up on the right when pressed), then its tray: the turns it has words ready for, and what it sent by itself today. On the right the
  * one picked, large: the goal, what to read to decide, and the answers. Answered, it leaves the list and the next one's
  * picked. Picking a lead's turn reads it, as their panel does. The list keeps its order while it's open (`keptOrder`),
  * so nothing moves under the pointer.
@@ -76,6 +85,8 @@ export function openComms(ui: CommsUi): void {
   // what landed in Show for the captain to hear of, and the one of them picked, shown instead of a hail
   let landedNow: LandedItem[] = [];
   let pickedLanded: string | null = null;
+  // a decision brought back up to read again, by its ledger line, shown instead of a hail
+  let pickedDecided: number | null = null;
   let trayOpen = false;
   const rows = new Map<string, HTMLElement>();
   // from Comms to an agent's panel, Esc comes back to it
@@ -116,7 +127,7 @@ export function openComms(ui: CommsUi): void {
   // a row is built once per item and kept, so the list isn't rebuilt under the pointer
   const renderRows = (items: InboxItem[], ready: InboxItem[], pickable: InboxItem[], selected: string | undefined, local: Map<string, Attention>, now: number) => {
     const rowKey = (it: InboxItem) => `${it.id}|${it.lane}`;
-    const next = new Map(pickable.map((it) => [rowKey(it), rows.get(rowKey(it)) ?? itemRow(it, () => { picked = it.id; pickedLanded = null; render(); })] as const));
+    const next = new Map(pickable.map((it) => [rowKey(it), rows.get(rowKey(it)) ?? itemRow(it, () => { picked = it.id; pickedLanded = pickedDecided = null; render(); })] as const));
     for (const it of pickable) {
       const row = next.get(rowKey(it));
       row?.classList.toggle('read', !!it.read);
@@ -125,7 +136,7 @@ export function openComms(ui: CommsUi): void {
       if (sends) sends.textContent = sendsIn(readOfHail(local.get(it.id))?.sendsAt, now);
     }
     if ([...next.keys()].join('|') !== [...rows.keys()].join('|') || !queue.childElementCount) {
-      const rowsOf = (list: InboxItem[]) => list.flatMap((it) => next.get(rowKey(it)) ?? []);
+      const rowsOf = (list: InboxItem[]) => grouped(list, (it) => next.get(rowKey(it)));
       fill(queue, ...(items.length ? rowsOf(items) : [h('p', { class: 'muted' }, '✓ Nothing needs you.')]));
       fill(tray, ...(trayOpen ? rowsOf(ready) : []));
     }
@@ -139,7 +150,7 @@ export function openComms(ui: CommsUi): void {
     landedHead.hidden = landedList.hidden = !mine.length;
     landedHead.textContent = `Landed in Show · ${mine.length}`;
     fill(landedList, ...mine.map((l) => {
-      const row = landedRow(l, () => { pickedLanded = l.id; render(); });
+      const row = landedRow(l, () => { pickedLanded = l.id; pickedDecided = null; render(); });
       row.classList.toggle('sel', l.id === pickedLanded);
       return row;
     }));
@@ -153,7 +164,12 @@ export function openComms(ui: CommsUi): void {
     trayLine.textContent = line;
     const mine = decidedByCaptain(decidedLately, project, DECIDED_SHOWN);
     decidedHead.hidden = decided.hidden = !mine.length;
-    fill(decided, ...mine.map(decidedRow));
+    fill(decided, ...mine.map((d) => {
+      const row = decidedRow(d, () => { pickedDecided = d.seq; pickedLanded = null; render(); });
+      row.classList.toggle('sel', d.seq === pickedDecided);
+      return row;
+    }));
+    return mine.find((d) => d.seq === pickedDecided);
   };
 
   // on the right, the one picked, large; picking a lead's turn reads it
@@ -178,9 +194,11 @@ export function openComms(ui: CommsUi): void {
     const { flagged, ready, reading: judging } = lanes(known, project);
     const keys = (order = keptOrder(order, flagged.map((i) => i.id)));
     const byId = new Map(known.map((i) => [i.id, i]));
-    const items = keys.flatMap((k) => byId.get(k) ?? []);
+    // in the order they're shown, under their goals, so J and K go down the list as it reads
+    const items = byGoal(keys.flatMap((k) => byId.get(k) ?? [])).flatMap((g) => g.items);
+    const trayItems = byGoal(ready).flatMap((g) => g.items);
     // the tray's rows are picked like the list's, when it's open
-    const pickable = [...items, ...(trayOpen ? ready : [])];
+    const pickable = [...items, ...(trayOpen ? trayItems : [])];
     const ids = pickable.map((i) => i.id);
     const i = focusIndex(ids, step ? null : picked, stepped(at, step, ids.length));
     if (i >= 0) at = i;
@@ -190,10 +208,16 @@ export function openComms(ui: CommsUi): void {
     reading.textContent = readingLine(judging);
     reading.hidden = !judging;
     // moving through the queue leaves the landed card for the hail
-    if (step) pickedLanded = null;
+    if (step) pickedLanded = pickedDecided = null;
     const landedPick = renderLanded();
-    renderRows(items, ready, pickable, landedPick ? undefined : ids[i], local, now);
-    renderFoot(ready.length, now);
+    const decidedPick = renderFoot(ready.length, now);
+    renderRows(items, trayItems, pickable, landedPick || decidedPick ? undefined : ids[i], local, now);
+    if (decidedPick) {
+      const key = `decided:${decidedPick.seq}`;
+      if (shown !== key) fill(detail, decidedCard(ui, decidedPick, agentOfDecision(decidedPick), openAgent));
+      shown = key;
+      return;
+    }
     if (landedPick) {
       if (shown !== landedPick.id) fill(detail, landedCard(ui, landedPick, () => { pickedLanded = null; refresh(); }));
       shown = landedPick.id;

@@ -70,3 +70,30 @@ export function sendsIn(sendsAt: number | undefined, now: number): string {
   const min = Math.ceil((sendsAt - now) / 60_000);
   return min > 1 ? `⏱ sends itself in ${min} min` : '⏱ sends itself within a minute';
 }
+
+/** One goal's items on the list, under its title and who's on it. */
+export interface GoalGroup<T> {
+  key: string;
+  goal: string;
+  who: string;
+  items: T[];
+}
+
+/**
+ * The list grouped by goal, so a goal with two things waiting reads as one place: each goal where its most urgent item
+ * is, and its items under it in their order. A pull request without a lead is a goal of its own.
+ */
+export function byGoal<T extends Pick<InboxItem, 'agentId' | 'projectId' | 'goal' | 'who'>>(items: readonly T[]): GoalGroup<T>[] {
+  const groups = new Map<string, GoalGroup<T>>();
+  for (const it of items) {
+    const key = it.agentId ?? `${it.projectId}|${it.goal}`;
+    const group = groups.get(key) ?? { key, goal: it.goal, who: it.who, items: [] };
+    group.items.push(it);
+    groups.set(key, group);
+  }
+  return [...groups.values()];
+}
+
+/** The agent a decision was about, from its item's key (`hailKey`); none for a pull request's. */
+export const agentOfDecision = (d: Pick<DecisionEvent, 'item'>): string | undefined =>
+  /^(hand|question|error|wrap-up|turn):/.test(d.item.id) ? d.item.id.split(':')[1] : undefined;

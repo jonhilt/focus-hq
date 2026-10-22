@@ -47,7 +47,7 @@
 .cos-inbox-tag { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
 .cos-inbox-goal { color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
 .cos-decided-list { display: flex; flex-direction: column; gap: 6px; }
-.cos-decided { background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 8px solid var(--muted); padding: 6px 10px; opacity: 0.7; }
+.cos-decided { display: block; width: 100%; text-align: left; font: inherit; color: inherit; border-top: 0; border-right: 0; border-bottom: 0; cursor: pointer; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 8px solid var(--muted); padding: 6px 10px; opacity: 0.7; }
 .cos-decided-answer { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
 .cos-tray-line { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
 .cos-tray-line:hover { color: var(--text); }
@@ -89,3 +89,11 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-zoom-frame { border: 0; background: #fff; transform-origin: 0 0; border-radius: var(--radius); }
 .cos-zoom-bar { display: flex; align-items: center; gap: 10px; }
 .cos-zoom-says { flex: 1; display: flex; flex-direction: column; }
+
+/* the list under a heading each for its goal */
+.cos-inbox-goal-head { display: flex; align-items: baseline; gap: 4px; margin: 8px 0 -2px; white-space: nowrap; overflow: hidden; min-width: 0; }
+.cos-inbox-goal-head:first-child { margin-top: 0; }
+.cos-inbox-goal-head .cos-inbox-goal { overflow: hidden; text-overflow: ellipsis; color: var(--lcars-peach); }
+.cos-inbox-row .cos-inbox-row-head .cos-need-what { flex: 1; min-width: 0; margin-top: 0; }
+.cos-decided:hover { opacity: 0.9; }
+.cos-decided.sel { opacity: 1; outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }

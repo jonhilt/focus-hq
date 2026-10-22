@@ -108,6 +108,47 @@ describe('Comms', () => {
     expect(picked()).toBe('qa:p:acme/shop#7');
   });
 
+  it('lists what needs the captain under its goals, and J goes down the list as it reads', async () => {
+    const other: Attention = { kind: 'turn', agent: agent('d', {}, { at: 1000, judged: verdict(2) }) };
+    fake.waiting = [hand, card, other];
+    fake.inbox = {
+      open: [
+        item('hand:a:r1', { kind: 'hand', agentId: 'a', goal: 'Goal a', who: 'Lt. a' }),
+        item('turn:d:1000', { agentId: 'd', goal: 'Goal d', who: 'Lt. d', cos: verdict(2) }),
+        item('turn:b:1000', { agentId: 'a', goal: 'Goal a', who: 'Lt. a', cos: verdict(2) }),
+      ],
+      landed: [],
+      decided: [],
+    };
+    await open();
+    expect([...document.querySelectorAll('.cos-inbox-goal-head')].map((g) => g.textContent)).toEqual(['Goal a · a', 'Goal d · d']);
+    expect(picked()).toBe('hand:a:r1');
+    press('j');
+    expect(picked()).toBe('turn:b:1000');
+    press('j');
+    expect(picked()).toBe('turn:d:1000');
+  });
+
+  it('brings a decision back up from Recently decided, with a reply to follow it up while its lead is aboard', async () => {
+    fake.waiting = [hand];
+    const lead = agent('a');
+    const { focus } = await import('../../plugin-api/client');
+    const spy = vi.spyOn(focus, 'agent').mockImplementation((id) => (id === 'a' ? lead : undefined));
+    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' })], landed: [], decided: [{ ...decision('office', 'Ship it'), item: { id: 'turn:a:900', kind: 'turn', what: 'Ship slice 2?' } }] };
+    await open();
+    document.querySelector<HTMLButtonElement>('.cos-decided')?.click();
+    const detail = document.querySelector('.cos-inbox-detail');
+    expect(detail?.querySelector('.cos-card-what')?.textContent).toBe('✓Ship slice 2?');
+    expect(detail?.querySelector('.cos-card-context')?.textContent).toBe('You: “Ship it”');
+    expect(detail?.querySelector('textarea')).not.toBeNull();
+    expect(document.querySelector('.cos-inbox-row.sel')).toBeNull();
+    press('b');
+    expect(ui.goToAgent).toHaveBeenCalledWith('a');
+    press('j');
+    expect(picked()).toBe('hand:a:r1');
+    spy.mockRestore();
+  });
+
   it('opens its tray of ready words, each counting down to going by itself', async () => {
     fake.waiting = [ready];
     fake.inbox = { open: [item('turn:c:1000', { lane: 'ready', cos: verdict(1) })], landed: [], decided: [] };
