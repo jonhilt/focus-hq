@@ -1,6 +1,6 @@
 import crypto from 'node:crypto';
 import { describe, expect, it } from 'vitest';
-import { BotHook, type BotLook, signature, withLinks } from './botHook';
+import { BotHook, type BotLook, signature, webhookAuth, withLinks } from './botHook';
 import type { InboxItem } from './inbox';
 
 const item = (id: string, shown?: InboxItem['shown']): InboxItem => ({ id, kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. Reyes', goal: 'Saved items', what: 'Slice 2?', lane: 'needs-you', ...(shown && { shown }) });
@@ -9,6 +9,15 @@ describe('a delivery to the bot', () => {
   it('signs a delivery as HMAC-SHA256 of its timestamp and body, which the bot can check', () => {
     const want = crypto.createHmac('sha256', 'k').update('100.{"a":1}').digest('hex');
     expect(signature('k', '100', '{"a":1}')).toBe(`sha256=${want}`);
+  });
+
+  it('sends FOCUS_BOT_WEBHOOK_AUTH as Authorization, stripping a pasted header line, and is unset when that’s empty', () => {
+    expect(webhookAuth(undefined)).toBeUndefined();
+    expect(webhookAuth('  ')).toBeUndefined();
+    expect(webhookAuth('Bearer grok-secret')).toBe('Bearer grok-secret');
+    expect(webhookAuth('Authorization: Bearer grok-secret')).toBe('Bearer grok-secret');
+    expect(webhookAuth('Authorization:Bearer grok-secret')).toBe('Bearer grok-secret');
+    expect(webhookAuth('Authorization:   ')).toBeUndefined();
   });
 });
 
@@ -39,6 +48,32 @@ describe('BotHook', () => {
     expect(post.url).toBe('https://grok/hook');
     expect(JSON.parse(post.body)).toMatchObject({ event: 'item-opened', item: { id: 't2' } });
     expect(post.headers).toMatchObject({ 'x-focus-event': 'item-opened', 'x-focus-signature': signature('k', post.headers['x-focus-timestamp'], post.body) });
+    expect(post.headers.authorization).toBeUndefined();
+  });
+
+  it('sends Authorization when the webhook auth is set, still signed the same way, and never logs the value', async () => {
+    const posts: { headers: Record<string, string>; body: string }[] = [];
+    const warned: string[] = [];
+    const warn = console.warn;
+    console.warn = (text: string) => void warned.push(text);
+    try {
+      let look: BotLook = { open: [], decided: [], leads: [] };
+      const hook = new BotHook(() => look, { token: 'k', webhook: 'https://grok/hook', auth: 'Authorization: Bearer grok-secret' }, async (_url, init) => {
+        posts.push({ headers: init.headers, body: init.body });
+        return { ok: false, status: 401 };
+      });
+      await hook.tick();
+      look = { ...look, open: [item('t1')] };
+      await hook.tick();
+    } finally {
+      console.warn = warn;
+    }
+    expect(posts).toHaveLength(1);
+    const [post] = posts;
+    expect(post.headers.authorization).toBe('Bearer grok-secret');
+    expect(post.headers['x-focus-signature']).toBe(signature('k', post.headers['x-focus-timestamp'], post.body));
+    expect(warned.join('\n')).toMatch(/item-opened/);
+    expect(warned.join('\n')).not.toMatch(/grok-secret/);
   });
 
   it('carries on when the webhook fails', async () => {

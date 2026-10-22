@@ -12,6 +12,17 @@ import type { DecisionEvent, InboxItem } from './inbox';
 export const signature = (token: string, timestamp: string, body: string): string =>
   `sha256=${crypto.createHmac('sha256', token).update(`${timestamp}.${body}`).digest('hex')}`;
 
+/**
+ * The Authorization header value for the bot's webhook (`FOCUS_BOT_WEBHOOK_AUTH`). A leading `Authorization:` is
+ * stripped so pasting a full header line works; empty after that is unset.
+ */
+export function webhookAuth(raw: string | undefined): string | undefined {
+  const value = raw?.trim();
+  if (!value) return undefined;
+  const stripped = value.startsWith('Authorization:') ? value.slice('Authorization:'.length).trim() : value;
+  return stripped || undefined;
+}
+
 /** An item with the links to what was shown made whole, from Focus's address as the bot reaches it (`base`), when it's known. */
 export function itemWithLinks(item: InboxItem, base: string | undefined): InboxItem {
   if (!base || !item.shown) return item;
@@ -45,7 +56,7 @@ export class BotHook {
 
   constructor(
     private readonly look: () => BotLook,
-    private readonly bot: { token: string; webhook: string; publicUrl?: string },
+    private readonly bot: { token: string; webhook: string; publicUrl?: string; auth?: string },
     private readonly post: Post = fetch,
   ) {}
 
@@ -67,7 +78,14 @@ export class BotHook {
   private async send(e: BotEvent): Promise<void> {
     const body = JSON.stringify({ ...withLinks(e, this.bot.publicUrl), at: Date.now() });
     const timestamp = String(Date.now());
-    const headers = { 'content-type': 'application/json', 'x-focus-event': e.event, 'x-focus-timestamp': timestamp, 'x-focus-signature': signature(this.bot.token, timestamp, body) };
+    const auth = webhookAuth(this.bot.auth);
+    const headers = {
+      'content-type': 'application/json',
+      'x-focus-event': e.event,
+      'x-focus-timestamp': timestamp,
+      'x-focus-signature': signature(this.bot.token, timestamp, body),
+      ...(auth && { authorization: auth }),
+    };
     try {
       const res = await this.post(this.bot.webhook, { method: 'POST', headers, body, signal: AbortSignal.timeout(10_000) });
       if (!res.ok) console.warn(`[chief-of-staff] the bot’s webhook answered ${e.event} with ${res.status}`);

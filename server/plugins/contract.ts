@@ -238,9 +238,10 @@ export interface PluginHost {
   reviews(): ReadonlyMap<string, Readonly<QaReview>>;
   /**
    * A bot speaking for the captain, as Focus was started with: its `token` (`FOCUS_BOT_TOKEN`), which signs what's
-   * sent to its `webhook` (`FOCUS_BOT_WEBHOOK`), and Focus's address as the bot reaches it (`FOCUS_PUBLIC_URL`).
+   * sent to its `webhook` (`FOCUS_BOT_WEBHOOK`); `auth` (`FOCUS_BOT_WEBHOOK_AUTH`) as the Authorization header on each
+   * delivery; and Focus's address as the bot reaches it (`FOCUS_PUBLIC_URL`).
    */
-  readonly bot: Readonly<{ token?: string; webhook?: string; publicUrl?: string }>;
+  readonly bot: Readonly<{ token?: string; webhook?: string; auth?: string; publicUrl?: string }>;
   /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */
   artifact(leadId: string, file: string): Promise<Uint8Array | undefined>;
   /** Every agent aboard now, of every project. */

@@ -39,9 +39,9 @@ const chiefOfStaff: FocusPlugin = {
     const inbox = new Inbox(host, autoSends);
     setInterval(() => void inbox.autoSend(), AUTO_SEND_EVERY).unref();
     // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook
-    const { token, webhook, publicUrl } = host.bot;
+    const { token, webhook, publicUrl, auth } = host.bot;
     if (token && webhook) {
-      const hook = new BotHook(() => ({ ...inbox.view(), leads: inbox.leads() }), { token, webhook, publicUrl });
+      const hook = new BotHook(() => ({ ...inbox.view(), leads: inbox.leads() }), { token, webhook, publicUrl, auth });
       setInterval(() => void hook.tick(), BOT_EVERY).unref();
     }
     const leadsIn = (projectId: string) => host.agents().filter((a) => a.projectId === projectId && a.task === 'lead').map((a) => a.id);
