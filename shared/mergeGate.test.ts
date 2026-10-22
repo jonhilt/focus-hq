@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateOps, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, stepMark, unpassedReason } from './mergeGate';
+import { autoMergedSaid, autoMergeFor, boardMergeSaid, checkMergesFor, conflictsSaid, forgottenMarks, type GateOps, goneReply, mergeAction, mergeMethodFor, mergeStep, requestedMerge, requestedMergeSaid, stepMark, unpassedReason } from './mergeGate';
 import type { PullRequest, QaReview } from './types';
 
 const HEAD = 'abc1234def5678';
@@ -220,6 +220,15 @@ describe('autoMergeFor', () => {
   });
 });
 
+describe('checkMergesFor', () => {
+  it('is on unless the project switched it off', () => {
+    expect(checkMergesFor({})).toBe(true);
+    expect(checkMergesFor(undefined)).toBe(true);
+    expect(checkMergesFor({ checkMerges: true })).toBe(true);
+    expect(checkMergesFor({ checkMerges: false })).toBe(false);
+  });
+});
+
 describe('mergeAction', () => {
   it('merges a PR QA passed straight away', () => {
     expect(mergeAction(review(), pr())).toEqual({ kind: 'merge' });
@@ -356,7 +365,22 @@ describe('conflictsSaid', () => {
 
 describe('boardMergeSaid', () => {
   it('says whether the captain’s merge was checked or went past the check', () => {
-    expect(boardMergeSaid('shop#12', 'main', false)).toBe('Merged shop#12: it checks out merged onto main');
-    expect(boardMergeSaid('shop#12', 'main', true)).toBe('Merged shop#12 past its merge check, as you asked');
+    expect(boardMergeSaid('shop#12', 'main', 'checked')).toBe('Merged shop#12: it checks out merged onto main');
+    expect(boardMergeSaid('shop#12', 'main', 'override')).toBe('Merged shop#12 past its merge check, as you asked');
+    expect(boardMergeSaid('shop#12', 'main', 'unchecked')).toBe('Merged shop#12 (the merge check is off for this project)');
+  });
+});
+
+describe('autoMergedSaid', () => {
+  it('says the merge is green only when the project checks merges', () => {
+    expect(autoMergedSaid('shop#12', true)).toBe('🤖 Auto-merged shop#12: QA passed it, its checks are green and so is its merge');
+    expect(autoMergedSaid('shop#12', false)).toBe('🤖 Auto-merged shop#12: QA passed it, its checks are green (the merge check is off for this project)');
+  });
+});
+
+describe('requestedMergeSaid', () => {
+  it('says the merge checked out only when the project checks merges', () => {
+    expect(requestedMergeSaid('shop#12', true)).toBe('Merged shop#12: QA passed it and its merge checks out, as you asked');
+    expect(requestedMergeSaid('shop#12', false)).toBe('Merged shop#12: QA passed it, as you asked (the merge check is off for this project)');
   });
 });

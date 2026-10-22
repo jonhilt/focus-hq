@@ -17,9 +17,13 @@ async function gated(outcome: (heads: MergeHeads) => MergeTrial, hold?: Promise<
   const gh = await ManagedRuntime.make(demoLayer).runPromise(GitHub.use(Effect.succeed));
   let base = 'base0000aaa';
   const trials: MergeHeads[] = [];
+  let fetches = 0;
   const workspace: WorkspaceOps = {
     ...demoWorkspace,
-    mergeHeads: async () => ({ base, head: '' }),
+    mergeHeads: async () => {
+      fetches++;
+      return { base, head: '' };
+    },
     tryMerge: async (_repo, heads) => {
       trials.push(heads);
       await hold;
@@ -34,7 +38,7 @@ async function gated(outcome: (heads: MergeHeads) => MergeTrial, hold?: Promise<
   const state = () => Effect.runPromise(gh.pullRequestState(REPO, pr.number));
   const comments = () => Effect.runPromise(gh.pullRequestComments(REPO, pr.number));
   const checks = () => o.store.ledger.filter((e) => e.kind === 'merge-check');
-  return { ...o, pr, prs, trials, state, comments, checks, moveBase: (to: string) => (base = to) };
+  return { ...o, gh, pr, prs, trials, state, comments, checks, fetches: () => fetches, moveBase: (to: string) => (base = to) };
 }
 
 const lintFails = (heads: MergeHeads): MergeTrial => ({
@@ -118,5 +122,72 @@ describe('the merge check', () => {
     expect(trials).toHaveLength(2);
     toasts.mockRestore();
     sent.mockRestore();
+  });
+});
+
+describe('with the merge check switched off for the project', () => {
+  it('merges straight away at the head the caller means, with no fetch or trial, and the ledger notes it went unchecked', async () => {
+    const { agents, project, pr, state, checks, trials, fetches } = await gated(lintFails);
+    project.checkMerges = false;
+    await expect(agents.merge(project.id, pr, { method: 'squash', by: 'office', want: pr.headSha })).resolves.toBe(pr.headSha);
+    expect(await state()).toBe('MERGED');
+    expect(fetches()).toBe(0);
+    expect(trials).toHaveLength(0);
+    expect(checks()).toMatchObject([{ outcome: 'unchecked', by: 'office', head: pr.headSha }]);
+    expect(agents.mergeCheck(pr)).toBeUndefined();
+  });
+
+  it('asks GitHub for exactly the commit the caller means, so a PR that moved on isn’t merged', async () => {
+    const { agents, project, pr, state, gh } = await gated(allPass);
+    project.checkMerges = false;
+    const merged = vi.spyOn(gh, 'mergePullRequest');
+    await expect(agents.merge(project.id, pr, { method: 'squash', by: 'captain', want: 'fffffff000' })).rejects.toThrow('GitHub refused it');
+    expect(merged).toHaveBeenCalledWith(REPO, pr.number, 'squash', 'fffffff000');
+    expect(await state()).toBe('OPEN');
+  });
+
+  it('merges a PR asked for twice at once only once', async () => {
+    const { agents, project, pr, gh, checks } = await gated(allPass);
+    project.checkMerges = false;
+    const merged = vi.spyOn(gh, 'mergePullRequest');
+    const how = { method: 'squash', by: 'office', want: pr.headSha } as const;
+    await expect(Promise.all([agents.merge(project.id, pr, how), agents.merge(project.id, pr, how)])).resolves.toEqual([pr.headSha, pr.headSha]);
+    expect(merged).toHaveBeenCalledTimes(1);
+    expect(checks()).toHaveLength(1);
+  });
+
+  it('doesn’t wait behind a checked merge under way in the same repo, or show as queued', async () => {
+    let release = () => {};
+    const { agents, project, pr, prs, store, state, trials } = await gated(allPass, new Promise<void>((r) => (release = r)));
+    const other = prs.find((p) => p.number !== pr.number);
+    if (!other) throw new Error('the demo repo has only one PR');
+    const toasts = vi.spyOn(Hub.prototype, 'toast');
+    const card = (n: number) => store.boards.get(project.id)?.prs.find((p) => p.number === n)?.mergeCheck;
+    const first = agents.merge(project.id, pr, { method: 'squash', by: 'captain' });
+    await expect.poll(() => card(pr.number)?.state).toBe('checking');
+    // switched off while that one is being checked: it finishes as it started, the next skips the check
+    project.checkMerges = false;
+    await expect(agents.merge(project.id, other, { method: 'squash', by: 'captain' })).resolves.toBe(other.headSha);
+    expect(card(other.number)).toBeUndefined();
+    expect(toasts).not.toHaveBeenCalledWith('info', expect.stringContaining('queued behind'), undefined, project.id);
+    expect(await state()).toBe('OPEN');
+    release();
+    await first;
+    expect(await state()).toBe('MERGED');
+    expect(trials).toHaveLength(1);
+    toasts.mockRestore();
+  });
+
+  it('checks merges again once it’s switched back on', async () => {
+    const { agents, project, pr, prs, trials, state, checks } = await gated(lintFails);
+    const other = prs.find((p) => p.number !== pr.number);
+    if (!other) throw new Error('the demo repo has only one PR');
+    project.checkMerges = false;
+    await agents.merge(project.id, other, { method: 'squash', by: 'captain' });
+    project.checkMerges = true;
+    await expect(agents.merge(project.id, pr, { method: 'squash', by: 'captain' })).rejects.toThrow('lint');
+    expect(trials).toHaveLength(1);
+    expect(await state()).toBe('OPEN');
+    expect(checks().map((e) => e.kind === 'merge-check' && e.outcome)).toEqual(['unchecked', 'failed']);
   });
 });

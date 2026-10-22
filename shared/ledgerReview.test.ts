@@ -81,6 +81,7 @@ describe('ledgerRow', () => {
     expect(ledgerRow(check('failed', { failed: 'pnpm test', goal: GOAL }))).toMatchObject({ tone: 'bad', title: 'focus #241 · merge refused, a check failed by Ops', detail: 'pnpm test · Engineering deck' });
     expect(ledgerRow(check('overridden', { by: 'captain' }))).toMatchObject({ tone: 'warn', title: 'focus #241 · merged past the check by the captain' });
     expect(ledgerRow(check('broken')).tone).toBe('warn');
+    expect(ledgerRow(check('unchecked', { head: 'abcdef1234' }))).toMatchObject({ tone: 'warn', title: 'focus #241 · merged without the check (off for this project) by Ops · abcdef1' });
   });
 
   it('says which failing checks went back, and what the operations officer did', () => {

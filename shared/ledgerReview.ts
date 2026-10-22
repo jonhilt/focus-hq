@@ -102,7 +102,9 @@ const MERGE_CHECK: Record<string, string> = {
   conflicts: 'merge refused, it conflicts',
   broken: 'merge refused, couldn’t check it',
   overridden: 'merged past the check',
+  unchecked: 'merged without the check (off for this project)',
 };
+const MERGE_CHECK_TONE: Record<string, Tone> = { passed: 'ok', overridden: 'warn', broken: 'warn', unchecked: 'warn' };
 /** Where the chief of staff would have sent a lead's turn, in a word or two. */
 const VERDICT_ROUTE: Record<VerdictRoute, string> = { 1: 'carry on', 2: 'card', 3: 'interrupt', 4: 'back to the lead' };
 const TRIAGE: Record<string, string> = {
@@ -210,8 +212,9 @@ function conflictsRow(e: Of<'conflicts'>): RowParts {
 
 function mergeCheckRow(e: Of<'merge-check'>): RowParts {
   const said = MERGE_CHECK[e.outcome] ?? e.outcome;
-  const at = e.head && e.base ? ` · ${e.head.slice(0, 7)} onto ${e.base.slice(0, 7)}` : '';
-  const tone = e.outcome === 'passed' ? 'ok' : e.outcome === 'overridden' || e.outcome === 'broken' ? 'warn' : 'bad';
+  // an unchecked merge has no base it was tried on: just the head it merged
+  const at = e.head && e.base ? ` · ${e.head.slice(0, 7)} onto ${e.base.slice(0, 7)}` : e.outcome === 'unchecked' && e.head ? ` · ${e.head.slice(0, 7)}` : '';
+  const tone = MERGE_CHECK_TONE[e.outcome] ?? 'bad';
   return { tag: 'Merge check', tone, title: `${short(e.repo)} #${e.pr} · ${said} ${BY[e.by] ?? e.by}${at}`, detail: [e.failed, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
 }
 

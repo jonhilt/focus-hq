@@ -13,6 +13,8 @@ describe('qaSwitchSays', () => {
     expect(qaSwitchSays('qaProof', false)).toContain('own judgement');
     expect(qaSwitchSays('autoMerge', false)).toContain('you merge from the board');
     expect(qaSwitchSays('autoMerge', true)).toContain('merge check passes');
+    expect(qaSwitchSays('checkMerges', true)).toContain('one merge at a time');
+    expect(qaSwitchSays('checkMerges', false)).toContain('straight to GitHub');
   });
 });
 

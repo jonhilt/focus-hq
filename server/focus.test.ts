@@ -236,6 +236,61 @@ describe('Merge when QA passes, on a board refresh', () => {
   });
 });
 
+// docs/merging.md#switching-it-off: every caller's merge skips the check, through the same Merges.merge
+describe('a project with the merge check switched off', () => {
+  /** A room whose merge check would refuse #8, had the project not switched it off. */
+  async function unchecked() {
+    const r = await room({}, lintFails);
+    r.project.checkMerges = false;
+    const merged = () => r.store.ledger.filter((e) => e.kind === 'merge-check');
+    return { ...r, merged };
+  }
+
+  it('auto-merges a PR QA passed with no trial, at the commit QA passed, and says the check is off', async () => {
+    const { project, reviewed, refresh, state, said, trials, merged, head } = await unchecked();
+    project.autoMerge = true;
+    reviewed();
+    await refresh();
+    await expect.poll(state).toBe('MERGED');
+    expect(trials).toEqual([]);
+    expect(merged()).toMatchObject([{ outcome: 'unchecked', by: 'office', head }]);
+    await expect.poll(() => said('success')).toEqual([expect.stringContaining('(the merge check is off for this project)')]);
+  });
+
+  it('merges a goal’s lead’s slice in Ship or Show with no trial', async () => {
+    for (const lane of ['ship', 'show'] as const) {
+      const r = await unchecked();
+      vi.spyOn(r.agents, 'leadPrs').mockReturnValue([{ repo: REPO, number: NUMBER, lane }]);
+      r.reviewed({ openedByOffice: false });
+      await r.refresh();
+      await expect.poll(r.state).toBe('MERGED');
+      expect(r.trials).toEqual([]);
+      expect(r.merged()).toMatchObject([{ outcome: 'unchecked', head: r.head }]);
+    }
+  });
+
+  it('merges once QA passes, as the captain asked, with no trial', async () => {
+    const { reviewed, refresh, state, said, trials, merged, store } = await unchecked();
+    reviewed({ openedByOffice: false, mergeRequested: { at: 1 } });
+    await refresh();
+    await expect.poll(state).toBe('MERGED');
+    expect(trials).toEqual([]);
+    expect(merged()).toMatchObject([{ outcome: 'unchecked', by: 'captain' }]);
+    expect(store.reviews.get(prKey(REPO, NUMBER))?.mergeRequested).toBeUndefined();
+    await expect.poll(() => said('success')).toEqual(['Merged webshop-frontend#8: QA passed it, as you asked (the merge check is off for this project)']);
+  });
+
+  it('merges from the board straight away, with no trial', async () => {
+    const { focus, project, state, said, trials, merged } = await unchecked();
+    await focus.refreshBoard(project.id);
+    expect(focus.mergeFromBoard(project.id, REPO, NUMBER)).toEqual({ checking: true });
+    await expect.poll(state).toBe('MERGED');
+    expect(trials).toEqual([]);
+    expect(merged()).toMatchObject([{ outcome: 'unchecked', by: 'captain' }]);
+    await expect.poll(() => said('success')).toEqual(['Merged webshop-frontend#8 (the merge check is off for this project)']);
+  });
+});
+
 describe('a board refresh', () => {
   it('puts each repo’s open issues and PRs on the board, and tells the browsers', async () => {
     const { focus, store, project, refresh } = await room();

@@ -43,7 +43,7 @@ export type LedgerEntry =
    * the command that failed, the files that conflicted, or why it couldn't run; `overridden` is the captain merging
    * past it on purpose. `base` and `head` are the commits it checked.
    */
-  | (PrRef & { kind: 'merge-check'; outcome: 'passed' | 'failed' | 'conflicts' | 'broken' | 'overridden'; by: Closer; base?: string; head?: string; failed?: string })
+  | (PrRef & { kind: 'merge-check'; outcome: 'passed' | 'failed' | 'conflicts' | 'broken' | 'overridden' | 'unchecked'; by: Closer; base?: string; head?: string; failed?: string })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   /** A plugin (`by`, its id) raised a goal's lead's pull request from the lane they shipped it in (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
   | (PrRef & { kind: 'lane-raised'; from: Lane; to: Lane; by: string; why: string })

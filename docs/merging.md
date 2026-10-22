@@ -1,12 +1,12 @@
 # Merging and the merge check
 
-Every time Ops merges a pull request, it runs the **merge check** first. The check builds what the base branch would look like with the PR in it (the PR's head merged onto the base as it is right now) and runs the repo's checks on that. If the merge conflicts or a check fails, Ops doesn't merge.
+Every time Ops merges a pull request, it runs the **merge check** first, unless the project has switched it off ([below](#switching-it-off)). The check builds what the base branch would look like with the PR in it (the PR's head merged onto the base as it is right now) and runs the repo's checks on that. If the merge conflicts or a check fails, Ops doesn't merge.
 
 The reason is that a PR can be green on its own branch and still break main once it lands next to someone else's work. Before the check existed, Focus's history had 5 QA fails on PRs that only broke main after being merged with others, 4 on PRs that claimed green but weren't, and 9 bug fixes for parallel agents' work colliding. Nothing automatic ran before a merge.
 
 ## What it promises
 
-Every merge Ops makes goes through it: the captain's merge button (the board's, or a card's in Comms), **Merge when QA passes** and auto-merge ([QA](qa.md)). PRs merged on GitHub itself don't go through Ops, so the check never sees them. `server/agents/merges.test.ts`, `server/focus.test.ts` and `shared/mergeCheck.test.ts` hold it to these:
+On a project that checks merges (the default), every merge Ops makes goes through it: the captain's merge button (the board's, or a card's in Comms), **Merge when QA passes** and auto-merge ([QA](qa.md)). PRs merged on GitHub itself don't go through Ops, so the check never sees them. `server/agents/merges.test.ts`, `server/focus.test.ts` and `shared/mergeCheck.test.ts` hold it to these:
 
 - A PR merges only if git merged it onto its base by itself and every check passed (a repo with no checks to run counts as passing). Conflicts, a failing check, or a merge Ops couldn't build or run all refuse it.
 - Ops merges exactly the head it checked. A PR that moved on from the commit the caller means to merge (QA's pass, say) is refused without checking.
@@ -32,6 +32,15 @@ A goal's lead ships each slice in a lane, after [Ship/Show/Ask](https://martinfo
 - **A repo can say exactly what to run**: if its package.json has a `merge-check` script, Ops runs that script and nothing else.
 - **A project can choose different scripts** with `mergeChecks` on the project (`PATCH /api/projects/:id` with `{ "mergeChecks": ["typecheck", "test:unit"] }`, or a comma-separated string). An empty list runs no checks, so only conflicts stop a merge. `null` goes back to the default.
 - A repo with no package.json, or none of the chosen scripts, runs no checks. Only conflicts stop its merges.
+
+## Switching it off
+
+A project can switch the check off with **Check merges** in the QA station's Playbook (`checkMerges: false` on the project; missing means on). It's for a project whose merges the captain would rather have land straight away than wait minutes for a trial and in line behind other merges. Off, every merge Ops makes for that project, from any caller (the merge button, **Merge when QA passes**, auto-merge, a lead's Ship or Show), goes straight to GitHub. `server/agents/merges.test.ts` and `server/focus.test.ts` hold it to these:
+
+- **What it skips:** the trial merge and its scripts, the refusals they bring, and the repo's line: an unchecked merge doesn't wait behind another merge in its repo, even a checked one from another project, and its card never shows queued or checking.
+- **What it keeps:** Ops still merges exactly the head the caller means (QA's pass), so GitHub refuses a PR that moved on since. A PR asked to merge twice at once merges once. QA is unchanged: it still runs the `mergeChecks` scripts for its own checks, sends failed PRs back, and gates auto-merge, Merge when QA passes and the lanes as before.
+- **The ledger** gets a `merge-check` line with the outcome `unchecked` (who merged it, and the head) for each merge, so a merge that skipped the check is never mistaken for one that passed it.
+- A merge already queued or being checked when the switch goes off finishes as it started; switching it back on brings back the trial, the line and the refusals from the next merge.
 
 ## Merging past it (the override)
 

@@ -38,6 +38,7 @@ describe('changeProject', () => {
       autoSendBack: false,
       autoMerge: true,
       qaProof: false,
+      checkMerges: false,
       qaBrief: 'Check checkout.',
       hidden: true,
       qaEffort: 'max',
@@ -55,6 +56,7 @@ describe('changeProject', () => {
       autoSendBack: false,
       autoMerge: true,
       qaProof: false,
+      checkMerges: false,
       qaBrief: 'Check checkout.',
       hidden: true,
       qaEffort: 'max',
@@ -81,6 +83,7 @@ describe('changeProject', () => {
       autoQa: 'yes',
       autoSendBack: 0,
       autoMerge: 'true',
+      checkMerges: 'off',
       qaBrief: ['a'],
       hidden: 'yes',
       preview: 'npm start',
@@ -88,6 +91,14 @@ describe('changeProject', () => {
     expect(changeProject(project, wrong)).toEqual(project);
     expect(changeProject(project, { maxAgents: Number.NaN }).maxAgents).toBe(2);
     expect(changeProject(project, { maxAgents: Number.POSITIVE_INFINITY }).maxAgents).toBe(2);
+  });
+
+  it('switches the merge check off and back on, a project without the setting having it on', () => {
+    const off = changeProject(project, { checkMerges: false });
+    expect(off.checkMerges).toBe(false);
+    expect(changeProject(off, { checkMerges: true }).checkMerges).toBe(true);
+    expect(changeProject(off, { checkMerges: 0 }).checkMerges).toBe(false);
+    expect(changeProject(project, { checkMerges: 'no' }).checkMerges).toBeUndefined();
   });
 
   it('keeps the name when the new one is blank', () => {

@@ -95,6 +95,11 @@ export interface Project {
    */
   mergeChecks?: string[];
   /**
+   * Ops runs the merge check before each merge it makes (missing = on). Off, a merge goes straight to GitHub: no trial,
+   * and no wait in the repo's line (docs/merging.md#switching-it-off). QA still runs the `mergeChecks` scripts itself.
+   */
+  checkMerges?: boolean;
+  /**
    * QA blocks a pull request only with proof: a test that fails when Ops runs it, a failing check, or a screenshot
    * of a failure in the browser. A fail without one goes up as advice and the verdict is a pass (missing = on).
    */

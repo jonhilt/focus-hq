@@ -4,7 +4,7 @@ import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../sh
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
 import { issuesToAssign } from '../shared/dependencies';
 import type { Closer } from '../shared/ledger';
-import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, stepMark } from '../shared/mergeGate';
+import { autoMergedSaid, autoMergeFor, boardMergeSaid, checkMergesFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, requestedMergeSaid, stepMark } from '../shared/mergeGate';
 import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalMark } from '../shared/personalLog';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
@@ -257,6 +257,11 @@ export class Focus {
     this.boardChanged(projectId);
   }
 
+  /** Whether the project's merges go through the merge check (`Merges.merge` decides the same way). */
+  private checksMerges(projectId: string): boolean {
+    return checkMergesFor(this.store.projects.find((p) => p.id === projectId));
+  }
+
   /** An open pull request on the project's board; throws for one that isn't. */
   private boardPr(projectId: string, repo: string, number: number): PullRequest {
     const pr = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number);
@@ -279,8 +284,9 @@ export class Focus {
   mergeFromBoard(projectId: string, repo: string, number: number, override = false): { checking: true } {
     const pr = this.boardPr(projectId, repo, number);
     const where = `${repo.split('/')[1]}#${number}`;
+    const checked = override ? 'override' : this.checksMerges(projectId) ? 'checked' : 'unchecked';
     const started = this.mergeLater(projectId, pr, override ? pr.headSha : undefined, 'captain', override, {
-      merged: () => this.hub.toast('success', boardMergeSaid(where, pr.baseBranch, override), undefined, projectId),
+      merged: () => this.hub.toast('success', boardMergeSaid(where, pr.baseBranch, checked), undefined, projectId),
       refused: (err) => this.hub.toast('error', `${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId),
     });
     if (!started) throw new Error(`Ops is already merging ${where}`);
@@ -453,7 +459,7 @@ export class Focus {
           continue;
         case 'merge':
           this.mergeLater(projectId, pr, step.sha, 'captain', false, {
-            merged: () => this.hub.toast('success', `Merged ${where}: QA passed it and its merge checks out, as you asked`, undefined, projectId),
+            merged: () => this.hub.toast('success', requestedMergeSaid(where, this.checksMerges(projectId)), undefined, projectId),
             refused: (err) => {
               this.agents.requestMerge(pr.repo, pr.number, false);
               this.hub.toast('error', `${where} didn’t merge: ${errorMessage(err)}`, undefined, projectId);
@@ -521,7 +527,7 @@ export class Focus {
         this.mergeLater(projectId, pr, step.sha, 'office', false, {
           merged: () => {
             this.gateMarks.delete(key);
-            this.hub.toast('success', `🤖 Auto-merged ${where}: QA passed it, its checks are green and so is its merge`, undefined, projectId);
+            this.hub.toast('success', autoMergedSaid(where, this.checksMerges(projectId)), undefined, projectId);
           },
           refused: (err) => {
             this.gateMarks.set(key, { sha: step.sha, kind: 'refused', reason: errorMessage(err) });

@@ -1,7 +1,7 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheck';
-import { autoMergeFor } from '../../../shared/mergeGate';
+import { autoMergeFor, checkMergesFor } from '../../../shared/mergeGate';
 import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, spotCheckUrl } from '../../../shared/qa';
 import { type QaSwitch, qaSwitchSays, qaWhoLine } from '../../../shared/qaPlaybook';
 import { triageLabel } from '../../../shared/triage';
@@ -106,6 +106,9 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     showWho();
     const mergeChecks = h('input', { type: 'text', class: 'qa-merge-checks', value: (p.mergeChecks ?? DEFAULT_MERGE_CHECKS).join(', '), placeholder: 'none: only conflicts stop a merge' });
     mergeChecks.addEventListener('change', () => void save({ mergeChecks: mergeChecks.value.split(/[\s,]+/).filter(Boolean) }));
+    // with the merge check off, the scripts are QA's alone
+    const scriptsFor = (checked: boolean) => (checked ? 'Scripts to run (the merge check runs the same)' : 'Scripts to run (QA only: the merge check is off)');
+    const scriptsLabel = h('label', null, scriptsFor(checkMergesFor(p)));
     const section = (title: string, ...children: (HTMLElement | string | null)[]) => h('section', { class: 'qa-playbook-section' }, h('h3', null, title), ...children);
     return [
       h('p', { class: 'muted' }, `What ${officer.name} does on ${p.name}, read from QA's instructions and these settings as they are now.`),
@@ -119,8 +122,12 @@ export function openQaPanel(ui: Ui, projectId: string): void {
       section('Its steps', steps),
       section('The checks it runs',
         checks,
+        toggle('Check merges', 'checkMerges', checkMergesFor(p), (on) => {
+          scriptsLabel.textContent = scriptsFor(on);
+          void save({ checkMerges: on });
+        }),
         h('div', { class: 'field' },
-          h('label', null, 'Scripts to run (the merge check runs the same)'),
+          scriptsLabel,
           mergeChecks,
           h('small', null, 'package.json scripts, by name. A repo with a merge-check script runs that alone; empty runs none.'),
         ),

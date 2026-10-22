@@ -172,6 +172,11 @@ export function autoMergeFor(project: { autoMerge?: boolean }): boolean {
   return project.autoMerge === true;
 }
 
+/** Whether Ops runs the merge check before merging the project's PRs: on unless the project switched it off. */
+export function checkMergesFor(project: { checkMerges?: boolean } | undefined): boolean {
+  return project?.checkMerges !== false;
+}
+
 /** How a repo's pull requests merge: the project's choice for that repo, or else the Focus-wide setting. */
 export function mergeMethodFor(project: { mergeMethods?: Record<string, MergeMethod> } | undefined, repo: string, fallback: MergeMethod): MergeMethod {
   return project?.mergeMethods?.[repo] ?? fallback;
@@ -228,9 +233,23 @@ export function requestedMerge(pr: Pick<PullRequest, 'headSha' | 'isDraft' | 'me
   return { kind: 'merge', sha: head };
 }
 
-/** What Ops tells the captain once their merge from the board went through: past the check (`override`), or checked. */
-export function boardMergeSaid(where: string, base: string, override: boolean): string {
-  return override ? `Merged ${where} past its merge check, as you asked` : `Merged ${where}: it checks out merged onto ${base}`;
+/** How a merge went past the merge check: checked, merged past it by the captain, or with the project's check off. */
+export type MergeChecked = 'checked' | 'override' | 'unchecked';
+
+/** What Ops tells the captain once their merge from the board went through. */
+export function boardMergeSaid(where: string, base: string, how: MergeChecked): string {
+  if (how === 'override') return `Merged ${where} past its merge check, as you asked`;
+  return how === 'unchecked' ? `Merged ${where} (the merge check is off for this project)` : `Merged ${where}: it checks out merged onto ${base}`;
+}
+
+/** What Ops tells the captain once it merged a PR by itself (auto-merge, or a lead's Ship or Show). */
+export function autoMergedSaid(where: string, checked: boolean): string {
+  return `🤖 Auto-merged ${where}: QA passed it, its checks are green ${checked ? 'and so is its merge' : '(the merge check is off for this project)'}`;
+}
+
+/** What Ops tells the captain once a merge they asked for while QA was testing went through. */
+export function requestedMergeSaid(where: string, checked: boolean): string {
+  return checked ? `Merged ${where}: QA passed it and its merge checks out, as you asked` : `Merged ${where}: QA passed it, as you asked (the merge check is off for this project)`;
 }
 
 /** What a QA officer says to a message once their PR merged or closed, instead of resuming their session. */

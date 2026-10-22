@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 import type { Closer, LedgerEntry } from '../../../shared/ledger';
 import { gateStep, type MergeHeads, mergeCheckOn, type MergeTrial, mergeVerdict, refusalComment, trialOutcome } from '../../../shared/mergeCheck';
+import { checkMergesFor } from '../../../shared/mergeGate';
 import { prKey } from '../../../shared/qa';
 import type { MergeCheck, MergeMethod, PullRequest } from '../../../shared/types';
 import { GitHub } from '../../github/service';
@@ -24,7 +25,8 @@ type CheckFields = Pick<Extract<LedgerEntry, { kind: 'merge-check' }>, 'outcome'
  * Every merge Ops makes (docs/merging.md): the merge check first (the PR's head merged onto its base as it is
  * now, and the repo's checks run on it), then GitHub's merge of exactly the commit it checked. One merge at a time in
  * each repo, so the next one is checked against a base that has the last one in it. A trial is kept by its base and
- * head, so trying again runs nothing until one of them moves.
+ * head, so trying again runs nothing until one of them moves. A project with the check switched off (`checkMerges`)
+ * skips all of that: its merges go straight to GitHub, at the head the caller means.
  */
 export class Merges extends Part {
   /** Each PR's last trial (by prKey). */
@@ -44,14 +46,29 @@ export class Merges extends Part {
       if (how.override) return Promise.reject(new Refused({ message: `Ops is still checking its merge` }));
       return going;
     }
+    if (!checkMergesFor(this.store.projects.find((p) => p.id === projectId))) return this.track(key, this.mergeUnchecked(projectId, pr, how));
     const ahead = this.join(pr);
     if (ahead !== undefined) this.queue(projectId, pr, how, ahead);
-    const job = this.repoLock.with(pr.repo, () => this.gateAndMerge(projectId, pr, how)).finally(() => {
-      this.inFlight.delete(key);
-      this.leave(pr);
-    });
+    return this.track(key, this.repoLock.with(pr.repo, () => this.gateAndMerge(projectId, pr, how)).finally(() => this.leave(pr)));
+  }
+
+  /** Keeps the PR's merge as the one under way until it's done, so asking again meanwhile gets the same merge. */
+  private track(key: string, merging: Promise<string>): Promise<string> {
+    const job = merging.finally(() => this.inFlight.delete(key));
     this.inFlight.set(key, job);
     return job;
+  }
+
+  /** A merge with the project's check off: no line, no trial, just GitHub's merge of the head the caller means, noted in the ledger. */
+  private mergeUnchecked(projectId: string, pr: MergeTarget, how: MergeHow): Promise<string> {
+    const head = how.want ?? pr.headSha ?? '';
+    this.record(projectId, pr, how, { outcome: 'unchecked', ...(head && { head }) });
+    return this.land(projectId, pr, how, head || undefined);
+  }
+
+  private record(projectId: string, pr: MergeTarget, how: MergeHow, fields: CheckFields): void {
+    const goal = this.core.leads.leadWith(pr.repo, pr.number)?.lead?.title;
+    this.core.ledger.record(projectId, { kind: 'merge-check', repo: pr.repo, pr: pr.number, ...(goal && { goal }), by: how.by, ...fields });
   }
 
   /** Puts the PR at the back of its repo's line, and returns the PR just ahead of it, if any. */
@@ -79,10 +96,7 @@ export class Merges extends Part {
   }
 
   private async gateAndMerge(projectId: string, pr: MergeTarget, how: MergeHow): Promise<string> {
-    const record = (fields: CheckFields) => {
-      const goal = this.core.leads.leadWith(pr.repo, pr.number)?.lead?.title;
-      this.core.ledger.record(projectId, { kind: 'merge-check', repo: pr.repo, pr: pr.number, ...(goal && { goal }), by: how.by, ...fields });
-    };
+    const record = (fields: CheckFields) => this.record(projectId, pr, how, fields);
     if (how.override) {
       const head = how.want ?? pr.headSha ?? '';
       record({ outcome: 'overridden', ...(head && { head }) });

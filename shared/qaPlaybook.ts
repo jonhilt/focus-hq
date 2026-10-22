@@ -6,7 +6,7 @@ import type { Effort, QaRepoChecks, Settings } from './types';
 // shows it beside the steps and instructions the server builds from QA's prompt (`qaPlaybook` in server/agents/qa.ts).
 
 /** QA's switches at the QA station, by the project field each sets. */
-export type QaSwitch = 'autoQa' | 'autoSendBack' | 'qaProof' | 'autoMerge';
+export type QaSwitch = 'autoQa' | 'autoSendBack' | 'qaProof' | 'autoMerge' | 'checkMerges';
 
 /** What a switch means for the project, set as it is (`on`). */
 export function qaSwitchSays(which: QaSwitch, on: boolean): string {
@@ -27,6 +27,10 @@ export function qaSwitchSays(which: QaSwitch, on: boolean): string {
       return on
         ? 'Merges a pull request the crew opened once QA passed its latest commit, its checks are green and its merge check passes.'
         : 'Nothing merges by itself: you merge from the board (Auto-merge is off).';
+    case 'checkMerges':
+      return on
+        ? 'Before each merge, Ops merges the pull request onto its base and runs these scripts on the result, one merge at a time in each repo.'
+        : 'Merges go straight to GitHub, with no trial merge and no wait behind other merges (Check merges is off). QA still runs these scripts.';
   }
 }
 
