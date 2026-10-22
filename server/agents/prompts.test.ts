@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../shared/types';
 import { carryOnPrompt, conflictsPrompt, pullRequestBody, pushNudge, systemAppend } from './prompts';
+import { PUBLIC_WORDS_RULE } from './wording';
 
 const agent = (a: Partial<Agent> = {}): Agent => ({
   id: 'agent_ab12',
@@ -21,6 +22,11 @@ const agent = (a: Partial<Agent> = {}): Agent => ({
 });
 
 describe('systemAppend', () => {
+  it('keeps the ship’s terms for people out of a local or cloud agent’s pull requests and commits', () => {
+    expect(systemAppend(agent())).toContain(PUBLIC_WORDS_RULE);
+    expect(systemAppend(agent({ cloud: true }))).toContain(PUBLIC_WORDS_RULE);
+  });
+
   it('keeps a local agent from pushing and points them at Focus’s browser tools', () => {
     const text = systemAppend(agent());
     expect(text).toContain('Do NOT push');

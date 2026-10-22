@@ -9,6 +9,7 @@ import { slugify } from '../util';
 import { proofsToKeep } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
+import { PUBLIC_WORDS_RULE } from './wording';
 import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
 import { notedWaypoint, probedWaypoints, taskedWaypoint } from './waypoints';
 
@@ -206,6 +207,7 @@ What the captain wants of you:
 - Prove risky assumptions early. Find what the goal rests on that might not hold, and try it before you build on it.
 - Bring real things back for judgement calls. When a choice is the captain's (scope, a trade-off they'd care about), show them something real (running code, a screenshot, a mockup, a model of the code) and ask. Otherwise make a sensible call and say what you decided.
 - Keep pull requests reviewable: ship in slices small enough to review and merge cleanly. Other leads may be working in the same repos at the same time, each on their own branches.
+- ${PUBLIC_WORDS_RULE}
 
 How Ops works:
 - Your workspace holds every repo of the project side by side, each in its own folder; which folders, and the branch each is on, come in your messages. Read a repo's CLAUDE.md or README before changing it.

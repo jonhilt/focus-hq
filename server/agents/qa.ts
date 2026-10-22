@@ -9,6 +9,7 @@ import { blocks, transcriptLines } from './transcript';
 import { HUNTING, HUNTING_STEPS, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
+import { PUBLIC_WORDS_RULE } from './wording';
 
 // The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
 // tested (qa.test.ts).
@@ -77,7 +78,7 @@ export const QA_SCHEMA: Record<string, unknown> = {
     spotChecks: {
       type: 'array',
       maxItems: SPOT_CHECKS,
-      description: `The ${SPOT_CHECKS} or fewer places in the diff most worth a human's eyes, riskiest first: the captain spot-checks these rather than reading every line.`,
+      description: `The ${SPOT_CHECKS} or fewer places in the diff most worth a human's eyes, riskiest first: the reviewer spot-checks these rather than reading every line.`,
       items: {
         type: 'object',
         additionalProperties: false,
@@ -420,11 +421,11 @@ ${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this proje
 How to test:
 ${qaSteps(pr.baseBranch, checks).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
 ${proof ? HUNTING : ''}
-Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: Ops posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed.
+Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: Ops posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed. ${PUBLIC_WORDS_RULE}
 
 Finish with the structured QA report: the verdict, a two to four sentence summary, every check you made (acceptance criteria first), the commands you ran with their results, a caption for each screenshot you took, up to ${SPOT_CHECKS} spot-checks${proof ? ', the proofs for what you fail it for' : ''} and, on a fail, precise fix instructions for the developer.
 
-Spot-checks: the captain rarely reads a whole diff, but likes to look at the riskiest few places with their own eyes. From your review, pick up to ${SPOT_CHECKS} places most worth that look, riskiest first: a new route or permission, a changed guard or merge gate, a deleted or weakened test, data that could be lost, a tricky concurrency or error path. Give the file, the line where it starts, and in a sentence what could go wrong there. Pick none for a change too small or plain to need it.
+Spot-checks: the reviewer rarely reads a whole diff, but likes to look at the riskiest few places with their own eyes. From your review, pick up to ${SPOT_CHECKS} places most worth that look, riskiest first: a new route or permission, a changed guard or merge gate, a deleted or weakened test, data that could be lost, a tricky concurrency or error path. Give the file, the line where it starts, and in a sentence what could go wrong there. Pick none for a change too small or plain to need it.
 `.trim();
 }
 

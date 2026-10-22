@@ -4,6 +4,7 @@ import { truncate } from '../util';
 import type { BriefSpec } from '../plugins/contract';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
+import { PUBLIC_WORDS_RULE } from './wording';
 
 const PULL_REQUEST_SUMMARY = 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.';
 
@@ -50,6 +51,7 @@ ${assignment} You work autonomously; the manager watches your terminal and brows
 
 ${where.join('\n')}
 - Nobody can answer questions while you work. Make sensible decisions and mention them in your summary.
+- ${PUBLIC_WORDS_RULE}
 - ${summary}
 `.trim();
 }
