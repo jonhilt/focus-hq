@@ -56,7 +56,9 @@
 /* the one picked, large (needCard.ts): what to read to decide, and the answers */
 .cos-need-title { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--lcars-peach); }
 .cos-need-trail { font-size: 14px; color: var(--muted); margin-top: -8px; }
-.cos-need-then { color: var(--muted); }
+.cos-card-fold > summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+.cos-card-fold[open] > summary { margin-bottom: 6px; }
+.cos-need-trail .cos-beam { margin-left: 8px; vertical-align: middle; }
 .cos-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 12px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 16px 20px; }
 .cos-card-what { font-size: 20px; font-weight: 600; line-height: 1.2; display: flex; gap: 12px; }
 .cos-card-context { white-space: normal; line-height: 1.45; max-height: 40vh; overflow-y: auto; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; }

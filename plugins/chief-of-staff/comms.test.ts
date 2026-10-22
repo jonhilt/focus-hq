@@ -62,6 +62,7 @@ const ui = {
   openBoard: vi.fn(),
   openGoals: vi.fn(),
   openScreen: vi.fn(),
+  goToAgent: vi.fn(),
   error: vi.fn(),
 } satisfies CommsUi;
 

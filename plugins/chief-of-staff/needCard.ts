@@ -25,7 +25,7 @@ export const TONE: Record<Attention['kind'], string> = {
 export type OpenAgent = (id: string) => void;
 
 /** What a card asks of the app: a lead's screen up close, a project's board, and a word when an answer fails. */
-export type CardUi = Pick<Ui, 'openScreen' | 'openBoard' | 'error'>;
+export type CardUi = Pick<Ui, 'openScreen' | 'openBoard' | 'goToAgent' | 'error'>;
 
 const said = (agent: Agent) => lastWords(focus.lines(agent.id));
 const open = (go: OpenAgent, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew (G)', onclick: () => go(agent.id) }, label);
@@ -76,12 +76,24 @@ function sendBox(ui: CardUi, a: Attention & { agent: Agent }, words: string): HT
   return [h('small', { class: 'muted' }, `The chief of staff’s words for ${a.agent.name}:`), h('blockquote', { class: 'cos-words', innerHTML: markdownHtml(words) }), row];
 }
 
-/** What the chief of staff made of a lead's turn, when it has: why it goes where it does, and to the captain its words. */
-function cosContext(agent: Agent): string {
+/** Something the captain may want to read but needn't to decide, folded away under its label. */
+const folded = (label: string, markdown: string): HTMLElement =>
+  h('details', { class: 'cos-card-fold' }, h('summary', null, label), h('div', { class: 'cos-card-context', innerHTML: markdownHtml(markdown) }));
+
+/**
+ * What the captain reads of a lead's turn: the chief of staff's words to them, when it has some, with the lead's own
+ * words and why it routed the turn so folded under it, since its headline and words already say what's being decided.
+ * A turn it hasn't judged has only the lead's words, so they're shown open.
+ */
+function turnContext(agent: Agent): { context: string; folds: HTMLElement[] } {
   const cos = readOf(agent)?.judged;
-  if (!cos) return '';
-  const toCaptain = cos.route === 2 || cos.route === 3;
-  return [`**Chief of Staff:** ${cos.why}`, toCaptain && cos.message ? `> ${cos.message.replaceAll('\n', '\n> ')}` : ''].filter(Boolean).join('\n\n');
+  const words = said(agent);
+  if (!cos) return { context: words, folds: [] };
+  const toCaptain = (cos.route === 2 || cos.route === 3) && cos.message;
+  return {
+    context: toCaptain ? cos.message : '',
+    folds: [words ? folded(`What ${agent.name} said`, words) : null, folded('Why the chief of staff routed it here', cos.why)].filter((f) => f !== null),
+  };
 }
 
 /**
@@ -169,7 +181,7 @@ function pickBox(ui: CardUi, agent: Agent): HTMLElement[] {
 }
 
 /** What the captain reads to decide, and what answers it, for one hail. */
-function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answers: HTMLElement[]; then: string } {
+function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; folds?: HTMLElement[]; answers: HTMLElement[] } {
   switch (a.kind) {
     case 'hand': {
       const req = a.agent.permission;
@@ -180,25 +192,24 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answe
         deny.onclick = () => void busy(deny, () => allowTool(a.agent.id, req.id, false), ui.error);
       }
       // what they said as they raised it, and the tool it's for (the request itself is the heading)
-      return { context: [said(a.agent), req ? `Tool: ${req.tool}` : ''].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, allow, deny, open(go, a.agent, 'Open their panel'))], then: 'Approve: the tool runs and they carry on. Decline: they’re told no, and find another way or ask you.' };
+      return { context: [said(a.agent), req ? `Tool: ${req.tool}` : ''].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, allow, deny, open(go, a.agent, 'Open their panel'))] };
     }
     case 'error':
-      return { context: said(a.agent), answers: [h('div', { class: 'row' }, open(go, a.agent, 'Open their panel'))], then: 'Their panel shows what went wrong, and starts them again.' };
+      return { context: said(a.agent), answers: [h('div', { class: 'row' }, open(go, a.agent, 'Open their panel'))] };
     case 'question':
-      return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent), then: 'Pick: they hear your pick, and your word with it, and carry on.' };
+      return { context: openQuestion(a.agent)?.context ?? '', answers: pickBox(ui, a.agent) };
     case 'turn': {
       const cos = readOf(a.agent)?.judged;
       const ready = cos && (cos.route === 1 || cos.route === 4) ? cos.message : '';
-      const context = [cosContext(a.agent), said(a.agent)].filter(Boolean).join('\n\n---\n\n');
-      const gotIt = 'Got it: off your queue, nothing sent, until their next turn.';
-      if (ready) return { context, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
-      return { context, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
+      const { context, folds } = turnContext(a.agent);
+      if (ready) return { context, folds, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)] };
+      return { context, folds, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)] };
     }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
+      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))] };
     }
     case 'qa':
     case 'conflicts':
@@ -208,7 +219,6 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answe
           h('button', { class: 'btn small primary', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
           h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
         )],
-        then: a.kind === 'qa' ? 'Merge it from here, or Pull requests: read QA’s report, then merge, close or send it back.' : 'Pull requests: send it back to its lead to resolve, or resolve it on GitHub.',
       };
   }
 }
@@ -228,16 +238,22 @@ function trail(a: Attention): string {
   return [project, work ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
 }
 
-/** One hail, large: the goal it's part of, where it's from, what's needed, what to read to decide, the answers, and what each leads to. */
+/** To a lead's team room, where there's more of what they're on than the card has. */
+const beamBox = (ui: CardUi, a: Attention): HTMLElement[] =>
+  'agent' in a && a.agent.lead
+    ? [h('button', { class: 'btn small cos-beam', title: 'Beam to their team room (B)', attrs: { 'data-act': 'beam' }, onclick: () => ui.goToAgent(a.agent.id) }, 'Beam to their room')]
+    : [];
+
+/** One hail, large: the goal it's part of, where it's from, what's needed, what to read to decide, and the answers. */
 export function needCard(ui: CardUi, a: Attention, go: OpenAgent): HTMLElement {
   const { icon, what } = lineOf(a, focus.reviews);
-  const { context, answers, then } = body(ui, a, go);
+  const { context, folds = [], answers } = body(ui, a, go);
   return h('div', { class: 'cos-card', style: `--tone:${TONE[a.kind]}` },
     h('div', { class: 'cos-need-title' }, titleOf(a)),
-    h('div', { class: 'cos-need-trail' }, trail(a), ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : [])),
+    h('div', { class: 'cos-need-trail' }, trail(a), ...('agent' in a ? goalTags(a.agent, 'line').map((tag) => tag.el) : []), ...beamBox(ui, a)),
     h('div', { class: 'cos-card-what' }, h('span', null, icon), what),
     context ? h('div', { class: 'cos-card-context', innerHTML: markdownHtml(context) }) : null,
+    ...folds,
     ...answers,
-    h('small', { class: 'cos-need-then' }, then),
   );
 }

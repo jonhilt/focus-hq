@@ -53,7 +53,7 @@ const pr: PullRequest = {
   isDraft: false, mergeable: 'MERGEABLE', checks: 'passing', failedChecks: [], closes: [], createdAt: '2026-10-01',
 };
 
-const ui = { openScreen: vi.fn(), openBoard: vi.fn(), error: vi.fn() };
+const ui = { openScreen: vi.fn(), openBoard: vi.fn(), goToAgent: vi.fn(), error: vi.fn() };
 const open = vi.fn();
 const card = (a: Attention) => needCard(ui, a, open);
 const button = (el: HTMLElement, text: string): HTMLButtonElement => {
@@ -82,7 +82,6 @@ describe('a card in Comms', () => {
   it('sends an agent who’s stuck to their panel', () => {
     const el = card({ kind: 'error', agent: lead({ status: 'error', error: 'npm install failed' }) });
     expect(el.textContent).toContain('Stuck: npm install failed');
-    expect(el.textContent).toContain('Their panel shows what went wrong');
   });
 
   it('picks a question’s option, with the captain’s word', async () => {
@@ -99,7 +98,6 @@ describe('a card in Comms', () => {
   it('replies to a lead whose turn ended, unjudged, in the captain’s words', async () => {
     const el = card({ kind: 'turn', agent: lead() });
     expect(el.textContent).toContain('Waiting for your reply');
-    expect(el.textContent).toContain('A reply, or Send: they carry on with it.');
     const text = el.querySelector('textarea');
     if (text) text.value = 'Carry on';
     button(el, 'Send').click();
@@ -107,12 +105,20 @@ describe('a card in Comms', () => {
     expect(calls.messageAgent).toHaveBeenCalledWith('a1', 'Lt. Vale', 'Carry on');
   });
 
-  it('heads a card with what the chief of staff made of the turn, and its words to the captain', () => {
+  it('heads a card with what the chief of staff made of the turn and its words to the captain, why it routed it folded away', () => {
     const el = card({ kind: 'turn', agent: lead({}, { at: 1000, judged: verdict(2) }) });
     expect(el.textContent).toContain('Ship slice 2?');
-    expect(el.textContent).toContain('It changes the checkout.');
-    expect(el.textContent).toContain('Go ahead with the tests first.');
+    expect(el.querySelector('.cos-card > .cos-card-context')?.textContent).toBe('Go ahead with the tests first.');
+    const why = [...el.querySelectorAll('details')].find((d) => d.querySelector('summary')?.textContent === 'Why the chief of staff routed it here');
+    expect(why?.open).toBe(false);
+    expect(why?.textContent).toContain('It changes the checkout.');
     expect(el.textContent).not.toContain('Send the chief of staff’s words');
+  });
+
+  it('beams to a lead’s team room from their card', () => {
+    const el = card({ kind: 'turn', agent: lead() });
+    el.querySelector<HTMLButtonElement>('[data-act="beam"]')?.click();
+    expect(ui.goToAgent).toHaveBeenCalledWith('a1');
   });
 
   it('sends its ready words with one press, and holds them while they count down', async () => {
@@ -177,7 +183,6 @@ describe('a card in Comms', () => {
   it('merges a pull request QA needs the captain on from its card, or leaves it to the board', async () => {
     const qa = card({ kind: 'qa', projectId: 'p', pr });
     expect(qa.textContent).toContain('acme/shop#7 · Wishlist endpoints');
-    expect(qa.textContent).toContain('Pull requests: read QA’s report');
     button(qa, 'Pull requests').click();
     expect(ui.openBoard).toHaveBeenCalledWith('p', 'prs');
     calls.confirmDialog.mockResolvedValueOnce(false);

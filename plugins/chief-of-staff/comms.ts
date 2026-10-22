@@ -51,7 +51,7 @@ function decidedRow(d: DecisionEvent): HTMLElement {
 }
 
 /** What Comms asks of the app: its panel, and the panels it goes on to (an agent's, a board, the goals, a lead's screen). */
-export type CommsUi = Pick<Ui, 'openAgent' | 'openBoard' | 'openGoals' | 'openScreen' | 'error'> & { panels: Pick<Ui['panels'], 'open' | 'own' | 'backTo'> };
+export type CommsUi = Pick<Ui, 'openAgent' | 'openBoard' | 'openGoals' | 'openScreen' | 'goToAgent' | 'error'> & { panels: Pick<Ui['panels'], 'open' | 'own' | 'backTo'> };
 
 /** Whether a key comes from the captain writing in a field, where Comms' keys don't count. */
 const typingIn = (target: EventTarget | null): boolean => target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || target instanceof HTMLSelectElement;
