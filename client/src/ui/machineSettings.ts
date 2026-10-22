@@ -1,6 +1,6 @@
 // Settings' card for what's particular to the machine Focus runs on: auto update, the terminal a cloud session opens
-// in, the browser agents drive. Each one an environment variable sets (`ServerInfo.settingsPinned`) shows as set
-// there, and can't be changed here.
+// in, the browser agents drive, where previews are mirrored. Each one an environment variable sets
+// (`ServerInfo.settingsPinned`) shows as set there, and can't be changed here.
 import type { PinnedSettings, Settings } from '../../../shared/types';
 import { api } from '../net/api';
 import type { Ui } from './context';
@@ -23,6 +23,22 @@ export function machineSection(ui: Ui, s: Settings, pinned: PinnedSettings): HTM
     return input;
   };
 
+  // Tailscale (nothing saved), off, or the addresses typed: the addresses' field only shows for the last
+  const hosts = s.previewHosts;
+  const mirrorPick = h('select', { disabled: pinned.previewHosts !== undefined },
+    h('option', { value: 'tailscale', selected: !hosts }, 'On the Tailscale addresses'),
+    h('option', { value: 'off', selected: hosts === 'off' }, 'Off'),
+    h('option', { value: 'listed', selected: !!hosts && hosts !== 'off' }, 'On these addresses'),
+  );
+  const listed = h('input', { type: 'text', value: hosts && hosts !== 'off' ? hosts : '', placeholder: 'e.g. 192.168.1.20, 10.0.0.5', style: 'flex:1', disabled: pinned.previewHosts !== undefined });
+  listed.hidden = mirrorPick.value !== 'listed';
+  mirrorPick.addEventListener('change', () => {
+    listed.hidden = mirrorPick.value !== 'listed';
+    if (mirrorPick.value === 'listed') return listed.value.trim() ? save({ previewHosts: listed.value }) : listed.focus();
+    save({ previewHosts: mirrorPick.value === 'off' ? 'off' : '' });
+  });
+  listed.addEventListener('change', () => save({ previewHosts: listed.value }));
+
   return h('div', { class: 'card', style: 'margin-top:12px' },
     h('strong', { class: 'label' }, 'This machine'),
     h('div', { class: 'field', style: 'margin-top:8px' },
@@ -38,6 +54,11 @@ export function machineSection(ui: Ui, s: Settings, pinned: PinnedSettings): HTM
       h('label', null, 'Browser for agents'),
       h('div', { class: 'row' }, text('browserPath', 'Playwright’s Chromium, else Chrome, else Edge'), pinnedChip(pinned, 'browserPath')),
       h('small', null, 'The path to a Chromium-based browser’s executable. Applies from Focus’s next start.'),
+    ),
+    h('div', { class: 'field' },
+      h('label', null, 'Preview mirrors'),
+      h('div', { class: 'row' }, mirrorPick, listed, pinnedChip(pinned, 'previewHosts')),
+      h('small', null, 'Opens each running preview on this machine’s other addresses, so your phone or laptop can reach it. Applies to the next preview that comes up.'),
     ),
   );
 }

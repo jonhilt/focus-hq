@@ -74,12 +74,10 @@ export const whisper = {
 };
 
 /**
- * Previews' ports mirrored where other machines reach them (server/previewMirrors.ts): `hosts` is FOCUS_PREVIEW_HOSTS
- * (addresses, comma-separated, or `off`), else the machine's tailnet addresses. With a certificate and key (from
- * `tailscale cert`), the mirrors serve https.
+ * Previews' ports mirrored where other machines reach them (server/previewMirrors.ts), on the addresses Settings name
+ * (`previewHosts`). With a certificate and key (from `tailscale cert`), the mirrors serve https.
  */
 export const previewMirrors = {
-  hosts: process.env.FOCUS_PREVIEW_HOSTS,
   cert: path.resolve(process.env.FOCUS_PREVIEW_CERT || path.join(config.dataDir, 'tls', 'preview.crt')),
   key: path.resolve(process.env.FOCUS_PREVIEW_KEY || path.join(config.dataDir, 'tls', 'preview.key')),
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Settings } from '../shared/types';
-import { changeSettings, LEAD_COMPACT_MIN, pinnedSettings, settingsInForce } from './settings';
+import { changeSettings, LEAD_COMPACT_MIN, pinnedSettings, previewHosts, settingsInForce } from './settings';
 
 const settings: Settings = {
   maxConcurrent: 4,
@@ -120,6 +120,18 @@ describe('changeSettings', () => {
     expect(cleared).not.toHaveProperty('whisperBin');
     expect(cleared).not.toHaveProperty('whisperModel');
     expect(cleared.speechGpu).toBe(false);
+  });
+});
+
+describe('where preview mirrors listen', () => {
+  it('is off, or the addresses typed, tidied; empty going back to Tailscale’s', () => {
+    expect(previewHosts(' OFF ')).toBe('off');
+    expect(previewHosts('192.168.1.20,10.0.0.5  192.168.1.20 ,')).toBe('192.168.1.20, 10.0.0.5');
+    const set = changeSettings(settings, { previewHosts: '10.0.0.5' });
+    expect(set.previewHosts).toBe('10.0.0.5');
+    expect(changeSettings(set, { previewHosts: ' , ' })).not.toHaveProperty('previewHosts');
+    expect(settingsInForce({ ...set }, { FOCUS_PREVIEW_HOSTS: 'off' }).previewHosts).toBe('off');
+    expect(pinnedSettings({ FOCUS_PREVIEW_HOSTS: 'off' })).toEqual({ previewHosts: 'FOCUS_PREVIEW_HOSTS' });
   });
 });
 

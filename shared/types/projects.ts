@@ -53,6 +53,11 @@ export interface Settings {
   whisperModel?: string;
   /** The crew's voices (Kokoro) on the Apple GPU where it can run them. Missing = on; off keeps them on the CPU. */
   speechGpu?: boolean;
+  /**
+   * Where previews are mirrored for other machines to reach (server/previewMirrors.ts): 'off', or addresses
+   * comma-separated. Missing = the machine's Tailscale addresses.
+   */
+  previewHosts?: string;
   /** Focus's address as a bot speaking for the captain reaches it (server/bot.ts), unless FOCUS_PUBLIC_URL is set. Missing = none. */
   publicUrl?: string;
 }
@@ -65,6 +70,7 @@ export const SETTINGS_ENV = {
   whisperBin: 'FOCUS_WHISPER_BIN',
   whisperModel: 'FOCUS_WHISPER_MODEL',
   speechGpu: 'FOCUS_KOKORO_GPU',
+  previewHosts: 'FOCUS_PREVIEW_HOSTS',
 } as const satisfies Partial<Record<keyof Settings, string>>;
 export type PinnedSettings = Partial<Record<keyof typeof SETTINGS_ENV, (typeof SETTINGS_ENV)[keyof typeof SETTINGS_ENV]>>;
 

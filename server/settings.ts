@@ -11,7 +11,8 @@ import { EFFORT_LEVELS, MERGE_METHODS, type PinnedSettings, type Settings, SETTI
  * An empty (or unknown) effort for conflict-resolving agents goes back to the model's default. A lead's compaction
  * threshold is 0 (off) or a whole number of tokens from LEAD_COMPACT_MIN to a million. The plugins switched on for the
  * ship keep only what could be plugins' ids, each once. The public address is an http(s) one ('' clears it); the
- * terminal, browser and whisper commands and paths are trimmed, empty clearing them.
+ * terminal, browser and whisper commands and paths are trimmed, empty clearing them. The preview mirrors' hosts are
+ * 'off' or a list of addresses (`previewHosts`), empty going back to the Tailscale addresses.
  */
 /** Below this, a compacted lead's conversation (some 30–50k tokens) would soon need compacting again. */
 export const LEAD_COMPACT_MIN = 80_000;
@@ -42,10 +43,21 @@ export function changeSettings(settings: Settings, patch: unknown): Settings {
     if (value.trim()) s[key] = value.trim();
     else delete s[key];
   }
+  if (typeof p.previewHosts === 'string') {
+    const hosts = previewHosts(p.previewHosts);
+    if (hosts) s.previewHosts = hosts;
+    else delete s.previewHosts;
+  }
   const publicUrl = typeof p.publicUrl === 'string' ? httpUrl(p.publicUrl) : undefined;
   if (publicUrl) s.publicUrl = publicUrl;
   else if (publicUrl === '') delete s.publicUrl;
   return s;
+}
+
+/** Where preview mirrors listen, as typed: 'off', or the addresses listed, tidied ('' when there are none). */
+export function previewHosts(typed: string): string {
+  if (typed.trim().toLowerCase() === 'off') return 'off';
+  return [...new Set(typed.split(/[\s,]+/).filter(Boolean))].join(', ');
 }
 
 type Env = Record<string, string | undefined>;
@@ -62,6 +74,6 @@ export function pinnedSettings(env: Env = process.env): PinnedSettings {
 export function settingsInForce(settings: Settings, env: Env = process.env): Settings {
   const value = (key: keyof typeof SETTINGS_ENV) => env[SETTINGS_ENV[key]]?.trim() || undefined;
   const [autoUpdate, speechGpu] = [value('autoUpdate'), value('speechGpu')];
-  const paths = Object.fromEntries(PATH_SETTINGS.flatMap((key) => (value(key) ? [[key, value(key)]] : [])));
+  const paths = Object.fromEntries([...PATH_SETTINGS, 'previewHosts' as const].flatMap((key) => (value(key) ? [[key, value(key)]] : [])));
   return { ...settings, ...(autoUpdate && { autoUpdate: autoUpdate !== '0' }), ...(speechGpu && { speechGpu: speechGpu !== '0' && speechGpu !== 'false' }), ...paths };
 }

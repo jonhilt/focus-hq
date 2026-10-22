@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import http from 'node:http';
+import os from 'node:os';
 import path from 'node:path';
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import express from 'express';
@@ -30,7 +31,7 @@ import { flowRecorder } from './flows';
 import { loadPlugins, pluginCatalog } from './plugins/load';
 import { pluginChoice } from '../shared/shipPlugins';
 import { Focus } from './focus';
-import { PreviewMirrors } from './previewMirrors';
+import { mirrorHosts, PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { settingsInForce } from './settings';
@@ -62,7 +63,7 @@ async function main() {
   const browsers = new BrowserPool(() => settingsInForce(store.settings).browserPath);
   const demoRunner = config.demo ? new DemoRunner() : undefined;
   const runner = demoRunner ?? new ClaudeRunner(browsers, () => settingsInForce(store.settings).terminal);
-  const previews = new Previews(hub, github, config.demo, undefined, config.demo ? undefined : new PreviewMirrors());
+  const previews = new Previews(hub, github, config.demo, undefined, config.demo ? undefined : new PreviewMirrors(() => mirrorHosts(settingsInForce(store.settings).previewHosts, os.networkInterfaces())));
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
   // plugins read the ship through `focus`, which is up by the time anyone asks

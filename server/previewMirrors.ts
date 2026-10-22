@@ -22,7 +22,7 @@ export function tailnetAddresses(interfaces: NodeJS.Dict<os.NetworkInterfaceInfo
   });
 }
 
-/** Where the mirrors listen: FOCUS_PREVIEW_HOSTS (`off` for nowhere), else the tailnet addresses. */
+/** Where the mirrors listen: Settings' previewHosts (`off` for nowhere, or addresses), else the tailnet addresses. */
 export function mirrorHosts(setting: string | undefined, interfaces: NodeJS.Dict<os.NetworkInterfaceInfo[]>): string[] {
   if (setting?.trim() === 'off') return [];
   const listed = (setting ?? '').split(',').map((h) => h.trim()).filter(Boolean);
@@ -116,7 +116,8 @@ export class PreviewMirrors {
   private listeners: (() => void)[] = [];
 
   constructor(
-    private readonly hosts: () => string[] = () => mirrorHosts(settings.hosts, os.networkInterfaces()),
+    /** Read as each mirror opens, so a change in Settings applies to the next one. */
+    private readonly hosts: () => string[] = () => mirrorHosts(undefined, os.networkInterfaces()),
     private readonly tls: () => Tls | undefined = readTls,
   ) {}
 
