@@ -7,10 +7,11 @@
 //   pnpm run jev-backtest --set fresh       asks Jev about them (needs TYPESAFE_API_KEY)
 //   pnpm run jev-fresh --score              scores Jev and the live judge against fresh/captain.txt
 //
-// A sample already there isn't replaced (the captain's labels are numbered into it) unless --force.
+// A sample already there isn't replaced (the captain's labels are numbered into it) unless --force, which sets its
+// labels and Jev's answers aside (renamed, never deleted), so --score can't pair old labels with the new sample.
 
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { focusLedger } from '../../../plugin-api/server';
@@ -26,9 +27,17 @@ const fresh = path.join(data, 'chief-of-staff', 'fresh');
 const file = (name: string) => path.join(fresh, name);
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
 
+/** Makes way for a new sample: refused without --force, and with it the old labels and answers renamed aside. */
+function makeWay() {
+  if (!existsSync(file('sample.json'))) return;
+  if (!args.includes('--force')) throw new Error(`${file('sample.json')} is there already: --force to replace it (and its labels)`);
+  const stamp = Date.now();
+  for (const old of ['captain.txt', `${JEV_QUESTIONS_VERSION}-raw.jsonl`]) if (existsSync(file(old))) renameSync(file(old), file(`${old}.replaced-${stamp}`));
+}
+
 /** Picks the sample from the ledger and writes it, with its turns and its labelling page. */
 function sample() {
-  if (existsSync(file('sample.json')) && !args.includes('--force')) throw new Error(`${file('sample.json')} is there already: --force to replace it (and its labels)`);
+  makeWay();
   const events = focusLedger().events ?? [];
   // This goal's own turns are about Jev, so they're left out.
   const turns = freshTurns(events, flag('--since', '2026-10-20'), (goal) => /\bjev\b/i.test(goal ?? ''));

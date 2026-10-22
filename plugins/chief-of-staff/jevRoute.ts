@@ -3,7 +3,7 @@ import type { CosRoute } from './shared';
 
 // The Jev backtest's rules (README.md#backtesting-jev): what TypeSafe's System One model is asked about a lead's
 // ended turn, how its answers become one of the four routes, and how a run is scored against the captain's labels.
-// Offline only: the live judge doesn't use any of it.
+// The live judge routes by them too, where Route with Jev is on (`jevRouter.ts`).
 
 /** The model the backtest asks: pinned, since `jev-latest` lags the newest release. */
 export const JEV_BACKTEST_MODEL = 'jev-1.14.0';

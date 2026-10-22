@@ -46,8 +46,17 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
       method: 'post', path: '/auto-send',
       handle: ({ body }) => {
         const { projectId, on } = switchOf(body);
-        settings.set({ autoSend: { ...settings.get().autoSend, [projectId]: on } });
+        settings.set({ ...settings.get(), autoSend: { ...settings.get().autoSend, [projectId]: on } });
         if (!on) for (const lead of leadsIn(projectId)) inbox.holdFor(lead);
+        return settings.get();
+      },
+    },
+    {
+      // the captain's say on whether Jev picks the route for a project's turns, Haiku only writing the words
+      method: 'post', path: '/jev',
+      handle: ({ body }) => {
+        const { projectId, on } = switchOf(body);
+        settings.set({ ...settings.get(), jev: { ...settings.get().jev, [projectId]: on } });
         return settings.get();
       },
     },

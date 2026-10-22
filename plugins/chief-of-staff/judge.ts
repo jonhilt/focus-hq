@@ -1,5 +1,5 @@
 import { isOneOf, isRecord } from '../../plugin-api/shared';
-import { MAX_REPLIES, MAX_REPLY_LABEL, repliesOf, ROUTES, type Verdict } from './shared';
+import { type CosRoute, MAX_REPLIES, MAX_REPLY_LABEL, repliesOf, ROUTES, type Verdict } from './shared';
 
 export type { Verdict } from './shared';
 
@@ -55,18 +55,28 @@ Reply with JSON only: {"route":1|2|3|4,"ask":"...","why":"...","message":"...","
   - route 3: what you'd say to the captain right now, and why it can't wait.
 - replies: buttons for the captain's likely answers to what the lead actually asked or offered, on any route, ${MAX_REPLIES} at most: "label" is 2 to 4 words on the button, ${MAX_REPLY_LABEL} characters at most ("Keep it open", "Close it"), "text" the exact reply the captain would send, as the captain, in the first person, a sentence or two ("Close it: it's done."). Only answers the lead's own words allow; never a choice the lead didn't offer. An empty list when the turn asks nothing a button could answer.`;
 
-/** The judge's system prompt, with the captain's standing orders (the file's text) in their place, or none yet. */
-export function judgeSystemPrompt(standingOrders?: string): string {
-  return `${RULES}\n\n${ORDERS_HEADING}\n${standingOrders?.trim() || NO_ORDERS}\n\n\n${REPLY}\n`;
+const ROUTE_NAMES: Record<CosRoute, string> = { 1: 'carry on', 2: 'a card', 3: 'interrupt', 4: 'back to the lead' };
+
+/** What the prompt says when the route is decided already (Jev's, `jevRouter.ts`): Haiku writes the words for it. */
+const pinnedRoute = (route: CosRoute) =>
+  `\n\nThe route is decided already: ${route} (${ROUTE_NAMES[route]}). Don't weigh it again: give route ${route}, and write the ask, why, message and replies for that route.`;
+
+/**
+ * The judge's system prompt, with the captain's standing orders (the file's text) in their place, or none yet; with
+ * `pinned`, the route is decided and it only writes the words.
+ */
+export function judgeSystemPrompt(standingOrders?: string, pinned?: CosRoute): string {
+  return `${RULES}\n\n${ORDERS_HEADING}\n${standingOrders?.trim() || NO_ORDERS}\n\n\n${REPLY}${pinned ? pinnedRoute(pinned) : ''}\n`;
 }
 
 /** What the judge reads: the goal, and the end of what the lead said this turn. */
 export const judgePrompt = (goal: string | undefined, tail: string): string => `Goal: ${goal || '(untitled)'}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
 
-export const VERDICT_SCHEMA = {
+/** The verdict's shape; with `pinned`, the one route it may give. */
+export const verdictSchema = (pinned?: CosRoute) => ({
   type: 'object',
   properties: {
-    route: { type: 'integer', enum: [...ROUTES] },
+    route: { type: 'integer', enum: pinned ? [pinned] : [...ROUTES] },
     ask: { type: 'string' },
     why: { type: 'string' },
     message: { type: 'string' },
@@ -78,7 +88,9 @@ export const VERDICT_SCHEMA = {
   },
   required: ['route', 'ask', 'why', 'message', 'replies'],
   additionalProperties: false,
-};
+});
+
+export const VERDICT_SCHEMA = verdictSchema();
 
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 

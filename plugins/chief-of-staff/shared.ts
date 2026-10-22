@@ -129,18 +129,27 @@ export const readOf = (agent: Pick<Agent, 'lead'> | undefined): CosRead | undefi
 /** Whether a verdict's words are for the lead (carry on, back to the lead): ready for the captain to send. */
 export const forLead = (v: Pick<Verdict, 'route'>): boolean => v.route === 1 || v.route === 4;
 
-/** What it keeps across a restart: whether it sends its words by itself, by project (`autoSendFor`). */
+/**
+ * What it keeps across a restart, by project: whether it sends its words by itself (`autoSendFor`), and whether Jev
+ * routes its turns (`jevFor`; missing from what was kept before there was the switch).
+ */
 export interface CosState {
   autoSend: Record<string, boolean>;
+  jev?: Record<string, boolean>;
 }
 
-export const freshState = (): CosState => ({ autoSend: {} });
+export const freshState = (): CosState => ({ autoSend: {}, jev: {} });
+
+const switches = (v: unknown): Record<string, boolean> =>
+  isRecord(v) ? Object.fromEntries(Object.entries(v).filter((e): e is [string, boolean] => typeof e[1] === 'boolean')) : {};
 
 /** Its state as the browser has it (`state.plugins[CHIEF_OF_STAFF]`): fresh where it isn't one. */
 export function cosStateOf(v: unknown): CosState {
-  const said = isRecord(v) && isRecord(v.autoSend) ? v.autoSend : {};
-  return { autoSend: Object.fromEntries(Object.entries(said).filter((e): e is [string, boolean] => typeof e[1] === 'boolean')) };
+  return { autoSend: switches(isRecord(v) ? v.autoSend : undefined), jev: switches(isRecord(v) ? v.jev : undefined) };
 }
+
+/** Whether Jev picks the route for its turns in `project` (Haiku writing the words): only where the captain said so. */
+export const jevFor = (state: CosState, projectId: string | undefined): boolean => projectId !== undefined && state.jev?.[projectId] === true;
 
 /**
  * Whether it sends its words for a lead by itself in `project`: the captain's say on it here, or, before they've said,

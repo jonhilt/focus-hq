@@ -14,7 +14,8 @@ import { ClaudeJudge } from './claudeJudge';
 import { DemoJudge } from './demoJudge';
 import { STANDING_ORDERS } from './judge';
 import { inboxRoutes } from './routes';
-import { AUTO_SEND_EVERY, autoSendFor, CHIEF_OF_STAFF, freshState } from './shared';
+import { JevRouter } from './jevRouter';
+import { AUTO_SEND_EVERY, autoSendFor, CHIEF_OF_STAFF, freshState, jevFor } from './shared';
 
 /** How often the bot hears what changed. */
 const BOT_EVERY = 3000;
@@ -36,7 +37,12 @@ const chiefOfStaff: FocusPlugin = {
     const settings = host.state(freshState);
     // its words go by themselves only in a project it's on for, and where the captain lets it
     const autoSends = (projectId: string) => host.on(projectId) && autoSendFor(settings.get(), host.projects().find((p) => p.id === projectId));
-    const chief = new ChiefOfStaff(host, host.demo ? new DemoJudge() : new ClaudeJudge((run) => host.readOnlySession(run)), () => readIfThere(orders), autoSends);
+    // Jev routes only where the captain switched it on, with the TypeSafe key from where Focus starts or, so it reaches
+    // no other plugin (Number One's calls take theirs from the environment), from the plugin's own folder
+    const typesafeKey = () => process.env.TYPESAFE_API_KEY || readIfThere(path.join(host.dataDir(), 'typesafe.key'))?.trim() || undefined;
+    const jev = host.demo ? undefined : { router: new JevRouter(typesafeKey), on: (projectId: string) => host.on(projectId) && jevFor(settings.get(), projectId) };
+    const judge = host.demo ? new DemoJudge() : new ClaudeJudge((run) => host.readOnlySession(run));
+    const chief = new ChiefOfStaff(host, judge, () => readIfThere(orders), autoSends, jev);
     const inbox = new Inbox(host, autoSends);
     setInterval(() => void inbox.autoSend(), AUTO_SEND_EVERY).unref();
     // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook, once

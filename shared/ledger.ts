@@ -71,7 +71,13 @@ export type LedgerEntry =
    * last line), to check against `captain-replies`: a journal format the core reads (the ledger's review) but never
    * writes. `message` is what it would say (to the lead on routes 1 and 4); `version` is its prompt's.
    */
-  | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: VerdictRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
+  | {
+      kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: VerdictRoute; why: string; message?: string; model: string; version: string; costUsd?: number;
+      /** Who picked the route when it wasn't the judge's model: Jev, with what it rested on (`jevRouter.ts`); the model only wrote the words. */
+      router?: { by: 'jev'; model: string; version: string; interrupt: number; choice?: string; confidence?: number; costUsd: number };
+      /** Why Jev was asked and couldn't route, so the judge's model routed as well. */
+      routerFailed?: string;
+    }
   /**
    * The captain answered something waiting on them (in a plugin's inbox, or an agent's panel, as that plugin records
    * it): `item` is what it was (its inbox id, kind and line), `answer` what they decided in a few words, `via` where

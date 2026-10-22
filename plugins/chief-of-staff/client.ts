@@ -7,7 +7,7 @@ import { openComms } from './comms';
 import { hailing } from './here';
 import { type TurnStage, turnNews, turnStage } from './inbox';
 import { cosMove } from './move';
-import { AUTO_SEND_MS, autoSendFor, CHIEF_OF_STAFF, cosStateOf } from './shared';
+import { AUTO_SEND_MS, autoSendFor, CHIEF_OF_STAFF, cosStateOf, jevFor } from './shared';
 
 /** Comms on the HUD: whatever waits on the captain, anywhere on the ship, lit up and counted; C opens Comms to answer it. */
 function badge(hails: number): HTMLElement {
@@ -20,6 +20,14 @@ function autoSendSwitch(project: Project, ui: Ui): HTMLElement {
   return new Switch('Auto-send ready words', autoSendFor(cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)), project), {
     title: `A lead’s turn the chief of staff would carry on, or send back to the lead, gets its words by itself after ${AUTO_SEND_MS / 60_000} minutes, unless you hold them in Comms`,
     changed: (on) => void callPlugin(CHIEF_OF_STAFF, '/auto-send', { projectId: project.id, on }).catch((e: Error) => ui.error(e.message)),
+  }).el;
+}
+
+/** Its say in a project it's on for: whether Jev picks where a turn goes, Haiku only writing the words. */
+function jevSwitch(project: Project, ui: Ui): HTMLElement {
+  return new Switch('Route with Jev', jevFor(cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)), project.id), {
+    title: 'TypeSafe’s Jev picks where each lead’s turn goes, in under a second, and Haiku writes the words for it. It needs a TypeSafe key; when Jev can’t answer, Haiku routes as before',
+    changed: (on) => void callPlugin(CHIEF_OF_STAFF, '/jev', { projectId: project.id, on }).catch((e: Error) => ui.error(e.message)),
   }).el;
 }
 
@@ -46,14 +54,15 @@ const chiefOfStaff: ClientPlugin = {
       'Comms, your inbox (C, the bridge chair)',
       'A badge on the HUD, and toasts',
       'Auto-send, per project: its words go to leads without you',
+      'Route with Jev, per project: TypeSafe’s Jev picks the route, Haiku writes the words',
     ],
     cost: 'background',
-    costDetail: 'A Haiku call at the end of every lead turn in the projects it’s on for, about a tenth of a cent each: small, but it adds up across busy leads.',
+    costDetail: 'A Haiku call at the end of every lead turn in the projects it’s on for, about a tenth of a cent each: small, but it adds up across busy leads. With Route with Jev, a Jev call too, about a hundredth of a cent.',
   },
   project: {
     label: 'Chief of staff',
     about: 'Judges each of a goal lead’s turns as it ends: a card for you, an interrupt, or words for the lead (carry on, or back to them) ready for you to send from Comms. It sends nothing itself',
-    settings: (project, ui) => [autoSendSwitch(project, ui)],
+    settings: (project, ui) => [autoSendSwitch(project, ui), jevSwitch(project, ui)],
   },
   legend: [{ key: 'C', label: 'comms' }],
   hud: () => {

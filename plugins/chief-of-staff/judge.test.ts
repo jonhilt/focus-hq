@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, VERDICT_SCHEMA } from './judge';
+import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, VERDICT_SCHEMA, verdictSchema } from './judge';
 import { MAX_REPLIES, MAX_REPLY_LABEL } from './shared';
 import { demoReplies } from './demoJudge';
 
@@ -59,5 +59,14 @@ describe('the demo’s judge', () => {
     expect(demoReplies('Keep the goal open, or close it?').map((r) => r.label)).toEqual(['Keep it open', 'Close it']);
     expect(demoReplies('Want me to redraw that part?').map((r) => r.label)).toEqual(['Yes, redraw it', 'No need']);
     expect(demoReplies('Shall I go ahead?').map((r) => r.label)).toEqual(['Go ahead', 'Not yet']);
+  });
+});
+
+describe('a route decided already', () => {
+  it('tells Haiku the route and lets it give only that one', () => {
+    expect(judgeSystemPrompt(undefined, 3)).toContain('The route is decided already: 3 (interrupt)');
+    expect(judgeSystemPrompt(undefined)).not.toContain('decided already');
+    expect(verdictSchema(4).properties.route.enum).toEqual([4]);
+    expect(VERDICT_SCHEMA.properties.route.enum).toEqual([1, 2, 3, 4]);
   });
 });

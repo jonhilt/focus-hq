@@ -244,10 +244,18 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
     await until(() => o.read()?.sendsAt !== undefined);
     o.route('/auto-send')({ projectId: o.project.id, on: false });
-    expect(o.state()).toEqual({ autoSend: { [o.project.id]: false } });
+    expect(o.state()).toEqual({ autoSend: { [o.project.id]: false }, jev: {} });
     expect(o.read()).toMatchObject({ judged: { route: 1 } });
     expect(o.read()?.sendsAt).toBeUndefined();
     expect(() => o.route('/auto-send')({ on: true })).toThrow(/projectId/);
+  });
+
+  it('keeps the captain’s say on Route with Jev apart from auto-send, each switch leaving the other as it was', async () => {
+    const o = await aboard(false);
+    o.route('/jev')({ projectId: o.project.id, on: true });
+    o.route('/auto-send')({ projectId: o.project.id, on: true });
+    expect(o.state()).toEqual({ autoSend: { [o.project.id]: true }, jev: { [o.project.id]: true } });
+    expect(() => o.route('/jev')({ on: true })).toThrow(/projectId/);
   });
 
   it('serves the inbox on its routes, an item answered by its id', async () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/server';
 import { checkAtOnce, checkRestart, type Later, focus, type Running, type Subject } from '../../plugin-api/testing';
 import { type ChiefHost, ChiefOfStaff, type Judge } from './chief';
+import type { Router } from './jevRouter';
 
 // The chief of staff under Focus's two rules (docs/invariants.md): a restart while a turn is being judged ends as
 // if it had never been judged or had been, and two ends of turns at once write what one after the other would: each
@@ -35,7 +36,10 @@ const chief: Subject<Kept> = {
       };
       // the model answering is a step out there: a restart can fall while it does
       const judge: Judge = { model: 'haiku', judge: () => later('haiku', () => Promise.resolve({ structured: { route: 2, why: 'A pick.', message: '' } })) };
-      const cos = new ChiefOfStaff(host, judge, () => undefined);
+      // and so is Jev picking the route first, where Route with Jev is on
+      const how = { model: 'jev-1.14.0', version: 'jev-v1', interrupt: 0.1, costUsd: 0 };
+      const router: Router = { route: () => later('jev', () => Promise.resolve({ route: 2, how })) };
+      const cos = new ChiefOfStaff(host, judge, () => undefined, undefined, { router, on: () => true });
       let going: Promise<unknown> = Promise.resolve();
       return {
         actions: () => [

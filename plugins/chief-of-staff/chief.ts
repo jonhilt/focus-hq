@@ -1,7 +1,8 @@
 import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
-import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict } from './judge';
+import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, verdictSchema } from './judge';
 import { heldForRead, LANE_JUDGE_VERSION, lostRaise, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
+import type { JevRouting, Router } from './jevRouter';
 import { judged, reading, waking } from './lanes';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
@@ -34,13 +35,15 @@ export class ChiefOfStaff {
 
   /**
    * `standingOrders` reads the captain's standing orders as they are now: undefined when there are none. `autoSends`
-   * says whether a project lets it send its words for a lead by itself (`autoSendFor`).
+   * says whether a project lets it send its words for a lead by itself (`autoSendFor`). `jev` routes the turns of a
+   * project the captain switched Route with Jev on for (`jevFor`), the judge writing only the words.
    */
   constructor(
     private readonly host: ChiefHost,
     private readonly judge: Judge,
     private readonly standingOrders: () => string | undefined,
     private readonly autoSends: (projectId: string) => boolean = () => false,
+    private readonly jev?: { router: Router; on: (projectId: string) => boolean },
   ) {}
 
   /** Whether it judges this agent's turns: a goal lead's, in a project it's on for. */
@@ -143,18 +146,39 @@ export class ChiefOfStaff {
     if (this.judging.has(key) || this.judged(sessionId, tail.uuid)) return;
     this.judging.add(key);
     try {
-      const result = await this.judge.judge({ system: judgeSystemPrompt(this.standingOrders()), prompt: judgePrompt(goal, tail.text), settings: this.host.settings() });
-      const verdict = parseVerdict(result.structured);
-      if (!verdict) throw new Error(`the judge gave no verdict: ${JSON.stringify(result.structured)}`);
+      const orders = this.standingOrders();
+      const prompt = judgePrompt(goal, tail.text);
+      const { routing, failed } = await this.routeWithJev(agent.projectId, prompt, orders);
+      const pinned = routing?.route;
+      const result = await this.judge.judge({ system: judgeSystemPrompt(orders, pinned), prompt, settings: this.host.settings(), ...(pinned && { schema: verdictSchema(pinned) }) });
+      const parsed = parseVerdict(result.structured);
+      if (!parsed) throw new Error(`the judge gave no verdict: ${JSON.stringify(result.structured)}`);
+      const verdict = pinned ? { ...parsed, route: pinned } : parsed;
       this.host.record(agent.projectId, {
         kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, why: verdict.why,
-        ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model, version: JUDGE_VERSION,
+        ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,
+        version: routing ? `${JUDGE_VERSION}+${routing.how.version}` : JUDGE_VERSION,
         ...(result.costUsd !== undefined && { costUsd: result.costUsd }),
+        ...(routing && { router: { by: 'jev', ...routing.how } }),
+        ...(failed && { routerFailed: failed }),
       });
       const read = judged(readOf(this.host.agent(agent.id)), verdict, since, this.autoSends(agent.projectId), Date.now());
       if (read && this.host.goals.mark(agent.id, read, since)) this.wakeDeferred(agent.id);
     } finally {
       this.judging.delete(key);
+    }
+  }
+
+  /**
+   * Jev's route for a turn, in a project the captain switched it on for; why not, when it was asked and couldn't
+   * answer (the judge's model routes then, as everywhere else).
+   */
+  private async routeWithJev(projectId: string, prompt: string, orders: string | undefined): Promise<{ routing?: JevRouting; failed?: string }> {
+    if (!this.jev?.on(projectId)) return {};
+    try {
+      return { routing: await this.jev.router.route(prompt, orders) };
+    } catch (err) {
+      return { failed: errorMessage(err) };
     }
   }
 

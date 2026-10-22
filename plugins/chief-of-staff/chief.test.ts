@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
 import { demoWorkspace, focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
+import type { Router } from './jevRouter';
+import { JUDGE_VERSION } from './judge';
 import { CHIEF_OF_STAFF, readOf } from './shared';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
@@ -9,10 +11,10 @@ const said = (uuid: string, text: string) => ({ type: 'assistant', uuid, message
 const captain = (uuid: string, text: string) => ({ type: 'user', uuid, message: { content: text } });
 
 /** A Focus with the chief of staff on for its project, a judge that sends every turn back to the lead, and a lead at work. */
-async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' }, held: Promise<void> = Promise.resolve()) {
+async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' }, held: Promise<void> = Promise.resolve(), jev?: ConstructorParameters<typeof ChiefOfStaff>[4]) {
   const o = focus();
   o.project.plugins = [CHIEF_OF_STAFF];
-  const asked: { system: string; prompt: string }[] = [];
+  const asked: { system: string; prompt: string; schema?: Record<string, unknown> }[] = [];
   const judge: Judge = {
     model: 'haiku',
     judge: (req) => (asked.push(req), held.then(() => ({ structured: answer, costUsd: 0.001, model: 'claude-haiku-4-5' }))),
@@ -22,7 +24,7 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
   const plugin: FocusPlugin = {
     id: CHIEF_OF_STAFF,
     start: (host) => {
-      const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.');
+      const c = new ChiefOfStaff(host, judge, () => 'STANDING ORDERS\nSay yes.', undefined, jev);
       chief = c;
       return { turn: (agent, phase) => void c.turn(agent, phase), leadNoted: (lead, note) => c.noted(lead, note) };
     },
@@ -35,6 +37,56 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
   const read = () => readOf(lead());
   return { ...o, asked, transcript, chief: chief!, lead, verdicts, read };
 }
+
+/** Jev, as a test has it: the route it gives, or why it can't; and what it was asked. */
+function fakeJev(answer: 1 | 2 | 3 | 4 | Error) {
+  const asked: { state: string; orders: string | undefined }[] = [];
+  const router: Router = {
+    route: (state, orders) => {
+      asked.push({ state, orders });
+      if (answer instanceof Error) return Promise.reject(answer);
+      return Promise.resolve({ route: answer, how: { model: 'jev-1.14.0', version: 'jev-v1', interrupt: 0.6, choice: 'interrupt', confidence: 0.5, costUsd: 0.0001 } });
+    },
+  };
+  return { router, asked };
+}
+
+describe('routing with Jev', () => {
+  it('lets Jev pick the route where it’s switched on, Haiku writing the words for that route', async () => {
+    const jev = fakeJev(3);
+    const o = await aboard(undefined, undefined, { router: jev.router, on: () => true });
+    o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
+    await until(() => o.verdicts().length === 1);
+    expect(jev.asked[0]).toEqual({ state: o.asked[0].prompt, orders: 'STANDING ORDERS\nSay yes.' });
+    expect(o.asked[0].system).toContain('The route is decided already: 3 (interrupt)');
+    expect(o.asked[0].schema).toMatchObject({ properties: { route: { enum: [3] } } });
+    expect(o.verdicts()[0]).toMatchObject({
+      route: 3, model: 'claude-haiku-4-5', version: `${JUDGE_VERSION}+jev-v1`,
+      router: { by: 'jev', model: 'jev-1.14.0', version: 'jev-v1', interrupt: 0.6, costUsd: 0.0001 },
+    });
+    expect(o.read()?.judged).toMatchObject({ route: 3 });
+  });
+
+  it('routes as Haiku says when Jev can’t answer, keeping why', async () => {
+    const jev = fakeJev(new Error('Jev answered HTTP 529'));
+    const o = await aboard(undefined, undefined, { router: jev.router, on: () => true });
+    o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
+    await until(() => o.verdicts().length === 1);
+    expect(o.asked[0].system).not.toContain('decided already');
+    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: JUDGE_VERSION, routerFailed: 'Jev answered HTTP 529' });
+    expect(o.verdicts()[0]).not.toHaveProperty('router');
+  });
+
+  it('doesn’t ask Jev in a project it isn’t switched on for', async () => {
+    const jev = fakeJev(3);
+    const o = await aboard(undefined, undefined, { router: jev.router, on: () => false });
+    o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
+    await until(() => o.verdicts().length === 1);
+    expect(jev.asked).toEqual([]);
+    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: JUDGE_VERSION });
+    expect(o.verdicts()[0]).not.toHaveProperty('routerFailed');
+  });
+});
 
 describe('the chief of staff', () => {
   it('judges a lead’s turn as it ends and writes the verdict in the ledger, saying nothing to anyone', async () => {
