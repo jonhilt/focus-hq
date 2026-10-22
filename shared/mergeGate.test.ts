@@ -64,6 +64,10 @@ describe('mergeStep', () => {
     expect(mergeStep(pr({ mergeable: 'UNKNOWN' }), review(), ops()).kind).toBe('wait');
   });
 
+  it('stops when GitHub didn’t say which commit it’s at, even while a developer works on it', () => {
+    expect(mergeStep(pr({ headSha: '' }), review(), ops({ developerBusy: true }))).toEqual({ kind: 'blocked', reason: 'GitHub didn’t say which commit it’s at' });
+  });
+
   it('waits while a developer is working on it', () => {
     expect(mergeStep(pr({ mergeable: 'CONFLICTING' }), review(), ops({ developerBusy: true }))).toEqual({ kind: 'wait', reason: 'a developer is working on it' });
   });

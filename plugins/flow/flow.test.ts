@@ -72,6 +72,12 @@ describe('transcriptMoments', () => {
       { at: min(2), kind: 'activity' },
     ]);
   });
+
+  it('counts a compaction as the lead at work, and leaves out the harness’s meta lines', () => {
+    n = 0;
+    const jsonl = [line('user', 'This session is being continued from a previous conversation', 1), line('user', 'a skill’s words', 2, { isMeta: true })].join('\n');
+    expect(transcriptMoments(jsonl)).toEqual([{ at: min(1), kind: 'activity' }]);
+  });
 });
 
 describe('goalFlow', () => {

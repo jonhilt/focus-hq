@@ -126,106 +126,118 @@ function sessionLine(d: SessionDigest): { title: string; detail: string } {
 
 const quotes = (frictions: Friction[]) => frictions.map((f) => `${f.signature}: “${f.quote}”`);
 
+/** A row's own words and links, without where it sits in the log. */
+type RowParts = Omit<LedgerRow, 'seq' | 'at' | 'projectId' | 'group'>;
+type Of<K extends LedgerEvent['kind']> = Extract<LedgerEvent, { kind: K }>;
+
 /** An event as a line of the log. */
 export function ledgerRow(e: LedgerEvent): LedgerRow {
-  const base = { seq: e.seq, at: e.at, projectId: e.projectId, group: groupOf(e) };
+  return { seq: e.seq, at: e.at, projectId: e.projectId, group: groupOf(e), ...rowParts(e) };
+}
+
+function rowParts(e: LedgerEvent): RowParts {
   switch (e.kind) {
-    case 'qa-verdict': {
-      const pass = e.verdict === 'pass';
-      const total = e.checks.pass + e.checks.fail + e.checks.skip;
-      const checks = pass ? `${plural(e.checks.pass, 'check')} passed` : `${e.checks.fail} of ${plural(total, 'check')} failed`;
-      const rounds = pass ? (e.failedRounds ? ` · after ${plural(e.failedRounds, 'failed round')}` : ' · first time') : ` · fail ${e.failedRounds}`;
-      return { ...base, tag: pass ? 'QA pass' : 'QA fail', tone: pass ? 'ok' : 'bad', title: `${short(e.repo)} #${e.pr} · ${checks}${rounds}`, detail: [e.goal, e.reviewer].filter(Boolean).join(' · '), pr: e, goal: e.goal };
-    }
+    case 'qa-verdict':
+      return verdictRow(e);
     case 'merged':
-    case 'closed': {
-      const passed = e.qa === 'passed';
-      const qa = passed ? (e.failedRounds ? `QA passed after ${plural(e.failedRounds, 'failed round')}` : 'QA passed first time') : `without a QA pass (QA ${e.qa})`;
-      const closes = e.kind === 'merged' && e.closes?.length ? ` · closed ${e.closes.map((n) => `#${n}`).join(', ')}` : '';
-      return {
-        ...base,
-        tag: e.kind === 'merged' ? 'Merged' : 'Closed',
-        tone: e.kind === 'closed' ? 'warn' : passed ? 'ok' : 'warn',
-        title: `${short(e.repo)} #${e.pr} · ${BY[e.by] ?? e.by} · ${qa}`,
-        detail: [e.goal, e.triages ? plural(e.triages, 'triage') : null].filter(Boolean).join(' · ') + closes,
-        pr: e,
-        goal: e.goal,
-      };
-    }
+    case 'closed':
+      return landedRow(e);
     case 'conflicts':
-      return {
-        ...base,
-        tag: 'Conflicts',
-        tone: e.resolved === 'agent' ? 'bad' : 'warn',
-        title: `${short(e.repo)} #${e.pr} · ${RESOLVED[e.resolved] ?? e.resolved}${e.files?.length ? ` · ${plural(e.files.length, 'file')}` : ''}`,
-        detail: [e.files?.join(', '), e.broke ? `broke ${e.broke}` : null, e.goal].filter(Boolean).join(' · '),
-        pr: e,
-        goal: e.goal,
-      };
-    case 'merge-check': {
-      const said = MERGE_CHECK[e.outcome] ?? e.outcome;
-      const at = e.head && e.base ? ` · ${e.head.slice(0, 7)} onto ${e.base.slice(0, 7)}` : '';
-      const tone = e.outcome === 'passed' ? 'ok' : e.outcome === 'overridden' || e.outcome === 'broken' ? 'warn' : 'bad';
-      return { ...base, tag: 'Merge check', tone, title: `${short(e.repo)} #${e.pr} · ${said} ${BY[e.by] ?? e.by}${at}`, detail: [e.failed, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
-    }
+      return conflictsRow(e);
+    case 'merge-check':
+      return mergeCheckRow(e);
     case 'checks-sent-back':
-      return { ...base, tag: 'Sent back', tone: 'warn', title: `${short(e.repo)} #${e.pr} · failing checks sent back: ${e.checks.join(', ')}`, detail: e.goal, pr: e, goal: e.goal };
+      return { tag: 'Sent back', tone: 'warn', title: `${short(e.repo)} #${e.pr} · failing checks sent back: ${e.checks.join(', ')}`, detail: e.goal, pr: e, goal: e.goal };
     case 'triage':
-      return { ...base, tag: 'Triage', tone: e.action === 'escalate' ? 'bad' : 'warn', title: `${short(e.repo)} #${e.pr} · ${e.officer} ${TRIAGE[e.action] ?? e.action}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
-    case 'goal-closed': {
-      const g = e.goal;
-      const days = Math.max(0, Math.round((g.closedAt - g.openedAt) / 86_400_000));
-      return { ...base, tag: 'Goal', tone: 'info', title: `Closed: ${g.title}`, detail: `${g.leadName} · ${plural(g.slices, 'slice')} · ${plural(g.prs.length, 'pull request')} · open ${days ? plural(days, 'day') : 'under a day'}`, goal: g.title };
-    }
+      return { tag: 'Triage', tone: e.action === 'escalate' ? 'bad' : 'warn', title: `${short(e.repo)} #${e.pr} · ${e.officer} ${TRIAGE[e.action] ?? e.action}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+    case 'goal-closed':
+      return goalClosedRow(e);
     case 'retro-decision':
-      return {
-        ...base,
-        tag: 'Retro',
-        tone: e.accepted ? 'ok' : 'info',
-        title: `${e.accepted ? 'Accepted' : 'Rejected'}: ${e.title}`,
-        detail: [e.issue ? `filed as ${short(e.issue.repo)} #${e.issue.number}` : null, plural(e.signatures.length, 'friction signature')].filter(Boolean).join(' · '),
-      };
+      return retroRow(e);
     case 'session-digest': {
       const { title, detail } = sessionLine(e);
-      return { ...base, tag: 'Session', tone: e.facts.wastedCalls > 5 || e.facts.nudges > 1 ? 'warn' : 'info', title, detail, pr: e.prs[0], goal: e.goal };
+      return { tag: 'Session', tone: e.facts.wastedCalls > 5 || e.facts.nudges > 1 ? 'warn' : 'info', title, detail, pr: e.prs[0], goal: e.goal };
     }
     case 'captain-replies':
-      return {
-        ...base,
-        tag: 'Captain',
-        tone: 'info',
-        title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`,
-        detail: e.goal ?? '',
-      };
+      return { tag: 'Captain', tone: 'info', title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`, detail: e.goal ?? '' };
     case 'captain-decision':
-      return {
-        ...base,
-        tag: 'Captain',
-        tone: 'info',
-        title: `Decided: ${e.item.what} → ${e.answer}`,
-        detail: [e.agent, e.goal, viaNote(e.via)].filter(Boolean).join(' · '),
-        goal: e.goal,
-      };
+      return { tag: 'Captain', tone: 'info', title: `Decided: ${e.item.what} → ${e.answer}`, detail: [e.agent, e.goal, viaNote(e.via)].filter(Boolean).join(' · '), goal: e.goal };
     case 'cos-verdict':
-      return {
-        ...base,
-        tag: 'CoS',
-        tone: e.route === 3 ? 'warn' : 'info',
-        title: `CoS: ${VERDICT_ROUTE[e.route]} — ${e.why}`,
-        detail: [e.agent, e.goal].filter(Boolean).join(' · '),
-        ...(e.message && { quotes: [`To the ${verdictAddressee(e.route)}: “${e.message}”`] }),
-        goal: e.goal,
-      };
+      return cosRow(e);
     case 'session-frictions':
-      return {
-        ...base,
-        tag: 'Frictions',
-        tone: e.frictions.length ? 'warn' : 'info',
-        title: e.missing ? 'Session not on this machine: not read' : e.frictions.length ? `${plural(e.frictions.length, 'friction')} found in a session` : 'Nothing got in the way of a session',
-        detail: [...new Set(e.frictions.map((f) => f.kind))].join(', '),
-        quotes: quotes(e.frictions),
-      };
+      return frictionsRow(e);
   }
+}
+
+function verdictRow(e: Of<'qa-verdict'>): RowParts {
+  const pass = e.verdict === 'pass';
+  const total = e.checks.pass + e.checks.fail + e.checks.skip;
+  const checks = pass ? `${plural(e.checks.pass, 'check')} passed` : `${e.checks.fail} of ${plural(total, 'check')} failed`;
+  const rounds = pass ? (e.failedRounds ? ` · after ${plural(e.failedRounds, 'failed round')}` : ' · first time') : ` · fail ${e.failedRounds}`;
+  return { tag: pass ? 'QA pass' : 'QA fail', tone: pass ? 'ok' : 'bad', title: `${short(e.repo)} #${e.pr} · ${checks}${rounds}`, detail: [e.goal, e.reviewer].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+}
+
+function landedRow(e: Of<'merged' | 'closed'>): RowParts {
+  const passed = e.qa === 'passed';
+  const qa = passed ? (e.failedRounds ? `QA passed after ${plural(e.failedRounds, 'failed round')}` : 'QA passed first time') : `without a QA pass (QA ${e.qa})`;
+  const closes = e.kind === 'merged' && e.closes?.length ? ` · closed ${e.closes.map((n) => `#${n}`).join(', ')}` : '';
+  return {
+    tag: e.kind === 'merged' ? 'Merged' : 'Closed',
+    tone: e.kind === 'closed' ? 'warn' : passed ? 'ok' : 'warn',
+    title: `${short(e.repo)} #${e.pr} · ${BY[e.by] ?? e.by} · ${qa}`,
+    detail: [e.goal, e.triages ? plural(e.triages, 'triage') : null].filter(Boolean).join(' · ') + closes,
+    pr: e,
+    goal: e.goal,
+  };
+}
+
+function conflictsRow(e: Of<'conflicts'>): RowParts {
+  return {
+    tag: 'Conflicts',
+    tone: e.resolved === 'agent' ? 'bad' : 'warn',
+    title: `${short(e.repo)} #${e.pr} · ${RESOLVED[e.resolved] ?? e.resolved}${e.files?.length ? ` · ${plural(e.files.length, 'file')}` : ''}`,
+    detail: [e.files?.join(', '), e.broke ? `broke ${e.broke}` : null, e.goal].filter(Boolean).join(' · '),
+    pr: e,
+    goal: e.goal,
+  };
+}
+
+function mergeCheckRow(e: Of<'merge-check'>): RowParts {
+  const said = MERGE_CHECK[e.outcome] ?? e.outcome;
+  const at = e.head && e.base ? ` · ${e.head.slice(0, 7)} onto ${e.base.slice(0, 7)}` : '';
+  const tone = e.outcome === 'passed' ? 'ok' : e.outcome === 'overridden' || e.outcome === 'broken' ? 'warn' : 'bad';
+  return { tag: 'Merge check', tone, title: `${short(e.repo)} #${e.pr} · ${said} ${BY[e.by] ?? e.by}${at}`, detail: [e.failed, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+}
+
+function goalClosedRow(e: Of<'goal-closed'>): RowParts {
+  const g = e.goal;
+  const days = Math.max(0, Math.round((g.closedAt - g.openedAt) / 86_400_000));
+  return { tag: 'Goal', tone: 'info', title: `Closed: ${g.title}`, detail: `${g.leadName} · ${plural(g.slices, 'slice')} · ${plural(g.prs.length, 'pull request')} · open ${days ? plural(days, 'day') : 'under a day'}`, goal: g.title };
+}
+
+function retroRow(e: Of<'retro-decision'>): RowParts {
+  return {
+    tag: 'Retro',
+    tone: e.accepted ? 'ok' : 'info',
+    title: `${e.accepted ? 'Accepted' : 'Rejected'}: ${e.title}`,
+    detail: [e.issue ? `filed as ${short(e.issue.repo)} #${e.issue.number}` : null, plural(e.signatures.length, 'friction signature')].filter(Boolean).join(' · '),
+  };
+}
+
+function cosRow(e: Of<'cos-verdict'>): RowParts {
+  return {
+    tag: 'CoS',
+    tone: e.route === 3 ? 'warn' : 'info',
+    title: `CoS: ${VERDICT_ROUTE[e.route]} — ${e.why}`,
+    detail: [e.agent, e.goal].filter(Boolean).join(' · '),
+    ...(e.message && { quotes: [`To the ${verdictAddressee(e.route)}: “${e.message}”`] }),
+    goal: e.goal,
+  };
+}
+
+function frictionsRow(e: Of<'session-frictions'>): RowParts {
+  const title = e.missing ? 'Session not on this machine: not read' : e.frictions.length ? `${plural(e.frictions.length, 'friction')} found in a session` : 'Nothing got in the way of a session';
+  return { tag: 'Frictions', tone: e.frictions.length ? 'warn' : 'info', title, detail: [...new Set(e.frictions.map((f) => f.kind))].join(', '), quotes: quotes(e.frictions) };
 }
 
 /** The events in the window, the newest first, of the groups shown and from the project picked (if one is). */

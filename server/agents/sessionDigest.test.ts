@@ -39,6 +39,13 @@ describe('transcriptSpan', () => {
     expect(transcriptSpan(t, 'u5')?.facts).toMatchObject({ toolCalls: 0, captainMessages: 1, nudges: 0, compactions: 1, officeMessages: 1 });
     expect(transcriptSpan(t, 'u8')).toBeUndefined();
   });
+
+  it('counts a long message that starts like a go-on as a message, not a nudge, and leaves out the harness’s meta lines', () => {
+    n = 0;
+    const meta = JSON.stringify({ type: 'user', uuid: 'm1', isMeta: true, message: { content: 'yes' } });
+    const t = [line('user', 'yes, and while you’re there could you also tidy the doors?'), meta].join('\n');
+    expect(transcriptSpan(t)?.facts).toMatchObject({ captainMessages: 1, nudges: 0 });
+  });
 });
 
 describe('captainReplies', () => {

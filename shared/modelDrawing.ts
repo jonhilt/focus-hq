@@ -85,57 +85,74 @@ export function structureSize(m: SystemModel): { w: number; h: number } {
   };
 }
 
+/** What the structure view's shapes are drawn against: where each part sits, the step under way, and its connection. */
+interface StructureScene {
+  m: SystemModel;
+  focus: ModelFocus;
+  centres: Map<string, { x: number; y: number }>;
+  colours: Map<string, string>;
+  step?: SystemModel['trace'][number];
+  active?: ModelEdge;
+}
+
 /** The parts as shapes for their kinds, coloured by layer, and their connections as arrows, the step under way gold. */
 export function structureView(m: SystemModel, focus: ModelFocus = {}): Drawing {
-  const shapes: Shape[] = [];
-  const colours = layerColours(m);
   const { w: W, h: H } = structureSize(m);
-  const centres = structurePositions(m);
   const step = focus.step !== undefined ? m.trace[focus.step] : undefined;
-  const active = step && edgeFor(m.edges, step.from, step.to);
-  const touches = (id: string) => focus.picked === id;
-
-  for (const e of m.edges) {
-    const a = centres.get(e.from);
-    const b = centres.get(e.to);
-    if (!a || !b) continue;
-    const [x1, y1] = clipToBox(a, b);
-    const [x2, y2] = clipToBox(b, a);
-    const on = e === active;
-    const lit = touches(e.from) || touches(e.to);
-    const gone = e.change === 'removed';
-    const colour = on ? INK.gold : gone ? INK.muted : e.backed === false ? INK.red : EDGE_COLOURS[e.kind];
-    const steps = focus.marks ? stepsAlong(m, e) : undefined;
-    shapes.push({ t: 'line', x1, y1, x2, y2, stroke: colour, sw: on ? 7 : lit ? 5 : 3, dash: e.backed === false || gone, arrow: true, steps, cls: steps && 'edge' });
-    // its label only where the line's long enough to carry it, a change's mark before it
-    const room = Math.hypot(x2 - x1, y2 - y1) - 30;
-    const label = `${e.change ? `${CHANGE_TAGS[e.change].text} · ` : ''}${e.label ?? e.kind}`;
-    const labelColour = on ? INK.gold : e.change ? CHANGE_TAGS[e.change].colour : INK.muted;
-    if (room > width(label, 18) || room > 120) shapes.push({ t: 'text', x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 10, text: fit(label, 18, room), size: 18, fill: labelColour, anchor: 'middle', steps });
-  }
-  for (const n of m.nodes) {
-    const c = centres.get(n.id);
-    if (!c) continue;
-    const inStep = !!step && (step.from === n.id || step.to === n.id);
-    const gone = n.change === 'removed';
-    const stroke = touches(n.id) ? INK.text : inStep ? INK.gold : gone ? INK.muted : n.found === false ? INK.red : (colours.get(n.layer) ?? INK.muted);
-    shapes.push(...partShape(n.kind, c.x, c.y, { fill: INK.panel, stroke, sw: touches(n.id) || inStep ? 6 : 3, dash: n.found === false || gone, part: n.id }));
-    if (n.change) shapes.push(...changeTag(n.change, c.x, c.y - BOX.h / 2 - 16));
-    shapes.push({ t: 'text', x: c.x, y: c.y - 2, text: fit(n.label, 22, BOX.w - 20), size: 22, fill: colours.get(n.layer) ?? INK.text, bold: true, anchor: 'middle', part: n.id });
-    shapes.push({ t: 'text', x: c.x, y: c.y + 26, text: fit(citeText(n), 17, BOX.w - 20), size: 17, fill: n.found === false ? INK.red : INK.muted, mono: true, anchor: 'middle', part: n.id });
-  }
-  // the token, halfway along the step's connection, and the step in words over the legend, its payload with it
-  if (step && focus.step !== undefined && !focus.marks) {
-    const a = centres.get(step.from);
-    const b = centres.get(step.to);
-    if (a && b) shapes.push({ t: 'ellipse', cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, rx: 13, ry: 13, fill: INK.gold });
-    const y = H - STRUCT.legend - STRUCT.strip / 2 + 8;
-    const head = `STEP ${focus.step + 1} OF ${m.trace.length} · ${step.label}`;
-    shapes.push({ t: 'text', x: 40, y, text: fit(head, 26, 760), size: 26, fill: INK.gold, bold: true });
-    if (step.payload) shapes.push({ t: 'text', x: W - 40, y, text: fit(step.payload, 21, 760), size: 21, fill: INK.gold, mono: true, anchor: 'end' });
-  }
-  shapes.push(...legend(m, colours, H - STRUCT.legend, W));
+  const scene: StructureScene = { m, focus, centres: structurePositions(m), colours: layerColours(m), step, active: step && edgeFor(m.edges, step.from, step.to) };
+  const shapes = [...m.edges.flatMap((e) => edgeShapes(e, scene)), ...m.nodes.flatMap((n) => nodeShapes(n, scene)), ...stepShapes(scene, W, H), ...legend(m, scene.colours, H - STRUCT.legend, W)];
   return { w: W, h: H, shapes: [{ t: 'rect', x: 0, y: 0, w: W, h: H, fill: INK.bg }, ...shapes] };
+}
+
+/** A connection as an arrow between its parts' boxes, and its label where the line's long enough to carry it. */
+function edgeShapes(e: ModelEdge, { m, focus, centres, active }: StructureScene): Shape[] {
+  const a = centres.get(e.from);
+  const b = centres.get(e.to);
+  if (!a || !b) return [];
+  const [x1, y1] = clipToBox(a, b);
+  const [x2, y2] = clipToBox(b, a);
+  const on = e === active;
+  const lit = focus.picked === e.from || focus.picked === e.to;
+  const gone = e.change === 'removed';
+  const colour = on ? INK.gold : gone ? INK.muted : e.backed === false ? INK.red : EDGE_COLOURS[e.kind];
+  const steps = focus.marks ? stepsAlong(m, e) : undefined;
+  const shapes: Shape[] = [{ t: 'line', x1, y1, x2, y2, stroke: colour, sw: on ? 7 : lit ? 5 : 3, dash: e.backed === false || gone, arrow: true, steps, cls: steps && 'edge' }];
+  // its label only where the line's long enough to carry it, a change's mark before it
+  const room = Math.hypot(x2 - x1, y2 - y1) - 30;
+  const label = `${e.change ? `${CHANGE_TAGS[e.change].text} · ` : ''}${e.label ?? e.kind}`;
+  const labelColour = on ? INK.gold : e.change ? CHANGE_TAGS[e.change].colour : INK.muted;
+  if (room > width(label, 18) || room > 120) shapes.push({ t: 'text', x: (x1 + x2) / 2, y: (y1 + y2) / 2 - 10, text: fit(label, 18, room), size: 18, fill: labelColour, anchor: 'middle', steps });
+  return shapes;
+}
+
+/** A part as the shape for its kind, outlined by what's picked, the step and its layer, with its name and where it's cited. */
+function nodeShapes(n: ModelNode, { focus, centres, colours, step }: StructureScene): Shape[] {
+  const c = centres.get(n.id);
+  if (!c) return [];
+  const picked = focus.picked === n.id;
+  const inStep = !!step && (step.from === n.id || step.to === n.id);
+  const gone = n.change === 'removed';
+  const stroke = picked ? INK.text : inStep ? INK.gold : gone ? INK.muted : n.found === false ? INK.red : (colours.get(n.layer) ?? INK.muted);
+  return [
+    ...partShape(n.kind, c.x, c.y, { fill: INK.panel, stroke, sw: picked || inStep ? 6 : 3, dash: n.found === false || gone, part: n.id }),
+    ...(n.change ? changeTag(n.change, c.x, c.y - BOX.h / 2 - 16) : []),
+    { t: 'text', x: c.x, y: c.y - 2, text: fit(n.label, 22, BOX.w - 20), size: 22, fill: colours.get(n.layer) ?? INK.text, bold: true, anchor: 'middle', part: n.id },
+    { t: 'text', x: c.x, y: c.y + 26, text: fit(citeText(n), 17, BOX.w - 20), size: 17, fill: n.found === false ? INK.red : INK.muted, mono: true, anchor: 'middle', part: n.id },
+  ];
+}
+
+/** The token, halfway along the step's connection, and the step in words over the legend, its payload with it. */
+function stepShapes({ m, focus, centres, step }: StructureScene, W: number, H: number): Shape[] {
+  if (!step || focus.step === undefined || focus.marks) return [];
+  const shapes: Shape[] = [];
+  const a = centres.get(step.from);
+  const b = centres.get(step.to);
+  if (a && b) shapes.push({ t: 'ellipse', cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2, rx: 13, ry: 13, fill: INK.gold });
+  const y = H - STRUCT.legend - STRUCT.strip / 2 + 8;
+  const head = `STEP ${focus.step + 1} OF ${m.trace.length} · ${step.label}`;
+  shapes.push({ t: 'text', x: 40, y, text: fit(head, 26, 760), size: 26, fill: INK.gold, bold: true });
+  if (step.payload) shapes.push({ t: 'text', x: W - 40, y, text: fit(step.payload, 21, 760), size: 21, fill: INK.gold, mono: true, anchor: 'end' });
+  return shapes;
 }
 
 /**

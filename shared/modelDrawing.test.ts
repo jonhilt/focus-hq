@@ -51,6 +51,21 @@ describe('structureView', () => {
       expect(p.y).toBeLessThan(d.h);
     }
   });
+
+  it('thickens the picked part\'s connections, and dashes the outline of a part the code check didn\'t find', () => {
+    const d = structureView(model(), { picked: 'page' });
+    expect(lines(d.shapes).filter((l) => l.arrow).map((l) => l.sw)).toEqual([5, 3]);
+    const outline = (id: string) => d.shapes.find((s) => s.t !== 'text' && s.t !== 'line' && s.part === id);
+    expect(outline('db')).toMatchObject({ dash: true });
+    expect(outline('api')).toMatchObject({ dash: false });
+  });
+
+  it('marks each connection with its steps for a page that steps by CSS, and leaves the step\'s words and token to it', () => {
+    const d = structureView(model(), { step: 0, marks: true });
+    expect(lines(d.shapes).filter((l) => l.arrow).map((l) => l.steps)).toEqual([[0, 2], [1]]);
+    expect(texts(d.shapes).some((t) => t.startsWith('STEP '))).toBe(false);
+    expect(d.shapes.some((s) => s.t === 'ellipse' && s.rx === 13)).toBe(false);
+  });
 });
 
 describe('the structure\'s legend', () => {

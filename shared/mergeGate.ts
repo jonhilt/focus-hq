@@ -37,9 +37,8 @@ export interface GateOps {
 type GatePr = Pick<PullRequest, 'headSha' | 'isDraft' | 'mergeable' | 'checks' | 'failedChecks'>;
 
 export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps): MergeStep {
-  if (!ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
-  if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
-  if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
+  const held = heldBack(pr, ops);
+  if (held) return held;
   const head = pr.headSha;
   if (!head) return { kind: 'blocked', reason: 'GitHub didn’t say which commit it’s at' };
   if (ops.developerBusy) return { kind: 'wait', reason: 'a developer is working on it' };
@@ -47,7 +46,19 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps
   if (pr.mergeable === 'CONFLICTING') {
     return mark?.kind === 'resolving' ? { kind: 'blocked', reason: 'it still conflicts after resolving' } : { kind: 'resolve-conflicts', sha: head };
   }
+  return qaStep(review, head) ?? checksStep(pr, head, mark, ops);
+}
 
+/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, the captain's, or a draft. */
+function heldBack(pr: GatePr, ops: GateOps): MergeStep | undefined {
+  if (!ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
+  if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
+  if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
+  return undefined;
+}
+
+/** What QA's review of the PR's head holds it to, or undefined once QA passed this commit with nothing for the captain. */
+function qaStep(review: QaReview | undefined, head: string): MergeStep | undefined {
   if (!review) return { kind: 'qa', reason: 'QA hasn’t tested it' };
   switch (review.status) {
     case 'queued':
@@ -65,7 +76,11 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps
   if (review.status === 'failed') return { kind: 'blocked', reason: 'QA failed it' };
   // QA found problems it couldn't prove: the captain reads its advice before it merges
   if (review.report?.advisory) return { kind: 'blocked', reason: 'QA passed it with advice for the captain to read' };
+  return undefined;
+}
 
+/** Once QA has passed it: what its checks, and the mark on its head, leave to do before it merges. */
+function checksStep(pr: GatePr, head: string, mark: GateMark | undefined, ops: GateOps): MergeStep {
   if (mark?.kind === 'refused') return { kind: 'blocked', reason: `the merge was refused: ${mark.reason}` };
   switch (pr.checks) {
     case 'pending':

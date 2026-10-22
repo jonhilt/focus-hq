@@ -1,4 +1,4 @@
-import { type Block, blocks, clip, fieldsOf, FRICTION_KINDS, type Friction, isRecord, keysOf, type LedgerEvent, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
+import { type Block, blocks, clip, fieldsOf, FRICTION_KINDS, type Friction, isRecord, keysOf, type LedgerEvent, type Line, messageFrom, resultText, transcriptLines } from '../../plugin-api/server';
 
 // What the retro's reader reads of each session's span, and what's kept of its answer. Code supplies the facts
 // (server/agents/sessionDigest.ts); at retro time a strong model reads the spans not read yet, a batch at a time, and only finds and
@@ -16,59 +16,80 @@ function callLine(b: Block): string {
   return isRecord(input) && typeof input.command === 'string' ? `Bash: ${input.command}` : `${b.name}: ${JSON.stringify(input)}`;
 }
 
+/** The span read so far: its lines (the agent's own words `spare`, dropped first), each call by its id, and what the agent last said. */
+interface Reading {
+  lines: { text: string; spare: boolean }[];
+  calls: Map<string, string>;
+  lastSaid: string;
+}
+
 /**
  * The span after `afterUuid` (to `toUuid`, when given) as the reader reads it: each message to the agent (the
  * captain's in full, with what the agent had just said), each failed call with its error, and the agent's own words;
  * then the ledger's lines on its pull requests. When it runs long, the agent's own words go first, oldest first.
  */
 export function extractionInput(jsonl: string, afterUuid: string | undefined, prLines: LedgerEvent[], toUuid?: string): string {
-  const lines: { text: string; spare: boolean }[] = [];
-  const calls = new Map<string, string>();
+  const reading: Reading = { lines: [], calls: new Map(), lastSaid: '' };
   let inSpan = !afterUuid;
-  let lastSaid = '';
   for (const line of transcriptLines(jsonl)) {
     if (!inSpan) {
       // what the agent last said before the span, in case the captain's first message in it answers it
-      if (line.type === 'assistant') for (const b of blocks(line)) if (b.type === 'text' && b.text?.trim()) lastSaid = b.text;
+      if (line.type === 'assistant') for (const b of blocks(line)) if (b.type === 'text' && b.text?.trim()) reading.lastSaid = b.text;
       inSpan = line.uuid === afterUuid;
       continue;
     }
-    const at = minute(line.timestamp);
-    if (line.type === 'assistant') {
-      for (const b of blocks(line)) {
-        if (b.type === 'tool_use' && b.id) calls.set(b.id, callLine(b));
-        else if (b.type === 'text' && b.text?.trim()) {
-          lastSaid = b.text;
-          lines.push({ text: `[${at}] AGENT: ${clip(b.text, 400)}`, spare: true });
-        }
-      }
-    } else if (line.type === 'user' && !line.isMeta) {
-      for (const b of blocks(line)) {
-        if (b.type === 'tool_result' && b.is_error) {
-          const call = (b.tool_use_id && calls.get(b.tool_use_id)) || 'a call';
-          lines.push({ text: `[${at}] FAILED ${clip(call, 200)} → ${clip(resultText(b.content).split('\n')[0] ?? '', 200)}`, spare: false });
-        }
-        if (b.type !== 'text' || !b.text?.trim()) continue;
-        const from = messageFrom(b.text);
-        if (!from) continue;
-        if (from === 'captain') {
-          lines.push({ text: `[${at}] CAPTAIN: ${clip(b.text, 1500)}${lastSaid ? `\n  (the agent had just said: “${clip(lastSaid, 300)}”)` : ''}`, spare: false });
-        } else lines.push({ text: `[${at}] ${from === 'office' ? 'OPS' : from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
-      }
-    }
+    if (line.type === 'assistant') readAgent(line, reading);
+    else if (line.type === 'user' && !line.isMeta) readToAgent(line, reading);
     if (toUuid && line.uuid === toUuid) break;
   }
-  const ledger = prLines.map((e) => {
-    const { at: _a, projectId: _p, seq: _s, kind, ...rest } = e;
-    return `LEDGER ${kind}: ${JSON.stringify(rest)}`;
-  });
-  let size = [...lines, ...ledger.map((text) => ({ text }))].reduce((n, l) => n + l.text.length + 1, 0);
-  for (let i = 0; size > BUDGET && i < lines.length; i++) {
-    if (!lines[i].spare) continue;
-    size -= lines[i].text.length + 1;
-    lines.splice(i--, 1);
+  return withinBudget(reading.lines, prLines.map(ledgerLine));
+}
+
+/** The agent's own words, and the calls it made, to name them when they fail. */
+function readAgent(line: Line, reading: Reading): void {
+  const at = minute(line.timestamp);
+  for (const b of blocks(line)) {
+    if (b.type === 'tool_use' && b.id) reading.calls.set(b.id, callLine(b));
+    else if (b.type === 'text' && b.text?.trim()) {
+      reading.lastSaid = b.text;
+      reading.lines.push({ text: `[${at}] AGENT: ${clip(b.text, 400)}`, spare: true });
+    }
   }
-  return clip([...lines.map((l) => l.text), ...(ledger.length ? ['', ...ledger] : [])].join('\n'), BUDGET);
+}
+
+/** What came back to the agent: each failed call with its error, and each message from someone (the captain's in full). */
+function readToAgent(line: Line, reading: Reading): void {
+  const at = minute(line.timestamp);
+  for (const b of blocks(line)) {
+    if (b.type === 'tool_result' && b.is_error) {
+      const call = (b.tool_use_id && reading.calls.get(b.tool_use_id)) || 'a call';
+      reading.lines.push({ text: `[${at}] FAILED ${clip(call, 200)} → ${clip(resultText(b.content).split('\n')[0] ?? '', 200)}`, spare: false });
+    }
+    if (b.type !== 'text' || !b.text?.trim()) continue;
+    const from = messageFrom(b.text);
+    if (!from) continue;
+    if (from === 'captain') {
+      const said = reading.lastSaid ? `\n  (the agent had just said: “${clip(reading.lastSaid, 300)}”)` : '';
+      reading.lines.push({ text: `[${at}] CAPTAIN: ${clip(b.text, 1500)}${said}`, spare: false });
+    } else reading.lines.push({ text: `[${at}] ${from === 'office' ? 'OPS' : from.toUpperCase()}: ${clip(b.text, from === 'compacted' ? 120 : 600)}`, spare: false });
+  }
+}
+
+function ledgerLine(e: LedgerEvent): string {
+  const { at: _a, projectId: _p, seq: _s, kind, ...rest } = e;
+  return `LEDGER ${kind}: ${JSON.stringify(rest)}`;
+}
+
+/** The span's lines then the ledger's, the agent's own words dropped oldest first until they fit the budget. */
+function withinBudget(lines: Reading['lines'], ledger: string[]): string {
+  const kept = [...lines];
+  let size = [...kept.map((l) => l.text), ...ledger].reduce((n, text) => n + text.length + 1, 0);
+  for (let i = 0; size > BUDGET && i < kept.length; i++) {
+    if (!kept[i].spare) continue;
+    size -= kept[i].text.length + 1;
+    kept.splice(i--, 1);
+  }
+  return clip([...kept.map((l) => l.text), ...(ledger.length ? ['', ...ledger] : [])].join('\n'), BUDGET);
 }
 
 const KINDS = keysOf(FRICTION_KINDS);

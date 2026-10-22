@@ -1,6 +1,6 @@
 import type { CaptainReply, LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
 import type { Agent } from '../../shared/types';
-import { type Block, blocks, messageFrom, resultText, transcriptLines } from './transcript';
+import { type Block, blocks, type Line, messageFrom, resultText, transcriptLines } from './transcript';
 
 // A digest of a span of an agent's session, from code alone: its Claude Code transcript (from the line after the last
 // digest's to the end) and the ledger's lines on its pull requests. Written when the agent goes home, when QA gives a
@@ -28,6 +28,12 @@ export interface Span {
   facts: SpanFacts;
 }
 
+/** The calls counted so far: each one's tool and input by its id, and the calls that have failed (running one again is a repeat). */
+interface Calls {
+  keys: Map<string, string>;
+  failed: Set<string>;
+}
+
 /**
  * What a transcript says from the line after `afterUuid` (from the start without one) to its end, or undefined when
  * there's nothing new. Lines that don't parse are skipped: a transcript can be mid-write.
@@ -38,9 +44,7 @@ export function transcriptSpan(jsonl: string, afterUuid?: string): Span | undefi
   let toUuid: string | undefined;
   let from: string | undefined;
   let to: string | undefined;
-  // each call's tool and input by its id, and the calls that have failed: running one of those again is a repeat
-  const callKeys = new Map<string, string>();
-  const failed = new Set<string>();
+  const calls: Calls = { keys: new Map(), failed: new Set() };
   for (const line of transcriptLines(jsonl)) {
     if (!inSpan) {
       if (line.uuid === afterUuid) inSpan = true;
@@ -51,38 +55,45 @@ export function transcriptSpan(jsonl: string, afterUuid?: string): Span | undefi
       from ??= line.timestamp;
       to = line.timestamp;
     }
-    if (line.type === 'assistant') {
-      facts.turns++;
-      for (const b of blocks(line)) {
-        if (b.type !== 'tool_use') continue;
-        facts.toolCalls++;
-        const key = callKey(b);
-        if (failed.has(key)) facts.repeatedCalls++;
-        if (b.id) callKeys.set(b.id, key);
-      }
-    } else if (line.type === 'user' && !line.isMeta) {
-      for (const b of blocks(line)) {
-        if (b.type === 'tool_result' && b.is_error) {
-          facts.failedCalls++;
-          const key = b.tool_use_id && callKeys.get(b.tool_use_id);
-          if (key) failed.add(key);
-          if (REFUSED.test(resultText(b.content))) facts.refusedCalls++;
-        }
-        if (b.type !== 'text' || !b.text?.trim()) continue;
-        const said = messageFrom(b.text);
-        if (said === 'captain') {
-          facts.captainMessages++;
-          const t = b.text.trim();
-          if (t.length <= 40 && NUDGE.test(t)) facts.nudges++;
-        } else if (said === 'office' || said === 'qa') facts.officeMessages++;
-        else if (said === 'compacted') facts.compactions++;
-      }
-    }
+    if (line.type === 'assistant') countTurn(line, facts, calls);
+    else if (line.type === 'user' && !line.isMeta) countToAgent(line, facts, calls);
   }
   if (!toUuid) return undefined;
   facts.wastedCalls = facts.failedCalls + facts.repeatedCalls;
   facts.minutes = from && to ? Math.round((Date.parse(to) - Date.parse(from)) / 60_000) : 0;
   return { afterUuid, toUuid, from, to, facts };
+}
+
+/** A turn of the agent's, and its calls: one it already saw fail is a repeat. */
+function countTurn(line: Line, facts: SpanFacts, calls: Calls): void {
+  facts.turns++;
+  for (const b of blocks(line)) {
+    if (b.type !== 'tool_use') continue;
+    facts.toolCalls++;
+    const key = callKey(b);
+    if (calls.failed.has(key)) facts.repeatedCalls++;
+    if (b.id) calls.keys.set(b.id, key);
+  }
+}
+
+/** What came back to the agent: failed and refused calls, and messages, by who sent them (a short go-on from the captain is a nudge). */
+function countToAgent(line: Line, facts: SpanFacts, calls: Calls): void {
+  for (const b of blocks(line)) {
+    if (b.type === 'tool_result' && b.is_error) {
+      facts.failedCalls++;
+      const key = b.tool_use_id && calls.keys.get(b.tool_use_id);
+      if (key) calls.failed.add(key);
+      if (REFUSED.test(resultText(b.content))) facts.refusedCalls++;
+    }
+    if (b.type !== 'text' || !b.text?.trim()) continue;
+    const said = messageFrom(b.text);
+    if (said === 'captain') {
+      facts.captainMessages++;
+      const t = b.text.trim();
+      if (t.length <= 40 && NUDGE.test(t)) facts.nudges++;
+    } else if (said === 'office' || said === 'qa') facts.officeMessages++;
+    else if (said === 'compacted') facts.compactions++;
+  }
 }
 
 /** How much of what the lead said before the captain answered is kept: its end, where it asks or hands over. */

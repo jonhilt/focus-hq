@@ -53,6 +53,27 @@ describe('extractionInput', () => {
     expect(input.endsWith('CAPTAIN: please fix the header\n  (the agent had just said: “199 ' + 'x'.repeat(296) + ' …[+94]”)')).toBe(true);
     expect(input).not.toContain('AGENT: 0 ');
   });
+
+  it('keeps every failed call and message when the span runs long, however old', () => {
+    n = 0;
+    const long = [line('user', 'fix the header'), ...Array.from({ length: 200 }, (_, i) => line('assistant', [{ type: 'text', text: `${i} ${'x'.repeat(390)}` }]))].join('\n');
+    expect(extractionInput(long, undefined, []).startsWith('[12:00] CAPTAIN: fix the header\n')).toBe(true);
+  });
+
+  it('names a failed call it never saw made as a call, and leaves out the harness’s meta lines', () => {
+    n = 0;
+    const odd = [
+      line('user', [{ type: 'tool_result', tool_use_id: 'gone', is_error: true, content: 'boom' }]),
+      JSON.stringify({ type: 'user', uuid: 'm1', isMeta: true, message: { content: 'meta words' } }),
+    ].join('\n');
+    expect(extractionInput(odd, undefined, [])).toBe('[12:00] FAILED a call → boom');
+  });
+
+  it('clips a compaction’s summary shorter than a message', () => {
+    n = 0;
+    const said = extractionInput(line('user', `This session is being continued ${'y'.repeat(300)}`), undefined, []);
+    expect(said).toBe(`[12:00] COMPACTED: This session is being continued ${'y'.repeat(88)} …[+212]`);
+  });
 });
 
 describe('checking what the reader found', () => {

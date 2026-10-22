@@ -57,6 +57,49 @@ describe('ledgerRow', () => {
     expect(ledgerRow(decided('office'))).toMatchObject({ group: 'sessions', tag: 'Captain', tone: 'info', title: 'Decided: Waiting for your reply → Ship it', detail: 'Cmdr. Vale · Engineering deck', goal: GOAL });
     expect(ledgerRow(decided('api')).detail).toBe('Cmdr. Vale · Engineering deck · via the API');
   });
+
+  it('says a closed pull request was closed, never merged', () => {
+    const closed = ev({ kind: 'closed', repo: REPO, pr: 240, by: 'officer', qa: 'passed', failedRounds: 1, triages: 2, goal: GOAL, closes: [226] }, 8);
+    expect(ledgerRow(closed)).toMatchObject({ group: 'merged', tag: 'Closed', tone: 'warn', title: 'focus #240 · by the operations officer · QA passed after 1 failed round', detail: 'Engineering deck · 2 triages' });
+  });
+
+  it('says how Ops’ merge check went, and on which commits', () => {
+    const check = (outcome: string, more: Record<string, unknown> = {}) => ev({ kind: 'merge-check', repo: REPO, pr: 241, outcome, by: 'office', ...more }, 9);
+    expect(ledgerRow(check('passed', { head: 'abcdef1234', base: '1234567890' }))).toMatchObject({ tag: 'Merge check', tone: 'ok', title: 'focus #241 · merge checked by Ops · abcdef1 onto 1234567', pr: { repo: REPO, pr: 241 } });
+    expect(ledgerRow(check('failed', { failed: 'pnpm test', goal: GOAL }))).toMatchObject({ tone: 'bad', title: 'focus #241 · merge refused, a check failed by Ops', detail: 'pnpm test · Engineering deck' });
+    expect(ledgerRow(check('overridden', { by: 'captain' }))).toMatchObject({ tone: 'warn', title: 'focus #241 · merged past the check by the captain' });
+    expect(ledgerRow(check('broken')).tone).toBe('warn');
+  });
+
+  it('says which failing checks went back, and what the operations officer did', () => {
+    expect(ledgerRow(ev({ kind: 'checks-sent-back', repo: REPO, pr: 242, checks: ['lint', 'test'], goal: GOAL }, 10))).toMatchObject({ group: 'qa', tag: 'Sent back', tone: 'warn', title: 'focus #242 · failing checks sent back: lint, test', detail: GOAL, goal: GOAL });
+    const triage = (action: string) => ev({ kind: 'triage', repo: REPO, pr: 243, officer: 'Lt. Cho', action, note: 'Flaky' }, 11);
+    expect(ledgerRow(triage('retry-qa'))).toMatchObject({ tag: 'Triage', tone: 'warn', title: 'focus #243 · Lt. Cho ran QA again', detail: 'Flaky' });
+    expect(ledgerRow(triage('escalate'))).toMatchObject({ tone: 'bad', title: 'focus #243 · Lt. Cho asked the captain' });
+  });
+
+  it('says how long a closed goal was open, and what it took', () => {
+    const goal = (days: number) => ev({ kind: 'goal-closed', goal: { id: 'g1', title: GOAL, leadName: 'Cmdr. Vale', slices: 3, prs: [{ repo: REPO, pr: 1 }], openedAt: at(0), closedAt: at(0) + days * 86_400_000 } }, 12);
+    expect(ledgerRow(goal(2))).toMatchObject({ group: 'goals', tag: 'Goal', title: `Closed: ${GOAL}`, detail: 'Cmdr. Vale · 3 slices · 1 pull request · open 2 days', goal: GOAL });
+    expect(ledgerRow(goal(0)).detail).toBe('Cmdr. Vale · 3 slices · 1 pull request · open under a day');
+  });
+
+  it('says what the captain made of a retro draft, and where it was filed', () => {
+    expect(ledgerRow(ev({ kind: 'retro-decision', title: 'Fix the demo', signatures: ['a: b', 'c: d'], accepted: true, issue: { repo: REPO, number: 226 } }, 13))).toMatchObject({ group: 'retro', tone: 'ok', title: 'Accepted: Fix the demo', detail: 'filed as focus #226 · 2 friction signatures' });
+    expect(ledgerRow(ev({ kind: 'retro-decision', title: 'Fix the demo', signatures: ['a: b'], accepted: false }, 13))).toMatchObject({ tone: 'info', title: 'Rejected: Fix the demo', detail: '1 friction signature' });
+  });
+
+  it('counts the captain’s replies to a lead', () => {
+    const replies = (n: number) => ev({ kind: 'captain-replies', key: 's1', sessionId: 's1', agent: 'Cmdr. Vale', goal: GOAL, replies: Array.from({ length: n }, () => ({ lead: 'Go?', captain: 'Yes' })) }, 14);
+    expect(ledgerRow(replies(2))).toMatchObject({ group: 'sessions', tag: 'Captain', title: '2 replies to Cmdr. Vale', detail: GOAL });
+    expect(ledgerRow(replies(0)).title).toBe('Nothing said to Cmdr. Vale');
+  });
+
+  it('says a session that isn’t on this machine wasn’t read, and one with no frictions had none', () => {
+    const read = (missing?: boolean) => ev({ kind: 'session-frictions', key: 's1', sessionId: 's1', reader: 'retro', frictions: [], missing }, 15);
+    expect(ledgerRow(read(true))).toMatchObject({ tone: 'info', title: 'Session not on this machine: not read' });
+    expect(ledgerRow(read())).toMatchObject({ tone: 'info', title: 'Nothing got in the way of a session', detail: '' });
+  });
 });
 
 describe('ledgerLog', () => {

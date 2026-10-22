@@ -1,4 +1,4 @@
-import { type ArchivedGoal, blocks, keysOf, type LedgerEvent, messageFrom, recordOf, resultText, transcriptLines } from '../../plugin-api/server';
+import { type ArchivedGoal, blocks, keysOf, type LedgerEvent, type Line, messageFrom, recordOf, resultText, transcriptLines } from '../../plugin-api/server';
 import type { CaptainReason, FlowNow, FlowState, LeadFlow, Said } from './shared';
 
 // Where a goal's time goes (README.md), from code alone: its lead's Claude Code transcript says when the lead was
@@ -60,34 +60,48 @@ export function endsWith(text: string): 'go-ahead' | 'question' | 'report' {
 /** A lead's transcript as moments, in order: the messages that start turns, the lead's own lines, and each ship's pull requests. */
 export function transcriptMoments(jsonl: string): Moment[] {
   const moments: Moment[] = [];
+  // the ids of the lead's ship calls, to read the pull requests off their results
   const ships = new Set<string>();
   for (const line of transcriptLines(jsonl)) {
     const at = line.timestamp ? Date.parse(line.timestamp) : NaN;
     if (Number.isNaN(at)) continue;
-    if (line.type === 'assistant') {
-      moments.push({ at, kind: 'activity' });
-      for (const b of blocks(line)) {
-        if (b.type === 'tool_use' && b.name === 'mcp__office__ship' && b.id) ships.add(b.id);
-        if (b.type === 'tool_use' && b.name === 'mcp__office__ask') moments.push({ at, kind: 'said', said: 'ask' });
-        if (b.type === 'tool_use' && b.name === 'mcp__office__propose_close') moments.push({ at, kind: 'said', said: 'close' });
-        if (b.type === 'text' && b.text?.trim()) moments.push({ at, kind: 'said', said: endsWith(b.text) });
-      }
-    } else if (line.type === 'user' && !line.isMeta) {
-      for (const b of blocks(line)) {
-        if (b.type === 'tool_result') {
-          const prs = b.tool_use_id && ships.has(b.tool_use_id) && !b.is_error ? [...resultText(b.content).matchAll(SHIPPED)].map((m) => ({ repo: m[1], pr: Number(m[2]) })) : [];
-          moments.push(prs.length ? { at, kind: 'ship', prs } : { at, kind: 'activity' });
-        } else if (b.type === 'text' && b.text?.trim()) {
-          const from = messageFrom(b.text);
-          if (from === 'captain') moments.push({ at, kind: 'message', from: 'captain' });
-          else if (from === 'office' || from === 'qa') moments.push({ at, kind: 'message', from: 'office', ...(b.text.startsWith('Slice ') ? { slice: true } : {}) });
-          else if (from === 'compacted') moments.push({ at, kind: 'activity' });
-          else if (b.text.trimStart().startsWith('<task-notification')) moments.push({ at, kind: 'message', from: 'background' });
-        }
-      }
-    }
+    if (line.type === 'assistant') moments.push(...leadMoments(line, at, ships));
+    else if (line.type === 'user' && !line.isMeta) moments.push(...toLeadMoments(line, at, ships));
   }
   return moments.sort((a, b) => a.at - b.at);
+}
+
+/** A line of the lead's: it at work, and anything it asked, proposed or said. */
+function leadMoments(line: Line, at: number, ships: Set<string>): Moment[] {
+  const moments: Moment[] = [{ at, kind: 'activity' }];
+  for (const b of blocks(line)) {
+    if (b.type === 'tool_use' && b.name === 'mcp__office__ship' && b.id) ships.add(b.id);
+    if (b.type === 'tool_use' && b.name === 'mcp__office__ask') moments.push({ at, kind: 'said', said: 'ask' });
+    if (b.type === 'tool_use' && b.name === 'mcp__office__propose_close') moments.push({ at, kind: 'said', said: 'close' });
+    if (b.type === 'text' && b.text?.trim()) moments.push({ at, kind: 'said', said: endsWith(b.text) });
+  }
+  return moments;
+}
+
+/** A line to the lead: its calls coming back (a ship's with the pull requests it opened), and messages starting a turn. */
+function toLeadMoments(line: Line, at: number, ships: Set<string>): Moment[] {
+  return blocks(line).flatMap((b): Moment[] => {
+    if (b.type === 'tool_result') {
+      const prs = b.tool_use_id && ships.has(b.tool_use_id) && !b.is_error ? [...resultText(b.content).matchAll(SHIPPED)].map((m) => ({ repo: m[1], pr: Number(m[2]) })) : [];
+      return [prs.length ? { at, kind: 'ship', prs } : { at, kind: 'activity' }];
+    }
+    return b.type === 'text' && b.text?.trim() ? messageMoments(b.text, at) : [];
+  });
+}
+
+/** A message to the lead, by who it's from: the captain, Ops (QA too), a background task, or a compaction (the lead at work). */
+function messageMoments(text: string, at: number): Moment[] {
+  const from = messageFrom(text);
+  if (from === 'captain') return [{ at, kind: 'message', from: 'captain' }];
+  if (from === 'office' || from === 'qa') return [{ at, kind: 'message', from: 'office', ...(text.startsWith('Slice ') ? { slice: true } : {}) }];
+  if (from === 'compacted') return [{ at, kind: 'activity' }];
+  if (text.trimStart().startsWith('<task-notification')) return [{ at, kind: 'message', from: 'background' }];
+  return [];
 }
 
 export interface GoalFlow {
