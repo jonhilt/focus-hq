@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
+import path from 'node:path';
 import { seededRandom } from '../shared/random';
 
 export class CommandError extends Error {
@@ -118,4 +119,13 @@ export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms))
 
 export function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+/**
+ * `name`'s file in `dir`. Names come from requests (`/api/agents/:id/...`), so one that isn't a plain file name, like
+ * `../x` (sent as `..%2fx`), is refused rather than read from, or truncated, outside `dir`.
+ */
+export function fileIn(dir: string, name: string): string {
+  if (!name || name !== path.basename(name) || name.includes('\\') || name === '.' || name === '..') throw new Error(`Not a file name: ${name}`);
+  return path.join(dir, name);
 }

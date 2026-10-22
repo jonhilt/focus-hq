@@ -36,11 +36,14 @@ export function linkedPrs(pr: PullRequest, board: Pick<Board, 'issues' | 'prs'>)
 }
 
 /**
- * What ▶ Preview on `pr` runs: `pr` in its own repo and, in every other repo, the most recently updated PR linked to it,
- * or the default branch. A PR with no feature gets only itself.
+ * What ▶ Preview on `pr` runs: `pr` in its own repo and, in every other repo, the most recently updated PR linked to it
+ * by the same known author, or the default branch. A PR with no feature gets only itself. Anyone can open a PR saying
+ * "Closes #N", and a preview runs its code with the captain's own environment, so one by somebody else comes along only
+ * when the captain picks it (chosenSet).
  */
 export function previewSet(pr: PullRequest, board: Pick<Board, 'issues' | 'prs'>, repos: string[]): PreviewSet {
-  const linked = linkedPrs(pr, board);
+  // an author GitHub couldn't name (a deleted account) is nobody's in particular, so nothing comes along with it
+  const linked = pr.author === undefined ? [] : linkedPrs(pr, board).filter((l) => l.author === pr.author);
   const set: PreviewSet = { [pr.repo]: pr.number };
   for (const repo of repos) if (repo !== pr.repo) set[repo] = linked.find((l) => l.repo === repo)?.number ?? null;
   return set;

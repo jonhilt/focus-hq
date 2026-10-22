@@ -28,6 +28,7 @@ const pr = (repo: string, number: number, closes: number[], updatedAt?: string):
   closes,
   createdAt: '2026-10-01T00:00:00Z',
   updatedAt,
+  author: 'captain',
 });
 
 const issues = [issue('acme/api', 5, ['feature:x']), issue('acme/web', 3, ['enhancement', 'Feature:X']), issue('acme/admin', 2, ['bug'])];
@@ -69,6 +70,22 @@ describe('previewSet', () => {
   it('falls back to the highest PR number when it can’t tell which was updated last', () => {
     const prs = [apiPr, pr('acme/web', 15, [3], '2026-10-04T00:00:00Z'), pr('acme/web', 20, [3])];
     expect(previewSet(apiPr, { issues, prs }, REPOS)['acme/web']).toBe(20);
+  });
+
+  it('brings along only the same author’s PRs: somebody else’s waits to be picked', () => {
+    const mine = { ...apiPr, author: 'captain' };
+    const stranger = { ...pr('acme/web', 30, [3], '2026-10-09T00:00:00Z'), author: 'stranger' };
+    const own = { ...pr('acme/web', 15, [3], '2026-10-04T00:00:00Z'), author: 'captain' };
+    expect(previewSet(mine, { issues, prs: [mine, stranger] }, REPOS)['acme/web']).toBeNull();
+    expect(previewSet(mine, { issues, prs: [mine, stranger, own] }, REPOS)['acme/web']).toBe(15);
+    expect(chosenSet(mine, { issues, prs: [mine, stranger, own] }, REPOS, { 'acme/web': 30 })['acme/web']).toBe(30);
+  });
+
+  it('brings nothing along for a PR whose author GitHub couldn’t name, not even another such PR', () => {
+    const nobodys = { ...apiPr, author: undefined };
+    const stranger = { ...pr('acme/web', 30, [3]), author: undefined };
+    expect(previewSet(nobodys, { issues, prs: [nobodys, stranger] }, REPOS)['acme/web']).toBeNull();
+    expect(previewSet(nobodys, { issues, prs: [nobodys, webPr] }, REPOS)['acme/web']).toBeNull();
   });
 
   it('links through any of an issue’s features', () => {

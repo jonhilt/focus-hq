@@ -21,7 +21,7 @@ import { machinePath, machineRuns } from './agents/machines';
 import type { MachineRun, MachineStep } from '../shared/machines';
 import type { LentJournals } from './plugins/contract';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
-import { newId } from './util';
+import { fileIn, newId } from './util';
 import { changeProject } from './projectChange';
 
 /**
@@ -466,7 +466,7 @@ export class Store {
     if (buffer.length > MEMORY_LINES) buffer.splice(0, buffer.length - MEMORY_LINES);
     this.lines.set(id, buffer);
     if (this.persist && persist) {
-      fs.appendFile(path.join(paths.logs, `${id}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n') + '\n', () => undefined);
+      fs.appendFile(fileIn(paths.logs, `${id}.jsonl`), lines.map((l) => JSON.stringify(l)).join('\n') + '\n', () => undefined);
     }
   }
 
@@ -481,7 +481,7 @@ export class Store {
   async allLines(id: string): Promise<TermLine[]> {
     if (!this.persist) return this.lines.get(id) ?? [];
     try {
-      await fsp.access(path.join(paths.logs, `${id}.jsonl`));
+      await fsp.access(fileIn(paths.logs, `${id}.jsonl`));
     } catch {
       return this.lines.get(id) ?? [];
     }
@@ -490,7 +490,7 @@ export class Store {
 
   private readLog(id: string, max: number): TermLine[] {
     try {
-      const text = fs.readFileSync(path.join(paths.logs, `${id}.jsonl`), 'utf8');
+      const text = fs.readFileSync(fileIn(paths.logs, `${id}.jsonl`), 'utf8');
       return text
         .split('\n')
         .filter(Boolean)

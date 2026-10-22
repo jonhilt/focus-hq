@@ -68,6 +68,16 @@ describe('Store on disk', () => {
     expect(later.run('journaled')).toEqual({ inbox: [], later: [], notes: [], owed: [], turns: 0, phase: 'idle', seq: 4 });
   });
 
+  it('reads an agent’s log and run journal only from its own folder, whatever id a request names', async () => {
+    // not loaded: reading needs no lock on the data folder
+    const store = new Store(true);
+    fs.writeFileSync(path.join(dir, 'outside.jsonl'), '{"text":"not yours"}\n');
+    for (const id of ['../outside', '..\\outside']) {
+      expect(await store.allLines(id)).toEqual([]);
+      expect(() => store.journalEntries(id)).toThrow(/Not a file name/);
+    }
+  });
+
   it('lists the journals written to since a time, a review’s by its pull request', () => {
     const store = new Store(true);
     store.load();

@@ -36,6 +36,13 @@ describe('refusal', () => {
     expect(refusal({ host: 'localhost:4477', origin: 'https://localhost.evil.example' }, local)).toBeDefined();
   });
 
+  it('refuses a page from another app on this machine, or another machine on a tailnet', () => {
+    expect(refusal({ host: 'localhost:4477', origin: 'http://localhost:3000' }, local)).toMatch(/pages from http:\/\/localhost:3000/);
+    expect(refusal({ host: 'localhost:4477', origin: 'http://127.0.0.1:4477' }, local)).toBeDefined();
+    expect(refusal({ host: 'mac.tailnet.ts.net', origin: 'https://evil.ts.net' }, local)).toMatch(/pages from https:\/\/evil\.ts\.net/);
+    expect(refusal({ host: 'localhost:4477', origin: 'https://mac.tailnet.ts.net' }, local)).toBeDefined();
+  });
+
   it('lets scripts and curl in with no Origin, on a known host', () => {
     expect(refusal({ host: 'localhost:4477' }, local)).toBeUndefined();
   });
@@ -46,6 +53,7 @@ describe('allowedHosts', () => {
     const hosts = allowedHosts('focus.lan', 'Office.Example, .corp.example', machine);
     expect(refusal({ host: 'focus.lan:4477' }, hosts)).toBeUndefined();
     expect(refusal({ host: 'office.example' }, hosts)).toBeUndefined();
+    expect(refusal({ host: 'Office.Example', origin: 'https://office.example' }, hosts)).toBeUndefined();
     expect(refusal({ host: 'me.corp.example', origin: 'https://me.corp.example' }, hosts)).toBeUndefined();
     expect(refusal({ host: '192.168.1.20:4477' }, hosts)).toBeDefined();
   });

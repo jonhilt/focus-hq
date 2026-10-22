@@ -48,7 +48,8 @@ const allowed = (name: string, hosts: AllowedHosts) => hosts.names.has(name) || 
 /**
  * Why a request to Focus is refused, or undefined to let it through. Focus has no login, so it only answers
  * the captain's own browser: a `Host` it doesn't know is another site's name pointed at this machine (DNS rebinding),
- * and an `Origin` it doesn't know is another site's page (or a sandboxed one, `null`, like a lead's artifact) trying
+ * and a page from anywhere but Focus itself, the very name and port the request came to, is another site's (another
+ * app on a localhost port, another machine under `.ts.net`, or a sandboxed page, `null`, like a lead's artifact) trying
  * to drive it. Requests with no `Origin` (same-origin page loads, curl, scripts) need only the `Host`.
  */
 export function refusal(headers: { host?: string; origin?: string }, hosts: AllowedHosts): string | undefined {
@@ -56,11 +57,11 @@ export function refusal(headers: { host?: string; origin?: string }, hosts: Allo
   if (headers.origin === undefined) return undefined;
   let origin: string;
   try {
-    origin = hostname(new URL(headers.origin).host);
+    origin = new URL(headers.origin).host.toLowerCase();
   } catch {
     return `Focus doesn't answer pages from ${headers.origin}`;
   }
-  if (!origin || !allowed(origin, hosts)) return `Focus doesn't answer pages from ${headers.origin}`;
+  if (origin !== headers.host.toLowerCase()) return `Focus doesn't answer pages from ${headers.origin}`;
   return undefined;
 }
 

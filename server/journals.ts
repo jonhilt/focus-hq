@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { journalLine, readJournal } from './agents/runJournal';
+import { fileIn } from './util';
 
 // Append-only journals of one kind (agents' runs, QA reviews, leads' slices), a file each in one folder: each fact is
 // numbered, written and flushed to disk (fsync) before `append` returns, and never rewritten. What a journal adds up to
@@ -64,7 +65,7 @@ export class Journals<F extends { kind: string }, S extends { seq: number }> {
   }
 
   private file(key: string): string {
-    return path.join(this.folder.dir, `${this.folder.name(key)}.jsonl`);
+    return fileIn(this.folder.dir, `${this.folder.name(key)}.jsonl`);
   }
 
   private keep(key: string, entry: Stamped<F>): void {

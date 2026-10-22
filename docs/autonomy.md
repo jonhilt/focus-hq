@@ -19,4 +19,6 @@ Local sessions are always started able to switch: bypassing permissions is allow
 
 None of these is a sandbox. Agents run as you, on your machine, with your `gh` credentials. Treat full autonomy accordingly.
 
+Raise your hand stops an agent's honest mistakes, not one steered by what it reads. Its commands that never ask include `curl`, `node` and `python3`, and Focus answers any request to its own address that no other site's page sent (`server/hostGuard.ts`), so an agent told to by an issue's or a comment's text can give itself full autonomy without raising its hand. Treat an agent working on text from someone you don't trust as having full autonomy.
+
 Cloud agents run in a cloud VM rather than on your machine, but they push to GitHub as you. In Raise your hand mode, the one push they may make without asking is `git push origin HEAD:<their branch>`. GitHub access from a cloud session doesn't limit which branches can be pushed, so use branch protection on GitHub for anything that matters.
