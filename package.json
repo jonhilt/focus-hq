@@ -35,6 +35,7 @@
     "card-replay": "tsx plugins/chief-of-staff/scripts/cardReplay.ts",
     "jev-backtest": "tsx plugins/chief-of-staff/scripts/jevBacktest.ts",
     "jev-sweep": "tsx plugins/chief-of-staff/scripts/jevSweep.ts",
+    "jev-fresh": "tsx plugins/chief-of-staff/scripts/jevFresh.ts",
     "claude-streams": "tsx tools/claudeStreams.ts",
     "fence:lower": "tsx plugins/scorecard/scripts/fenceLower.ts"
   },

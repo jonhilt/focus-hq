@@ -6,6 +6,7 @@
 //   pnpm run jev-backtest --dry-run        what it would send: the call count, one request in full, the cost
 //   pnpm run jev-backtest                  every turn of backtest/test.json and the blind sample (needs TYPESAFE_API_KEY)
 //   pnpm run jev-backtest --limit 5        the first five not yet answered
+//   pnpm run jev-backtest --set fresh      the fresh sample (`jev-fresh`), into fresh/ instead
 //
 // Answers go to `<data>/chief-of-staff/backtest/<questions version>-raw.jsonl`, a line a turn; a rerun skips the
 // turns already there. It stops before it would spend more than $1.
@@ -31,7 +32,10 @@ if (!(limit > 0)) throw new Error('--limit takes a number of turns');
 
 const data = path.resolve(process.env.FOCUS_DATA_DIR ?? path.join(os.homedir(), '.focus'));
 const cos = path.join(data, 'chief-of-staff');
-const out = path.join(cos, 'backtest', `${JEV_QUESTIONS_VERSION}-raw.jsonl`);
+// The backtest's held-out turns and blind sample, or with --set fresh the fresh sample `jev-fresh` picked.
+const freshSet = args.includes('--set') && args[args.indexOf('--set') + 1] === 'fresh';
+const folder = path.join(cos, freshSet ? 'fresh' : 'backtest');
+const out = path.join(folder, `${JEV_QUESTIONS_VERSION}-raw.jsonl`);
 const readJson = (file: string): unknown => JSON.parse(readFileSync(file, 'utf8'));
 const readLines = (file: string): unknown[] => parseJsonLines(readFileSync(file, 'utf8'));
 const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : []);
@@ -44,8 +48,11 @@ const ordersFile = path.join(data, 'plugins', 'chief-of-staff', 'standing-orders
 const orders = existsSync(ordersFile) ? readFileSync(ordersFile, 'utf8') : undefined;
 const questions = routeQuestions(orders);
 
-const wanted = [...new Set([...strings(readJson(path.join(cos, 'backtest', 'test.json'))), ...strings(readJson(path.join(cos, 'blind-sample.json')))])];
-const turns = new Map(readLines(path.join(cos, 'replies.jsonl')).map((r) => [field(r, 'id') ?? '', { goal: field(r, 'goal'), lead: field(r, 'lead') ?? '' }]));
+const wanted = freshSet
+  ? strings(readJson(path.join(folder, 'sample.json')))
+  : [...new Set([...strings(readJson(path.join(cos, 'backtest', 'test.json'))), ...strings(readJson(path.join(cos, 'blind-sample.json')))])];
+const turnsFile = freshSet ? path.join(folder, 'turns.jsonl') : path.join(cos, 'replies.jsonl');
+const turns = new Map(readLines(turnsFile).map((r) => [field(r, 'id') ?? '', { goal: field(r, 'goal'), lead: field(r, 'lead') ?? '' }]));
 const done = new Set(existsSync(out) ? readLines(out).map((r) => field(r, 'id')) : []);
 const todo = wanted.filter((id) => turns.has(id) && !done.has(id)).slice(0, limit);
 const missing = wanted.filter((id) => !turns.has(id));

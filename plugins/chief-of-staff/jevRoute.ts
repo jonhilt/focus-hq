@@ -212,6 +212,12 @@ export interface BlindScore {
   agree: number;
   caught: number;
   captainsInterrupts: number;
+  /** Routes that are the label's own bucket, route 4 counting as bucket 1 (`agreesWithLabel`). */
+  agreeMapped: number;
+  /** The captain's 3s routed to carry on: missed silently. */
+  silent: number;
+  /** Turns it interrupted the captain on. */
+  interrupts: number;
 }
 
 /**
@@ -220,16 +226,21 @@ export interface BlindScore {
  * that judged fewer).
  */
 export function scoreBlind(routes: ReadonlyMap<string, CosRoute>, sample: readonly string[], captain: string, only?: ReadonlySet<string>): BlindScore {
-  const pairs = captain.split(/\s+/).filter(Boolean).flatMap((pair) => {
+  const pairs = captain.split(/\s+/).filter(Boolean).flatMap((pair): { bucket: 1 | 2 | 3; route: CosRoute }[] => {
     const [n, bucket] = pair.split(':').map(Number);
     const id = sample[n - 1];
     const route = id === undefined ? undefined : routes.get(id);
-    return route === undefined || ![1, 2, 3].includes(bucket) || (only && !only.has(id)) ? [] : [{ bucket, route }];
+    const label = bucket === 1 || bucket === 2 || bucket === 3 ? bucket : undefined;
+    if (route === undefined || label === undefined || (only && !only.has(id))) return [];
+    return [{ bucket: label, route }];
   });
   return {
     judged: pairs.length,
     agree: pairs.filter((p) => p.bucket === p.route).length,
     caught: pairs.filter((p) => p.bucket === 3 && p.route === 3).length,
     captainsInterrupts: pairs.filter((p) => p.bucket === 3).length,
+    agreeMapped: pairs.filter((p) => agreesWithLabel(p.bucket, p.route)).length,
+    silent: pairs.filter((p) => p.bucket === 3 && p.route === 1).length,
+    interrupts: pairs.filter((p) => p.route === 3).length,
   };
 }

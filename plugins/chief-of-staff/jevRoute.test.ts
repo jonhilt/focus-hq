@@ -96,13 +96,17 @@ describe('scoring', () => {
 describe('scoreBlind', () => {
   const routes = new Map<string, CosRoute>([['a', 3], ['b', 2], ['c', 1]]);
   it('counts the same bucket and the captain’s 3s caught, over the sample’s turns that were judged', () => {
-    expect(scoreBlind(routes, ['a', 'b', 'c', 'd'], '1:3 2:3 3:1 4:3')).toEqual({ judged: 3, agree: 2, caught: 1, captainsInterrupts: 2 });
+    expect(scoreBlind(routes, ['a', 'b', 'c', 'd'], '1:3 2:3 3:1 4:3')).toEqual({ judged: 3, agree: 2, caught: 1, captainsInterrupts: 2, agreeMapped: 2, silent: 0, interrupts: 1 });
+  });
+  it('counts route 4 as bucket 1, and a captain’s 3 carried on as a silent miss', () => {
+    const r = new Map<string, CosRoute>([['a', 4], ['b', 1]]);
+    expect(scoreBlind(r, ['a', 'b'], '1:1 2:3')).toMatchObject({ agree: 0, agreeMapped: 1, silent: 1, interrupts: 0 });
   });
   it('skips a label with no bucket', () => {
-    expect(scoreBlind(routes, ['a', 'b'], '1:3 2:')).toEqual({ judged: 1, agree: 1, caught: 1, captainsInterrupts: 1 });
+    expect(scoreBlind(routes, ['a', 'b'], '1:3 2:')).toEqual({ judged: 1, agree: 1, caught: 1, captainsInterrupts: 1, agreeMapped: 1, silent: 0, interrupts: 1 });
   });
   it('narrows to the turns asked for', () => {
-    expect(scoreBlind(routes, ['a', 'b', 'c'], '1:3 2:3 3:1', new Set(['b']))).toEqual({ judged: 1, agree: 0, caught: 0, captainsInterrupts: 1 });
+    expect(scoreBlind(routes, ['a', 'b', 'c'], '1:3 2:3 3:1', new Set(['b']))).toEqual({ judged: 1, agree: 0, caught: 0, captainsInterrupts: 1, agreeMapped: 0, silent: 0, interrupts: 0 });
   });
 });
 
