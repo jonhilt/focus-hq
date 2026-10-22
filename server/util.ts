@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import path from 'node:path';
 import { seededRandom } from '../shared/random';
+import { withoutSecrets } from './secrets';
 
 export class CommandError extends Error {
   constructor(
@@ -21,7 +22,7 @@ export function run(cmd: string, args: string[], opts: { cwd?: string; input?: s
     const child = execFile(
       cmd,
       args,
-      { cwd: opts.cwd, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeoutMs ?? 5 * 60_000, env: process.env },
+      { cwd: opts.cwd, maxBuffer: 64 * 1024 * 1024, timeout: opts.timeoutMs ?? 5 * 60_000, env: withoutSecrets() },
       (err, stdout, stderr) => {
         if (err) {
           const detail = (stderr || err.message).trim().split('\n').slice(-6).join('\n');

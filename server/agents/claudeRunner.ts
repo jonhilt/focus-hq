@@ -16,6 +16,7 @@ import { WorkflowPermits, workflowAsk } from './workflows';
 import { BackgroundTracker } from './backgroundTasks';
 import { bundledClaude, openTerminal, readTerminal } from './terminal';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest, LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
+import { withoutSecrets } from '../secrets';
 
 /** Feeds user messages into a streaming-input query; lets the manager talk to a running agent. */
 class InputQueue implements AsyncIterable<SDKUserMessage> {
@@ -230,13 +231,13 @@ export function toolPermission(
 /**
  * The environment every Claude Code session gets. Agents run on your Claude login, not on an API key that happens to
  * be in the environment, unless Focus says the key's in use (`keyFallback`): always, or while your plan's usage
- * limit is reached.
+ * limit is reached. Focus's own secrets (the bot's token, say) are left out (`withoutSecrets`).
  */
 export function agentEnv(onKey = keyFallback.onKey()): Record<string, string | undefined> {
   // Claude Code's task tools (TaskCreate, TaskUpdate, TaskList): on newer models a session only has them when asked
   // for, which the SDK's docs advise when the app reads them, as Focus does: it follows each agent's task list
   // (`tasks.ts`), and draws a lead's on its goal's chart
-  const env: Record<string, string | undefined> = { ...process.env, CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
+  const env: Record<string, string | undefined> = { ...withoutSecrets(), CLAUDE_AGENT_SDK_CLIENT_APP: 'focus/0.1.0', CLAUDE_CODE_ENABLE_TODO_TOOLS: '1' };
   if (!onKey) delete env.ANTHROPIC_API_KEY;
   return env;
 }

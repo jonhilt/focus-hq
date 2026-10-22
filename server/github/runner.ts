@@ -1,5 +1,6 @@
 import { execFile, type ExecFileException } from 'node:child_process';
 import { Context, Data, Effect, Layer, Schema } from 'effect';
+import { withoutSecrets } from '../secrets';
 
 const TIMEOUT_MS = 120_000;
 
@@ -73,7 +74,7 @@ export class GhRunner extends Context.Service<GhRunner, {
   static readonly layer = Layer.succeed(GhRunner, GhRunner.of({
     run: (args, input) =>
       Effect.callback<string, GhCommandError>((resume, signal) => {
-        const child = execFile('gh', args, { maxBuffer: 64 * 1024 * 1024, env: process.env, signal }, (err, stdout, stderr) => {
+        const child = execFile('gh', args, { maxBuffer: 64 * 1024 * 1024, env: withoutSecrets(), signal }, (err, stdout, stderr) => {
           resume(err ? Effect.fail(classify(args, err, stderr)) : Effect.succeed(stdout));
         });
         if (input !== undefined) child.stdin?.end(input);

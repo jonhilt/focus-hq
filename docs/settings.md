@@ -14,7 +14,7 @@ Held in `server/secretsInvariants.test.ts`, `server/secrets.test.ts`, `server/se
 
 - What you set in Settings is kept across a restart, and what you clear stays cleared.
 - A secret is never sent to a browser: Focus's info says only where each comes from (and the webhook's host).
-- A secret is never put in Focus's environment, which every agent's session is handed a copy of.
+- A secret is never put in Focus's environment, which every agent's session is handed a copy of; and one set there by hand (a shell profile, a server's env file) isn't handed on to what Focus starts: agents, a preview's dev server, a pull request's checks, git and gh (`withoutSecrets`).
 - The file is readable by its owner alone, and changing one name from Settings keeps the rest of it (comments, other names) as it was.
 - An environment variable wins. Settings refuses to change a secret one sets; for a setting (`SETTINGS_ENV`), Focus goes by `settingsInForce`, whatever's saved, and Settings shows it as set there, its field locked (`settingsPinned`).
 

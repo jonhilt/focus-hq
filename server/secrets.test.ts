@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseSecrets, Secrets, withSecret } from './secrets';
+import { parseSecrets, Secrets, withoutSecrets, withSecret } from './secrets';
 
 describe('the secrets file’s text', () => {
   it('starts with a line saying what it is, and adds a name at the end', () => {
@@ -55,5 +55,13 @@ describe('the secrets file', () => {
     const before = process.env.FOCUS_BOT_WEBHOOK;
     new Secrets(file()).set('FOCUS_BOT_WEBHOOK', 'https://hook.example/s3cret');
     expect(process.env.FOCUS_BOT_WEBHOOK).toBe(before);
+  });
+});
+
+describe('what Focus hands what it starts', () => {
+  it('leaves out its own secrets, and keeps everything else', () => {
+    const env = { FOCUS_BOT_TOKEN: 't', FOCUS_BOT_WEBHOOK: 'https://h/s3cret', FOCUS_BOT_WEBHOOK_AUTH: 'Bearer x', FOCUS_PUBLIC_URL: 'https://f', PATH: '/bin', HOME: '/h' };
+    expect(withoutSecrets(env)).toEqual({ FOCUS_PUBLIC_URL: 'https://f', PATH: '/bin', HOME: '/h' });
+    expect(env.FOCUS_BOT_TOKEN).toBe('t');
   });
 });

@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { kokoro } from './config';
 import type { FromSpeechWorker, ToSpeechWorker } from './speech';
+import { withoutSecrets } from './secrets';
 import { fieldsOf } from '../shared/records';
 
 // The processes Kokoro can run in, for server/speech.ts: on the Apple GPU through mlx-audio (server/speechMlx.py),
@@ -98,7 +99,7 @@ export function gpuKokoro(uv: string): SpeechHelper {
       const args = ['run', '--quiet', '--no-project', '--python', '3.12', ...MLX_PACKAGES.flatMap((p) => ['--with', p]), 'python', path.join(here, 'speechMlx.py')];
       const child = spawn(uv, args, {
         stdio: ['pipe', 'pipe', 'ignore'],
-        env: { ...process.env, HF_HOME: kokoro.gpuDir, HF_HUB_DISABLE_PROGRESS_BARS: '1', TOKENIZERS_PARALLELISM: 'false' },
+        env: { ...withoutSecrets(), HF_HOME: kokoro.gpuDir, HF_HUB_DISABLE_PROGRESS_BARS: '1', TOKENIZERS_PARALLELISM: 'false' },
       });
       createInterface({ input: child.stdout }).on('line', (line) => {
         const message = fromHelperLine(line);

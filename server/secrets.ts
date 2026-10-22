@@ -10,6 +10,16 @@ import { parseEnv } from 'node:util';
 export const SECRET_NAMES = ['FOCUS_BOT_TOKEN', 'FOCUS_BOT_WEBHOOK', 'FOCUS_BOT_WEBHOOK_AUTH'] as const;
 export type SecretName = (typeof SECRET_NAMES)[number];
 
+/**
+ * The environment, without the secrets of Focus's own (SECRET_NAMES) that may be set in it: what Focus hands anything
+ * it starts (agents' sessions, a preview's dev server, a pull request's checks, git and gh), none of which needs them.
+ */
+export function withoutSecrets(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const rest = { ...env };
+  for (const name of SECRET_NAMES) delete rest[name];
+  return rest;
+}
+
 export const isSecretName = (name: unknown): name is SecretName => SECRET_NAMES.some((n) => n === name);
 
 const HEADER = '# Focus\'s secrets (docs/settings.md): set from Settings in the ready room, or here by hand (read as Focus starts).\n';

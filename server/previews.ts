@@ -13,6 +13,7 @@ import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
 import { exitVerdict, linksVerdict, stackVerdict } from './previewVerdicts';
 import { errorMessage, truncate } from './util';
+import { withoutSecrets } from './secrets';
 
 const LOG_LINES = 600;
 const WINDOWS = process.platform === 'win32';
@@ -765,7 +766,7 @@ function shellQuote(value: string): string {
 }
 
 function previewEnv(port: number, auto: boolean): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, FOCUS_PREVIEW_PORT: String(port), BROWSER: 'none', NO_COLOR: '1', FORCE_COLOR: '0' };
+  const env: NodeJS.ProcessEnv = { ...withoutSecrets(), FOCUS_PREVIEW_PORT: String(port), BROWSER: 'none', NO_COLOR: '1', FORCE_COLOR: '0' };
   // Focus's own PORT/HOST must not leak into the site. Auto-detected Node apps get PORT (Next, Express, CRA…);
   // a project's own command doesn't, so a CLI starting several sites doesn't hand them all one port.
   delete env.PORT;
