@@ -37,8 +37,8 @@ class BriefingScreen implements ScreenPart {
   }
 }
 
-/** The writer's card: which model writes a lead's brief up, how hard it thinks, and fast mode, where the model has it. */
-function writerCard(ui: Ui): HTMLElement {
+/** The writer's settings: which model writes a lead's brief up, how hard it thinks, and fast mode, where the model has it. */
+function writerSettings(ui: Ui): HTMLElement[] {
   const state = pluginState<BriefingsState>(BRIEFINGS) ?? freshBriefings();
   const w = state.writer;
   const set = (patch: Partial<WriterSetting>) => void callPlugin<BriefingsState>(BRIEFINGS, '/writer', patch).catch((err: Error) => ui.error(err.message));
@@ -52,11 +52,18 @@ function writerCard(ui: Ui): HTMLElement {
   const fast = new Switch('Fast', w.fast, { title: 'Fast mode: quicker briefings at twice the price per token. Only Opus has it: on another model it’s left off.', changed: (on) => set({ fast: on }) });
   // the leads' own model may be Opus, so fast is only out of reach once another model's picked
   fast.el.disabled = w.model !== '' && !hasFast(w.model);
-  return h('div', { class: 'card briefings-writer' },
-    h('div', { class: 'row' }, h('strong', { class: 'grow' }, 'Briefings', h('span', { class: 'muted' }, ' · writer')), fast.el),
+  return [
+    h('div', { class: 'row' }, h('span', { class: 'grow' }, 'Writer'), fast.el),
     h('div', { class: 'row' }, model, effort),
     h('small', { class: 'muted' }, state.last ? `Last brief: ${writtenHow(state.last)}.` : 'Leads send a brief and the writer writes the explainer, or they write it themselves.'),
-  );
+  ];
+}
+
+/** The writer's card on the engineering panel: its settings, as the Plugins tab has them. */
+function writerCard(ui: Ui): HTMLElement {
+  const [head, ...rest] = writerSettings(ui);
+  head?.firstElementChild?.replaceWith(h('strong', { class: 'grow' }, 'Briefings', h('span', { class: 'muted' }, ' · writer')));
+  return h('div', { class: 'card briefings-writer' }, head ?? null, ...rest);
 }
 
 const briefings: ClientPlugin = {
@@ -67,7 +74,7 @@ const briefings: ClientPlugin = {
     adds: [
       'The leads’ explain tool, in projects it’s on for',
       'A voice-over for explainers up close',
-      'The writer’s model setting on the engineering panel',
+      'The writer’s model, effort and speed, here and on the engineering panel',
     ],
     cost: 'per-turn',
     costDetail: 'Its explain tool’s long description is read on every turn of every lead in the projects it’s on for. When a lead sends a brief instead of writing the explainer, Ops’ writer writes it on the model you set.',
@@ -75,6 +82,7 @@ const briefings: ClientPlugin = {
   project: { label: 'Briefings', about: 'Leads can walk you through a concept with an animated explainer on their station’s screen, narrated in their voice.' },
   screen: (view) => new BriefingScreen(view),
   engineering: { card: writerCard },
+  settings: writerSettings,
 };
 
 export default briefings;

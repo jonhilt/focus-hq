@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, Project } from '../../shared/types';
-import { type ClientPlugin, everyGoalButtons, goalClaim, goalHolders, goalsFor, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, projectSettings } from './plugins';
+import { type ClientPlugin, everyGoalButtons, goalClaim, goalHolders, goalsFor, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, pluginSettings, projectSettings } from './plugins';
 import type { Ui } from './ui/context';
 import { hailStat } from './ui/hails';
 
@@ -22,6 +22,18 @@ describe('a plugin’s stat on the HUD', () => {
     ];
     expect(hudStats(plugins)).toEqual([{ text: '3 open' }, { text: '1 waiting', el }]);
     expect(error).toHaveBeenCalledWith('The broken plugin\'s HUD stat failed', expect.any(Error));
+    error.mockRestore();
+  });
+});
+
+describe('a plugin’s own settings', () => {
+  it('are what it gives, none when it has none, and none, logged, when they throw', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const el = document.createElement('div');
+    expect(pluginSettings({ id: 'set', settings: () => [el] }, ui)).toEqual([el]);
+    expect(pluginSettings({ id: 'bare' }, ui)).toEqual([]);
+    expect(pluginSettings({ id: 'broken', settings: () => { throw new Error('no state'); } }, ui)).toEqual([]);
+    expect(error).toHaveBeenCalledWith('The broken plugin\'s settings failed', expect.any(Error));
     error.mockRestore();
   });
 });

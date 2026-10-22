@@ -22,11 +22,15 @@ export function pluginChoice(env: string | undefined, demo: boolean, saved: read
   return { names: saved ? [...saved] : [], pinnedBy: null };
 }
 
-/** Whether the captain's choice differs from what Focus started with, so it takes a restart to apply (order aside). */
-export function restartPending(startedWith: readonly string[], chosen: readonly string[] | undefined): boolean {
+/**
+ * Whether the captain's choice differs from what Focus started with, so it takes a restart to apply (order aside). A
+ * plugin chosen that isn't among `available` (gone from plugins/, or failing to load) can't start, so a restart wouldn't
+ * change it, and doesn't count.
+ */
+export function restartPending(startedWith: readonly string[], chosen: readonly string[] | undefined, available: readonly AvailablePlugin[]): boolean {
   if (!chosen) return false;
   const now = new Set(startedWith);
-  const next = new Set(chosen);
+  const next = new Set(chosen.filter((id) => available.some((a) => a.id === id)));
   return now.size !== next.size || [...next].some((id) => !now.has(id));
 }
 

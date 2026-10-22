@@ -90,6 +90,8 @@ export function openManagerPanel(ui: Ui, tab: ManagerTab = state.projects.length
     body.querySelector('.personal-entries')?.replaceChildren(...personalEntries(ui));
   }));
   ui.panels.own(state.on('info', () => (current === 'settings' || current === 'plugins') && !body.contains(document.activeElement) && show(current)));
+  // a plugin's own settings, as its state changes
+  ui.panels.own(state.on('plugin', () => current === 'plugins' && !body.contains(document.activeElement) && show(current)));
 }
 
 /** One project at a time, picked from a list, so the console stays navigable however many projects there are. */

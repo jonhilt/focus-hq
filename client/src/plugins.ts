@@ -17,6 +17,11 @@ export interface ClientPlugin {
   id: string;
   /** What it is and what it costs, in the captain's words, for the ready room's Plugins tab: every plugin of Focus's own has one. */
   about?: PluginAbout;
+  /**
+   * Its own settings for the whole ship, in its card in the ready room's Plugins tab while it's on, drawn again as its
+   * state changes: the same controls it may also put where they're used (the engineering panel, say).
+   */
+  settings?: (ui: Ui) => HTMLElement[];
   /** What it adds to the engineering station on deck 5. */
   engineering?: EngineeringPart;
   /** What it draws on main engineering's MSD beside the ship, while it's put up there (`ui.showOnMsd({ plugin })`). */
@@ -173,6 +178,16 @@ export function hudStats(plugins = clientPlugins()): HudStat[] {
       return [];
     }
   });
+}
+
+/** A plugin's own settings for the whole ship (`settings`), or none: one whose settings throw is logged and shows none. */
+export function pluginSettings(plugin: ClientPlugin, ui: Ui): HTMLElement[] {
+  try {
+    return plugin.settings?.(ui) ?? [];
+  } catch (err) {
+    console.error(`The ${plugin.id} plugin's settings failed`, err);
+    return [];
+  }
 }
 
 /** A plugin's parts that run once it has started. */

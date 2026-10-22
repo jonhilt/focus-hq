@@ -20,10 +20,15 @@ describe('the plugins Focus starts with', () => {
 
 describe('a restart to apply the captain’s choice', () => {
   it('is pending only while the choice differs from what Focus started with, in any order', () => {
-    expect(restartPending(['a', 'b'], ['b', 'a'])).toBe(false);
-    expect(restartPending(['a', 'b'], ['a'])).toBe(true);
-    expect(restartPending(['a'], ['a', 'c'])).toBe(true);
-    expect(restartPending(['a'], undefined)).toBe(false);
+    const available = ['a', 'b', 'c'].map((id) => ({ id, requires: [] }));
+    expect(restartPending(['a', 'b'], ['b', 'a'], available)).toBe(false);
+    expect(restartPending(['a', 'b'], ['a'], available)).toBe(true);
+    expect(restartPending(['a'], ['a', 'c'], available)).toBe(true);
+    expect(restartPending(['a'], undefined, available)).toBe(false);
+  });
+
+  it('isn’t pending for a plugin chosen that can’t start, gone or failing to load', () => {
+    expect(restartPending(['a'], ['a', 'gone'], [{ id: 'a', requires: [] }])).toBe(false);
   });
 });
 

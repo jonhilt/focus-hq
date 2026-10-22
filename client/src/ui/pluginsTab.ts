@@ -8,7 +8,7 @@ import type { Project, ServerInfo } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { COST_BADGE, type PluginEntry, pluginEntries, shipStatus } from '../pluginList';
-import { everyPlugin, projectSettings } from '../plugins';
+import { everyPlugin, pluginSettings, projectSettings } from '../plugins';
 import type { Ui } from './context';
 import { busy, h } from './dom';
 import { Switch } from './panels';
@@ -31,8 +31,11 @@ export function pluginsTab(ui: Ui, selected: string | undefined, pick: (id: stri
   return h('div', null, banner(ui, info), h('div', { class: 'projects' }, list, pluginCard(ui, info, open, entries)));
 }
 
-/** The plugins the captain has switched on for the ship: their choice, or else what Focus started with. */
-const chosen = (info: ServerInfo): string[] => info.settings.plugins ?? info.shipPlugins.startedWith;
+/**
+ * The plugins switched on for the ship from Focus's next start: what Focus started with while something else decides
+ * (FOCUS_PLUGINS, the demo), else the captain's choice, or what Focus started with until they make one.
+ */
+const chosen = (info: ServerInfo): string[] => (info.shipPlugins.pinnedBy ? info.shipPlugins.startedWith : info.settings.plugins ?? info.shipPlugins.startedWith);
 
 /** Above the list: that FOCUS_PLUGINS decides, or that the captain's switches wait on a restart, with the way to restart. */
 function banner(ui: Ui, info: ServerInfo): HTMLElement | null {
@@ -47,7 +50,7 @@ function banner(ui: Ui, info: ServerInfo): HTMLElement | null {
       h('strong', null, 'The demo ship has every plugin on. '),
       h('span', { class: 'muted' }, 'It saves nothing across a restart, so the switches below are locked. Per-project switches still work.'));
   }
-  if (!restartPending(ship.startedWith, info.settings.plugins)) return null;
+  if (!restartPending(ship.startedWith, info.settings.plugins, ship.available)) return null;
   const restart = h('button', { class: 'btn small primary' }, 'Restart Focus');
   restart.onclick = () => void busy(restart, () => api.restart(), ui.error);
   return h('div', { class: 'card plugin-banner row' },
@@ -76,8 +79,15 @@ function pluginCard(ui: Ui, info: ServerInfo, e: PluginEntry, entries: readonly 
     needs(info, e, entries),
     h('div', { class: 'plugin-cost' }, h('div', { class: 'row' }, h('span', { class: 'label' }, 'Cost'), costChip(e)), h('p', { class: 'muted' }, about.costDetail)),
     about.adds.length ? [h('div', { class: 'label' }, 'Adds'), h('ul', { class: 'plugin-adds' }, ...about.adds.map((a) => h('li', null, a)))] : null,
+    e.on ? ownSettings(ui, e) : null,
     e.on ? whereItWorks(ui, e) : h('p', { class: 'muted' }, 'Off for the whole ship.'),
   );
+}
+
+/** The plugin's own settings for the whole ship, while it's on. */
+function ownSettings(ui: Ui, e: PluginEntry): HTMLElement[] {
+  const settings = pluginSettings(e.plugin, ui);
+  return settings.length ? [h('div', { class: 'label' }, 'Settings'), h('div', { class: 'plugin-settings' }, ...settings)] : [];
 }
 
 /** The plugin's switch for the whole ship, from Focus's next start: locked while FOCUS_PLUGINS decides. */
