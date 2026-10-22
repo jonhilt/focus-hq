@@ -163,6 +163,35 @@ describe('mergeStep', () => {
   });
 });
 
+describe('mergeStep for a goal’s lead’s PR, by its lane', () => {
+  const lead = (lane: GateOps['lane']) => ops({ openedByOffice: false, lane });
+
+  it('merges one in Ship once QA passes it clean, though Ops’ developers didn’t open it', () => {
+    expect(mergeStep(pr(), review(), lead('ship'))).toEqual({ kind: 'merge', sha: HEAD });
+  });
+
+  it('leaves one in Show or Ask to the captain, whatever QA says', () => {
+    expect(mergeStep(pr(), review(), lead('show'))).toEqual({ kind: 'blocked', reason: 'its lead put it in Show, so the captain merges it' });
+    expect(mergeStep(pr(), review(), lead('ask'))).toEqual({ kind: 'blocked', reason: 'its lead put it in Ask, so the captain merges it' });
+  });
+
+  it('holds one in Ship that QA failed, passed with advice, or needs the captain for', () => {
+    expect(mergeStep(pr(), review({ status: 'failed' }), lead('ship'))).toEqual({ kind: 'blocked', reason: 'QA failed it' });
+    expect(mergeStep(pr(), review({ report: { verdict: 'pass', advisory: true, summary: 'Double clicks save twice', checks: [], commands: [], files: [], captions: [] } }), lead('ship')).kind).toBe('blocked');
+    expect(mergeStep(pr(), review({ followUp: { kind: 'needs-you', reason: 'a judgement call' } }), lead('ship'))).toEqual({ kind: 'blocked', reason: 'a judgement call' });
+  });
+
+  it('leaves failing checks to its lead, never sending a developer, but re-runs them first', () => {
+    expect(mergeStep(failing, review(), lead('ship')).kind).toBe('rerun-checks');
+    expect(mergeStep(failing, review(), { ...lead('ship'), mark: { sha: HEAD, kind: 'rerun' } })).toEqual({ kind: 'blocked', reason: 'checks fail, for its lead to fix' });
+  });
+
+  it('still keeps one a plugin claimed, or a draft, for the captain', () => {
+    expect(mergeStep(pr(), review(), { ...lead('ship'), captainMerges: true }).kind).toBe('blocked');
+    expect(mergeStep(pr({ isDraft: true }), review(), lead('ship')).kind).toBe('blocked');
+  });
+});
+
 describe('unpassedReason', () => {
   it('lets a PR QA passed at its head merge without asking', () => {
     expect(unpassedReason(review(), { headSha: HEAD })).toBeUndefined();

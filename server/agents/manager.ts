@@ -1,7 +1,7 @@
 import type { Layer } from 'effect';
 import { type CaptainAnswer, landed } from '../../shared/captainAnswer';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
@@ -196,7 +196,7 @@ export class AgentManager {
     return this.core.comms.setAutonomy(id, autonomy);
   }
 
-  leadPrs(projectId: string): { repo: string; number: number }[] {
+  leadPrs(projectId: string): Pick<LeadPr, 'repo' | 'number' | 'lane'>[] {
     return this.core.leads.leadPrs(projectId);
   }
 

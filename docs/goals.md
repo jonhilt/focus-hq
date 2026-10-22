@@ -39,7 +39,7 @@ Every ship carries the slice's **system recap**, after Kent C. Dodds' [visual re
 - **It goes into the pull requests:** a marked block in the description of each pull request the ship opens, its map and flow in mermaid, which GitHub draws. Shipping again puts the recap as it is now in place of that block, leaving the rest of the description as it was (`withRecap`).
 - **And onto the lead's station screen,** as `system-recap`, so Comms shows its picture with the lead's turn. A picture that won't go up never holds the ship back.
 - **Its map's arrows are checked against the code.** An arrow between two primitives is solid when a file of one imports a file of the other, either way round, and dashed when Ops found no import, with a key saying so (`recapImports.ts`). Dashed isn't refused: the browser calling the server over HTTP is a true arrow with no import behind it. Only JavaScript and TypeScript's relative imports are read, up to a few hundred files a primitive.
-- The lead names the primitives itself, the same from slice to slice.
+- The lead names the primitives itself, the same from slice to slice, and picks the slice's [lane](merging.md#lanes-how-a-goals-leads-slice-merges), which the recap shows: never lower than its rollup allows.
 
 ## The slice journal: a ship or a move that Focus cut off
 

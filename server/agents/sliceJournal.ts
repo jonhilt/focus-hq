@@ -1,4 +1,5 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
+import type { Lane } from '../../shared/mergeLane';
 import type { LeadPr } from '../../shared/types';
 import type { ShipInput } from './recap';
 
@@ -28,7 +29,7 @@ export type SliceFact =
   /** The lead shipped (`title`, `summary`, and its `recap`): written before anything's pushed, so a restart finishes it. */
   | ({ kind: 'shipping' } & ShipInput)
   /** A repo's pull request for the slice is open (or updated) at `sha`. */
-  | { kind: 'pr'; repo: string; number: number; url: string; sha: string; branch: string }
+  | { kind: 'pr'; repo: string; number: number; url: string; sha: string; branch: string; lane?: Lane }
   /** The ship's done: its pull requests are open, and with QA. */
   | { kind: 'shipped' }
   /** The ship ended without shipping (nothing new, uncommitted changes, an error). */
@@ -41,7 +42,7 @@ export type SliceFact =
   | { kind: 'moved' };
 
 /** A slice's pull request, as the journal tells it. */
-export type SlicePr = Pick<LeadPr, 'repo' | 'number' | 'url' | 'sha' | 'branch' | 'outcome'>;
+export type SlicePr = Pick<LeadPr, 'repo' | 'number' | 'url' | 'sha' | 'branch' | 'outcome' | 'lane'>;
 
 export interface SliceContext {
   slice: number;

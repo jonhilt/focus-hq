@@ -1,8 +1,10 @@
+import { type Lane, laneName } from './mergeLane';
 import { prKey, qaBadge, sameCommit } from './qa';
 import type { Board, ConflictsOutcome, FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
 
 // When a pull request may merge, and what Ops does next with one that can't yet. Pure, so it's unit tested
-// (shared/mergeGate.test.ts); focus.ts follows the steps on each board refresh while a project has auto-merge on.
+// (shared/mergeGate.test.ts); focus.ts follows the steps on each board refresh: for a goal's lead's PRs by their lane,
+// on every project; for the rest while the project has auto-merge on.
 
 /** What the merge gate already did about a PR's head commit, so a board refresh doesn't do it again. */
 export type GateMark = { sha: string } & ({ kind: 'rerun' } | { kind: 'sent-back' } | { kind: 'resolving' } | { kind: 'refused'; reason: string });
@@ -25,6 +27,8 @@ export type MergeStep =
 export interface GateOps {
   /** One of our agents opened it. Teammates' PRs never merge by themselves. */
   openedByOffice: boolean;
+  /** A goal's lead shipped it, in this lane: only Ship merges by itself (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
+  lane?: Lane;
   /** One of our agents is working on it right now (fixing it, resolving its conflicts). */
   developerBusy: boolean;
   /** The project sends failed PRs back to a developer. */
@@ -46,12 +50,15 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps
   if (pr.mergeable === 'CONFLICTING') {
     return mark?.kind === 'resolving' ? { kind: 'blocked', reason: 'it still conflicts after resolving' } : { kind: 'resolve-conflicts', sha: head };
   }
-  return qaStep(review, head) ?? checksStep(pr, head, mark, ops);
+  const step = qaStep(review, head) ?? checksStep(pr, head, mark, ops);
+  // a lead fixes their own slice's checks: no developer sits down on it
+  return ops.lane && step.kind === 'send-back' ? { kind: 'blocked', reason: 'checks fail, for its lead to fix' } : step;
 }
 
-/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, the captain's, or a draft. */
+/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, a lead's not in Ship, the captain's, or a draft. */
 function heldBack(pr: GatePr, ops: GateOps): MergeStep | undefined {
-  if (!ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
+  if (ops.lane && ops.lane !== 'ship') return { kind: 'blocked', reason: `its lead put it in ${laneName(ops.lane)}, so the captain merges it` };
+  if (!ops.lane && !ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
   if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
   if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
   return undefined;

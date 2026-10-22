@@ -75,6 +75,34 @@ async function room(listed: Partial<PullRequest> = {}, trial: (heads: MergeHeads
   return { ...o, focus, head, reviewed, said, state, trials, reruns, failRerun, refresh: () => focus.refreshBoard(o.project.id) };
 }
 
+// docs/merging.md#lanes-how-a-goals-leads-slice-merges: a goal's lead's PR merges by its lane, on every project, whatever its auto-merge switch says
+describe('a goal’s lead’s pull request on a board refresh', () => {
+  /** A room (auto-merge off) where #8 is a goal's lead's, shipped in `lane`, and QA passed it. */
+  async function leads(lane?: 'ship' | 'show' | 'ask') {
+    const r = await room();
+    vi.spyOn(r.agents, 'leadPrs').mockReturnValue([{ repo: REPO, number: NUMBER, ...(lane && { lane }) }]);
+    r.reviewed({ openedByOffice: false });
+    return r;
+  }
+
+  it('merges one in Ship once QA passes it, with the project’s auto-merge off', async () => {
+    const { project, refresh, state, said } = await leads('ship');
+    await refresh();
+    expect(project.autoMerge).toBeUndefined();
+    await expect.poll(state).toBe('MERGED');
+    await expect.poll(() => said('success')).toEqual([expect.stringContaining('🤖 Auto-merged webshop-frontend#8')]);
+  });
+
+  it('leaves one in Show or Ask, or shipped before lanes, for the captain', async () => {
+    for (const lane of ['show', 'ask', undefined] as const) {
+      const { refresh, state, trials } = await leads(lane);
+      await refresh();
+      expect(trials).toEqual([]);
+      expect(await state()).toBe('OPEN');
+    }
+  });
+});
+
 describe('auto-merge on a board refresh', () => {
   /** A room with auto-merge on (docs/qa.md: "on each board refresh Ops takes every PR it opened one step closer to merged"). */
   async function auto(...args: Parameters<typeof room>) {

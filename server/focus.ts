@@ -478,15 +478,22 @@ export class Focus {
     }
   }
 
-  /** With auto-merge on, takes each open PR one step further along mergeStep: QA, checks, conflicts, merged. */
+  /**
+   * Takes each open PR one step further along mergeStep (QA, checks, conflicts, merged): a goal's lead's by its lane on
+   * every project, the rest while the project has auto-merge on.
+   */
   private async autoMerge(projectId: string, board: Board): Promise<void> {
     const project = this.store.projects.find((p) => p.id === projectId);
-    if (!project || !autoMergeFor(project)) return;
+    if (!project) return;
     for (const key of forgottenMarks(this.gateMarks.keys(), project.repos, board)) this.gateMarks.delete(key);
+    const leads = new Map(this.agents.leadPrs(projectId).map((p) => [prKey(p.repo, p.number), p]));
     for (const pr of [...board.prs]) {
       const key = prKey(pr.repo, pr.number);
+      const lead = leads.get(key);
+      if (!lead && !autoMergeFor(project)) continue;
       const step = mergeStep(pr, this.store.reviews.get(key), {
         openedByOffice: this.agents.openedByOffice(pr.repo, pr.number),
+        ...(lead && { lane: lead.lane ?? 'ask' }),
         captainMerges: this.agents.plugins.captainMerges(pr),
         developerBusy: this.agents.busyOn(pr.repo, pr.number),
         autoSendBack: autoSendBackFor(project),

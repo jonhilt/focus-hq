@@ -44,6 +44,11 @@ describe('what Ops refuses a ship’s recap for', () => {
     expect(problems).toEqual(['cos-verdict is named twice', 'Say what the slice does to cos-verdict', 'Say where cos-verdict is (its paths)', '“Cos Verdict” isn’t a primitive’s id: lowercase letters, digits and dashes']);
   });
 
+  it('a lane below what its rollup allows', () => {
+    expect(recapProblems(recap({ lane: 'ship' }), [])).toEqual(['A slice that extends existing primitives goes in Show or higher, not Ship: lanes are only ever raised']);
+    expect(recapProblems(recap({ lane: 'show' }), [])).toEqual([]);
+  });
+
   it('no primitive at all', () => {
     expect(recapProblems({ primitives: [] }, [])).toEqual(['Name at least one primitive the slice touches']);
   });
@@ -58,6 +63,12 @@ describe('the recap in a pull request', () => {
     expect(md.endsWith(RECAP_END)).toBe(true);
     expect(md).toContain('<summary>System recap: <b>extends existing primitives</b> (medium risk)</summary>');
     expect(md).toContain('**Classification:** extends. 1 composes, 1 extends.');
+  });
+
+  it('says its lane, Ask when the lead picked none', () => {
+    expect(recapMarkdown(recap({ lane: 'show' }))).toContain('**Lane:** Show, the lead’s pick: it merges itself once QA passes it, and tells the captain.');
+    expect(md).toContain('**Lane:** Ask, as the lead picked none: it waits for the captain to merge it.');
+    expect(recapPage(recap({ lane: 'ship' }), 't')).toContain('Lane: <b>Ship</b>');
   });
 
   it('lists the primitives and invariants, and draws the map and flow in mermaid, a blank line around each fence', () => {

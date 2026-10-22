@@ -5,7 +5,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { afterLanding, afterPush, landedMidShipNote, hasLeadWork, sliceLanded, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
-import { recapMarkdown, recapPage, recapProblems, type ShipInput, type SliceRecap, withRecap } from '../recap';
+import { recapLane, recapMarkdown, recapPage, recapProblems, type ShipInput, type SliceRecap, withRecap } from '../recap';
 import { backedMap, MAX_FILES, primitivesToRead, SOURCE } from '../recapImports';
 import { type Moving, reconciledPrs, sliceRecovery } from '../sliceJournal';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
@@ -289,9 +289,10 @@ export class Slices extends Part {
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
         }
-        this.store.sliceJournal(agent.id, { kind: 'pr', repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch });
+        const lane = recapLane(recap);
+        this.store.sliceJournal(agent.id, { kind: 'pr', repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch, lane });
         const others = agent.lead.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
-        this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch }] } });
+        this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch, lane }] } });
         this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
         toReview.push({ repo: s.repo, number: pr.number, head: s.head });
       }

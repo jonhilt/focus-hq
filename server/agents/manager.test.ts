@@ -1005,6 +1005,23 @@ describe('AgentManager', () => {
     expect(edited[0].startsWith('A thin first slice.')).toBe(true);
   });
 
+  it('refuses a lane below what the recap’s rollup allows, and keeps the one shipped on each pull request', async () => {
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, changedFiles: async () => ['src/saved.ts'] });
+    agents.startGoal(project.id, 'Saved items');
+    await until(() => claude.turns.length === 1);
+    const ship = (impact: 'composes' | 'extends', lane: 'ship' | 'show') => claude.turns[0].req.tools!.ship({
+      title: 'Saved items',
+      summary: 'A thin first slice.',
+      recap: { primitives: [{ id: 'saved', group: 'shop', impact, change: 'Wired in', paths: ['webshop-frontend/', 'webshop-api/'] }], lane },
+    });
+
+    await expect(ship('extends', 'ship')).rejects.toThrow('goes in Show or higher, not Ship');
+    await ship('composes', 'ship');
+    const lead = [...store.agents.values()].find((a) => a.lead)!;
+    expect(lead.lead!.prs.map((p) => p.lane)).toEqual(['ship', 'ship']);
+    expect(agents.leadPrs(project.id).map((p) => p.lane)).toEqual(['ship', 'ship']);
+  });
+
   it('ships through GitHub 5xx answers, trying the push and the PR again', async () => {
     let pushFailures = 2;
     let prFailures = 2;

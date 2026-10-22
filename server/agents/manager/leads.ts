@@ -1,7 +1,7 @@
 import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
-import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
+import type { Agent, Effort, Evidence, LeadAgent, LeadPr, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
@@ -430,7 +430,7 @@ export class Leads extends Part {
   }
 
   /** The leads' pull requests still open, for Ops to notice when they're merged or closed on GitHub. */
-  leadPrs(projectId: string): { repo: string; number: number }[] {
+  leadPrs(projectId: string): Pick<LeadPr, 'repo' | 'number' | 'lane'>[] {
     return this.store.agentsIn(projectId).flatMap((a) => (a.task === 'lead' ? (a.lead?.prs ?? []).filter((p) => !p.outcome) : []));
   }
 }

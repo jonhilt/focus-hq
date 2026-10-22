@@ -15,6 +15,17 @@ Every merge Ops makes goes through it: the captain's merge button (the board's, 
 - Ops doesn't wait on the check: the board's refresh and the captain's request both return straight away.
 - A refused PR stays open and says why, with a comment on the PR listing each command and the end of the failing one's output, and the ledger gets a `merge-check` line for every trial that runs. With auto-merge, the refusal blocks that head commit until something new is pushed. A "Merge when QA passes" request is dropped.
 
+## Lanes: how a goal's lead's slice merges
+
+A goal's lead ships each slice in a lane, after [Ship/Show/Ask](https://martinfowler.com/articles/ship-show-ask.html): **Ship** merges by itself once QA passes it, **Show** merges by itself and tells the captain, **Ask** waits for the captain to merge it (from its Comms card, or the board). It's there because the captain's time went on merging: of 271 merges from 14 to 22 October 2026, 270 were the captain's, a median of 8 minutes after QA passed. The project's auto-merge switch never reached a lead's pull request, and doesn't decide this: lanes hold on every project (the captain's call). `shared/mergeLane.ts` and `shared/mergeGate.ts` decide it; `mergeLane.test.ts`, `mergeGate.test.ts`, `server/focus.test.ts` and `manager.test.ts` hold it to these:
+
+- **A lane is only ever raised.** The slice's [recap](goals.md#the-system-recap) sets the lowest the lead may pick: a slice that only composes primitives may Ship, one that extends any may Show, one that adds one is Ask. Ops refuses a ship below that. A lead that picks none is in Ask, and so is a pull request shipped before lanes.
+- **Ship needs a clean pass at its head:** QA failing it, passing it with advice, or needing the captain holds it for the captain, as do a draft, a plugin claiming it, and the merge check refusing it. It goes through the merge check like every merge Ops makes.
+- **A lead's failing checks are theirs to fix.** Ops re-runs them once, as for any PR, but never sends a developer to a lead's slice. Conflicts are merged in by Ops, as before, and the lead hears of it.
+- **Show waits like Ask for now,** until Ops can tell the captain a slice landed on a card of its own.
+
+The chief of staff raising a lane is still to come.
+
 ## Which checks
 
 - By default the check runs the repo's `typecheck`, `lint` and `test` package.json scripts, whichever of them it has, using the package manager its lockfile names.

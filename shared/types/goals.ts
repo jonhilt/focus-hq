@@ -1,5 +1,6 @@
 // Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
 
+import type { Lane } from '../mergeLane';
 import type { ClaudeTask, Effort } from './agents';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
@@ -178,6 +179,8 @@ export interface LeadPr {
   outcome?: 'merged' | 'closed';
   /** The slice it shipped in. Set once the slice is over (it lands, or the goal closes); missing on goals closed before. */
   slice?: number;
+  /** How it merges once QA passes it, as last shipped (shared/mergeLane.ts). Missing is Ask. */
+  lane?: Lane;
 }
 
 /**

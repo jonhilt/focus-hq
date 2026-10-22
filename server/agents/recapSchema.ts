@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LANES } from '../../shared/mergeLane';
 import { IMPACTS } from './recap';
 
 // The ship tool's recap, as the lead sends it (recap.ts says what each part is for).
@@ -20,4 +21,5 @@ export const RECAP_SCHEMA = z.object({
   invariants: z.array(z.string()).optional().describe('The promises the slice could break, in plain words (“A card the captain owes never leaves their queue unanswered”).'),
   map: z.array(step).optional().describe('How the touched primitives connect: each an arrow on the system map.'),
   flow: z.array(step).optional().describe('What happens, in order: each a message in the change flow’s sequence diagram.'),
+  lane: z.enum(LANES).optional().describe('How it merges once QA passes it. ship: by itself; show: by itself, and the captain is told; ask: the captain merges it. Pick by how much the captain would want to see it first. The rollup sets the lowest you may pick: composes allows ship, extends show, adds only ask. Left out, it’s ask.'),
 }).describe('The slice’s system recap.');

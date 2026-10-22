@@ -4,6 +4,8 @@
 // ship; Ops checks it covers every file the slice changes, then writes it into the pull requests (mermaid, which GitHub
 // draws) and onto the lead's station screen. Pure, so it's tested (recap.test.ts).
 
+import { LANE_SAID, type Lane, laneName, laneProblem } from '../../shared/mergeLane';
+
 export const IMPACTS = ['composes', 'extends', 'adds'] as const;
 export type Impact = (typeof IMPACTS)[number];
 
@@ -37,6 +39,13 @@ export interface SliceRecap {
   map?: RecapStep[];
   /** What happens, in order: the change flow, as a sequence. */
   flow?: RecapStep[];
+  /** How the lead would have it merge once QA passes it (shared/mergeLane.ts): none is Ask. */
+  lane?: Lane;
+}
+
+/** The lane the slice ships in: the lead's pick, or Ask when they made none. */
+export function recapLane(recap: Pick<SliceRecap, 'lane'> | undefined): Lane {
+  return recap?.lane ?? 'ask';
 }
 
 /** What the lead ships with: the pull requests' title and description, and the slice's recap (none from before recaps). */
@@ -90,6 +99,8 @@ export function recapProblems(recap: SliceRecap, changed: readonly string[]): st
   for (const [name, steps] of [['map', recap.map], ['flow', recap.flow]] as const) {
     if ((steps?.length ?? 0) > L.steps) out.push(`Its ${name} has ${steps?.length} steps (at most ${L.steps})`);
   }
+  const lane = recap.lane && laneProblem(recap.lane, rollup(recap));
+  if (lane) out.push(lane);
   const missed = uncovered(recap, changed);
   if (missed.length) {
     const shown = missed.slice(0, 8).map((f) => `- ${f}`);
@@ -148,6 +159,12 @@ export const RECAP_END = '<!-- system-recap:end -->';
  * The recap as a pull request shows it: a block GitHub opens out, with the rollup in its summary, the primitives
  * touched, the invariants, and the map and flow as mermaid. A blank line around each fence, or GitHub won't draw it.
  */
+/** The lane line: which one, and what it does once QA passes. */
+function laneSaid(recap: SliceRecap): string {
+  const lane = recapLane(recap);
+  return `**Lane:** ${laneName(lane)}, ${recap.lane ? 'the lead’s pick' : 'as the lead picked none'}: it ${LANE_SAID[lane]}.`;
+}
+
 export function recapMarkdown(recap: SliceRecap): string {
   const impact = rollup(recap);
   const rows = recap.primitives.map((p) => `| \`${p.id}\` | ${label(p.group)} | ${p.impact} | ${label(p.change)} |`);
@@ -159,6 +176,8 @@ export function recapMarkdown(recap: SliceRecap): string {
     `<summary>System recap: <b>${SAID[impact]}</b> (${RISK[impact]})</summary>`,
     '',
     `**Classification:** ${impact}. ${counts.map(([i, n]) => `${n} ${i}`).join(', ')}.`,
+    '',
+    laneSaid(recap),
     '',
     '### Primitives touched',
     '',
@@ -216,8 +235,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#262c36;
 ul{font-size:15px;line-height:1.45;padding-left:18px}
 pre.mermaid{margin:0 0 10px}
 .key{font-size:14px;color:#7d8590;margin:0 0 10px}
+.lane{font-size:15px;color:#e6edf3}
 </style></head><body><div class="wrap">
-<div class="sum">System recap: <b>${SAID[impact]}</b> <span class="badge ${impact}">${RISK[impact]}</span><span class="t">${escape(title)}</span></div>
+<div class="sum">System recap: <b>${SAID[impact]}</b> <span class="badge ${impact}">${RISK[impact]}</span><span class="lane" title="${escape(LANE_SAID[recapLane(recap)])}">Lane: <b>${laneName(recapLane(recap))}</b></span><span class="t">${escape(title)}</span></div>
 <div class="grid"><div>
 <h3>Primitives touched</h3><table><tr><th>Primitive</th><th>Group</th><th>Impact</th><th>What changed</th></tr>${rows}</table>
 ${invariants}
