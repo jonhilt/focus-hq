@@ -11,10 +11,13 @@ import { EFFORT_LEVELS, MERGE_METHODS, type PinnedSettings, type Settings, SETTI
  * An empty (or unknown) effort for conflict-resolving agents goes back to the model's default. A lead's compaction
  * threshold is 0 (off) or a whole number of tokens from LEAD_COMPACT_MIN to a million. The plugins switched on for the
  * ship keep only what could be plugins' ids, each once. The public address is an http(s) one ('' clears it); the
- * terminal and browser commands are trimmed, empty clearing them.
+ * terminal, browser and whisper commands and paths are trimmed, empty clearing them.
  */
 /** Below this, a compacted lead's conversation (some 30–50k tokens) would soon need compacting again. */
 export const LEAD_COMPACT_MIN = 80_000;
+
+/** The settings that are a command or a file's path on this machine. */
+const PATH_SETTINGS = ['terminal', 'browserPath', 'whisperBin', 'whisperModel'] as const;
 
 export function changeSettings(settings: Settings, patch: unknown): Settings {
   const p: Partial<Record<keyof Settings, unknown>> = patch !== null && typeof patch === 'object' ? patch : {};
@@ -32,7 +35,8 @@ export function changeSettings(settings: Settings, patch: unknown): Settings {
   if (Array.isArray(p.plugins)) s.plugins = [...new Set(p.plugins.filter(isPluginId))];
   if (typeof p.leadCompactAt === 'number' && Number.isFinite(p.leadCompactAt)) s.leadCompactAt = p.leadCompactAt <= 0 ? 0 : Math.max(LEAD_COMPACT_MIN, Math.min(1_000_000, Math.round(p.leadCompactAt)));
   if (typeof p.autoUpdate === 'boolean') s.autoUpdate = p.autoUpdate;
-  for (const key of ['terminal', 'browserPath'] as const) {
+  if (typeof p.speechGpu === 'boolean') s.speechGpu = p.speechGpu;
+  for (const key of PATH_SETTINGS) {
     const value = p[key];
     if (typeof value !== 'string') continue;
     if (value.trim()) s[key] = value.trim();
@@ -53,11 +57,11 @@ export function pinnedSettings(env: Env = process.env): PinnedSettings {
 
 /**
  * The settings Focus goes by: the captain's, with each an environment variable sets as it sets it (FOCUS_AUTO_UPDATE=0
- * is off, anything else on).
+ * is off, anything else on; FOCUS_KOKORO_GPU=0 or false is off, anything else on).
  */
 export function settingsInForce(settings: Settings, env: Env = process.env): Settings {
   const value = (key: keyof typeof SETTINGS_ENV) => env[SETTINGS_ENV[key]]?.trim() || undefined;
-  const autoUpdate = value('autoUpdate');
-  const [terminal, browserPath] = [value('terminal'), value('browserPath')];
-  return { ...settings, ...(autoUpdate && { autoUpdate: autoUpdate !== '0' }), ...(terminal && { terminal }), ...(browserPath && { browserPath }) };
+  const [autoUpdate, speechGpu] = [value('autoUpdate'), value('speechGpu')];
+  const paths = Object.fromEntries(PATH_SETTINGS.flatMap((key) => (value(key) ? [[key, value(key)]] : [])));
+  return { ...settings, ...(autoUpdate && { autoUpdate: autoUpdate !== '0' }), ...(speechGpu && { speechGpu: speechGpu !== '0' && speechGpu !== 'false' }), ...paths };
 }

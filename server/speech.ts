@@ -76,8 +76,11 @@ export class Speech {
   /** `changed` tells every browser when the status moves. */
   constructor(
     private readonly changed: () => void,
-    private readonly helpers: readonly SpeechHelper[] = [cpuKokoro],
+    private readonly helpersHere: () => readonly SpeechHelper[] = () => [cpuKokoro],
   ) {}
+
+  /** The helpers this load tries, chosen as it starts (Settings may have moved Kokoro off the GPU since). */
+  private helpers: readonly SpeechHelper[] = [];
 
   status(): SpeechStatus {
     const gpu = existsSync(kokoro.gpuMarker);
@@ -90,7 +93,16 @@ export class Speech {
     this.engine = { state: 'loading', bytes: 0 };
     this.changed();
     this.close();
+    this.helpers = this.helpersHere();
     this.start(0);
+  }
+
+  /** Loads Kokoro again, on the helpers as they are now, if it's loaded or on its way; otherwise the next load will. */
+  reload(): void {
+    if (this.engine.state !== 'loading' && this.engine.state !== 'ready') return;
+    this.close();
+    this.engine = { state: 'idle' };
+    this.load();
   }
 
   /** Starts the helper at `at`; if it can't load, the next one, until there are none left to try. */

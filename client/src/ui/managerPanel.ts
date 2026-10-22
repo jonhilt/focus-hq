@@ -2,7 +2,7 @@ import { pluginOn } from '../../../shared/projectPlugins';
 import { projectPlugins, projectSettings } from '../plugins';
 import { isHidden } from '../../../shared/hidden';
 import { autoMergeFor } from '../../../shared/mergeGate';
-import type { Autonomy, Effort, MergeMethod, PreviewConfig, Project, RoomTheme, SpeechStatus, VoiceStatus } from '../../../shared/types';
+import type { Autonomy, Effort, MergeMethod, PinnedSettings, PreviewConfig, Project, RoomTheme, Settings, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';
 import { api } from '../net/api';
@@ -15,7 +15,7 @@ import { withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
 import { demoPaceField } from './demoPace';
 import { botSection } from './botSettings';
-import { machineSection } from './machineSettings';
+import { machineSection, pinnedChip } from './machineSettings';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
@@ -455,7 +455,7 @@ function settingsTab(ui: Ui): HTMLElement {
     ),
     machineSection(ui, s, info.settingsPinned),
     botSection(ui),
-    voiceSection(ui),
+    voiceSection(ui, s, info.settingsPinned),
   );
 }
 
@@ -486,10 +486,34 @@ function speechSetup(speech: SpeechStatus, ui: Ui): HTMLElement {
 }
 
 /** Dictation's setup: whisper-cli (installed by hand) and its model (downloaded from here). Follows the server live. */
-function voiceSection(ui: Ui): HTMLElement {
-  const el = h('div', { class: 'card voice-setup', style: 'margin-top:12px' });
+/**
+ * Where whisper and its model are, and whether Kokoro may use the Apple GPU: built once with Settings, not as the voice
+ * status moves, so a field being typed in keeps what's typed. Each one an environment variable sets can't be changed here.
+ */
+function voiceSettings(ui: Ui, s: Settings, pinned: PinnedSettings): HTMLElement {
+  const save = (patch: Partial<Settings>) => void api.updateSettings(patch).catch((e: Error) => ui.error(e.message));
+  const text = (key: 'whisperBin' | 'whisperModel', placeholder: string) => {
+    const input = h('input', { type: 'text', value: s[key] ?? '', placeholder, style: 'flex:1', disabled: pinned[key] !== undefined });
+    input.addEventListener('change', () => save({ [key]: input.value }));
+    return h('div', { class: 'row' }, input, pinnedChip(pinned, key));
+  };
+  const gpu = new Switch('Voices on the Apple GPU', s.speechGpu !== false, { changed: (on) => save({ speechGpu: on }) });
+  gpu.el.disabled = pinned.speechGpu !== undefined;
+  return h('div', { style: 'margin-top:8px' },
+    h('div', { class: 'field' }, h('label', null, 'whisper-cli'), text('whisperBin', 'whisper-cli, on the PATH'), h('small', null, 'The command, or its path, if whisper.cpp’s CLI is somewhere else.')),
+    h('div', { class: 'field' }, h('label', null, 'Speech model'), text('whisperModel', 'large-v3-turbo, in Focus’s data folder'), h('small', null, 'The path to another whisper model, if you have one. Downloading puts it there.')),
+    h('div', { class: 'field' },
+      h('div', { class: 'row' }, gpu.el, pinnedChip(pinned, 'speechGpu')),
+      h('small', null, 'On Apple Silicon with uv. Off keeps the crew’s voices on the CPU. A change loads them again.'),
+    ),
+  );
+}
+
+function voiceSection(ui: Ui, s: Settings, pinned: PinnedSettings): HTMLElement {
+  const status = h('div');
+  const el = h('div', { class: 'card voice-setup', style: 'margin-top:12px' }, status, voiceSettings(ui, s, pinned));
   const render = (voice: VoiceStatus | null) => {
-    if (!voice) return fill(el, h('strong', { class: 'label' }, 'Voice input'), h('p', { class: 'muted' }, 'Connecting…'));
+    if (!voice) return fill(status, h('strong', { class: 'label' }, 'Voice input'), h('p', { class: 'muted' }, 'Connecting…'));
     const recheck = h('button', { class: 'btn small', title: 'Look for whisper-cli and the model again' }, 'Check again');
     recheck.onclick = () => void busy(recheck, () => api.voiceStatus(), ui.error);
     const copy = h('button', { class: 'btn small' }, 'Copy');
@@ -499,7 +523,7 @@ function voiceSection(ui: Ui): HTMLElement {
     const get = h('button', { class: 'btn small primary', disabled: running }, download?.state === 'failed' ? 'Retry download' : 'Download model (574 MB)');
     get.onclick = () => void busy(get, () => api.downloadVoiceModel(), ui.error);
 
-    fill(el,
+    fill(status,
       h('div', { class: 'row' },
         h('strong', { class: 'label' }, 'Voice input'),
         voiceMissing(voice) ? h('span', { class: 'chip bad' }, 'not set up') : h('span', { class: 'chip ok' }, 'ready'),

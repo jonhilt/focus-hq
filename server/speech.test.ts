@@ -55,7 +55,7 @@ const settle = () => new Promise((r) => setTimeout(r, 0));
 describe('Speech', () => {
   it('runs on the GPU when it loads there', async () => {
     const gpu = fakeHelper('gpu', 'ready');
-    const speech = new Speech(() => undefined, [gpu.helper, fakeHelper('cpu', 'ready').helper]);
+    const speech = new Speech(() => undefined, () => [gpu.helper, fakeHelper('cpu', 'ready').helper]);
     speech.load();
     await settle();
     expect(speech.status().engine).toEqual({ state: 'ready', on: 'gpu' });
@@ -64,7 +64,7 @@ describe('Speech', () => {
   it('hands over to the CPU when the GPU can’t load, or its process dies first', async () => {
     for (const load of ['fail', 'crash'] as const) {
       const gpu = fakeHelper('gpu', load);
-      const speech = new Speech(() => undefined, [gpu.helper, fakeHelper('cpu', 'ready').helper]);
+      const speech = new Speech(() => undefined, () => [gpu.helper, fakeHelper('cpu', 'ready').helper]);
       speech.load();
       await settle();
       await settle();
@@ -73,8 +73,24 @@ describe('Speech', () => {
     }
   });
 
+  it('loads again on the helpers as they are now, once it’s loaded, and not before', async () => {
+    const [gpu, cpu] = [fakeHelper('gpu', 'ready'), fakeHelper('cpu', 'ready')];
+    let helpers = [gpu.helper, cpu.helper];
+    const speech = new Speech(() => undefined, () => helpers);
+    speech.reload();
+    expect(speech.status().engine.state).toBe('idle');
+    speech.load();
+    await settle();
+    expect(speech.status().engine).toEqual({ state: 'ready', on: 'gpu' });
+    helpers = [cpu.helper];
+    speech.reload();
+    await settle();
+    expect(gpu.killed()).toBe(true);
+    expect(speech.status().engine).toEqual({ state: 'ready', on: 'cpu' });
+  });
+
   it('fails once the last helper can’t load', async () => {
-    const speech = new Speech(() => undefined, [fakeHelper('cpu', 'fail').helper]);
+    const speech = new Speech(() => undefined, () => [fakeHelper('cpu', 'fail').helper]);
     speech.load();
     await settle();
     expect(speech.status().engine.state).toBe('failed');
@@ -82,7 +98,7 @@ describe('Speech', () => {
 
   it('says one line at a time, a line wanted now before lines fetched ahead, and drops one nobody wants', async () => {
     const cpu = fakeHelper('cpu', 'ready');
-    const speech = new Speech(() => undefined, [cpu.helper]);
+    const speech = new Speech(() => undefined, () => [cpu.helper]);
     speech.load();
     await settle();
     const first = speech.speak('first', 'af_heart', 'ahead');

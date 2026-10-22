@@ -17,8 +17,8 @@
   "server/plugins/dataDir.ts": 6,
   "server/previews.ts": 0,
   "server/secrets.ts": 100,
-  "server/speech.ts": 0,
+  "server/speech.ts": 8,
   "server/speechWorker.ts": 0,
   "server/store.ts": 68,
-  "server/voice.ts": 4
+  "server/voice.ts": 25
 }

@@ -5,7 +5,7 @@ import path from 'node:path';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
-import type { VoiceDownload, VoiceStatus } from '../shared/types';
+import type { Settings, VoiceDownload, VoiceStatus } from '../shared/types';
 import { type KokoroVoice, voiceMissing } from '../shared/voice';
 import { whisper } from './config';
 import type { Hub } from './hub';
@@ -44,10 +44,18 @@ function findExecutable(bin: string): string | undefined {
   });
 }
 
+/** What Voice goes by of the settings in force (`settingsInForce`): read each time, so a change applies at once. */
+export type VoiceSettings = Pick<Settings, 'whisperBin' | 'whisperModel' | 'speechGpu'>;
+
+/** whisper's CLI and model as `settings` name them, else whisper-cli on the PATH and the model in Focus's data folder. */
+export function whisperFor(settings: VoiceSettings): { bin: string; model: string } {
+  return { bin: settings.whisperBin || 'whisper-cli', model: path.resolve(settings.whisperModel || whisper.model) };
+}
+
 /** Kokoro's helpers on this machine, in the order to try them: the Apple GPU (through uv) where it can, then the CPU. */
-function speechHelpersHere(): SpeechHelper[] {
+function speechHelpersHere(gpu: boolean | undefined): SpeechHelper[] {
   const uv = findExecutable('uv');
-  return speechHelpers({ platform: process.platform, arch: process.arch, uv: uv !== undefined, gpu: process.env.FOCUS_KOKORO_GPU }).map((on) =>
+  return speechHelpers({ platform: process.platform, arch: process.arch, uv: uv !== undefined, gpu }).map((on) =>
     on === 'gpu' && uv ? gpuKokoro(uv) : cpuKokoro,
   );
 }
@@ -59,15 +67,30 @@ function speechHelpersHere(): SpeechHelper[] {
  */
 export class Voice {
   private download?: VoiceDownload;
-  private readonly speech = new Speech(() => this.refresh(), speechHelpersHere());
+  private readonly speech = new Speech(() => this.refresh(), () => speechHelpersHere(this.settings().speechGpu));
+  /** Whether Kokoro may use the GPU, as it was last loaded or told: a change loads it again (`settingsChanged`). */
+  private gpu: boolean;
 
   constructor(
     private readonly hub: Hub,
     private readonly demo: boolean,
-  ) {}
+    private readonly settings: () => VoiceSettings = () => ({}),
+  ) {
+    this.gpu = settings().speechGpu !== false;
+  }
+
+  /** Settings moved: every browser hears where whisper is now, and Kokoro moves onto or off the GPU if it's loaded. */
+  settingsChanged(): void {
+    this.refresh();
+    const gpu = this.settings().speechGpu !== false;
+    if (gpu === this.gpu) return;
+    this.gpu = gpu;
+    if (!this.demo) this.speech.reload();
+  }
 
   status(): VoiceStatus {
     const speech = this.speech.status();
+    const whisper = whisperFor(this.settings());
     if (this.demo) return { whisper: { found: true, command: whisper.bin }, model: { present: true, path: whisper.model }, speech };
     const found = findExecutable(whisper.bin);
     return {
@@ -138,8 +161,9 @@ export class Voice {
 
   /** Streams to `<model>.partial` and renames it into place only once it's complete, so a broken download never looks like a model. */
   private async fetchModel(): Promise<void> {
-    const partial = `${whisper.model}.partial`;
-    await mkdir(path.dirname(whisper.model), { recursive: true });
+    const model = whisperFor(this.settings()).model;
+    const partial = `${model}.partial`;
+    await mkdir(path.dirname(model), { recursive: true });
     try {
       const res = await fetch(whisper.modelUrl);
       if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
@@ -159,7 +183,7 @@ export class Voice {
       });
       await pipeline(Readable.fromWeb(res.body as NodeReadableStream<Uint8Array>), progress, createWriteStream(partial));
       if (total !== undefined && bytes !== total) throw new Error(`got ${bytes} of ${total} bytes`);
-      await rename(partial, whisper.model);
+      await rename(partial, model);
     } catch (err) {
       await rm(partial, { force: true });
       throw err;

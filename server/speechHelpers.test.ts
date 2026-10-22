@@ -10,7 +10,7 @@ describe('speechHelpers', () => {
     expect(speechHelpers({ platform: 'darwin', arch: 'arm64', uv: false })).toEqual(['cpu']);
     expect(speechHelpers({ platform: 'darwin', arch: 'x64', uv: true })).toEqual(['cpu']);
     expect(speechHelpers({ platform: 'linux', arch: 'arm64', uv: true })).toEqual(['cpu']);
-    expect(speechHelpers({ platform: 'darwin', arch: 'arm64', uv: true, gpu: '0' })).toEqual(['cpu']);
+    expect(speechHelpers({ platform: 'darwin', arch: 'arm64', uv: true, gpu: false })).toEqual(['cpu']);
   });
 });
 

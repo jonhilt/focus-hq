@@ -112,6 +112,15 @@ describe('changeSettings', () => {
     expect(cleared).not.toHaveProperty('terminal');
     expect(cleared).not.toHaveProperty('browserPath');
   });
+
+  it('takes whisper’s command and model trimmed, empty clearing them, and the GPU for voices on or off', () => {
+    const set = changeSettings(settings, { whisperBin: ' /opt/whisper/bin/whisper-cli ', whisperModel: '~/models/small.bin', speechGpu: false });
+    expect(set).toMatchObject({ whisperBin: '/opt/whisper/bin/whisper-cli', whisperModel: '~/models/small.bin', speechGpu: false });
+    const cleared = changeSettings(set, { whisperBin: '', whisperModel: ' ', speechGpu: 'yes' });
+    expect(cleared).not.toHaveProperty('whisperBin');
+    expect(cleared).not.toHaveProperty('whisperModel');
+    expect(cleared.speechGpu).toBe(false);
+  });
 });
 
 describe('the settings in force', () => {
@@ -125,6 +134,15 @@ describe('the settings in force', () => {
     const env = { FOCUS_AUTO_UPDATE: '0', FOCUS_TERMINAL: ' wezterm start -- ', FOCUS_BROWSER_PATH: '', PATH: '/bin' };
     expect(settingsInForce({ ...settings, autoUpdate: true, terminal: 'kitty -e', browserPath: '/mine' }, env)).toMatchObject({ autoUpdate: false, terminal: 'wezterm start --', browserPath: '/mine' });
     expect(pinnedSettings(env)).toEqual({ autoUpdate: 'FOCUS_AUTO_UPDATE', terminal: 'FOCUS_TERMINAL' });
+  });
+
+  it('take whisper’s command and model, and the GPU for voices, from FOCUS_WHISPER_* and FOCUS_KOKORO_GPU', () => {
+    const env = { FOCUS_WHISPER_BIN: '/env/whisper-cli', FOCUS_WHISPER_MODEL: '/env/model.bin', FOCUS_KOKORO_GPU: 'false' };
+    const mine = { ...settings, whisperBin: '/mine/whisper-cli', whisperModel: '/mine/model.bin', speechGpu: true };
+    expect(settingsInForce(mine, env)).toMatchObject({ whisperBin: '/env/whisper-cli', whisperModel: '/env/model.bin', speechGpu: false });
+    expect(pinnedSettings(env)).toEqual({ whisperBin: 'FOCUS_WHISPER_BIN', whisperModel: 'FOCUS_WHISPER_MODEL', speechGpu: 'FOCUS_KOKORO_GPU' });
+    expect(settingsInForce({ ...settings, speechGpu: false }, { FOCUS_KOKORO_GPU: '1' }).speechGpu).toBe(true);
+    expect(settingsInForce(settings, { FOCUS_KOKORO_GPU: '0' }).speechGpu).toBe(false);
   });
 
   it('turn auto update on for FOCUS_AUTO_UPDATE set to anything but 0', () => {

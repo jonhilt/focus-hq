@@ -47,12 +47,25 @@ export interface Settings {
   terminal?: string;
   /** The browser agents drive (its executable's path). Missing = Playwright's Chromium, else Chrome, else Edge. */
   browserPath?: string;
+  /** whisper.cpp's CLI for dictation (a command on the PATH, or its path). Missing = whisper-cli. */
+  whisperBin?: string;
+  /** whisper's model file for dictation. Missing = the large-v3-turbo model in Focus's data folder, downloaded from Settings. */
+  whisperModel?: string;
+  /** The crew's voices (Kokoro) on the Apple GPU where it can run them. Missing = on; off keeps them on the CPU. */
+  speechGpu?: boolean;
   /** Focus's address as a bot speaking for the captain reaches it (server/bot.ts), unless FOCUS_PUBLIC_URL is set. Missing = none. */
   publicUrl?: string;
 }
 
 /** The settings an environment variable can set, each with its name: where it's set, it wins over the captain's. */
-export const SETTINGS_ENV = { autoUpdate: 'FOCUS_AUTO_UPDATE', terminal: 'FOCUS_TERMINAL', browserPath: 'FOCUS_BROWSER_PATH' } as const satisfies Partial<Record<keyof Settings, string>>;
+export const SETTINGS_ENV = {
+  autoUpdate: 'FOCUS_AUTO_UPDATE',
+  terminal: 'FOCUS_TERMINAL',
+  browserPath: 'FOCUS_BROWSER_PATH',
+  whisperBin: 'FOCUS_WHISPER_BIN',
+  whisperModel: 'FOCUS_WHISPER_MODEL',
+  speechGpu: 'FOCUS_KOKORO_GPU',
+} as const satisfies Partial<Record<keyof Settings, string>>;
 export type PinnedSettings = Partial<Record<keyof typeof SETTINGS_ENV, (typeof SETTINGS_ENV)[keyof typeof SETTINGS_ENV]>>;
 
 /**

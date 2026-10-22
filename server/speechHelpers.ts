@@ -35,11 +35,10 @@ export interface SpeechHelper {
 
 /**
  * Which helpers to try, in order: the GPU first where it can run (Apple Silicon, with uv to set up its Python), then the
- * CPU, which runs anywhere. A helper that can't load hands over to the next. `gpu` is FOCUS_KOKORO_GPU: 0 keeps it on the CPU.
+ * CPU, which runs anywhere. A helper that can't load hands over to the next. `gpu` is Settings' speechGpu: false keeps it on the CPU.
  */
-export function speechHelpers(machine: { platform: string; arch: string; uv: boolean; gpu?: string }): SpeechOn[] {
-  const off = machine.gpu === '0' || machine.gpu === 'false';
-  return !off && machine.platform === 'darwin' && machine.arch === 'arm64' && machine.uv ? ['gpu', 'cpu'] : ['cpu'];
+export function speechHelpers(machine: { platform: string; arch: string; uv: boolean; gpu?: boolean }): SpeechOn[] {
+  return machine.gpu !== false && machine.platform === 'darwin' && machine.arch === 'arm64' && machine.uv ? ['gpu', 'cpu'] : ['cpu'];
 }
 
 /** One line of the GPU helper's stdout as a message (its WAVs come base64); anything else it printed, undefined. */

@@ -594,6 +594,7 @@ export class Focus {
     const s = this.store.replaceSettings(changeSettings(this.store.settings, patch));
     this.store.save();
     this.infoChanged();
+    this.voice.settingsChanged();
     this.agents.schedule();
     return s;
   }

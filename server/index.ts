@@ -72,7 +72,7 @@ async function main() {
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => workspace.dir(id), prStates);
   };
-  const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo), await currentVersion());
+  const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo, () => settingsInForce(store.settings)), await currentVersion());
   focus.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(workspace), Sessions.fromRunner(runner), Triage.fromTriager(config.demo ? new DemoTriager() : new ClaudeTriager()), Renderer.fromBrowser(browsers), QaChat.fromChatter(config.demo ? new DemoQaChat() : new ClaudeQaChat()));
   focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id));

@@ -8,7 +8,7 @@ import { h } from './dom';
 import { Switch } from './panels';
 
 /** A chip saying which environment variable sets it, or nothing. */
-const pinnedChip = (pinned: PinnedSettings, key: keyof PinnedSettings) => {
+export const pinnedChip = (pinned: PinnedSettings, key: keyof PinnedSettings) => {
   const env = pinned[key];
   return env ? h('span', { class: 'chip warn', title: `Unset ${env} and restart Focus to change it here` }, `from ${env}`) : null;
 };
