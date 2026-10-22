@@ -289,6 +289,26 @@ describe('the chief of staff reading a ship’s lane', () => {
     expect(o.lanes()).toEqual(['ask', 'ask']);
   });
 
+  it('takes a raise again that a restart lost, without reading the ship again', async () => {
+    const o = await shipped({ lane: 'ask', why: 'It changes what the captain sees on a card.' });
+    await o.read();
+    // Focus went down after the ledger had the read, before the raise was saved
+    const lead = [...o.store.agents.values()].find((a) => a.lead)!;
+    o.store.agents.set(lead.id, { ...lead, lead: { ...lead.lead!, prs: lead.lead!.prs.map(({ raised: _, ...p }) => ({ ...p, lane: 'ship' as const })) } });
+    expect(o.chief.mergeHeld(o.pr())).toBe('the chief of staff raised it to Ask');
+    await o.read();
+    expect(o.asked).toHaveLength(1);
+    expect(o.lanes()).toEqual(['ask', 'ask']);
+    expect(o.chief.mergeHeld(o.pr())).toBeUndefined();
+  });
+
+  it('reads a ship only once Ops has pushed all of it', async () => {
+    const o = await shipped({ lane: 'ship', why: 'Safe.' });
+    const lead = [...o.store.agents.values()].find((a) => a.lead)!;
+    o.store.agents.set(lead.id, { ...lead, status: 'pushing' });
+    expect(o.chief.readShips(o.project.id)).toEqual([]);
+  });
+
   it('puts a ship it couldn’t read in Ask: an unread one is the captain’s', async () => {
     const o = await shipped(new Error('Haiku is down'));
     await o.read();

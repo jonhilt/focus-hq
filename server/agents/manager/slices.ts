@@ -79,7 +79,7 @@ export class Slices extends Part {
       const lead = agent.lead;
       // the lead moves on once: a move taken again after that only checks out what's missing
       if (lead.slice < moving.slice) {
-        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [], slice: moving.slice, prs: [], recap: undefined, landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
+        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [], slice: moving.slice, prs: [], shipped: undefined, landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
       } else {
         this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [] } });
       }
@@ -260,6 +260,8 @@ export class Slices extends Part {
         if (problems.length) return yield* new Refused({ message: `Nothing shipped: the recap needs fixing first.\n\n${problems.map((p) => `- ${p}`).join('\n')}` });
         // each of the map's arrows marked whether an import stands behind it
         if (recap.map?.length) recap = { ...recap, map: backedMap(recap.primitives, recap.map, yield* this.recapSources(recap, states)) };
+        // kept before any pull request opens or moves, so a ship read as it lands is read as shipped
+        this.update(agent, { lead: { ...agent.lead, shipped: { title, summary: input.summary, recap } } });
       }
       const project = this.store.project(agent.projectId);
       const lines: string[] = [];
@@ -308,7 +310,6 @@ export class Slices extends Part {
         }
       }
       this.store.sliceJournal(agent.id, { kind: 'shipped' });
-      if (recap) this.update(agent, { lead: { ...agent.lead, recap } });
       // the recap up on the station's screen, where Comms shows it with the lead's turn: a picture that won't go up loses nothing
       if (recap) yield* Effect.ignore(this.core.goalTools.showArtifact(agent, { id: 'system-recap', title: `System recap: ${title}`.slice(0, 80), html: recapPage(recap, title) }));
       this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead, waypoints: shippedWaypoint(agent.lead, { title, summary: input.summary }, Date.now()) } });

@@ -57,16 +57,16 @@ export type LedgerEntry =
    */
   | { kind: 'captain-replies'; key: string; sessionId: string; agent: string; goal?: string; replies: CaptainReply[]; backfilled?: boolean }
   /**
-   * Where a plugin that judges goal leads' turns would send a lead's turn as it ended (`turnUuid` is its transcript's
-   * last line), to check against `captain-replies`: a journal format the core reads (the ledger's review) but never
-   * writes. `message` is what it would say (to the lead on routes 1 and 4); `version` is its prompt's.
-   */
-  /**
    * Which lane a plugin that reads goal leads' ships (the chief of staff) would have a ship in, the lead's pick (`from`)
    * or higher (`to`), and why, as it read its recap: one line per ship, its pull requests at the commits it read.
    * `failed` says it couldn't read it, and put it in Ask. `version` is its prompt's.
    */
   | { kind: 'cos-lane'; agent: string; goal?: string; prs: { repo: string; pr: number; sha?: string }[]; from: Lane; to: Lane; why: string; model: string; version: string; costUsd?: number; failed?: string }
+  /**
+   * Where a plugin that judges goal leads' turns would send a lead's turn as it ended (`turnUuid` is its transcript's
+   * last line), to check against `captain-replies`: a journal format the core reads (the ledger's review) but never
+   * writes. `message` is what it would say (to the lead on routes 1 and 4); `version` is its prompt's.
+   */
   | { kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: VerdictRoute; why: string; message?: string; model: string; version: string; costUsd?: number }
   /**
    * The captain answered something waiting on them (in a plugin's inbox, or an agent's panel, as that plugin records

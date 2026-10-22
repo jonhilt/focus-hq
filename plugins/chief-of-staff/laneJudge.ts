@@ -80,9 +80,14 @@ type ShipPr = { repo: string; number: number; sha?: string; lane?: Lane; outcome
 /** A pull request a lane read could still raise: open, in Ship or Show. Ask is as high as it goes. */
 const raisable = (p: ShipPr): boolean => !p.outcome && (p.lane === 'ship' || p.lane === 'show');
 
-/** Whether a `cos-lane` line read this pull request at the commit it's at now. */
-const readAt = (ledger: readonly LedgerEvent[], p: ShipPr): boolean =>
-  ledger.some((e) => e.kind === 'cos-lane' && e.prs.some((r) => r.repo === p.repo && r.pr === p.number && r.sha === p.sha));
+type LaneRead = Extract<LedgerEvent, { kind: 'cos-lane' }>;
+
+/** The latest `cos-lane` line that read this pull request at the commit it's at now, if one has. */
+const readAt = (ledger: readonly LedgerEvent[], p: ShipPr): LaneRead | undefined =>
+  ledger.findLast((e): e is LaneRead => e.kind === 'cos-lane' && e.prs.some((r) => r.repo === p.repo && r.pr === p.number && r.sha === p.sha));
+
+/** Whether a read took this pull request higher than the lane it's in: the raise was lost (Focus went down before it was saved). */
+const unapplied = (read: LaneRead, p: ShipPr): boolean => higherLane(p.lane ?? 'ask', read.to) !== (p.lane ?? 'ask');
 
 /** A lead's ship it has still to read: their pull requests a read could raise, and none of the ledger's has read at its commit. */
 export function unreadShip(lead: Pick<Agent, 'lead'>, ledger: readonly LedgerEvent[]): ShipPr[] {
@@ -90,9 +95,22 @@ export function unreadShip(lead: Pick<Agent, 'lead'>, ledger: readonly LedgerEve
   return prs.some((p) => !readAt(ledger, p)) ? prs : [];
 }
 
-/** Why Ops should hold a lead's pull request for now: one a read could raise, not yet read at its commit. */
+/** A raise the ledger has that a lead's pull requests don't (it was lost to a restart), to take again: the highest, and why. */
+export function lostRaise(lead: Pick<Agent, 'lead'>, ledger: readonly LedgerEvent[]): { lane: Lane; why: string } | undefined {
+  const lost = (lead.lead?.prs ?? []).filter(raisable).flatMap((p) => {
+    const read = readAt(ledger, p);
+    return read && unapplied(read, p) ? [read] : [];
+  });
+  const top = lost.reduce<LaneRead | undefined>((hi, r) => (!hi || higherLane(hi.to, r.to) !== hi.to ? r : hi), undefined);
+  return top && { lane: top.to, why: top.why };
+}
+
+/** Why Ops should hold a lead's pull request for now: one a read could raise, not yet read at its commit, or raised by a read and not yet in its lane. */
 export function heldForRead(pr: ShipPr | undefined, ledger: readonly LedgerEvent[]): string | undefined {
-  return pr && raisable(pr) && !readAt(ledger, pr) ? 'the chief of staff hasn’t read its lane yet' : undefined;
+  if (!pr || !raisable(pr)) return undefined;
+  const read = readAt(ledger, pr);
+  if (!read) return 'the chief of staff hasn’t read its lane yet';
+  return unapplied(read, pr) ? `the chief of staff raised it to ${laneName(read.to)}` : undefined;
 }
 
 /** The lead's pick for a ship: the lowest lane of its pull requests, since a raise only ever takes them higher. */

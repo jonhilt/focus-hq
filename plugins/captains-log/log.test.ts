@@ -69,6 +69,14 @@ describe('the captain’s log', () => {
     })]);
   });
 
+  it('names the chief of staff on a ship’s lane, read or raised', () => {
+    const ledger: LedgerEvent[] = [
+      { kind: 'cos-lane', agent: 'Lt. Oyelaran', goal: 'Saved items', prs: [{ repo: 'o/web', pr: 4, sha: 'abc' }], from: 'ship', to: 'ask', why: 'It changes a card.', model: 'haiku', version: 'lane-v1', at: 3, projectId: 'p', seq: 1 },
+      { kind: 'lane-raised', repo: 'o/web', pr: 4, goal: 'Saved items', from: 'ship', to: 'ask', by: 'chief-of-staff', why: 'It changes a card.', at: 3, projectId: 'p', seq: 2 },
+    ];
+    expect(captainsLog(sources({ ledger }), 0).map((l) => l.who)).toEqual(['Chief of Staff', 'Chief of Staff']);
+  });
+
   it('keeps to the window, oldest first, the ledger first at the same moment', () => {
     const runs = [{ key: 'a', who: 'A', entries: [at<RunFact>(5, { kind: 'held', until: 9 }), at<RunFact>(20, { kind: 'unheld' })] as JournalEntry[] }];
     const ledger = [{ kind: 'closed', repo: 'o/web', pr: 4, by: 'captain', qa: 'none', failedRounds: 0, triages: 0, at: 20, projectId: 'p', seq: 2 }] as unknown as LedgerEvent[];

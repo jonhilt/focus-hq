@@ -1,7 +1,7 @@
 import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
 import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict } from './judge';
-import { heldForRead, LANE_JUDGE_VERSION, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
+import { heldForRead, LANE_JUDGE_VERSION, lostRaise, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
 import { judged, reading, waking } from './lanes';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
@@ -86,7 +86,11 @@ export class ChiefOfStaff {
   readShips(projectId: string): Promise<void>[] {
     if (!this.host.on(projectId)) return [];
     const ledger = this.host.ledger();
-    return this.host.agents().filter((a) => a.projectId === projectId && this.judges(a)).flatMap((lead) => {
+    // a ship still pushing is read once it's all out
+    return this.host.agents().filter((a) => a.projectId === projectId && this.judges(a) && a.status !== 'pushing').flatMap((lead) => {
+      // a raise the ledger has but the lead's pull requests lost (to a restart) is taken again
+      const lost = lostRaise(lead, ledger);
+      if (lost) this.host.goals.raiseLane(lead.id, lost.lane, lost.why);
       const prs = unreadShip(lead, ledger);
       const key = `${lead.id}:${prs.map((p) => `${p.repo}#${p.number}@${p.sha ?? ''}`).join(',')}`;
       if (!prs.length || this.readingShips.has(key)) return [];
@@ -107,15 +111,15 @@ export class ChiefOfStaff {
     const work = lead.lead;
     if (!work) return;
     const from = pickOf(prs);
-    const shipped = work.waypoints?.at(-1);
+    const { shipped } = work;
     const read = { agent: lead.name, goal: work.title, prs: prs.map((p) => ({ repo: p.repo, pr: p.number, ...(p.sha && { sha: p.sha }) })), from, version: LANE_JUDGE_VERSION };
     let lane: Lane = 'ask';
     let why: string;
     try {
-      if (!work.recap) throw new Error('it shipped with no recap to read');
+      if (!shipped) throw new Error('it shipped with no recap to read');
       const result = await this.judge.judge({
         system: laneSystemPrompt(this.standingOrders()),
-        prompt: lanePrompt({ goal: work.title, title: shipped?.title, summary: shipped?.summary, recap: work.recap, lane: from }),
+        prompt: lanePrompt({ goal: work.title, title: shipped.title, summary: shipped.summary, recap: shipped.recap, lane: from }),
         settings: this.host.settings(),
         schema: LANE_SCHEMA,
       });

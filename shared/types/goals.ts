@@ -236,8 +236,11 @@ export interface LeadWork {
   slice: number;
   /** This slice's pull requests. */
   prs: LeadPr[];
-  /** The recap this slice last shipped with: none before it ships, or from a lead that sent none. */
-  recap?: SliceRecap;
+  /**
+   * What this slice last shipped with: its pull requests' title and description, and its recap. Kept before any pull
+   * request opens, so whoever reads a ship reads it as shipped. None before it ships, or from a lead that sent no recap.
+   */
+  shipped?: { title: string; summary: string; recap: SliceRecap };
   /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
   landed?: LeadPr[];
   /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */

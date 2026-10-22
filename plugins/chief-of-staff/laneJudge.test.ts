@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/shared';
-import { heldForRead, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
+import { heldForRead, lanePrompt, laneSystemPrompt, lostRaise, parseLane, pickOf, unreadShip } from './laneJudge';
 
 type Pr = { repo: string; number: number; url: string; sha?: string; lane?: 'ship' | 'show' | 'ask'; outcome?: 'merged' | 'closed' };
 const pr = (number: number, more: Partial<Pr> = {}): Pr => ({ repo: 'acme/shop', number, url: '', sha: `sha${number}`, lane: 'ship', ...more });
 const lead = (prs: Pr[]): Pick<Agent, 'lead'> => ({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs } });
-const read = (prs: { pr: number; sha: string }[]): LedgerEvent => ({
-  kind: 'cos-lane', seq: 1, at: 1, projectId: 'p', agent: 'Lt. Vale', prs: prs.map((p) => ({ repo: 'acme/shop', ...p })), from: 'ship', to: 'ship', why: 'Safe.', model: 'haiku', version: 'lane-v1',
+const read = (prs: { pr: number; sha: string }[], to: 'ship' | 'show' | 'ask' = 'ship'): LedgerEvent => ({
+  kind: 'cos-lane', seq: 1, at: 1, projectId: 'p', agent: 'Lt. Vale', prs: prs.map((p) => ({ repo: 'acme/shop', ...p })), from: 'ship', to, why: to === 'ship' ? 'Safe.' : 'It changes a card.', model: 'haiku', version: 'lane-v1',
 });
 
 describe('the chief of staff’s answer on a ship’s lane', () => {
@@ -40,6 +40,14 @@ describe('the ships it has still to read', () => {
     expect(heldForRead(pr(7), [])).toBe('the chief of staff hasn’t read its lane yet');
     expect(heldForRead(pr(7), [read([{ pr: 7, sha: 'sha7' }])])).toBeUndefined();
     expect(heldForRead(pr(9, { lane: 'ask' }), [])).toBeUndefined();
+  });
+
+  it('keeps holding one a read raised, until the raise is in its lane (a restart lost it), and says which to take again', () => {
+    const ledger = [read([{ pr: 7, sha: 'sha7' }, { pr: 8, sha: 'sha8' }], 'show'), read([{ pr: 8, sha: 'sha8' }], 'ask')];
+    expect(heldForRead(pr(7), ledger)).toBe('the chief of staff raised it to Show');
+    expect(lostRaise(lead([pr(7), pr(8)]), ledger)).toEqual({ lane: 'ask', why: 'It changes a card.' });
+    expect(heldForRead(pr(7, { lane: 'show' }), ledger)).toBeUndefined();
+    expect(lostRaise(lead([pr(7, { lane: 'show' }), pr(8, { lane: 'ask' })]), ledger)).toBeUndefined();
   });
 
   it('takes the lowest lane of its pull requests as the lead’s pick', () => {

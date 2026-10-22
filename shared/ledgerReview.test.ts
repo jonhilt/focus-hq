@@ -52,6 +52,18 @@ describe('ledgerRow', () => {
     expect(ledgerRow(cos(2)).quotes).toBeUndefined();
   });
 
+  it('says when a lane was raised, by whom and why, among the merges', () => {
+    const raised = ev({ kind: 'lane-raised', repo: REPO, pr: 236, goal: GOAL, from: 'ship', to: 'ask', by: 'chief-of-staff', why: 'It changes a card.' }, 6);
+    expect(ledgerRow(raised)).toMatchObject({ group: 'merged', tag: 'Lane', tone: 'warn', title: 'focus #236 · raised from ship to ask by the chief of staff', detail: 'It changes a card. · Engineering deck', pr: { repo: REPO, pr: 236 }, goal: GOAL });
+  });
+
+  it('says what the chief of staff made of a ship’s lane, kept, raised or unread', () => {
+    const read = (to: string, failed?: string) => ev({ kind: 'cos-lane', agent: 'Cmdr. Vale', goal: GOAL, prs: [{ repo: REPO, pr: 236, sha: 'abc' }], from: 'ship', to, why: 'Safe.', model: 'haiku', version: 'lane-v1', failed }, 6);
+    expect(ledgerRow(read('ship'))).toMatchObject({ group: 'sessions', tag: 'Lane', tone: 'info', title: 'Kept Cmdr. Vale’s ship in ship', detail: 'Safe. · Engineering deck', pr: { repo: REPO, pr: 236 } });
+    expect(ledgerRow(read('show')).title).toBe('Raised Cmdr. Vale’s ship from ship to show');
+    expect(ledgerRow(read('ask', 'Haiku is down'))).toMatchObject({ tone: 'bad', detail: 'Haiku is down · Engineering deck' });
+  });
+
   it('says what the captain decided, for whom, and when it came through the API', () => {
     const decided = (via: string) => ev({ kind: 'captain-decision', agent: 'Cmdr. Vale', goal: GOAL, item: { id: 'turn:a:1', kind: 'turn', what: 'Waiting for your reply' }, answer: 'Ship it', via }, 7);
     expect(ledgerRow(decided('office'))).toMatchObject({ group: 'sessions', tag: 'Captain', tone: 'info', title: 'Decided: Waiting for your reply → Ship it', detail: 'Cmdr. Vale · Engineering deck', goal: GOAL });
@@ -144,6 +156,16 @@ describe('trace', () => {
     verdict(300, 'pass', 0, 9, 'Another goal'),
     digest('s3', 300, 9),
   ];
+
+  it('follows a pull request’s lane, read and raised, by the pull request and by its goal', () => {
+    const lanes = [
+      ev({ kind: 'cos-lane', agent: 'Cmdr. Vale', goal: GOAL, prs: [{ repo: REPO, pr: 241, sha: 'abc' }], from: 'ship', to: 'ask', why: 'It changes a card.', model: 'haiku', version: 'lane-v1' }, 10),
+      ev({ kind: 'lane-raised', repo: REPO, pr: 241, goal: GOAL, from: 'ship', to: 'ask', by: 'chief-of-staff', why: 'It changes a card.' }, 10),
+      ev({ kind: 'cos-lane', agent: 'Cmdr. Vale', goal: 'Another goal', prs: [{ repo: REPO, pr: 300 }], from: 'ship', to: 'ship', why: 'Safe.', model: 'haiku', version: 'lane-v1' }, 11),
+    ];
+    expect(trace(lanes, { kind: 'pr', repo: REPO, pr: 241 }).steps.map((s) => s.tag)).toEqual(['Lane', 'Lane']);
+    expect(trace(lanes, { kind: 'goal', title: GOAL }).steps).toHaveLength(2);
+  });
 
   it('follows a pull request from its first session to its merge, with the frictions folded into their session', () => {
     const t = trace(events, { kind: 'pr', repo: REPO, pr: 236 });
