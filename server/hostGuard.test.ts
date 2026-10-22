@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { allowedHosts, hostname, listensBeyondLoopback, refusal } from './hostGuard';
 
-const machine = { hostname: 'Jons-Mac', addresses: ['127.0.0.1', '192.168.1.20', 'fe80::1'] };
+const machine = { hostname: 'my-mac', addresses: ['127.0.0.1', '192.168.1.20', 'fe80::1'] };
 const local = allowedHosts('127.0.0.1', '', machine);
 
 describe('hostname', () => {
@@ -53,7 +53,7 @@ describe('allowedHosts', () => {
   it('listening on every interface adds the machine’s own name and addresses', () => {
     const hosts = allowedHosts('0.0.0.0', '', machine);
     expect(refusal({ host: '192.168.1.20:4477', origin: 'http://192.168.1.20:4477' }, hosts)).toBeUndefined();
-    expect(refusal({ host: 'jons-mac.local:4477' }, hosts)).toBeUndefined();
+    expect(refusal({ host: 'my-mac.local:4477' }, hosts)).toBeUndefined();
     expect(refusal({ host: '0.0.0.0:4477' }, hosts)).toBeDefined();
   });
 });

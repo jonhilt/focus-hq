@@ -1,0 +1,58 @@
+# Brings a pull request opened on the public repo in here as a branch, contrib/pr-<n>, with a pull request of its own,
+# so it's reviewed (QA, the captain) like any other. Run it from the Actions tab with the public pull request's number
+# once you've read its diff: from then on its code runs here, in CI and in QA's checkouts. Run it again after the
+# contributor pushes more and the branch follows.
+#
+# Merge it with a merge commit, not a squash: the contributor's commits reach the public repo's main unchanged through
+# public-mirror.yml, so GitHub marks their pull request merged there and their name stays on the commits.
+#
+# Uses PUBLIC_REPO and PUBLIC_MIRROR_TOKEN, as public-mirror.yml does. GITHUB_TOKEN can't push a branch that changes
+# .github/workflows: bring one of those in by hand (see CONTRIBUTING.md).
+name: Import contribution
+
+on:
+  workflow_dispatch:
+    inputs:
+      pr:
+        description: Number of the pull request on the public repo
+        required: true
+        type: number
+
+permissions:
+  contents: write
+  pull-requests: write
+
+env:
+  PUBLIC: ${{ vars.PUBLIC_REPO }}
+  N: ${{ inputs.pr }}
+
+jobs:
+  import:
+    if: github.repository == 'jonhilt/focus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Fetch the pull request and push it here as contrib/pr-${{ inputs.pr }}
+        run: |
+          git fetch "https://github.com/${PUBLIC}.git" "refs/pull/${N}/head:contrib/pr-${N}"
+          git push --force origin "contrib/pr-${N}"
+
+      - name: Open a pull request for it, once
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PUBLIC_TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+        run: |
+          if gh pr view "contrib/pr-${N}" --json state -q .state 2>/dev/null | grep -q OPEN; then
+            echo "already open: updated the branch"; exit 0
+          fi
+          title=$(GH_TOKEN="$PUBLIC_TOKEN" gh pr view "$N" --repo "$PUBLIC" --json title -q .title)
+          author=$(GH_TOKEN="$PUBLIC_TOKEN" gh pr view "$N" --repo "$PUBLIC" --json author -q .author.login)
+          url=$(gh pr create --head "contrib/pr-${N}" --base main --title "$title (public #${N})" --body "Contributed by @${author} in ${PUBLIC}#${N}.
+
+          Merge with a merge commit, not a squash, so it lands on the public repo as their commits and their pull request shows as merged.")
+          GH_TOKEN="$PUBLIC_TOKEN" gh pr comment "$N" --repo "$PUBLIC" \
+            --body "Thanks! This is in for review. Once it's merged it shows up here and this pull request closes as merged."
+          echo "$url"

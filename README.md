@@ -35,8 +35,10 @@ In your **ready room** (<kbd>M</kbd>), make a **New project** from your repos, t
 
 ## Working on Focus
 
-[CLAUDE.md](CLAUDE.md) has the commands and rules. The docs hold what the code can't: [architecture](docs/architecture.md) (where things live), [scripts](docs/scripts.md), [invariants](docs/invariants.md), [plugins](docs/plugins.md), and the pages under `docs/` and `plugins/*/` for each part's decisions and promises.
+Contributions are welcome: see [CONTRIBUTING.md](CONTRIBUTING.md). [CLAUDE.md](CLAUDE.md) has the commands and rules. The docs hold what the code can't: [architecture](docs/architecture.md) (where things live), [scripts](docs/scripts.md), [invariants](docs/invariants.md), [plugins](docs/plugins.md), and the pages under `docs/` and `plugins/*/` for each part's decisions and promises.
 
 ## Licence
 
-Source-available for members of the AI Coding Lab community: see [LICENSE](LICENSE). Not open source, so please don't republish it.
+MIT: see [LICENSE](LICENSE). Focus runs agents through Anthropic's Claude Agent SDK, which `pnpm install` fetches under Anthropic's own terms, not this licence: you need your own Claude account and accept [Anthropic's terms](https://code.claude.com/docs/en/legal-and-compliance) to use it.
+
+Focus is a fan-made homage to Star Trek, not affiliated with or endorsed by Paramount or CBS Studios, who own Star Trek and its marks.

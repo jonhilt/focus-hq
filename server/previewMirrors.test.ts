@@ -7,7 +7,7 @@ import { certHost, localHeaders, mirroredLocation, mirrorHosts, mirrorPlan, Prev
 
 const nic = (address: string): NetworkInterfaceInfo =>
   address.includes(':') ? { address, netmask: '', family: 'IPv6', mac: '', internal: false, cidr: null, scopeid: 0 } : { address, netmask: '', family: 'IPv4', mac: '', internal: false, cidr: null };
-const interfaces = { lo0: [nic('127.0.0.1'), nic('::1')], en0: [nic('192.168.1.20')], utun4: [nic('100.114.71.102'), nic('fd7a:115c:a1e0::3737:4766')] };
+const interfaces = { lo0: [nic('127.0.0.1'), nic('::1')], en0: [nic('192.168.1.20')], utun4: [nic('100.101.102.103'), nic('fd7a:115c:a1e0::1')] };
 
 const preview = (status: Preview['status'], links: PreviewLink[]): Preview => ({
   projectId: 'p', repo: 'o/r', number: 1, title: 't', set: {}, checkouts: [], status, activity: '', links, startedAt: 0,
@@ -15,14 +15,14 @@ const preview = (status: Preview['status'], links: PreviewLink[]): Preview => ({
 
 describe('tailnetAddresses', () => {
   it('finds the machine’s Tailscale addresses and nothing else', () => {
-    expect(tailnetAddresses(interfaces)).toEqual(['100.114.71.102', 'fd7a:115c:a1e0::3737:4766']);
+    expect(tailnetAddresses(interfaces)).toEqual(['100.101.102.103', 'fd7a:115c:a1e0::1']);
     expect(tailnetAddresses({ eth0: [nic('100.10.0.1'), nic('100.128.0.1')] })).toEqual([]);
   });
 });
 
 describe('mirrorHosts', () => {
   it('takes FOCUS_PREVIEW_HOSTS, `off` for none, and the tailnet addresses without it', () => {
-    expect(mirrorHosts(undefined, interfaces)).toEqual(['100.114.71.102', 'fd7a:115c:a1e0::3737:4766']);
+    expect(mirrorHosts(undefined, interfaces)).toEqual(['100.101.102.103', 'fd7a:115c:a1e0::1']);
     expect(mirrorHosts('10.0.0.5, 10.0.0.6', interfaces)).toEqual(['10.0.0.5', '10.0.0.6']);
     expect(mirrorHosts('off', interfaces)).toEqual([]);
   });

@@ -1,0 +1,53 @@
+# Copies main (and version tags) to the public repo, so it carries the code and its history without this repo's issues,
+# pull requests or work-in-progress branches. A version tag (v0.2, v1.0.0) also becomes a release there, with notes
+# generated from the commits since the last one. Nothing is merged on the public repo itself: its main is overwritten
+# from here, and contributions come in through import-contribution.yml.
+#
+# Needs the PUBLIC_REPO variable (owner/name of the public repo) and the PUBLIC_MIRROR_TOKEN secret: a fine-grained
+# personal access token scoped to that repository only, with "Contents: read and write", "Workflows: read and write"
+# (main carries this file, and GitHub only lets a token with Workflows push it) and "Pull requests: read and write"
+# (import-contribution.yml comments on the pull request it brings in).
+name: Public mirror
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: public-mirror
+  cancel-in-progress: false
+
+env:
+  MIRROR: ${{ vars.PUBLIC_REPO }}
+
+jobs:
+  mirror:
+    # the public repo carries this file too: it only runs here
+    if: github.repository == 'jonhilt/focus'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          # the checkout's own credentials would be sent to the mirror too, and they can't write there
+          persist-credentials: false
+
+      - name: Push main and version tags to the public repo
+        env:
+          TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+        run: |
+          remote="https://x-access-token:${TOKEN}@github.com/${MIRROR}.git"
+          git push --force "$remote" HEAD:refs/heads/main
+          # a pattern that matches no tags fails the push
+          if git tag -l 'v*' | grep -q .; then git push "$remote" 'refs/tags/v*:refs/tags/v*'; fi
+
+      - name: Publish a release for a version tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.PUBLIC_MIRROR_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$MIRROR" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$MIRROR" --verify-tag --generate-notes --title "Focus $GITHUB_REF_NAME"

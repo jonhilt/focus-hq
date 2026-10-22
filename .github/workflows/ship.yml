@@ -24,7 +24,7 @@ env:
 
 jobs:
   build:
-    # the community mirror carries this file too: it only runs here
+    # forks carry this file too: it only runs here
     if: github.repository == 'jonhilt/focus'
     runs-on: ubuntu-latest
     steps:
