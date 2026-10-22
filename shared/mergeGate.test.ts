@@ -186,6 +186,10 @@ describe('mergeStep for a goal’s lead’s PR, by its lane', () => {
     expect(mergeStep(failing, review(), { ...lead('ship'), mark: { sha: HEAD, kind: 'rerun' } })).toEqual({ kind: 'blocked', reason: 'checks fail, for its lead to fix' });
   });
 
+  it('waits while a plugin holds it back, deciding something about it', () => {
+    expect(mergeStep(pr(), review(), { ...lead('ship'), held: 'the chief of staff hasn’t read its lane yet' })).toEqual({ kind: 'wait', reason: 'the chief of staff hasn’t read its lane yet' });
+  });
+
   it('still keeps one a plugin claimed, or a draft, for the captain', () => {
     expect(mergeStep(pr(), review(), { ...lead('ship'), captainMerges: true }).kind).toBe('blocked');
     expect(mergeStep(pr({ isDraft: true }), review(), lead('ship')).kind).toBe('blocked');

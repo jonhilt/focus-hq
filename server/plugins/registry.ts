@@ -1,7 +1,7 @@
 import { lend } from './lend';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
 import type { LedgerEvent } from '../../shared/ledger';
-import type { Agent, Brief, PluginStates, SignIn } from '../../shared/types';
+import type { Agent, Brief, PluginStates, PullRequest, SignIn } from '../../shared/types';
 import { errorMessage } from '../util';
 import type { BriefSpec, FocusPlugin, LeadNote, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
 
@@ -137,6 +137,15 @@ export class Plugins {
   /** Whether any plugin says only the captain merges this pull request. */
   captainMerges(pr: { branch: string }): boolean {
     return [...this.parts].some(([id, parts]) => this.safely(id, 'captainMerges', () => parts.captainMerges?.(pr)) === true);
+  }
+
+  /** Why a plugin holds this pull request back from merging by itself, if one does: the first that says. */
+  mergeHeld(pr: Pick<PullRequest, 'repo' | 'number' | 'headSha'>): string | undefined {
+    for (const [id, parts] of this.parts) {
+      const held = this.safely(id, 'mergeHeld', () => parts.mergeHeld?.(pr));
+      if (typeof held === 'string' && held) return held;
+    }
+    return undefined;
   }
 
   private each(hook: string, call: (parts: PluginParts) => void): void {

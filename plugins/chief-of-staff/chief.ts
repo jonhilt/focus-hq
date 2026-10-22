@@ -1,6 +1,7 @@
-import type { Agent, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
+import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
 import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict } from './judge';
+import { heldForRead, LANE_JUDGE_VERSION, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
 import { judged, reading, waking } from './lanes';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
@@ -16,15 +17,18 @@ import { wakeFor } from './wake';
 export interface Judge {
   /** The model it judges with, as the ledger names it when the session doesn't say. */
   readonly model: string;
-  judge(req: { system: string; prompt: string; settings: Settings }): Promise<{ structured: unknown; costUsd?: number; model?: string }>;
+  /** `schema` is the answer's shape: a turn's verdict when it's left out. */
+  judge(req: { system: string; prompt: string; settings: Settings; schema?: Record<string, unknown> }): Promise<{ structured: unknown; costUsd?: number; model?: string }>;
 }
 
 /** What the chief of staff needs of the focus. */
-export type ChiefHost = Pick<PluginHost, 'on' | 'projects' | 'agent' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'mark' | 'message'> };
+export type ChiefHost = Pick<PluginHost, 'on' | 'projects' | 'agent' | 'agents' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'mark' | 'message' | 'raiseLane'> };
 
 export class ChiefOfStaff {
   /** The turns being judged now, by session and last line: a turn that ends twice is judged once. */
   private readonly judging = new Set<string>();
+  /** The ships it's reading the lanes of now, by lead and the commits they're at: each is read once. */
+  private readonly readingShips = new Set<string>();
   /** Ops' news for leads whose turn it's still reading, by lead: it wakes them for it once it's judged, if it can then. */
   private readonly deferred = new Map<string, LeadNote[]>();
 
@@ -73,6 +77,57 @@ export class ChiefOfStaff {
     const project = this.host.projects().find((p) => p.id === lead.projectId);
     const text = project && wakeFor(note, project);
     if (text) this.host.goals.message(lead.id, text, { from: note.from });
+  }
+
+  /**
+   * The board of a project it's on for was refreshed: it reads the lane of each goal's lead's ship it hasn't read yet
+   * (`unreadShip`), and raises it where the captain would want to see it first (README.md#raising-a-ships-lane).
+   */
+  readShips(projectId: string): Promise<void>[] {
+    if (!this.host.on(projectId)) return [];
+    const ledger = this.host.ledger();
+    return this.host.agents().filter((a) => a.projectId === projectId && this.judges(a)).flatMap((lead) => {
+      const prs = unreadShip(lead, ledger);
+      const key = `${lead.id}:${prs.map((p) => `${p.repo}#${p.number}@${p.sha ?? ''}`).join(',')}`;
+      if (!prs.length || this.readingShips.has(key)) return [];
+      this.readingShips.add(key);
+      return [this.readShip(lead, prs).catch((err: unknown) => console.warn(`[chief-of-staff] reading ${lead.name}’s ship failed: ${errorMessage(err)}`)).finally(() => this.readingShips.delete(key))];
+    });
+  }
+
+  /** Why Ops should hold a goal's lead's pull request for now: its ship's lane isn't read yet, in a project it's on for. */
+  mergeHeld(pr: { repo: string; number: number }): string | undefined {
+    const lead = this.host.agents().find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === pr.repo && p.number === pr.number && !p.outcome));
+    if (!lead || !this.judges(lead)) return undefined;
+    return heldForRead(lead.lead?.prs.find((p) => p.repo === pr.repo && p.number === pr.number), this.host.ledger());
+  }
+
+  /** Reads a lead's ship and raises its lane if it would: one it can't read goes in Ask, since an unread one is the captain's. */
+  private async readShip(lead: Agent, prs: { repo: string; number: number; sha?: string; lane?: Lane }[]): Promise<void> {
+    const work = lead.lead;
+    if (!work) return;
+    const from = pickOf(prs);
+    const shipped = work.waypoints?.at(-1);
+    const read = { agent: lead.name, goal: work.title, prs: prs.map((p) => ({ repo: p.repo, pr: p.number, ...(p.sha && { sha: p.sha }) })), from, version: LANE_JUDGE_VERSION };
+    let lane: Lane = 'ask';
+    let why: string;
+    try {
+      if (!work.recap) throw new Error('it shipped with no recap to read');
+      const result = await this.judge.judge({
+        system: laneSystemPrompt(this.standingOrders()),
+        prompt: lanePrompt({ goal: work.title, title: shipped?.title, summary: shipped?.summary, recap: work.recap, lane: from }),
+        settings: this.host.settings(),
+        schema: LANE_SCHEMA,
+      });
+      const answer = parseLane(result.structured, from);
+      if (!answer) throw new Error(`it gave no lane: ${JSON.stringify(result.structured)}`);
+      ({ lane, why } = answer);
+      this.host.record(lead.projectId, { kind: 'cos-lane', ...read, to: lane, why, model: result.model ?? this.judge.model, ...(result.costUsd !== undefined && { costUsd: result.costUsd }) });
+    } catch (err) {
+      why = 'The chief of staff couldn’t read this ship, so it waits for you.';
+      this.host.record(lead.projectId, { kind: 'cos-lane', ...read, to: lane, why, model: this.judge.model, failed: errorMessage(err) });
+    }
+    if (lane !== from) this.host.goals.raiseLane(lead.id, lane, why);
   }
 
   private async judgeTurn(agent: Agent, sessionId: string, goal: string, since: number): Promise<void> {

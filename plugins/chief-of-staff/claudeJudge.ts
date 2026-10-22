@@ -13,7 +13,7 @@ export class ClaudeJudge implements Judge {
   /** `session` runs a read-only Claude Code session: the host's (`host.readOnlySession`), or a fake in a test. */
   constructor(private readonly session: (run: ReadOnlyRun) => Promise<ReadOnlyResult>) {}
 
-  async judge(req: { system: string; prompt: string; settings: ReadOnlyRun['settings'] }): Promise<{ structured: unknown; costUsd?: number; model?: string }> {
+  async judge(req: { system: string; prompt: string; settings: ReadOnlyRun['settings']; schema?: Record<string, unknown> }): Promise<{ structured: unknown; costUsd?: number; model?: string }> {
     const result = await this.session({
       cwd: os.tmpdir(),
       system: req.system,
@@ -23,7 +23,7 @@ export class ClaudeJudge implements Judge {
       signal: new AbortController().signal,
       activity: () => undefined,
       builtins: [],
-      schema: VERDICT_SCHEMA,
+      schema: req.schema ?? VERDICT_SCHEMA,
       model: JUDGE_MODEL,
       maxTurns: 2,
       timeoutMs: 3 * 60_000,

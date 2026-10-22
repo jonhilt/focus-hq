@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { higherLane, laneFloor, laneProblem } from './mergeLane';
+import { higherLane, laneFloor, laneProblem, raisedPrs, raisedSaid } from './mergeLane';
 
 describe('the lowest lane a slice may take', () => {
   it('is set by its rollup: composing may Ship, extending Show, adding only Ask', () => {
@@ -20,5 +20,24 @@ describe('the higher of two lanes', () => {
     expect(higherLane('ship', 'show')).toBe('show');
     expect(higherLane('ask', 'show')).toBe('ask');
     expect(higherLane('ship', 'ship')).toBe('ship');
+  });
+});
+
+describe('raising the lane of a lead’s pull requests', () => {
+  const by = { by: 'chief-of-staff', why: 'It changes a card.' };
+
+  it('takes each open one in a lower lane up, with who and why, and leaves the rest', () => {
+    const prs = [{ n: 1, lane: 'ship' as const }, { n: 2, lane: 'ask' as const }, { n: 3, lane: 'ship' as const, outcome: 'merged' }];
+    const { prs: next, from } = raisedPrs(prs, 'show', by);
+    expect(next).toEqual([{ n: 1, lane: 'show', raised: { lane: 'show', ...by } }, prs[1], prs[2]]);
+    expect([...from.values()]).toEqual(['ship']);
+  });
+
+  it('lowers none', () => {
+    expect(raisedPrs([{ lane: 'ask' as const }], 'ship', by).from.size).toBe(0);
+  });
+
+  it('says so on the pull request', () => {
+    expect(raisedSaid('ship', 'ask', 'chief-of-staff', 'It changes a card.')).toBe('⬆ The chief of staff raised this slice from Ship to Ask: it waits for the captain to merge it.\n\n> It changes a card.');
   });
 });

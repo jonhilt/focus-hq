@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
-import { focus, until } from '../../plugin-api/testing';
+import { demoWorkspace, focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
 import { CHIEF_OF_STAFF, readOf } from './shared';
 
@@ -220,5 +220,80 @@ describe('the chief of staff', () => {
       await new Promise((r) => setTimeout(r, 30));
       expect(o.claude.turns).toHaveLength(1);
     });
+  });
+});
+
+// README.md#raising-a-ships-lane: it reads each ship's recap and raises its lane where the captain would want to see it first
+describe('the chief of staff reading a ship’s lane', () => {
+  /** A lead who shipped a slice in Ship, and a chief of staff whose judge answers its read with `answer` (or fails). */
+  async function shipped(answer: unknown) {
+    let head = 'first';
+    const o = focus({ ...demoWorkspace, head: async () => head, changedFiles: async () => ['src/saved.ts'] });
+    o.project.plugins = [CHIEF_OF_STAFF];
+    const asked: { system: string; prompt: string; schema?: object }[] = [];
+    const judge: Judge = {
+      model: 'haiku',
+      judge: (req) => (asked.push(req), answer instanceof Error ? Promise.reject(answer) : Promise.resolve({ structured: answer, model: 'claude-haiku-4-5' })),
+    };
+    let chief: ChiefOfStaff | undefined;
+    const plugin: FocusPlugin = {
+      id: CHIEF_OF_STAFF,
+      start: (host) => {
+        const c = new ChiefOfStaff(host, judge, () => undefined);
+        chief = c;
+        return { mergeHeld: (pr) => c.mergeHeld(pr) };
+      },
+    };
+    o.agents.startPlugins([plugin], { demo: false, ownRepo: () => undefined, transcript: () => Promise.resolve('') });
+    const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => o.claude.turns.length === 1);
+    const ship = (lane: 'ship' | 'show') => o.claude.turns[0].req.tools!.ship({
+      title: 'Saved items',
+      summary: 'A thin first slice.',
+      recap: { primitives: [{ id: 'saved', group: 'shop', impact: 'composes', change: 'Wired in', paths: ['webshop-frontend/', 'webshop-api/'] }], lane },
+    });
+    await ship('ship');
+    const lanes = () => o.store.agents.get(agent.id)!.lead!.prs.map((p) => p.lane);
+    const pr = () => o.store.agents.get(agent.id)!.lead!.prs[0];
+    const read = () => Promise.all(chief!.readShips(o.project.id));
+    const lines = (kind: string) => o.store.ledger.filter((e) => e.kind === kind);
+    return { ...o, asked, chief: chief!, lanes, pr, read, lines, ship, next: () => (head = 'second') };
+  }
+
+  it('holds the lead’s pull requests back from merging by themselves until it has read the ship', async () => {
+    const o = await shipped({ lane: 'ship', why: 'It only wires in parts as they are.' });
+    expect(o.chief.mergeHeld(o.pr())).toBe('the chief of staff hasn’t read its lane yet');
+    await o.read();
+    expect(o.chief.mergeHeld(o.pr())).toBeUndefined();
+    expect(o.asked[0].prompt).toContain('- saved (shop), composes: Wired in');
+  });
+
+  it('keeps the lead’s pick, saying why in the ledger, and reads a ship once', async () => {
+    const o = await shipped({ lane: 'ship', why: 'It only wires in parts as they are.' });
+    await o.read();
+    await o.read();
+    expect(o.asked).toHaveLength(1);
+    expect(o.lanes()).toEqual(['ship', 'ship']);
+    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ship', why: 'It only wires in parts as they are.', version: 'lane-v1', model: 'claude-haiku-4-5' }]);
+    expect(o.lines('lane-raised')).toEqual([]);
+  });
+
+  it('raises it where the captain would want to see it first, and a ship after can’t bring it back down', async () => {
+    const o = await shipped({ lane: 'ask', why: 'It changes what the captain sees on a card.' });
+    await o.read();
+    expect(o.lanes()).toEqual(['ask', 'ask']);
+    expect(o.pr().raised).toEqual({ lane: 'ask', by: CHIEF_OF_STAFF, why: 'It changes what the captain sees on a card.' });
+    expect(o.lines('lane-raised')).toMatchObject([{ from: 'ship', to: 'ask', by: CHIEF_OF_STAFF }, { from: 'ship', to: 'ask', by: CHIEF_OF_STAFF }]);
+    o.next();
+    await o.ship('ship');
+    expect(o.lanes()).toEqual(['ask', 'ask']);
+  });
+
+  it('puts a ship it couldn’t read in Ask: an unread one is the captain’s', async () => {
+    const o = await shipped(new Error('Haiku is down'));
+    await o.read();
+    expect(o.lanes()).toEqual(['ask', 'ask']);
+    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ask', failed: 'Haiku is down' }]);
+    expect(o.chief.mergeHeld(o.pr())).toBeUndefined();
   });
 });

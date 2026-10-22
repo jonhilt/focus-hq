@@ -1,3 +1,4 @@
+import { type Lane, raisedPrs, raisedSaid } from '../../../shared/mergeLane';
 import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
@@ -427,6 +428,27 @@ export class Leads extends Part {
       this.noteForLead(lead, 'Ops', landedNote(lead.lead), { kind: 'slice-landed', slice: lead.lead.slice });
     }
     return true;
+  }
+
+  /**
+   * A plugin (`by`, its id) raises the lane of a goal's lead's open pull requests to `lane`, saying why: each in a lower
+   * lane goes up (docs/merging.md#lanes-how-a-goals-leads-slice-merges), with a ledger line and a comment on it; none
+   * comes down. What it raised, by repo#number.
+   */
+  raiseLane(leadId: string, lane: Lane, why: string, by: string): string[] {
+    const lead = this.store.agents.get(leadId);
+    if (lead?.task !== 'lead' || !lead.lead) return [];
+    const { prs, from } = raisedPrs(lead.lead.prs, lane, { by, why });
+    if (!from.size) return [];
+    this.update(lead, { lead: { ...lead.lead, prs } });
+    for (const [pr, was] of from) {
+      this.core.ledger.record(lead.projectId, { kind: 'lane-raised', repo: pr.repo, pr: pr.number, goal: lead.lead.title, from: was, to: lane, by, why });
+      this.background(GitHub.use((gh) => gh.commentOnPullRequest(pr.repo, pr.number, raisedSaid(was, lane, by, why))).pipe(Effect.ignore));
+    }
+    const where = [...from.keys()].map((p) => `${p.repo.split('/')[1]}#${p.number}`);
+    this.hub.toast('info', `⬆ ${where.join(', ')} raised to ${lane[0].toUpperCase()}${lane.slice(1)}: ${why}`, lead.id);
+    this.boardChanged(lead.projectId);
+    return where;
   }
 
   /** The leads' pull requests still open, for Ops to notice when they're merged or closed on GitHub. */

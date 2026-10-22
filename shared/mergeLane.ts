@@ -39,3 +39,21 @@ export const LANE_SAID: Record<Lane, string> = {
   show: 'merges itself once QA passes it, and tells the captain',
   ask: 'waits for the captain to merge it',
 };
+
+/** What a raise does to a lead's pull requests: each still open in a lower lane goes up to `lane`, the rest as they were. */
+export function raisedPrs<P extends { lane?: Lane; outcome?: unknown }>(prs: readonly P[], lane: Lane, raised: { by: string; why: string }): { prs: P[]; from: Map<P, Lane> } {
+  const from = new Map<P, Lane>();
+  const next = prs.map((p) => {
+    const was = p.lane ?? 'ask';
+    if (p.outcome || higherLane(was, lane) === was) return p;
+    const up = { ...p, lane, raised: { lane, ...raised } };
+    from.set(up, was);
+    return up;
+  });
+  return { prs: next, from };
+}
+
+/** What Ops says on a pull request whose lane was raised. */
+export function raisedSaid(from: Lane, to: Lane, by: string, why: string): string {
+  return `⬆ The ${by.replace(/-/g, ' ')} raised this slice from ${laneName(from)} to ${laneName(to)}: it ${LANE_SAID[to]}.\n\n> ${why.trim().replace(/\n/g, '\n> ')}`;
+}

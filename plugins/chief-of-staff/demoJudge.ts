@@ -1,5 +1,6 @@
 import { demoPace, sleep } from '../../plugin-api/server';
 import type { Judge } from './chief';
+import { LANE_SCHEMA } from './laneJudge';
 import type { Reply } from './shared';
 
 /** The replies the demo's judge suggests on a turn that asks something: fitted to the question where it knows it, yes or not yet otherwise. */
@@ -13,8 +14,10 @@ export function demoReplies(prompt: string): Reply[] {
 export class DemoJudge implements Judge {
   readonly model = 'demo';
 
-  async judge(req: { prompt: string }): Promise<{ structured: unknown; costUsd?: number }> {
+  async judge(req: { prompt: string; schema?: Record<string, unknown> }): Promise<{ structured: unknown; costUsd?: number }> {
     await sleep(300 / demoPace());
+    // a ship's lane: it keeps the lead's pick (a lane read only ever raises)
+    if (req.schema === LANE_SCHEMA) return { structured: { lane: 'ship', why: 'It only wires in parts as they are, so it can merge once QA passes it.' }, costUsd: 0 };
     const asks = /\?\s*(>>>)?\s*$/.test(req.prompt);
     return {
       structured: asks

@@ -125,6 +125,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
       closeGoal: (agentId, force) => core.leads.closeGoal(agentId, force),
       readTurn: (agentId) => core.comms.readTurn(agentId),
       mark: (agentId, data, since) => core.comms.mark(agentId, id, lend(data), since),
+      raiseLane: (agentId, lane, why) => core.leads.raiseLane(agentId, lane, why, id),
       message: (agentId, text, opts) => (opts?.from === undefined ? core.goalTools.captainMessage(agentId, text, opts?.how) : core.comms.message(agentId, text, opts.from, opts.how)),
     },
     fileIssue: (projectId, repo, title, body) => {

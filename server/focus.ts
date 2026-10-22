@@ -495,6 +495,7 @@ export class Focus {
         openedByOffice: this.agents.openedByOffice(pr.repo, pr.number),
         ...(lead && { lane: lead.lane ?? 'ask' }),
         captainMerges: this.agents.plugins.captainMerges(pr),
+        held: this.agents.plugins.mergeHeld(pr),
         developerBusy: this.agents.busyOn(pr.repo, pr.number),
         autoSendBack: autoSendBackFor(project),
         mark: this.gateMarks.get(key),

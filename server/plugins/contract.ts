@@ -4,6 +4,7 @@
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
+import type { Lane } from '../../shared/mergeLane';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
@@ -77,6 +78,11 @@ export interface PluginParts {
   machineStepped?(machine: string, key: string): void;
   /** Whether only the captain merges this pull request, whatever QA says. By its branch, since a pull request outlives its agent. */
   captainMerges?(pr: { branch: string }): boolean;
+  /**
+   * Why Ops shouldn't merge this pull request by itself yet, if it shouldn't: the plugin is still deciding something
+   * about it (the chief of staff reading a ship's lane). Asked on each board refresh, so it lets go once it's decided.
+   */
+  mergeHeld?(pr: Pick<PullRequest, 'repo' | 'number' | 'headSha'>): string | undefined;
   /**
    * Focus's new sessions moved onto your API key (your plan's usage limit was reached), or back onto your plan:
    * where it stands now, as `host.signIn()` reads it.
@@ -400,6 +406,12 @@ export interface PluginGoals {
    * later turn has started: what it says is an earlier turn's.
    */
   mark(agentId: string, data: unknown, since?: number): boolean;
+  /**
+   * Raises the lane of a goal's lead's open pull requests to `lane` (docs/merging.md#lanes-how-a-goals-leads-slice-merges),
+   * saying why: each in a lower lane goes up, with a ledger line and a comment on it, as the plugin's doing; none comes
+   * down. What it raised, by repo#number: none for anyone but a goal's lead.
+   */
+  raiseLane(agentId: string, lane: Lane, why: string): string[];
 }
 
 /** A journal Ops keeps, as a plugin has it: what it's about and its facts, oldest first. */

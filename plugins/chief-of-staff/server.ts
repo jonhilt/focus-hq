@@ -1,6 +1,7 @@
 // The chief of staff plugin (README.md): the captain's inbox (what waits on them, answered from Comms, an agent's panel
 // or a bot on the API), and, as a goal's lead ends a turn, its judgement of where the turn goes (carry on, a card for
-// the captain, interrupt the captain, back to the lead), written in the ledger and filed in the inbox. It sends nothing
+// the captain, interrupt the captain, back to the lead), written in the ledger and filed in the inbox; and as a lead
+// ships, whether to raise the lane it merges in (never lower it), holding it back until it has read it. It sends nothing
 // itself but where the captain lets it, and the carry-ons the core leaves to it: a QA fail back to the lead, a slice
 // that's landed. FOCUS_PLUGINS=chief-of-staff, and switched on per project.
 import fs from 'node:fs';
@@ -45,6 +46,8 @@ const chiefOfStaff: FocusPlugin = {
     const leadsIn = (projectId: string) => host.agents().filter((a) => a.projectId === projectId && a.task === 'lead').map((a) => a.id);
     return {
       turn: (agent, phase) => void chief.turn(agent, phase),
+      boardRefreshed: (projectId) => void chief.readShips(projectId),
+      mergeHeld: (pr) => chief.mergeHeld(pr),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
       routes: inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl),

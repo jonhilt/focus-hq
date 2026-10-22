@@ -35,6 +35,8 @@ export interface GateOps {
   autoSendBack: boolean;
   /** Only the captain merges it, whatever QA says: a plugin claimed it (`captainMerges`, docs/plugins.md), like main engineering's climbs. */
   captainMerges?: boolean;
+  /** Why a plugin holds it back for now (`mergeHeld`): it's still deciding something about it. */
+  held?: string;
   mark?: GateMark;
 }
 
@@ -55,11 +57,12 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps
   return ops.lane && step.kind === 'send-back' ? { kind: 'blocked', reason: 'checks fail, for its lead to fix' } : step;
 }
 
-/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, a lead's not in Ship, the captain's, or a draft. */
+/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, a lead's not in Ship, the captain's, a plugin's for now, or a draft. */
 function heldBack(pr: GatePr, ops: GateOps): MergeStep | undefined {
   if (ops.lane && ops.lane !== 'ship') return { kind: 'blocked', reason: `its lead put it in ${laneName(ops.lane)}, so the captain merges it` };
   if (!ops.lane && !ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
   if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
+  if (ops.held) return { kind: 'wait', reason: ops.held };
   if (pr.isDraft) return { kind: 'blocked', reason: 'it’s a draft' };
   return undefined;
 }

@@ -30,7 +30,8 @@ const chief: Subject<Kept> = {
         ledger: () => [...ledger],
         settings: () => settings,
         agent: () => undefined,
-        goals: { mark: () => true, message: () => ({ sent: true }) },
+        agents: () => [],
+        goals: { mark: () => true, message: () => ({ sent: true }), raiseLane: () => [] },
       };
       // the model answering is a step out there: a restart can fall while it does
       const judge: Judge = { model: 'haiku', judge: () => later('haiku', () => Promise.resolve({ structured: { route: 2, why: 'A pick.', message: '' } })) };

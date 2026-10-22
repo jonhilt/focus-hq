@@ -1,4 +1,5 @@
 import { Cause, Effect } from 'effect';
+import { higherLane } from '../../../shared/mergeLane';
 import { autoQaFor, sameCommit } from '../../../shared/qa';
 import type { Agent, LeadAgent } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
@@ -78,7 +79,7 @@ export class Slices extends Part {
       const lead = agent.lead;
       // the lead moves on once: a move taken again after that only checks out what's missing
       if (lead.slice < moving.slice) {
-        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [], slice: moving.slice, prs: [], landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
+        this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [], slice: moving.slice, prs: [], recap: undefined, landed: everyPr(lead), waypoints: nextWaypoints(lead, Date.now()) } });
       } else {
         this.update(agent, { branch: moving.branch, lead: { ...lead, repos: [] } });
       }
@@ -289,10 +290,12 @@ export class Slices extends Part {
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
         }
-        const lane = recapLane(recap);
+        // a lane raised before stays raised: the lead's pick only ever takes it higher
+        const raised = agent.lead.prs.find((p) => p.repo === s.repo && p.number === pr.number)?.raised;
+        const lane = raised ? higherLane(recapLane(recap), raised.lane) : recapLane(recap);
         this.store.sliceJournal(agent.id, { kind: 'pr', repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch, lane });
         const others = agent.lead.prs.filter((p) => !(p.repo === s.repo && p.number === pr.number));
-        this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch, lane }] } });
+        this.update(agent, { lead: { ...agent.lead, prs: [...others, { repo: s.repo, number: pr.number, url: pr.url, sha: s.head, branch: s.branch, lane, ...(raised && { raised }) }] } });
         this.print(agent, [{ kind: 'success', text: `✔ ${lines.at(-1)}` }]);
         toReview.push({ repo: s.repo, number: pr.number, head: s.head });
       }
@@ -305,6 +308,7 @@ export class Slices extends Part {
         }
       }
       this.store.sliceJournal(agent.id, { kind: 'shipped' });
+      if (recap) this.update(agent, { lead: { ...agent.lead, recap } });
       // the recap up on the station's screen, where Comms shows it with the lead's turn: a picture that won't go up loses nothing
       if (recap) yield* Effect.ignore(this.core.goalTools.showArtifact(agent, { id: 'system-recap', title: `System recap: ${title}`.slice(0, 80), html: recapPage(recap, title) }));
       this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead, waypoints: shippedWaypoint(agent.lead, { title, summary: input.summary }, Date.now()) } });

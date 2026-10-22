@@ -5,43 +5,9 @@
 // draws) and onto the lead's station screen. Pure, so it's tested (recap.test.ts).
 
 import { LANE_SAID, type Lane, laneName, laneProblem } from '../../shared/mergeLane';
+import { IMPACTS, type Impact, type RecapStep, type SliceRecap } from '../../shared/recap';
 
-export const IMPACTS = ['composes', 'extends', 'adds'] as const;
-export type Impact = (typeof IMPACTS)[number];
-
-/** One building block of the system the slice touches. */
-export interface RecapPrimitive {
-  /** Its name, short, lowercase with dashes (`cos-verdict`): the same one from slice to slice. */
-  id: string;
-  /** What part of the system it belongs to, in a word or two (`chief of staff`). */
-  group: string;
-  impact: Impact;
-  /** What the slice does to it, in a line. */
-  change: string;
-  /** Where it is, as the lead's workspace has it: files, or folders ending in `/` (`focus/plugins/chief-of-staff/`). */
-  paths: string[];
-}
-
-/** One step between two primitives (or anything else the slice talks to): what the slice sends along it. */
-export interface RecapStep {
-  from: string;
-  to: string;
-  label: string;
-  /** On a map's arrow between two primitives, set by Ops: whether an import backs it (recapImports.ts). */
-  backed?: boolean;
-}
-
-export interface SliceRecap {
-  primitives: RecapPrimitive[];
-  /** The promises the slice could break, in plain words. */
-  invariants?: string[];
-  /** How the touched primitives connect: the system map. */
-  map?: RecapStep[];
-  /** What happens, in order: the change flow, as a sequence. */
-  flow?: RecapStep[];
-  /** How the lead would have it merge once QA passes it (shared/mergeLane.ts): none is Ask. */
-  lane?: Lane;
-}
+export { IMPACTS, type Impact, type RecapPrimitive, type RecapStep, type SliceRecap } from '../../shared/recap';
 
 /** The lane the slice ships in: the lead's pick, or Ask when they made none. */
 export function recapLane(recap: Pick<SliceRecap, 'lane'> | undefined): Lane {
@@ -155,16 +121,16 @@ const fence = (code: string) => `\`\`\`mermaid\n${code}\n\`\`\``;
 export const RECAP_START = '<!-- system-recap:start -->';
 export const RECAP_END = '<!-- system-recap:end -->';
 
-/**
- * The recap as a pull request shows it: a block GitHub opens out, with the rollup in its summary, the primitives
- * touched, the invariants, and the map and flow as mermaid. A blank line around each fence, or GitHub won't draw it.
- */
 /** The lane line: which one, and what it does once QA passes. */
 function laneSaid(recap: SliceRecap): string {
   const lane = recapLane(recap);
   return `**Lane:** ${laneName(lane)}, ${recap.lane ? 'the lead’s pick' : 'as the lead picked none'}: it ${LANE_SAID[lane]}.`;
 }
 
+/**
+ * The recap as a pull request shows it: a block GitHub opens out, with the rollup in its summary, the primitives
+ * touched, the invariants, and the map and flow as mermaid. A blank line around each fence, or GitHub won't draw it.
+ */
 export function recapMarkdown(recap: SliceRecap): string {
   const impact = rollup(recap);
   const rows = recap.primitives.map((p) => `| \`${p.id}\` | ${label(p.group)} | ${p.impact} | ${label(p.change)} |`);

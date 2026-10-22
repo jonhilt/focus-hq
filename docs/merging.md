@@ -24,7 +24,7 @@ A goal's lead ships each slice in a lane, after [Ship/Show/Ask](https://martinfo
 - **A lead's failing checks are theirs to fix.** Ops re-runs them once, as for any PR, but never sends a developer to a lead's slice. Conflicts are merged in by Ops, as before, and the lead hears of it.
 - **Show waits like Ask for now,** until Ops can tell the captain a slice landed on a card of its own.
 
-The chief of staff raising a lane is still to come.
+- **The chief of staff can raise a lane, never lower it.** Where it's on, it reads each ship's recap and may raise the lead's pick; a Ship or Show pull request waits until it has read it at its commit, and one it couldn't read goes to Ask ([chief of staff](../plugins/chief-of-staff/README.md#raising-a-ships-lane)). A raise is a `lane-raised` ledger line and a comment on the pull request, and a ship after it keeps it at least that high (`raisedPrs`).
 
 ## Which checks
 

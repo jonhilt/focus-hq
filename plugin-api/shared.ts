@@ -27,6 +27,8 @@ export { lastWords, shownThisTurn } from '../shared/leadWords';
 export { autoSendBackFor, prKey, qaBadge } from '../shared/qa';
 /** What a pull request's merge button does now, as the board's does, and how a repo's pull requests merge. */
 export { type MergeAction, mergeAction } from '../shared/mergeGate';
+export { higherLane, type Lane, LANE_SAID, LANES, laneName } from '../shared/mergeLane';
+export type { SliceRecap } from '../shared/recap';
 export { goalTitle } from '../shared/goalTitle';
 /** The ledger as Focus reads it out: a line of it, and lines grouped by day. */
 export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';

@@ -1,6 +1,7 @@
 // Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
 
 import type { Lane } from '../mergeLane';
+import type { SliceRecap } from '../recap';
 import type { ClaudeTask, Effort } from './agents';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
@@ -181,6 +182,8 @@ export interface LeadPr {
   slice?: number;
   /** How it merges once QA passes it, as last shipped (shared/mergeLane.ts). Missing is Ask. */
   lane?: Lane;
+  /** Who raised its lane above the lead's pick, to which, and why: a ship after keeps it at least that high. */
+  raised?: { lane: Lane; by: string; why: string };
 }
 
 /**
@@ -233,6 +236,8 @@ export interface LeadWork {
   slice: number;
   /** This slice's pull requests. */
   prs: LeadPr[];
+  /** The recap this slice last shipped with: none before it ships, or from a lead that sent none. */
+  recap?: SliceRecap;
   /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
   landed?: LeadPr[];
   /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */
