@@ -2,10 +2,11 @@
 // pause panel, L away from a holodeck, a project's goals), its badge on the HUD, a toast as a lead's turn comes to the
 // captain, and its settings in a project's card (its switch, and whether it sends its words by itself).
 import './chief-of-staff.css';
-import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
+import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, LCARS, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
 import { openComms } from './comms';
 import { hailing } from './here';
 import { type TurnStage, turnNews, turnStage } from './inbox';
+import { cosMove } from './move';
 import { AUTO_SEND_MS, autoSendFor, CHIEF_OF_STAFF, cosStateOf } from './shared';
 
 /** Comms on the HUD: whatever waits on the captain, anywhere on the ship, lit up and counted; C opens Comms to answer it. */
@@ -54,6 +55,8 @@ const chiefOfStaff: ClientPlugin = {
   // its badge and its toasts, in place of the core's plain count and toast
   hails: true,
   chair: { at: 'bridge', label: 'Comms: what needs you', use: openComms },
+  // its pill in "whose move" over a goal's pod, lit while it reads the lead's turn or counts down to sending its words; what it leaves the captain it hands them
+  goal: { holder: { key: CHIEF_OF_STAFF, label: 'Chief of staff', colour: LCARS.peach }, move: cosMove },
   start({ ui }) {
     toastTurns(ui);
     return {

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, Project } from '../../shared/types';
-import { type ClientPlugin, everyGoalButtons, goalsFor, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, projectSettings } from './plugins';
+import { type ClientPlugin, everyGoalButtons, goalClaim, goalHolders, goalsFor, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, projectSettings } from './plugins';
 import type { Ui } from './ui/context';
 import { hailStat } from './ui/hails';
 
@@ -87,5 +87,40 @@ describe('what waits on the captain, on the HUD', () => {
     expect(pluginHails([{ id: 'inbox', hails: true }])).toBe(true);
     expect(hailStat([{ kind: 'turn', agent: lead }], true)).toBeNull();
     expect(hailStat([], false)).toBeNull();
+  });
+});
+
+describe('a plugin’s hold on a goal’s move', () => {
+  const lead = { id: 'a1', projectId: 'p' } as Agent;
+  const holder = (key: string) => ({ key, label: key, colour: '#fc9' });
+
+  it('shows the pills of plugins switched on, and of a per-project one only where it’s on', () => {
+    const plugins: ClientPlugin[] = [
+      { id: 'everywhere', goal: { holder: holder('everywhere') } },
+      { id: 'per-project', project: { label: 'P', about: '' }, goal: { holder: holder('per-project') } },
+      { id: 'no-pill', goal: { move: () => ({ why: 'mine' }) } },
+    ];
+    expect(goalHolders(lead, plugins, project()).map((h) => h.key)).toEqual(['everywhere']);
+    expect(goalHolders(lead, plugins, project(['per-project'])).map((h) => h.key)).toEqual(['everywhere', 'per-project']);
+    // a claim from a plugin with no pill, or off for the project, isn't heard
+    expect(goalClaim(lead, 0, plugins.slice(1), project())).toBeUndefined();
+  });
+
+  it('takes the first plugin’s claim, leaving out one whose move throws', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const plugins: ClientPlugin[] = [
+      { id: 'broken', goal: { holder: holder('broken'), move: () => { throw new Error('no read'); } } },
+      { id: 'quiet', goal: { holder: holder('quiet'), move: () => undefined } },
+      { id: 'cos', goal: { holder: { key: 'cos', label: 'Chief of staff', colour: '#fc9' }, move: (_, now) => ({ why: 'Carry on', counter: String(now) }) } },
+      { id: 'later', goal: { holder: holder('later'), move: () => ({ why: 'too late' }) } },
+    ];
+    expect(goalClaim(lead, 7, plugins, project())).toEqual({ key: 'cos', label: 'Chief of staff', why: 'Carry on', counter: '7' });
+    expect(error).toHaveBeenCalledWith('The broken plugin\'s move on a goal failed', expect.any(Error));
+    error.mockRestore();
+  });
+
+  it('passes on a plugin handing the move to the captain', () => {
+    const plugins: ClientPlugin[] = [{ id: 'cos', goal: { holder: holder('cos'), move: () => ({ why: 'A card for you', captain: true }) } }];
+    expect(goalClaim(lead, 0, plugins, project())).toEqual({ key: 'cos', label: 'cos', why: 'A card for you', captain: true });
   });
 });

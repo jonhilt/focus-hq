@@ -1,4 +1,5 @@
 import { openQuestion } from '../../../shared/artifacts';
+import { hailOf } from '../../../shared/tricorder';
 import type { Agent, GoalNote, LeadPr, LeadWork, QaStatus } from '../../../shared/types';
 
 // What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
@@ -148,4 +149,101 @@ export function prGlance(pr: Pick<LeadPr, 'outcome'>, qa: QaStatus | undefined):
     case undefined:
       return 'open';
   }
+}
+
+/**
+ * Who holds a goal's next move, on the screen over its pod and the sign at its door: its lead while they're at work,
+ * QA while it tests what they shipped, a plugin while it claims it (the chief of staff, counting down to sending its
+ * words), and otherwise the captain. `holder` is `lead`, `qa`, `you` or the claiming plugin's key; `why` is the line
+ * that says why; `sign` names it in a word or two at the door; `counter` is a plugin's countdown on its pill.
+ */
+export interface GoalMove {
+  holder: string;
+  why: string;
+  sign: string;
+  counter?: string;
+}
+
+/** A plugin's claim on a goal's next move (`GoalPart.move`), by the holder key it declared. */
+export interface MoveClaim {
+  key: string;
+  /** The holder's name, for the sign at the door. */
+  label: string;
+  why: string;
+  counter?: string;
+  /** It hands the move to the captain, rather than holding it: what it read leaves them something (`why`). */
+  captain?: boolean;
+}
+
+/** A pull request of the slice's, as the move reads it: its number and how it stands. */
+export interface MovePr {
+  number: number;
+  state: PrGlance;
+}
+
+/**
+ * What only the captain can answer, whatever else is going on, and why it's theirs: a raised hand, an error, a
+ * question, a goal ready to close, a lead stopped, waiting on them or on hold for the plan's limit. Undefined for none.
+ */
+function captainsNow(lead: Agent): string | undefined {
+  const hail = hailOf(lead);
+  if ((hail && hail !== 'turn') || lead.status === 'stopped' || lead.status === 'waiting') return leadNow(lead);
+  if (lead.held) return 'On hold until your plan’s usage limit resets, unless you carry on with your API key';
+  return undefined;
+}
+
+/**
+ * Whose move it is on `lead`'s goal, with the slice's pull requests `prs` and a plugin's `claim`, if one has a say:
+ * what only the captain can answer comes first, then a plugin's claim (for itself, or handing it to the captain), then
+ * the lead at work, then QA testing what they shipped, then the captain's (a pull request to merge, one QA failed, or
+ * the turn that's ended).
+ */
+export function goalMove(lead: Agent, prs: readonly MovePr[], claim: MoveClaim | undefined): GoalMove {
+  const { label } = goalRoomState(lead);
+  const owed = captainsNow(lead);
+  if (owed) return { holder: 'you', why: owed, sign: label };
+  if (claim?.captain) return { holder: 'you', why: claim.why, sign: label };
+  if (claim) return { holder: claim.key, why: claim.why, sign: claim.label, ...(claim.counter !== undefined && { counter: claim.counter }) };
+  if (lead.status !== 'done') return { holder: 'lead', why: leadNow(lead), sign: label };
+  const testing = prs.filter((p) => p.state === 'testing').map((p) => `#${p.number}`);
+  if (testing.length) return { holder: 'qa', why: `Shipped ${testing.join(', ')}; QA is testing it. Nothing asked of you.`, sign: 'QA testing' };
+  const passed = prs.find((p) => p.state === 'passed');
+  if (passed) return { holder: 'you', why: `QA passed #${passed.number}: it waits for you to merge it.`, sign: `Merge #${passed.number}` };
+  const failed = prs.find((p) => p.state === 'failed');
+  if (failed) return { holder: 'you', why: `QA failed #${failed.number}: send it back to the lead, or look yourself.`, sign: 'QA failed' };
+  return { holder: 'you', why: leadNow(lead), sign: label };
+}
+
+/** One of the pills in a station's "whose move" row: lit for whoever holds the move, its countdown on it. */
+export interface MovePill {
+  key: string;
+  label: string;
+  colour: string;
+  lit: boolean;
+}
+
+/**
+ * The "whose move" row: every holder there is (`holders`, in order: the lead, QA, the plugins', the captain), whoever
+ * holds `move` lit, with its countdown on its pill. The captain's, lit, is in `yours` (the room's tone), as the lamps
+ * and the rest of the screen are, so their move shows in one colour.
+ */
+export function movePills(holders: readonly { key: string; label: string; colour: string }[], move: Pick<GoalMove, 'holder' | 'counter'>, yours?: string): MovePill[] {
+  return holders.map(({ key, label, colour }) => {
+    const lit = key === move.holder;
+    return { key, label: lit && move.counter !== undefined ? `${label} · ${move.counter}` : label, colour: lit && key === 'you' && yours ? yours : colour, lit };
+  });
+}
+
+/** How brightly a dim lamp shows a move held by someone other than the captain: lit, but not calling. */
+export const HELD_ELSEWHERE = 0.3;
+
+/**
+ * How brightly the lamps by a station's door glow at `t` (s), from off (0) to full (1): they call the captain only
+ * when the move is theirs (`yours`), pulsing while something needs them, steady while it's their turn; while the lead,
+ * QA or a plugin holds it, they're dim and still.
+ */
+export function lampGlow(tone: GoalRoomTone, yours: boolean, t: number): number {
+  if (tone === 'free') return 0;
+  if (!yours) return HELD_ELSEWHERE;
+  return { 'in-session': 0.8 + 0.2 * Math.sin(t * 2), 'needs-you': 0.6 + 0.4 * Math.sin(t * 7), 'your-turn': 1, queued: 0.55, stopped: 1 }[tone];
 }

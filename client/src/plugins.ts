@@ -8,6 +8,7 @@ import { state } from './net/state';
 import { h } from './ui/dom';
 import type { Ui } from './ui/context';
 import type { Chair, Crew } from './world/deckExtras';
+import type { MoveClaim } from './world/goalRoom';
 import type { Box2, Seat } from './world/layout';
 import type { Box } from './world/msd';
 
@@ -255,6 +256,20 @@ export interface GoalPart {
   tag?: (lead: Agent, where: GoalTagPlace) => { label: string; el: HTMLElement } | null;
   /** A strip along the bottom of the goal board, or null for none. */
   board?: (lead: Agent) => GoalStrip | null;
+  /**
+   * Its pill in the "whose move" row on the screen over a goal's pod, between QA's and the captain's: it can hold a
+   * goal's next move (`move`). Shown on every goal it's on for, lit while it holds the move. `colour` is a CSS colour.
+   */
+  holder?: { key: string; label: string; colour: string };
+  /**
+   * Whether it holds `lead`'s next move at `now` (ms), and why, in a line for the screen; `counter` (a countdown, say)
+   * goes on its pill. With `captain`, it hands the move to the captain instead, `why` saying what it leaves them (ahead
+   * of the lead, QA and a pull request to merge, which can't see what it knows). Undefined when it has no say, so the
+   * move is the lead's, QA's or the captain's. What only the captain can answer (a raised hand, a question, an error, a
+   * goal ready to close) stays theirs whatever it says. Asked again about once a second while it holds the move, so a
+   * countdown ticks and a claim can lapse.
+   */
+  move?: (lead: Agent, now: number) => { why: string; counter?: string; captain?: boolean } | undefined;
 }
 
 export type GoalTagPlace = 'card' | 'line';
@@ -332,6 +347,27 @@ export function goalTags(lead: Agent, where: GoalTagPlace): { label: string; el:
     tag?.el.classList.add(where === 'card' ? 'goal-readout' : 'goal-tag');
     return tag ? [tag] : [];
   });
+}
+
+/** The plugins that can hold the next move of a goal in `project` (`GoalPart.holder`): those switched on, and on for it if they work per project. */
+const movers = (plugins: ClientPlugin[], project: Pick<Project, 'plugins'> | undefined) =>
+  plugins.flatMap((p) => (p.goal?.holder && (!p.project || pluginOn(project, p.id)) ? [{ plugin: p, holder: p.goal.holder }] : []));
+
+/** The plugins' pills in a goal's "whose move" row, in the order they're switched on. */
+export const goalHolders = (lead: Pick<Agent, 'projectId'>, plugins = clientPlugins(), project: Pick<Project, 'plugins'> | undefined = state.project(lead.projectId)): { key: string; label: string; colour: string }[] =>
+  movers(plugins, project).map((m) => m.holder);
+
+/** The first plugin's claim on `lead`'s goal's next move at `now` (`GoalPart.move`), for itself or the captain, if one has a say. A plugin whose `move` throws is logged and left out. */
+export function goalClaim(lead: Agent, now: number, plugins = clientPlugins(), project: Pick<Project, 'plugins'> | undefined = state.project(lead.projectId)): MoveClaim | undefined {
+  for (const { plugin, holder } of movers(plugins, project)) {
+    try {
+      const claim = plugin.goal?.move?.(lead, now);
+      if (claim) return { key: holder.key, label: holder.label, why: claim.why, ...(claim.counter !== undefined && { counter: claim.counter }), ...(claim.captain && { captain: true }) };
+    } catch (err) {
+      console.error(`The ${plugin.id} plugin's move on a goal failed`, err);
+    }
+  }
+  return undefined;
 }
 
 /** The plugins' strips along the bottom of a goal board, by its lead. */

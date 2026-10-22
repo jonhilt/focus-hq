@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { UNIFORM } from '../../../shared/crew';
 import type { Agent, Avatar, Helper } from '../../../shared/types';
-import { goalStrips } from '../plugins';
+import { goalClaim, goalHolders, goalStrips } from '../plugins';
 import { canvasTexture, fitFont, fitText, makeCanvas, UI_FONT, wrap } from './canvas';
 import type { CrewView } from './character';
-import { checklistGlance, type GoalRoomTone, goalRoomState, leadNow, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress, sliceSteps } from './goalRoom';
+import { checklistGlance, type GoalMove, goalMove, type GoalRoomTone, goalRoomState, leadNow, type MovePill, movePills, type NoteSection, noteSections, type PrGlance, rowAt, sliceProgress, sliceSteps } from './goalRoom';
 import { flat } from './materials';
 import { portrait } from './portraits';
 import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
@@ -43,8 +43,44 @@ export interface StationView {
   crew?: { who: CrewView; role: string }[];
   next?: string;
   /** The slice's pull requests and how each stands (the screen over its pod's). */
-  prs?: { label: string; state: PrGlance }[];
+  prs?: { label: string; number: number; state: PrGlance }[];
+  /** Whose move it is on its goal, while it has one (`whoseMove`). */
+  whose?: Whose;
 }
+
+/** The core's holders of a goal's move: its lead, QA and the captain, each in its LCARS colour. */
+const LEAD_HOLDER = { key: 'lead', label: 'Lead', colour: LCARS.sky };
+const QA_HOLDER = { key: 'qa', label: 'QA', colour: LCARS.lilac };
+const YOU_HOLDER = { key: 'you', label: 'You', colour: LCARS.gold };
+
+/**
+ * Whose move it is on a goal, as its station shows it: the move, the "whose move" row's pills, and the colour it's
+ * named in at the door, on the lamps and across the top of the screen over its pod (`colour`: the captain's in the
+ * room's tone, so what needs them still reads as it did, anyone else's in theirs), and its holder's own (`own`), for
+ * the line on why.
+ */
+export interface Whose {
+  move: GoalMove;
+  pills: MovePill[];
+  colour: string;
+  own: string;
+  /** A plugin holds it: asked again about once a second, so its countdown ticks and its claim can lapse. */
+  claimed: boolean;
+}
+
+/** Whose move it is on `lead`'s goal at `now` (ms), with the slice's pull requests `prs`. */
+export function whoseMove(lead: Agent, prs: StationView['prs'], now: number): Whose {
+  const claim = goalClaim(lead, now);
+  const move = goalMove(lead, prs ?? [], claim);
+  // the captain's move is in the room's tone everywhere it shows (the lamps, the sign, the top of the screen and its
+  // pill), so what needs them still reads as it did, in one colour
+  const pills = movePills([LEAD_HOLDER, QA_HOLDER, ...goalHolders(lead), YOU_HOLDER], move, TONE[goalRoomState(lead).tone]);
+  const own = pills.find((p) => p.lit)?.colour ?? TEXT;
+  return { move, pills, colour: own, own, claimed: !!claim && move.holder === claim.key };
+}
+
+/** How often (ms) the screen over a pod is drawn again while a countdown on it ticks: under a second, so none is skipped. */
+const COUNTDOWN_EVERY: typeof DISPLAY_EVERY = { near: 900, far: 900 };
 
 /**
  * A crew member's face, drawn flat, for where their portrait can't be (no WebGL): shoulders in their division's
@@ -147,11 +183,16 @@ abstract class Display {
    */
   update(now: number, view: ScreenView): void {
     if (!this.pending || (screenTest.still && this.drawn > -Infinity)) return;
-    if (!redrawDue({ changed: true, blinking: false, at: this.drawn, cursor: false }, view, now, DISPLAY_EVERY) || !takeDraw()) return;
+    if (!redrawDue({ changed: true, blinking: false, at: this.drawn, cursor: false }, view, now, this.every()) || !takeDraw()) return;
     const pending = this.pending;
     this.pending = null;
     this.drawn = now;
     this.redraw(pending);
+  }
+
+  /** How often it may be drawn again once what it shows changes. */
+  protected every(): typeof DISPLAY_EVERY {
+    return DISPLAY_EVERY;
   }
 
   /** Draws it again, whether or not anything it draws from has changed: for one that moves. */
@@ -189,11 +230,18 @@ export class GoalSign extends Display {
     super(GoalSign.W, GoalSign.H, false);
   }
 
-  protected draw({ index, accent, lead, next }: StationView): void {
+  protected override keyOf(view: StationView): unknown {
+    const move = view.whose && [view.whose.move.holder, view.whose.move.sign, view.whose.colour];
+    return [super.keyOf(view), move];
+  }
+
+  protected draw({ index, accent, lead, next, whose }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [GoalSign.W, GoalSign.H];
-    const { tone, label } = goalRoomState(lead);
-    const color = TONE[tone];
+    const room = goalRoomState(lead);
+    // named by whoever holds the goal's move, in their colour (the captain's in the room's tone)
+    const label = whose?.move.sign ?? room.label;
+    const color = whose?.colour ?? TONE[room.tone];
     const m = 14;
     ctx.fillStyle = GLASS;
     ctx.fillRect(0, 0, W, H);
@@ -972,8 +1020,8 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
 
 /**
  * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once
- * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, what the
- * lead's up to right now, how far through the slice they are and what's left of its tasks, and along the bottom
+ * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, whose
+ * move it is (a pill for each holder, the one holding it lit) and why, beside the lead's face, how far through the slice they are and what's left of its tasks, and along the bottom
  * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.
  */
 export class TeamScreen extends Display {
@@ -986,14 +1034,23 @@ export class TeamScreen extends Display {
 
   protected override keyOf(view: StationView): unknown {
     const { lead } = view;
-    return [super.keyOf(view), view.prs, lead && [leadNow(lead), lead.avatar]];
+    // the move's countdown is in it, so the screen's drawn again as it ticks
+    return [super.keyOf(view), view.prs, view.whose, lead && [leadNow(lead), lead.avatar]];
   }
 
-  protected draw({ index, accent, lead, crew, next, prs }: StationView): void {
+  /** While a countdown's on it, often enough that each second shows; otherwise as seldom as the other displays. */
+  protected override every(): typeof DISPLAY_EVERY {
+    return this.shown?.whose?.move.counter === undefined ? DISPLAY_EVERY : COUNTDOWN_EVERY;
+  }
+
+  protected draw({ index, accent, lead, crew, next, prs, whose }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [TeamScreen.W, TeamScreen.H];
-    const { tone, label } = goalRoomState(lead);
-    const color = TONE[tone];
+    const room = goalRoomState(lead);
+    const label = whose?.move.sign ?? room.label;
+    // the room's tone, for its face and its slice; whoever holds the move names it across the top
+    const color = TONE[room.tone];
+    const moveColor = whose?.colour ?? color;
     ctx.fillStyle = '#061a24';
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = GLASS;
@@ -1016,7 +1073,7 @@ export class TeamScreen extends Display {
     ctx.font = `600 68px ${LCARS_FONT}`;
     const toneText = label.toUpperCase();
     const toneW = ctx.measureText(toneText).width + 80;
-    ctx.fillStyle = color;
+    ctx.fillStyle = moveColor;
     ctx.beginPath();
     ctx.roundRect(W - 40 - toneW, top, toneW, barH, [12, 60, 60, 12]);
     ctx.fill();
@@ -1048,34 +1105,47 @@ export class TeamScreen extends Display {
 
     // the goal, in big type
     ctx.textAlign = 'left';
-    ctx.font = `600 88px ${LCARS_FONT}`;
+    ctx.font = `600 76px ${LCARS_FONT}`;
     const title = wrap(ctx, (lead.lead?.title ?? lead.issue.title).toUpperCase(), W - 100, 2);
-    title.forEach((line, i) => glowText(ctx, line, 50, top + barH + 62 + i * 92, TEXT, 10));
+    title.forEach((line, i) => glowText(ctx, line, 50, top + barH + 50 + i * 80, TEXT, 10));
 
-    // what the lead's up to right now, beside their face
-    const nowY = top + barH + 62 + 92 + 58;
-    const nowH = 150;
+    // whose move it is: every holder's pill, whoever holds it lit
+    const moveY = top + barH + 50 + 80 + 46;
+    if (whose) this.movePills(whose.pills, moveY);
+
+    // what the lead's up to right now, beside their face, or why the move is whoever's it is, edged in their colour
+    const nowY = moveY + 66;
+    const nowH = 140;
+    const own = whose?.own ?? color;
     ctx.fillStyle = PANE;
     ctx.beginPath();
     ctx.roundRect(40, nowY, W - 80, nowH, 22);
     ctx.fill();
+    ctx.save();
+    ctx.shadowColor = own;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = own;
+    ctx.beginPath();
+    ctx.roundRect(40, nowY, 12, nowH, [22, 0, 0, 22]);
+    ctx.fill();
+    ctx.restore();
     const tile = nowH - 36;
     ctx.fillStyle = 'rgba(8, 50, 66, 0.9)';
     ctx.beginPath();
-    ctx.roundRect(58, nowY + 18, tile, tile, 14);
+    ctx.roundRect(68, nowY + 18, tile, tile, 14);
     ctx.fill();
-    glowRect(ctx, 58, nowY + 18, tile, tile, 14, color, 3);
-    this.face(lead.avatar, 58, nowY + 18, tile);
-    const tx = 58 + tile + 30;
+    glowRect(ctx, 68, nowY + 18, tile, tile, 14, color, 3);
+    this.face(lead.avatar, 68, nowY + 18, tile);
+    const tx = 68 + tile + 30;
     const tw = W - 70 - tx;
-    ctx.font = `600 34px ${LCARS_FONT}`;
-    glowText(ctx, 'NOW', tx, nowY + 34, color, 8);
-    ctx.font = `42px ${UI_FONT}`;
+    ctx.font = `600 32px ${LCARS_FONT}`;
+    glowText(ctx, 'NOW', tx, nowY + 30, own, 8);
+    ctx.font = `40px ${UI_FONT}`;
     ctx.fillStyle = TEXT;
-    wrap(ctx, leadNow(lead), tw, 2).forEach((line, i) => ctx.fillText(line, tx, nowY + 82 + i * 48));
+    wrap(ctx, whose?.move.why ?? leadNow(lead), tw, 2).forEach((line, i) => ctx.fillText(line, tx, nowY + 74 + i * 44));
 
     // how far through the slice, and what's left of its tasks
-    const barY = nowY + nowH + 44;
+    const barY = nowY + nowH + 40;
     const items = sliceSteps(lead.lead);
     const progress = sliceProgress(items);
     ctx.font = `600 52px ${LCARS_FONT}`;
@@ -1101,8 +1171,8 @@ export class TeamScreen extends Display {
     glowText(ctx, progress === null ? '—' : `${progress}%`, W - 50, barY + 4, color, 14);
     ctx.textAlign = 'left';
 
-    const listY = barY + 54;
-    const lineH = 44;
+    const listY = barY + 50;
+    const lineH = 42;
     const glance = checklistGlance(items, 3);
     const lines: { mark: string; text: string; dim?: boolean }[] = [];
     if (glance.done) lines.push({ mark: '☑', text: `${glance.done} done`, dim: true });
@@ -1167,6 +1237,48 @@ export class TeamScreen extends Display {
       ctx.fillText(text, right - w / 2, footY + 39);
       right -= w + 14;
     }
+  }
+
+  /**
+   * The "whose move" row at `y` (its top): its heading, then a pill for each holder, the one holding the move filled
+   * in its colour with black type, the rest outlined and dimmed.
+   */
+  private movePills(pills: readonly MovePill[], y: number): void {
+    const { ctx } = this.c;
+    const h = 52;
+    ctx.textAlign = 'left';
+    ctx.font = `500 30px ${LCARS_FONT}`;
+    glowText(ctx, 'WHOSE MOVE', 50, y + h / 2 + 2, '#7d9aa3', 0);
+    let x = 50 + ctx.measureText('WHOSE MOVE').width + 28;
+    ctx.textAlign = 'center';
+    for (const pill of pills) {
+      const text = pill.label.toUpperCase();
+      ctx.font = `${pill.lit ? 700 : 500} 34px ${LCARS_FONT}`;
+      const w = ctx.measureText(text).width + 48;
+      ctx.save();
+      if (pill.lit) {
+        ctx.shadowColor = pill.colour;
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = pill.colour;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, h / 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#000000';
+      } else {
+        ctx.globalAlpha = 0.45;
+        ctx.strokeStyle = pill.colour;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.roundRect(x + 1.5, y + 1.5, w - 3, h - 3, h / 2);
+        ctx.stroke();
+        ctx.fillStyle = pill.colour;
+      }
+      ctx.fillText(text, x + w / 2, y + h / 2 + 2);
+      ctx.restore();
+      x += w + 16;
+    }
+    ctx.textAlign = 'left';
   }
 
   /** A crew member's portrait in a square tile, or their face drawn flat where there's no portrait. */

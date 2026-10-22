@@ -5,8 +5,8 @@ import { type Builder, interactive, type Interaction } from './builder';
 import type { Character, CrewView } from './character';
 import { dress } from './deck';
 import { type Crew, HELPER_SEATS, type Marker } from './deckExtras';
-import { type GoalRoomTone, goalRoomState, roster } from './goalRoom';
-import { ChartScreen, GoalBoard, GoalSign, type StationView, TeamScreen, TONE } from './goalScreens';
+import { type GoalRoomTone, goalRoomState, lampGlow, roster } from './goalRoom';
+import { ChartScreen, GoalBoard, GoalSign, type StationView, TeamScreen, TONE, whoseMove } from './goalScreens';
 import { PaneSwitches } from './paneSwitchPanel';
 import { PANE_SWITCHES, switchAt, switchLabel } from './paneSwitches';
 import { screenPrefs } from './screenPanes';
@@ -164,6 +164,10 @@ export class TeamStation {
   /** The lamps either side of the door, lit by how the goal room stands (`update`). */
   private readonly lamp = new THREE.MeshBasicMaterial({ color: HULL.dado });
   private tone: GoalRoomTone = 'free';
+  /** What it last showed, for asking again whose move it is while a plugin holds it (`update`). */
+  private view?: StationView;
+  /** When (performance.now, ms) to ask again whose move it is, while a plugin holds it. */
+  private askAt = 0;
   /** What the lead has running in the background, floating beside their chair (probes.ts). */
   private readonly probes: BackgroundProbes;
   /** Whose probes they are, for their labels. */
@@ -484,7 +488,8 @@ export class TeamStation {
     const seated = (s: StationSeat) => (s.view ? s : undefined);
     this.crew = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
     const crew = this.crew.map(({ who, role }) => ({ who: who.view!, role: role === 'Helper' ? (who.view!.tag ?? role) : role }));
-    const view = { index: this.index, accent: this.accent, lead, crew, next, prs };
+    const view: StationView = { index: this.index, accent: this.accent, lead, crew, next, prs, whose: lead && whoseMove(lead, prs, Date.now()) };
+    this.view = view;
     this.sign.show(view);
     this.board.show(view);
     this.chart.show(view);
@@ -493,16 +498,33 @@ export class TeamStation {
   }
 
   /**
-   * Lights the lamps either side of the door: off while the station's free, breathing in its tone while the lead's at
-   * work, pulsing while they need you, steady while it's your turn.
+   * While a plugin holds the goal's move, asks again whose it is a few times a second: its countdown ticks on the
+   * screen over the pod (drawn again only as its second changes), and its claim lapses without waiting for news.
+   */
+  private askWhose(): void {
+    const view = this.view;
+    if (!view?.lead || !view.whose?.claimed || performance.now() < this.askAt) return;
+    this.askAt = performance.now() + ASK_WHOSE_EVERY;
+    this.view = { ...view, whose: whoseMove(view.lead, view.prs, Date.now()) };
+    this.sign.show(this.view);
+    this.teamScreen.show(this.view);
+  }
+
+  /**
+   * Lights the lamps either side of the door: off while the station's free, and calling the captain only while the
+   * goal's move is theirs (pulsing while something needs them, steady while it's their turn); dim and still, in the
+   * holder's colour, while it's the lead's, QA's or a plugin's (`lampGlow`).
    */
   update(t: number): void {
     this.panes.update();
-    const glow = { free: 0, 'in-session': 0.8 + 0.2 * Math.sin(t * 2), 'needs-you': 0.6 + 0.4 * Math.sin(t * 7), 'your-turn': 1, queued: 0.55, stopped: 1 }[this.tone];
-    this.lamp.color.set(HULL.dado).lerp(LIT.set(TONE[this.tone]), glow);
+    this.askWhose();
+    const whose = this.view?.whose;
+    const glow = lampGlow(this.tone, whose?.move.holder === 'you', t);
+    const colour = whose?.colour ?? TONE[this.tone];
+    this.lamp.color.set(HULL.dado).lerp(LIT.set(colour), glow);
     // the team screen's outline glows as the lamps do, but from dim rather than the bulkhead's colour; a free one's in
     // the holograms' own cyan
-    this.teamHologram.tint.set(this.tone === 'free' ? HOLO_CYAN : TONE[this.tone]).multiplyScalar(0.35 + 0.65 * glow);
+    this.teamHologram.tint.set(this.tone === 'free' ? HOLO_CYAN : colour).multiplyScalar(0.35 + 0.65 * glow);
     this.signHologram.tint.copy(this.teamHologram.tint);
     hover(this.faces, 0, t, this.index * 1.7);
     hover(this.doorSign, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, t, this.index * 1.7 + 2);
@@ -537,6 +559,9 @@ export class TeamStation {
 }
 
 const LIT = new THREE.Color();
+
+/** How often (ms) a station asks again whose move it is while a plugin holds it: a few times a second, so no second of a countdown is missed. */
+const ASK_WHOSE_EVERY = 250;
 
 function blank(): Read {
   return { blocks: [], seats: new Map() };

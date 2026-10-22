@@ -13,10 +13,9 @@ import { ClaudeJudge } from './claudeJudge';
 import { DemoJudge } from './demoJudge';
 import { STANDING_ORDERS } from './judge';
 import { inboxRoutes } from './routes';
-import { autoSendFor, CHIEF_OF_STAFF, freshState } from './shared';
+import { AUTO_SEND_EVERY, autoSendFor, CHIEF_OF_STAFF, freshState } from './shared';
 
-/** How often its words that are due go by themselves, and how often the bot hears what changed. */
-const AUTO_SEND_EVERY = 5000;
+/** How often the bot hears what changed. */
 const BOT_EVERY = 3000;
 
 /** A file's text, or undefined when it isn't there. */

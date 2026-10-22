@@ -22,6 +22,9 @@ export const JUDGING_MS = 60_000;
 /** How long its words for a lead wait for the captain to hold them, in a project where it sends them itself. */
 export const AUTO_SEND_MS = 120_000;
 
+/** How often its server part sends the words whose time has come. */
+export const AUTO_SEND_EVERY = 5000;
+
 /** A turn as it judged it: its route, the line on what's decided, why, and its words. */
 export interface Verdict {
   route: CosRoute;
