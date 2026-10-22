@@ -70,6 +70,14 @@ describe('the demo GitHub keeps the GitHub contract', () => {
     expect(await Effect.runPromise(gh.pullRequestComments(repo, pr.number))).toEqual(['QA passed <!-- focus-verdict:abc -->']);
   });
 
+  it('keeps a pull request’s description as it opened, and as it was edited after', async () => {
+    const { gh, repo, pr } = await opened();
+    const body = async () => (await Effect.runPromise(gh.getPullRequest(repo, pr.number))).body;
+    expect(await body()).toBe('Closes #1');
+    await Effect.runPromise(gh.editPullRequestBody(repo, pr.number, 'Closes #1\n\nAnd a recap'));
+    expect(await body()).toBe('Closes #1\n\nAnd a recap');
+  });
+
   // GitHub says UNKNOWN while it works out whether a PR merges, after every push to it or its base (33dc5c2): the demo
   // always knows. What Ops does with UNKNOWN is tested on its own (shared/board.test.ts).
   it.fails('can report a pull request’s mergeability as UNKNOWN just after a push [simplified: the demo always knows]', async () => {

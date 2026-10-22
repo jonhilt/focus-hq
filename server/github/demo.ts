@@ -291,6 +291,13 @@ export const demoLayer = Layer.sync(GitHub, () => {
         r.issues = r.issues.filter((i) => !p.closes.includes(i.number));
       }),
 
+    editPullRequestBody: (name, number, body) =>
+      pr(name, number).pipe(
+        Effect.map((p) => {
+          p.body = body;
+        }),
+      ),
+
     closePullRequest: (name, number, comment) =>
       Effect.gen(function* () {
         const p = yield* pr(name, number);

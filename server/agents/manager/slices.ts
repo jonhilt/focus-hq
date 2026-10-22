@@ -5,9 +5,11 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { afterLanding, afterPush, landedMidShipNote, hasLeadWork, sliceLanded, carriedNote, behindNote, everyPr, heldBack, leadPrBody, leadWorktreeId, newSliceNote, notShipped, openPr, reposBackNote, shipped, shippedSha, shipPlan, shipBranch, sliceBranch, type FreshBranch, freshBranchNote, needsFreshBranch, repoBranch } from '../lead';
 import { repoFolders } from '../planner';
+import { recapMarkdown, recapPage, recapProblems, type ShipInput, type SliceRecap, withRecap } from '../recap';
+import { backedMap, MAX_FILES, primitivesToRead, SOURCE } from '../recapImports';
 import { type Moving, reconciledPrs, sliceRecovery } from '../sliceJournal';
 import { nextWaypoints, shippedWaypoint } from '../waypoints';
-import { type GitFailed, Workspace } from '../services';
+import { type GitFailed, type Renderer, Workspace } from '../services';
 import { type ManagerServices, NothingToCheckOut, Part, Refused } from './core';
 
 /** A goal's slices: checking every repo out side by side, moving on to fresh code when a slice lands, and the lead's ship tool. */
@@ -162,12 +164,12 @@ export class Slices extends Part {
    * The lead's ship tool: pushes every repo with new commits and opens (or updates) its pull request, which QA then
    * reviews. Nothing ships while any repo has uncommitted changes.
    */
-  shipLead(agent: Agent, input: { title: string; summary: string }): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace> {
+  shipLead(agent: Agent, input: ShipInput): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace | Renderer> {
     return Effect.gen({ self: this }, function* () {
       if (!hasLeadWork(agent) || !agent.lead.repos.length) return yield* new Refused({ message: 'There’s nothing checked out to ship' });
       if (this.core.leads.closingGoals.has(agent.id)) return yield* new Refused({ message: 'The captain is closing the goal: nothing ships now' });
       // on disk before anything's pushed (unless it's a ship cut off before, being finished): a restart finishes it
-      if (this.store.slice(agent.id).phase !== 'shipping') this.store.sliceJournal(agent.id, { kind: 'shipping', title: input.title, summary: input.summary });
+      if (this.store.slice(agent.id).phase !== 'shipping') this.store.sliceJournal(agent.id, { kind: 'shipping', title: input.title, summary: input.summary, ...(input.recap && { recap: input.recap }) });
       return yield* this.ship(agent, input).pipe(
         // a ship that shipped nothing, failed (or hit a bug) is over; an interrupted one isn't: a restart finishes it
         Effect.tap(() => Effect.sync(() => this.shipEnded(agent.id))),
@@ -178,12 +180,50 @@ export class Slices extends Part {
     });
   }
 
+  /** A pull request's description with the recap as the slice is now, in place of the one it had. */
+  private updateRecap(agent: LeadAgent, repo: string, number: number, recap: SliceRecap): Effect.Effect<void, GitHubError, GitHub> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const { body } = yield* this.retrying(agent, 'reading the pull request', github.getPullRequest(repo, number));
+      yield* this.retrying(agent, 'updating its recap', github.editPullRequestBody(repo, number, withRecap(body, recapMarkdown(recap))));
+    });
+  }
+
+  /**
+   * The source files of the primitives at both ends of the map's arrows, by the workspace's paths, for their imports:
+   * each primitive's first `MAX_FILES` that git tracks. A repo git can't list reads as having none.
+   */
+  private recapSources(recap: SliceRecap, repos: readonly { folder: string; dir: string }[]): Effect.Effect<Map<string, string>, never, Workspace> {
+    return Effect.gen(function* () {
+      const workspace = yield* Workspace;
+      const sources = new Map<string, string>();
+      for (const primitive of primitivesToRead(recap.primitives, recap.map ?? [])) {
+        const files: string[] = [];
+        for (const p of primitive.paths) {
+          const [folder, ...rest] = p.replace(/^\.\//, '').split('/');
+          const repo = repos.find((r) => r.folder === folder);
+          if (!repo) continue;
+          const listed = yield* workspace.runIn(repo.dir, ['git', 'ls-files', '--', rest.join('/') || '.'], 30_000);
+          if (listed.code === 0) files.push(...listed.output.split('\n').filter((f) => SOURCE.test(f)).map((f) => `${folder}/${f}`));
+        }
+        for (const file of files.slice(0, MAX_FILES)) {
+          if (sources.has(file)) continue;
+          const [folder, ...rest] = file.split('/');
+          const dir = repos.find((r) => r.folder === folder)?.dir;
+          const text = dir ? yield* workspace.readIn(dir, rest.join('/')) : undefined;
+          if (text !== undefined) sources.set(file, text);
+        }
+      }
+      return sources;
+    });
+  }
+
   /** The ship's over without shipping, if the journal still has it under way. */
   private shipEnded(id: string, error?: string): void {
     if (this.store.slice(id).phase === 'shipping') this.store.sliceJournal(id, { kind: 'ship-ended', ...(error && { error }) });
   }
 
-  private ship(agent: LeadAgent, input: { title: string; summary: string }): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace> {
+  private ship(agent: LeadAgent, input: ShipInput): Effect.Effect<string, GitHubError | GitFailed | Refused, GitHub | Workspace | Renderer> {
     return Effect.gen({ self: this }, function* () {
       const work = agent.lead;
       const github = yield* GitHub;
@@ -211,6 +251,15 @@ export class Slices extends Part {
       }
       const plan = shipPlan(states);
       if (plan.kind !== 'ship') return [notShipped(plan), ...movedNotes].join('\n\n');
+      // the recap must cover every file the slice changes, in every repo, so nothing in it goes unseen
+      let recap = input.recap;
+      if (recap) {
+        const changed = yield* Effect.forEach(states.filter((s) => s.ahead > 0), (s) => Effect.map(workspace.changedFiles(s.dir, s.baseBranch), (files) => files.map((f) => `${s.folder}/${f}`)));
+        const problems = recapProblems(recap, changed.flat());
+        if (problems.length) return yield* new Refused({ message: `Nothing shipped: the recap needs fixing first.\n\n${problems.map((p) => `- ${p}`).join('\n')}` });
+        // each of the map's arrows marked whether an import stands behind it
+        if (recap.map?.length) recap = { ...recap, map: backedMap(recap.primitives, recap.map, yield* this.recapSources(recap, states)) };
+      }
       const project = this.store.project(agent.projectId);
       const lines: string[] = [];
       const toReview: { repo: string; number: number; head: string }[] = [];
@@ -231,9 +280,11 @@ export class Slices extends Part {
         if (found) {
           pr = found;
           lines.push(`Updated ${s.repo}#${pr.number}: ${pr.url}`);
+          // the description keeps what it opened with, its recap now as the slice is
+          if (recap) yield* this.updateRecap(agent, s.repo, pr.number, recap);
         } else {
           const alongside = plan.repos.filter((r) => r !== s.repo);
-          const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution);
+          const body = leadPrBody(input.summary, agent, alongside, this.store.settings.attribution, recap && recapMarkdown(recap));
           pr = yield* this.retrying(agent, 'opening the pull request', github.createPullRequest(s.repo, { head: s.branch, base: s.baseBranch, title, body }));
           lines.push(`Opened ${s.repo}#${pr.number}: ${pr.url}`);
           this.hub.toast('success', `🎉 ${agent.name} opened ${s.repo.split('/')[1]}#${pr.number}: ${title}`, agent.id);
@@ -253,6 +304,8 @@ export class Slices extends Part {
         }
       }
       this.store.sliceJournal(agent.id, { kind: 'shipped' });
+      // the recap up on the station's screen, where Comms shows it with the lead's turn: a picture that won't go up loses nothing
+      if (recap) yield* Effect.ignore(this.core.goalTools.showArtifact(agent, { id: 'system-recap', title: `System recap: ${title}`.slice(0, 80), html: recapPage(recap, title) }));
       this.update(agent, { status: 'working', activity: 'Shipped the slice', lead: { ...agent.lead, waypoints: shippedWaypoint(agent.lead, { title, summary: input.summary }, Date.now()) } });
       this.boardChanged(agent.projectId);
       return [shipped(lines, autoQaFor(project)), ...movedNotes].join('\n\n');

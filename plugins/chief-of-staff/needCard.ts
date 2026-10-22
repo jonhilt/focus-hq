@@ -30,9 +30,12 @@ export type CardUi = Pick<Ui, 'openScreen' | 'openBoard' | 'error'>;
 const said = (agent: Agent) => lastWords(focus.lines(agent.id));
 const open = (go: OpenAgent, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew (G)', onclick: () => go(agent.id) }, label);
 
-/** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. */
+/** The id Ops shows a slice's system recap under on the lead's screen (docs/goals.md#the-system-recap). */
+const RECAP = 'system-recap';
+
+/** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. Their recap is the merge box's. */
 function shownBox(ui: CardUi, agent: Agent): HTMLElement[] {
-  const shown = shownThisTurn(agent.lead?.artifacts, focus.lines(agent.id));
+  const shown = shownThisTurn(agent.lead?.artifacts, focus.lines(agent.id)).filter((a) => a.id !== RECAP);
   if (!shown.length) return [];
   const cards = shown.map((a) =>
     h('a', { class: 'cos-card-option', href: artifactUrl(agent.id, a, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' },
@@ -101,8 +104,13 @@ function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
  * The pull requests a card can merge, a line each with QA's word on it and its merge button, as the board's: merged
  * from here, the captain doesn't go to the board to land what they've just read.
  */
-function mergeBox(ui: CardUi, prs: readonly BoardPr[]): HTMLElement[] {
+function mergeBox(ui: CardUi, prs: readonly BoardPr[], lead?: Agent): HTMLElement[] {
   if (!prs.length) return [];
+  // the slice's recap, what to review them by, whatever the lead or QA said since it went up
+  const recap = lead?.lead?.artifacts?.find((a) => a.id === RECAP);
+  const recapBox = lead && recap
+    ? [h('a', { class: 'cos-card-recap', href: artifactUrl(lead.id, recap, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' }, h('img', { src: artifactUrl(lead.id, recap, 'jpg'), alt: recap.title }))]
+    : [];
   const rows = prs.map(({ projectId, pr }) => {
     const review = focus.reviews.get(prKey(pr.repo, pr.number));
     const press = mergePress(mergeAction(review, pr), pr, focus.mergeMethod(projectId, pr.repo));
@@ -121,7 +129,7 @@ function mergeBox(ui: CardUi, prs: readonly BoardPr[]): HTMLElement[] {
     }
     return h('div', { class: 'row cos-merge' }, b, h('a', { class: 'muted', href: pr.url, target: '_blank', rel: 'noopener', title: 'Open it on GitHub' }, `${pr.title} · ${qaBadge(review, pr).label}`));
   });
-  return [h('small', { class: 'muted' }, prs.length > 1 ? 'Their open pull requests:' : 'Their open pull request:'), ...rows];
+  return [h('small', { class: 'muted' }, prs.length > 1 ? 'Their open pull requests:' : 'Their open pull request:'), ...recapBox, ...rows];
 }
 
 /** The lead's own pull requests still open, as the board has them. */
@@ -183,14 +191,14 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answe
       const ready = cos && (cos.route === 1 || cos.route === 4) ? cos.message : '';
       const context = [cosContext(a.agent), said(a.agent)].filter(Boolean).join('\n\n---\n\n');
       const gotIt = 'Got it: off your queue, nothing sent, until their next turn.';
-      if (ready) return { context, answers: [...mergeBox(ui, leadPrs(a.agent)), ...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
-      return { context, answers: [...mergeBox(ui, leadPrs(a.agent)), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
+      if (ready) return { context, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
+      return { context, answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
     }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent)), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
+      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
     }
     case 'qa':
     case 'conflicts':

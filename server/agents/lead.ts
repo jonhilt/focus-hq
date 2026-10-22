@@ -179,10 +179,10 @@ export function notShipped(plan: Exclude<ShipPlan, { kind: 'ship' }>): string {
     : 'Nothing shipped: no repo has new commits since it last shipped.';
 }
 
-/** A slice's pull request description: the lead's summary, and the repos shipping alongside it. */
-export function leadPrBody(summary: string, lead: Pick<Agent, 'name'>, alongside: string[], attribution: boolean): string {
+/** A slice's pull request description: the lead's summary, the repos shipping alongside it, and the slice's recap (`recapMarkdown`). */
+export function leadPrBody(summary: string, lead: Pick<Agent, 'name'>, alongside: string[], attribution: boolean, recap?: string): string {
   const also = alongside.length ? `\n\nShipped alongside the same slice in ${alongside.join(' and ')}.` : '';
-  const body = `${summary.trim() || 'A slice of work from one of the project’s leads.'}${also}`;
+  const body = `${summary.trim() || 'A slice of work from one of the project’s leads.'}${also}${recap ? `\n\n${recap}` : ''}`;
   return attribution ? `${body}\n\n---\n_Built by **${lead.name}**, a lead aboard the USS Focus, with Claude Code._` : body;
 }
 

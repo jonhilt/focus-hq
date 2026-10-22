@@ -7,6 +7,7 @@ import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
 import type { PackageFacts } from '../packageManager';
 import type { BackgroundEvent } from './backgroundTasks';
+import type { ShipInput } from './recap';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -119,7 +120,7 @@ export interface ToolReply {
 /** Tools Ops lends a session. Each returns what happened, in words, for Claude to read. */
 export interface OpsTools {
   /** Ships the slice: pushes every repo with new commits, and opens or updates its pull request. */
-  ship(input: { title: string; summary: string }): Promise<string>;
+  ship(input: ShipInput): Promise<string>;
   /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
   note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */

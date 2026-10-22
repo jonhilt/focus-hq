@@ -29,6 +29,8 @@ export class GitHub extends Context.Service<GitHub, {
   /** Every pull request, open or not, whose branch starts with `prefix`, newest first (at most 100), with its comments. */
   pullRequestsFrom(repo: string, prefix: string): Op<PastPullRequest[]>;
   commentOnPullRequest(repo: string, number: number, body: string): Op<string>;
+  /** Replaces a pull request's description. */
+  editPullRequestBody(repo: string, number: number, body: string): Op<void>;
   /** What a pull request's comments say, oldest first. */
   pullRequestComments(repo: string, number: number): Op<string[]>;
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Op<string>;
@@ -59,6 +61,7 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     findPullRequest: (repo, branch) => call((gh) => gh.findPullRequest(repo, branch)),
     getPullRequest: (repo, number) => call((gh) => gh.getPullRequest(repo, number)),
     commentOnPullRequest: (repo, number, body) => call((gh) => gh.commentOnPullRequest(repo, number, body)),
+    editPullRequestBody: (repo, number, body) => call((gh) => gh.editPullRequestBody(repo, number, body)),
     pullRequestComments: (repo, number) => call((gh) => gh.pullRequestComments(repo, number)),
     uploadQaEvidence: (repo, path, bytes) => call((gh) => gh.uploadQaEvidence(repo, path, bytes)),
     createPullRequest: (repo, pr) => call((gh) => gh.createPullRequest(repo, pr)),

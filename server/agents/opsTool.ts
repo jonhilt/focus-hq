@@ -1,6 +1,7 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { MODEL_SCHEMA } from './modelSchema';
+import { RECAP_SCHEMA } from './recapSchema';
 import { errorMessage } from '../util';
 import { CONTACT_LIMITS as C } from './contacts';
 import type { ExtraTool, OpsTools, ToolReply } from './types';
@@ -58,12 +59,13 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
     tools: [
       tool(
         'ship',
-        'Ship the slice: Ops pushes every repo in your workspace with new commits, and opens (or updates) a pull request in each. Commit everything first.',
+        'Ship the slice: Ops pushes every repo in your workspace with new commits, and opens (or updates) a pull request in each. Commit everything first. With it goes the slice\'s system recap, which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses the ship if a file the slice changes is under none of the primitives\' paths, then puts the recap in the pull requests and on your station\'s screen. Use the same primitive ids from slice to slice.',
         {
           title: z.string().describe('The pull requests’ title: imperative and specific, under 70 characters.'),
           summary: z.string().describe('The pull requests’ description in Markdown: what the slice does and why, and how you tested it.'),
+          recap: RECAP_SCHEMA,
         },
-        ({ title, summary }) => answer(() => tools.ship({ title, summary }), "Couldn't ship"),
+        ({ title, summary, recap }) => answer(() => tools.ship({ title, summary, recap }), "Couldn't ship"),
       ),
       tool(
         'note',

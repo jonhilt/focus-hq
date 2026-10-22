@@ -10,6 +10,7 @@ import type { Transcript } from './transcript';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
 import { renderText, renderToolUse } from './render';
 import { workflowProgress } from './workflows';
+import type { SliceRecap } from './recap';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
@@ -405,7 +406,7 @@ export class DemoRunner implements AgentRunner {
           await say('Holding off on shipping. Tell me what you’d like changed first.');
           return false;
         }
-        const result = await tools.ship({ title, summary });
+        const result = await tools.ship({ title, summary, recap: demoRecap(repos.map((r) => r.folder), goal) });
         journalCall('mcp__office__ship', { title, summary }, result)();
         hooks.lines(result.split('\n').filter((l) => l.trim()).slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
         return true;
@@ -901,6 +902,24 @@ export class DemoTriager implements Triager {
 const escapeHtml = (text: string) => text.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c);
 
 /** Demo mode: the diagram a lead puts on the screen while proposing the first slice, a box per repo. */
+/** The demo lead's recap of its thin slice: a new primitive end to end, each repo one, wired from the page to the store. */
+function demoRecap(folders: string[], goal: string): SliceRecap {
+  const primitives = folders.map((folder, i): SliceRecap['primitives'][number] => ({
+    id: `${folder.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-saved-items`,
+    group: folder,
+    impact: i === 0 ? 'adds' : 'extends',
+    change: i === 0 ? `New: ${goal}` : 'Stores and serves what was saved',
+    paths: [`${folder}/`],
+  }));
+  const map = primitives.slice(1).map((p, i) => ({ from: primitives[i].id, to: p.id, label: 'saves and reads items' }));
+  return {
+    primitives,
+    invariants: ['Saving an item never loses one saved before'],
+    map,
+    flow: [{ from: 'shopper', to: primitives[0].id, label: 'saves an item' }, ...map],
+  };
+}
+
 function demoFlowPage(goal: string, folders: string[]): string {
   const boxes = ['shopper', ...folders, 'database'];
   const step = 1180 / boxes.length;

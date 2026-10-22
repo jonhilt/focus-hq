@@ -961,6 +961,50 @@ describe('AgentManager', () => {
     await expect(ship()).rejects.toThrow(/^Nothing shipped: GitHub's `[^`]+` has commits \.\/webshop-/);
   });
 
+  it('refuses a ship whose recap misses a file it changes, then puts the recap in its pull requests, and an update’s in place of it', async () => {
+    const opened: string[] = [];
+    const edited: string[] = [];
+    // the demo GitHub, keeping what each pull request opened with, and each comment
+    const recording = Layer.effect(GitHub, Effect.gen(function* () {
+      const gh = yield* GitHub;
+      return GitHub.of({
+        ...gh,
+        createPullRequest: (repo, pr) => Effect.suspend(() => (opened.push(pr.body), gh.createPullRequest(repo, pr))),
+        editPullRequestBody: (repo, number, body) => Effect.suspend(() => (edited.push(body), gh.editPullRequestBody(repo, number, body))),
+      });
+    })).pipe(Layer.provide(demoLayer));
+    let head = 'first';
+    // each repo's src/saved.ts imports the other repo's: the map's arrow between them stands on it
+    const { agents, claude, store, project } = focus({
+      ...demoWorkspace,
+      head: async () => head,
+      changedFiles: async () => ['src/saved.ts'],
+      runIn: async (_dir, args) => (args[0] === 'git' ? { code: 0, output: 'src/saved.ts\nREADME.md' } : { code: 1, output: '' }),
+      readIn: async (dir) => (dir.endsWith('webshop-frontend') ? "import { save } from '../../webshop-api/src/saved';" : ''),
+    }, recording);
+    agents.startGoal(project.id, 'Saved items');
+    await until(() => claude.turns.length === 1);
+    const primitive = (folder: string) => ({ id: `${folder}-saved`, group: folder, impact: 'adds' as const, change: 'New', paths: [`${folder}/`] });
+    const ship = (folders: string[]) => claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'A thin first slice.', recap: { primitives: folders.map(primitive), map: [{ from: 'webshop-frontend-saved', to: 'webshop-api-saved', label: 'saves' }] } });
+
+    await expect(ship(['webshop-frontend'])).rejects.toThrow('Nothing shipped: the recap needs fixing first.\n\n- No primitive covers this changed file: add it to one’s paths, or name the primitive it belongs to\n- webshop-api/src/saved.ts');
+    expect(opened).toEqual([]);
+
+    await ship(['webshop-frontend', 'webshop-api']);
+    expect(opened).toHaveLength(2);
+    for (const body of opened) expect(body).toContain('<summary>System recap: <b>adds a primitive</b> (high risk)</summary>');
+    // the arrow stands on an import, so it's drawn solid
+    expect(opened[0]).toContain('n_webshop_frontend_saved -->|"saves"| n_webshop_api_saved');
+    const lead = [...store.agents.values()].find((a) => a.lead)!;
+    expect(lead.lead!.artifacts?.map((a) => a.id)).toContain('system-recap');
+
+    head = 'second';
+    await ship(['webshop-frontend', 'webshop-api']);
+    expect(edited).toHaveLength(2);
+    for (const body of edited) expect(body.match(/<!-- system-recap:start -->/g)).toHaveLength(1);
+    expect(edited[0].startsWith('A thin first slice.')).toBe(true);
+  });
+
   it('ships through GitHub 5xx answers, trying the push and the PR again', async () => {
     let pushFailures = 2;
     let prFailures = 2;

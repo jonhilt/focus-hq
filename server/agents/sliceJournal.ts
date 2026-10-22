@@ -1,5 +1,6 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
 import type { LeadPr } from '../../shared/types';
+import type { ShipInput } from './recap';
 
 // A goal's slices, as the lead's slice journal tells them, pure: the facts Ops records as a slice ships, lands
 // and moves on to fresh code (data/runs/slices/<lead>.jsonl), what they add up to, and what Ops does with them
@@ -24,8 +25,8 @@ export interface Moving {
 export type SliceFact =
   /** The goal's first slice, on `branch`. */
   | { kind: 'started'; slice: number; branch: string }
-  /** The lead shipped (`title`, `summary`): written before anything's pushed, so a restart finishes it. */
-  | { kind: 'shipping'; title: string; summary: string }
+  /** The lead shipped (`title`, `summary`, and its `recap`): written before anything's pushed, so a restart finishes it. */
+  | ({ kind: 'shipping' } & ShipInput)
   /** A repo's pull request for the slice is open (or updated) at `sha`. */
   | { kind: 'pr'; repo: string; number: number; url: string; sha: string; branch: string }
   /** The ship's done: its pull requests are open, and with QA. */
@@ -48,7 +49,7 @@ export interface SliceContext {
   /** The slice's pull requests. */
   prs: SlicePr[];
   /** The ship under way. */
-  ship?: { title: string; summary: string };
+  ship?: ShipInput;
   /** The move under way. */
   moving?: Moving;
 }
@@ -69,6 +70,9 @@ const same = (p: { repo: string; number: number }, q: { repo: string; number: nu
 const marked = ({ context, event }: { context: SliceContext; event: Extract<SliceEvent, { type: 'landed' }> }) => ({
   prs: context.prs.map((p) => (same(p, event) ? { ...p, outcome: event.merged ? ('merged' as const) : ('closed' as const) } : p)),
 });
+
+/** The ship a `shipping` fact records: its recap only when it has one (journals from before recaps have none). */
+const shipOf = (e: ShipInput): ShipInput => ({ title: e.title, summary: e.summary, ...(e.recap && { recap: e.recap }) });
 
 /**
  * What a lead's slice journal adds up to, as a state machine. A slice is `working` until the lead ships it, `shipping`
@@ -97,7 +101,7 @@ export const sliceMachine = setup({
     moving: { target: '.moving', actions: assign(({ event: { type: _, kind: __, ...moving } }) => ({ moving })) },
   },
   states: {
-    working: { on: { shipping: { target: 'shipping', actions: assign(({ event }) => ({ ship: { title: event.title, summary: event.summary } })) } } },
+    working: { on: { shipping: { target: 'shipping', actions: assign(({ event }) => ({ ship: shipOf(event) })) } } },
     shipping: {
       on: {
         pr: { actions: assign(({ context, event: { type: _, kind: __, ...pr } }) => ({ prs: [...context.prs.filter((p) => !same(p, pr)), pr] })) },
@@ -112,7 +116,7 @@ export const sliceMachine = setup({
     },
     'in-review': {
       on: {
-        shipping: { target: 'shipping', actions: assign(({ event }) => ({ ship: { title: event.title, summary: event.summary } })) },
+        shipping: { target: 'shipping', actions: assign(({ event }) => ({ ship: shipOf(event) })) },
         landed: [{ guard: 'every one landed', target: 'landed', actions: assign(marked) }, { actions: assign(marked) }],
       },
     },
@@ -141,7 +145,7 @@ export function foldSlice(entries: readonly (SliceFact & { seq?: number })[]): S
 export type SliceRecovery =
   | { kind: 'none' }
   /** A ship was cut off: Ops ships it again (pushing, finding or opening each pull request, asking QA), no Claude turn needed. */
-  | { kind: 'ship'; title: string; summary: string }
+  | ({ kind: 'ship' } & ShipInput)
   /** A move to fresh code was cut off: Ops finishes it from what was decided. */
   | { kind: 'move'; moving: Moving };
 

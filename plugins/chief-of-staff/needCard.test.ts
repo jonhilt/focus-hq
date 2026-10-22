@@ -161,8 +161,11 @@ describe('a card in Comms', () => {
 
   it('merges a lead’s open pull request from their turn, without going to the board', async () => {
     calls.shownPrs.mockReturnValue([{ projectId: 'p', pr }]);
-    const el = card({ kind: 'turn', agent: lead({ lead: { station: 2, title: 'Wishlist', repos: [], slice: 1, prs: [{ repo: 'acme/shop', number: 7, url: pr.url }] } }) });
+    const recap = { id: 'system-recap', title: 'System recap: Wishlist', at: 900, image: true };
+    const el = card({ kind: 'turn', agent: lead({ lead: { station: 2, title: 'Wishlist', repos: [], slice: 1, prs: [{ repo: 'acme/shop', number: 7, url: pr.url }], artifacts: [recap] } }) });
     expect(el.textContent).toContain('Their open pull request:');
+    // the slice's recap with them, once, whatever was said since it went up
+    expect([...el.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual(['/api/artifacts/a1/system-recap.jpg?v=900']);
     expect(el.querySelector('[data-act="merge"]')?.textContent).toBe('squash & merge shop#7');
     button(el, 'squash & merge shop#7').click();
     await settle();
