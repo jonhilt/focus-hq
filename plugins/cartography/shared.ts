@@ -1,10 +1,12 @@
 // What both halves of the cartography plugin (README.md) share: a project's architecture model, kept in each repo
 // it maps, and the map Ops makes of it from the code.
-import type { ModelKind } from '../../plugin-api/shared';
-import type { KeptDiagram } from './diagrams';
 import type { MapHistory } from './history';
 
 export const CARTOGRAPHY = 'cartography';
+
+/** What kind of thing a model's part is. */
+export const MODEL_KINDS = ['ui', 'route', 'handler', 'service', 'store', 'queue', 'external', 'job', 'type'] as const;
+export type ModelKind = (typeof MODEL_KINDS)[number];
 
 /** Where a repo keeps its model, from its root. */
 export const MODEL_FILE = '.focus/cartography.yaml';
@@ -143,6 +145,4 @@ export interface CartographyState {
   crossCalls: Record<string, CrossCall[]>;
   /** Projects whose maps are being made again. */
   mapping: string[];
-  /** The diagrams leads drew of how each project's code works, kept with it (diagrams.ts), by project id. */
-  diagrams: Record<string, KeptDiagram[]>;
 }

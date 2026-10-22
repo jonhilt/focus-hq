@@ -14,7 +14,6 @@ import { checkoutLatest } from '../workspace';
 import { pluginDataDir } from '../../plugins/dataDir';
 import { lend, lentLog } from '../../plugins/lend';
 import { runReadOnly, shipSession } from '../claudeCrew';
-import { demoModel, sessionModel } from '../modelSession';
 import { MACHINES } from '../machines';
 
 /**
@@ -139,12 +138,6 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     focusDir: config.root,
     dataDir,
     readOnlySession: (run) => runReadOnly(run),
-    drawModel: async ({ question, title, dirs }) => {
-      const ask = { question, dirs };
-      const model = lent.demo ? demoModel(ask) : await sessionModel(ask, core.store.settings, (run) => runReadOnly(run));
-      const drawn = await core.goalTools.drawn(model, title, dirs);
-      return { id: title, title, ...drawn };
-    },
     shipSession: (run) => shipSession(id, run),
     checkout: async (repo) => {
       // a plugin checks out only the captain's repos, and only into its own folder

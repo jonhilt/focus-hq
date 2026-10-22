@@ -4,14 +4,13 @@
 // One space serves every project: it shows the views of the project whose table you came through, and next to the
 // whole map, what each of its goals under way does to it (slice.ts).
 import * as THREE from 'three';
-import { callPlugin, canvasTexture, confirmDialog, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
+import { canvasTexture, Hologram, hover, makeCanvas, OVERLAY_LAYER, type Place, type PluginSpace, type ShipHost, SPACE, type Ui } from '../../plugin-api/client';
 import { ARCH, HolodeckArch } from './arch';
-import { type KeptDiagram, standing } from './diagrams';
 import { TIES_QUESTION } from './draw';
-import { openDiagram, openDrawing, openView } from './panel';
-import { drawNote, drawPicture, drawSvg, drawView } from './screen';
+import { openDrawing, openView } from './panel';
+import { drawNote, drawSvg, drawView } from './screen';
 import { type Shown, spaceStands } from './shown';
-import { CARTOGRAPHY, type CartographyState } from './shared';
+import type { CartographyState } from './shared';
 import { ARRIVAL, EXIT_ARCH, type PanelSpot, panelSpots, PLATFORM, type Point, reachOf } from './spaceLayout';
 
 /** The canvas each view's drawn on. */
@@ -36,30 +35,8 @@ interface Item {
   open: (ui: Ui) => void;
 }
 
-/** A kept diagram's page or picture, or what drawing it again or forgetting it says, from the plugin's server part. */
-const diagramCall = (projectId: string, d: KeptDiagram) => (path: string) => callPlugin<{ html: string; image?: string }>(CARTOGRAPHY, path, { project: projectId, id: d.id });
-
-/** A kept diagram of project `projectId` as the space draws it, and up close, where it can be drawn again or forgotten. */
-function diagramItem(projectId: string, d: KeptDiagram): Pick<Item, 'draw' | 'open'> {
-  const call = diagramCall(projectId, d);
-  return {
-    draw: async (ctx) => drawPicture(ctx, PX.w, PX.h, d.question, standing(d, Date.now()), d.image ? (await call('/diagram')).image : undefined, !!d.stale?.length),
-    open: (ui) =>
-      void call('/diagram')
-        .then((f) => openDiagram(ui, d, standing(d, Date.now(), false), f.html, {
-          redraw: () => call('/redraw'),
-          // it can't be taken back: its page and picture go too
-          forget: async () => {
-            if (!(await confirmDialog({ title: 'Forget this diagram?', message: `“${d.question}” goes from the architecture space for good. A lead can draw it again if it's asked for.`, confirmLabel: 'Forget it', danger: true }))) return false;
-            return call('/forget');
-          },
-        }))
-        .catch((err: Error) => ui.error(err.message)),
-  };
-}
-
-/** How something the space puts up (shown.ts) for project `projectId` is drawn, and what E on it opens. */
-function itemOf(s: Shown, projectId: string): Item {
+/** How something the space puts up (shown.ts) is drawn, and what E on it opens. */
+function itemOf(s: Shown): Item {
   switch (s.kind) {
     case 'view':
       return { ...s, draw: (ctx) => drawView(ctx, PX.w, PX.h, s.map, s.view), open: (ui) => openView(ui, s.map, s.view) };
@@ -67,8 +44,6 @@ function itemOf(s: Shown, projectId: string): Item {
       return { ...s, draw: (ctx) => drawView(ctx, PX.w, PX.h, s.map, s.view, s.marks, s.caption), open: (ui) => openView(ui, s.map, s.view, s.marks) };
     case 'ties':
       return { ...s, draw: (ctx) => drawSvg(ctx, PX.w, PX.h, TIES_QUESTION, s.ties.map.repo, s.ties.svg), open: (ui) => openDrawing(ui, TIES_QUESTION, s.ties.map.repo, s.ties) };
-    default:
-      return { ...s, ...diagramItem(projectId, s.diagram) };
   }
 }
 
@@ -139,7 +114,7 @@ export class ArchitectureSpace {
     this.drawnKey = key;
     const spots = panelSpots(Math.max(1, shows.length));
     if (note) return this.put(spots[0], note.title, null, (ctx) => drawNote(ctx, PX.w, PX.h, note.title, note.why));
-    shows.map((s) => itemOf(s, projectId)).forEach((v, i) => this.put(spots[i], v.title, v.open, v.draw));
+    shows.map((s) => itemOf(s)).forEach((v, i) => this.put(spots[i], v.title, v.open, v.draw));
   }
 
   /** A view's hologram at `spot`, drawn by `draw`; E on it does `use`. */

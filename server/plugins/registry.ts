@@ -3,7 +3,7 @@ import type { CaptainAnswer } from '../../shared/captainAnswer';
 import type { LedgerEvent } from '../../shared/ledger';
 import type { Agent, Brief, PluginStates, PullRequest, SignIn } from '../../shared/types';
 import { errorMessage } from '../util';
-import type { BriefSpec, FocusPlugin, LeadNote, LeadTool, ModelShown, PluginHost, PluginParts, PluginRoute } from './contract';
+import type { BriefSpec, FocusPlugin, LeadNote, LeadTool, PluginHost, PluginParts, PluginRoute } from './contract';
 
 /**
  * The plugins Focus started (docs/plugins.md), and the core's one way to them: it asks here rather than knowing
@@ -114,11 +114,6 @@ export class Plugins {
   /** The captain's answer to an agent went through: each plugin hears of its own copy of the agent as it stood before. */
   captainAnswered(before: Agent, answer: CaptainAnswer): void {
     this.each('captainAnswered', (parts) => parts.captainAnswered?.(lend(before), lend(answer)));
-  }
-
-  /** A lead drew a model: each plugin hears of its own copy of it. */
-  modelShown(agent: Agent, shown: ModelShown): void {
-    this.each('modelShown', (parts) => parts.modelShown?.(lend(agent), lend(shown)));
   }
 
   machineStepped(machine: string, key: string): void {

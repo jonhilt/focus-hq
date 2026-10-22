@@ -36,14 +36,6 @@ Focus records its own with `pnpm run record-flows` ([scripts](../../docs/scripts
 
 Every map with a git history has a **changes** view too (`history.ts`): hotspots and change coupling from the default branch's history. Git is a witness here that neither the model nor anyone drawing it is. What changes most is where change costs most, and where a map is most worth keeping right. A coupled pair with no import between them is the one worth a look: either they talk over the wire (the recorded run has a flow between them), or what ties them isn't on the map at all.
 
-## Diagrams leads draw, kept
-
-The diagram most worth having is the one asked for: the captain asks a lead how part of the system works, and the lead draws it with Ops' `model` tool ([docs/goals.md](../../docs/goals.md)). Cartography keeps it with the project, so it's there after the goal closes:
-
-- **What's kept**: a model of how the code works. One of what a change does (parts or connections marked added, changed or removed) is about a slice, and goes stale the moment it merges, so it isn't kept.
-- **Out of date**: when a file it cites has changed or gone on the default branch. It's a warning: the diagram may still be right, but the code under it has moved.
-- **Draw it again** only when the captain asks, since a session costs.
-
 ## A lead's map tool
 
 The plugin adds `mcp__office__map` to every goal lead's toolkit (`leadTool.ts`), so a lead puts a view on their station's screen with one call rather than drawing a diagram of the system afresh. With no view, it lists each repo's views; with a view (or `whole`, or `changes`), it maps the lead's own checkout, uncommitted work and all.
@@ -54,7 +46,7 @@ When no view answers what a lead wants to show, they add one to the model in the
 
 The plugin adds `mcp__office__statechart` too (`statechartTool.ts`), so every state chart or flow chart a lead shows the captain looks the same: the lead sends the chart as data, and Ops draws the page in one house style, with the flow first and then whatever trigger table, properties, risks and open questions the lead gives.
 
-The promise is legibility, and the flow is a strict top-down tree: one root, one arrow into every other node, nothing looping back. A chart that isn't one is refused with every problem listed, so the lead repeats a short end node rather than drawing two arrows into it. Cites are checked against the lead's checkouts as the `model` tool's are, and the ones that don't check out are drawn flagged rather than refused.
+The promise is legibility, and the flow is a strict top-down tree: one root, one arrow into every other node, nothing looping back. A chart that isn't one is refused with every problem listed, so the lead repeats a short end node rather than drawing two arrows into it. Cites are checked against the lead's checkouts, and the ones that don't check out are drawn flagged rather than refused.
 
 ## When the map and the code disagree
 

@@ -8,7 +8,7 @@ import type { Lane } from '../../shared/mergeLane';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
-import type { Agent, Issue, MessageReply, Planner, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, SystemModel, TermLine } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -66,11 +66,6 @@ export interface PluginParts {
    */
   ledgerRecorded?(event: Readonly<LedgerEvent>): void;
   /**
-   * A goal's lead drew a model of how the code works (their `model` tool), checked against their checkout: the id and
-   * title they gave it, the model as the check left it, the page drawn of it, and its picture when one was taken.
-   */
-  modelShown?(agent: Readonly<Agent>, shown: ModelShown): void;
-  /**
    * One of Ops' state machines stepped (`host.machines`): a journal took a fact, so a run of `machine` (`key`,
    * an agent's id or a pull request's key) may be in another state. Heard as it's written: read `host.machines()` for
    * where it is now.
@@ -118,15 +113,6 @@ export type LeadNews =
   | { kind: 'slice-landed'; slice: number }
   /** Anything else: Ops merged a base into their pull request, the star chart, a restart Ops finished something for. */
   | { kind: 'other' };
-
-/** A model a lead drew, as the plugins hear of it (`modelShown`). */
-export interface ModelShown {
-  id: string;
-  title: string;
-  model: SystemModel;
-  html: string;
-  image?: Uint8Array;
-}
 
 /** A tool a plugin adds to every goal lead's Ops tools (`mcp__office__<name>`), answered in words, and pictures if it likes. */
 export interface LeadTool {
@@ -338,13 +324,6 @@ export interface PluginHost {
    * `open_project`) as `mcp__<plugin id>__…`. Neither tool changes anything aboard.
    */
   shipSession(run: ShipSessionRun): Promise<ReadOnlyResult>;
-  /**
-   * A model of how the code answers `question`, drawn afresh by a read-only session reading `dirs` (each a checkout,
-   * as `checkout` gives them), then checked and drawn by Ops as a lead's model tool does: the model as the check
-   * left it (and what didn't check out), its page, and its picture. A session costs, so draw only when asked to. The
-   * demo's stand-in draws one model of Focus's own code, whatever's asked.
-   */
-  drawModel(ask: { question: string; title: string; dirs: string[] }): Promise<ModelShown & { problems: string[] }>;
   /**
    * Checks out `repo`'s default branch as it is on GitHub now, detached, in a folder of the plugin's own (in its
    * `dataDir`), and says where. `repo` has to be one of Focus's projects' repos: it throws, in words, for any other.

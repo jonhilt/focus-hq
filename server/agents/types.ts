@@ -1,5 +1,5 @@
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
-import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, SystemModel, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
 import type { LeadTool } from '../plugins/contract';
@@ -125,8 +125,6 @@ export interface OpsTools {
   note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
   show(input: ArtifactInput): Promise<string>;
-  /** Puts a system model on the lead's station's screen, checked against the lead's workspace (shared/modelDrawing.ts). */
-  model(input: { id: string; title: string; model: SystemModel }): Promise<string>;
   /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */

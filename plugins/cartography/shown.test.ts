@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { KeptDiagram } from './diagrams';
 import type { CartographyState, GoalSlice, RepoMap } from './shared';
-import { diagramStands, offNote, projectCard, spaceShows, spaceStands } from './shown';
+import { offNote, projectCard, spaceShows, spaceStands } from './shown';
 import { MAX_PANELS } from './spaceLayout';
 import { MAP } from './views.test';
 
@@ -12,8 +11,7 @@ const slice: GoalSlice = {
   leadId: 'lead-1', title: 'Wishlist', station: 2, at: 5,
   repos: [{ change: { repo: 'o/r', touched: [{ part: 'api', files: 1, lines: 3 }], unowned: [], added: [], removed: [], gained: [], lost: [] }, branch: MAP }],
 };
-const diagram: KeptDiagram = { id: 'd', title: 't', question: 'How does checkout work?', by: 'Lt. Okafor', goal: 'Wishlist', at: 1, image: false, files: [] };
-const state = (patch: Partial<CartographyState> = {}): CartographyState => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {}, ...patch });
+const state = (patch: Partial<CartographyState> = {}): CartographyState => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, ...patch });
 
 describe('projectCard', () => {
   const shop = { id: 'shop', repos: ['o/r'] };
@@ -52,12 +50,11 @@ describe('offNote', () => {
 });
 
 describe('spaceShows', () => {
-  it('puts up the whole map, then the diagrams, the ties and the slices, then the other views', () => {
-    const shows = spaceShows([web, api], state({ diagrams: { shop: [diagram] }, crossRepo: { shop: [tie] }, slices: { shop: [{ ...slice, repos: [{ ...slice.repos[0], change: { ...slice.repos[0].change, repo: 'o/web' }, branch: web }] }] } }), 'shop');
+  it('puts up the whole map, then the ties and the slices, then the other views', () => {
+    const shows = spaceShows([web, api], state({ crossRepo: { shop: [tie] }, slices: { shop: [{ ...slice, repos: [{ ...slice.repos[0], change: { ...slice.repos[0].change, repo: 'o/web' }, branch: web }] }] } }), 'shop');
     expect(shows.map((s) => [s.kind, s.title])).toEqual([
       ['view', "o/web's whole map"],
       ['view', "o/api's whole map"],
-      ['diagram', 'the diagram: How does checkout work?'],
       ['ties', 'how its repos connect'],
       ['slice', 'what Wishlist changes'],
       ['view', 'the map: What does the API reach?'],
@@ -68,15 +65,8 @@ describe('spaceShows', () => {
   });
 
   it('puts up no more than fit', () => {
-    const many = Array.from({ length: MAX_PANELS + 3 }, (_, i) => ({ ...diagram, id: `d${i}` }));
-    expect(spaceShows([MAP], state({ diagrams: { shop: many } }), 'shop')).toHaveLength(MAX_PANELS);
-  });
-
-  it('draws a diagram again once it is out of date, being drawn again, or failed to be', () => {
-    const key = (d: KeptDiagram) => spaceShows([], state({ diagrams: { shop: [d] } }), 'shop')[0].key;
-    const keys = [diagram, { ...diagram, stale: ['o/r/a.ts'] }, { ...diagram, redrawing: true }, { ...diagram, failed: 'no session' }, { ...diagram, at: 2 }].map(key);
-    expect(new Set(keys).size).toBe(keys.length);
-    expect(key(diagram)).toBe('diagram|d|1||');
+    const many = Array.from({ length: MAX_PANELS + 3 }, (_, i) => ({ ...MAP, repo: `o/r${i}` }));
+    expect(spaceShows(many, state(), 'shop')).toHaveLength(MAX_PANELS);
   });
 });
 
@@ -95,21 +85,6 @@ describe('spaceStands', () => {
     const stands = spaceStands(state({ maps: { shop: [MAP] } }), 'shop', 'Shop');
     expect(stands.note).toBeUndefined();
     expect(stands.key).toBe(stands.shows.map((s) => s.key).join('\n'));
-    expect(spaceStands(state({ maps: { shop: [MAP] }, diagrams: { shop: [diagram] } }), 'shop', 'Shop').key).not.toBe(stands.key);
-  });
-});
-
-describe('diagramStands', () => {
-  it('offers to draw a diagram that is up to date again, quietly', () => {
-    expect(diagramStands({})).toEqual({ warning: undefined, redraw: { class: 'btn small' } });
-  });
-
-  it('warns which files changed once it is out of date, and makes drawing it again stand out', () => {
-    expect(diagramStands({ stale: ['o/r/a.ts'] })).toEqual({ warning: 'Out of date: a file it cites has changed on the default branch since it was drawn (o/r/a.ts).', redraw: { class: 'btn' } });
-    expect(diagramStands({ stale: ['o/r/a.ts', 'o/r/b.ts'] }).warning).toBe('Out of date: 2 files it cites have changed on the default branch since it was drawn (o/r/a.ts, o/r/b.ts).');
-  });
-
-  it('offers no Draw it again while it is being drawn again', () => {
-    expect(diagramStands({ stale: ['o/r/a.ts'], redrawing: true }).redraw).toBeUndefined();
+    expect(spaceStands(state({ maps: { shop: [MAP] }, slices: { shop: [slice] } }), 'shop', 'Shop').key).not.toBe(stands.key);
   });
 });

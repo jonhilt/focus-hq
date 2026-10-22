@@ -2,14 +2,10 @@ import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
 import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
-import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../services';
-import { checkModel, modelError, modelReport } from '../../../shared/systemModel';
-import type { SystemModel } from '../../../shared/types';
-import { citedLines, modelPage } from '../modelPage';
-import { sourceReader } from '../sourceReader';
+import { type Frame, type Frames, type Picture, Renderer } from '../services';
 import { Part, Refused } from './core';
 
-/** The lead's `office` MCP tools besides ship: the goal's note, show, model, ask (and the captain's answer) and propose_close. */
+/** The lead's `office` MCP tools besides ship: the goal's note, show, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /** The lead's note tool: the goal's note and title, as they want them. */
   noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
@@ -65,41 +61,6 @@ export class GoalTools extends Part {
         ? { text: `${where}${pageErrorsNote(picture.errors)}`, picture: picture.taken }
         : { text: `${where} Ops couldn't take a picture of it for the screen (${picture.failed}), so the screen shows only its title.` };
     });
-  }
-
-  /**
-   * The lead's model tool: a system model of how its code works (or what its change does), checked against the lead's
-   * own workspace, drawn the one fixed way (shared/modelDrawing.ts), and shown like any of show's visuals, the code it cites carried in the
-   * page. What didn't check out is drawn flagged and said back, for the lead to fix.
-   */
-  showModel(agent: Agent, input: { id: string; title: string; model: SystemModel }): Effect.Effect<string, Refused, Renderer | Workspace> {
-    return Effect.gen({ self: this }, function* () {
-      const bad = modelError(input.model);
-      if (bad) return yield* new Refused({ message: bad });
-      const read = sourceReader([(yield* Workspace).dir(agent.id)]);
-      const { model, problems } = checkModel(input.model, read);
-      const html = modelPage(model, input.title, citedLines(model, read));
-      const shown = yield* this.showPage(agent, { id: input.id, title: input.title, html });
-      // a model of how the code works is worth keeping past the goal: the plugins hear of it (cartography keeps them)
-      this.core.plugins.modelShown(agent, { id: input.id, title: input.title, model, html, image: shown.picture?.image });
-      return `${shown.text} ${modelReport(model, problems)}`;
-    });
-  }
-
-  /**
-   * A model checked against the code under `dirs` and drawn as the model tool draws it, with its picture when one can
-   * be taken: for a plugin, a model a read-only session drew afresh (`PluginHost.drawModel`).
-   */
-  drawn(input: SystemModel, title: string, dirs: readonly string[]): Promise<{ model: SystemModel; problems: string[]; html: string; image?: Uint8Array }> {
-    const bad = modelError(input);
-    if (bad) return Promise.reject(new Refused({ message: bad }));
-    const read = sourceReader(dirs);
-    const { model, problems } = checkModel(input, read);
-    const html = modelPage(model, title, citedLines(model, read));
-    const picture = Effect.gen(function* () {
-      return (yield* (yield* Renderer).render(html)).image;
-    }).pipe(Effect.catch(() => Effect.void));
-    return this.runtime.runPromise(picture).then((image) => ({ model, problems, html, ...(image ? { image } : {}) }));
   }
 
   /**

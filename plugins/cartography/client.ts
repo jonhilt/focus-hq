@@ -148,7 +148,7 @@ const cartography: ClientPlugin = {
       'What each goal’s slice does to the map, worked out as a lead’s turn ends',
     ],
     cost: 'per-turn',
-    costDetail: 'Its map and statechart tools are read on every turn of every lead in the projects it’s on for. Mapping itself is static analysis; drawing a kept diagram again, when you ask, runs a read-only session.',
+    costDetail: 'Its map and statechart tools are read on every turn of every lead in the projects it’s on for. Mapping itself is static analysis.',
   },
   project: {
     label: 'Architecture map',

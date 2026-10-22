@@ -4,7 +4,6 @@
 // lead's checkout, worked out again as the lead's turn ends.
 // FOCUS_PLUGINS=cartography.
 import { type Agent, errorMessage, type FocusPlugin, type PluginHost, type PluginState } from '../../plugin-api/server';
-import { DiagramKeeper } from './keeper';
 import { mapTool } from './leadTool';
 import { statechartTool } from './statechartTool';
 import { crossCoupling, type OwnedCommit } from './crossRepo';
@@ -39,7 +38,6 @@ class Cartographer {
   constructor(
     private host: PluginHost,
     private state: PluginState<CartographyState>,
-    private diagrams: DiagramKeeper,
   ) {}
 
   /** Maps project `id`'s repos again, one at a time; asked while it's under way, it goes again once it's done. */
@@ -56,10 +54,9 @@ class Cartographer {
     const maps: RepoMap[] = [];
     const logs: { repo: string; commits: OwnedCommit[] }[] = [];
     const routes: RepoRoutes[] = [];
-    const dirs = new Map<string, string>();
     for (const repo of project.repos) {
       const mapped = await checkout(this.host, repo)
-        .then((dir) => (dirs.set(repo, dir), mapRepoAndLog(repo, dir)))
+        .then((dir) => mapRepoAndLog(repo, dir))
         .catch((err: unknown) => ({ map: { repo, files: 0, mapped: 0, sizes: {}, connections: [], problems: [], error: errorMessage(err) }, commits: [], routes: { repo, declared: [], called: [] } }));
       maps.push(mapped.map);
       logs.push({ repo, commits: mapped.commits });
@@ -73,8 +70,6 @@ class Cartographer {
     const crossRepo = many ? { ...otherTies, [id]: crossCoupling(logs) } : otherTies;
     const crossCalls = many ? { ...otherCalls, [id]: callsAcross(routes) } : otherCalls;
     this.state.set({ maps: { ...now.maps, [id]: maps }, crossRepo, crossCalls, mapping: now.mapping.filter((p) => p !== id) });
-    // the diagrams its leads drew, against the code as it now stands
-    this.diagrams.restale(id, dirs);
     if (this.again.delete(id)) return this.map(id);
     // against the new maps, what each goal under way does to them
     await this.sliceAll(id);
@@ -148,37 +143,12 @@ const cartography: FocusPlugin = {
   id: CARTOGRAPHY,
   start(host) {
     // made again from the code as Focus starts, so never saved in state.json
-    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, diagrams: {} }), { saved: false });
-    // the diagrams are kept in files of their own, beside the maps that are made again
-    const diagrams = new DiagramKeeper(host, state, (repo) => checkout(host, repo));
-    state.set({ diagrams: diagrams.load() });
-    const cartographer = new Cartographer(host, state, diagrams);
+    const state = host.state<CartographyState>(() => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {} }), { saved: false });
+    const cartographer = new Cartographer(host, state);
     setTimeout(() => void cartographer.mapAll().catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)), MAP_AFTER_START_MS).unref();
     return {
       leadTools: [mapTool, statechartTool],
       routes: [
-        {
-          method: 'post',
-          path: '/redraw',
-          handle: ({ body }) => {
-            // a session reads the code and draws it: the answer comes later, as the diagram's state changes
-            void diagrams.redraw(String(body.project ?? ''), String(body.id ?? '')).catch((err: unknown) => console.error(`Cartography couldn't draw a diagram again: ${errorMessage(err)}`));
-            return { ok: true };
-          },
-        },
-        {
-          method: 'post',
-          path: '/forget',
-          handle: ({ body }) => {
-            diagrams.forget(String(body.project ?? ''), String(body.id ?? ''));
-            return { ok: true };
-          },
-        },
-        {
-          method: 'post',
-          path: '/diagram',
-          handle: ({ body }) => diagrams.read(String(body.project ?? ''), String(body.id ?? '')),
-        },
         {
           method: 'post',
           path: '/map',
@@ -192,15 +162,6 @@ const cartography: FocusPlugin = {
       ],
       // switched on for a project, it maps it; switched off, its maps go
       projectChanged: (projectId) => void cartographer.map(projectId).catch((err: unknown) => console.error(`Cartography: ${errorMessage(err)}`)),
-      // a lead drew how the code works: kept with the project, for the architecture space
-      modelShown: (agent, shown) => {
-        if (!host.on(agent.projectId)) return;
-        try {
-          diagrams.keep(agent, shown, leadCheckouts(host, agent.id));
-        } catch (err) {
-          console.error(`Cartography couldn't keep ${agent.name}'s diagram: ${errorMessage(err)}`);
-        }
-      },
       prClosed: (repo, _number, merged) => {
         if (merged) cartographer.merged(repo);
       },

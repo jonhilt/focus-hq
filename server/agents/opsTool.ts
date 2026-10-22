@@ -1,6 +1,5 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { MODEL_SCHEMA } from './modelSchema';
 import { RECAP_SCHEMA } from './recapSchema';
 import { errorMessage } from '../util';
 import { CONTACT_LIMITS as C } from './contacts';
@@ -33,7 +32,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
-export const OPS_TOOL_NAMES = ['ship', 'note', 'show', 'model', 'ask', 'propose_close'] as const;
+export const OPS_TOOL_NAMES = ['ship', 'note', 'show', 'ask', 'propose_close'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
 /** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
@@ -47,7 +46,7 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, model, ask and
+ * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, ask and
  * propose_close, and those the plugins switched on add.
  */
 export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
@@ -82,16 +81,6 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
           html: z.string().describe('A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.'),
         },
         (input) => answer(() => tools.show(input), "Couldn't show it"),
-      ),
-      tool(
-        'model',
-        "Show how code works, or what your change does to it, as a system model recovered from the code: its parts, how they connect, and one concrete scenario as steps along the connections, every part and connection cited at the file and line in your workspace. Ops checks every cite against your workspace and tells you what didn't check out (drawn flagged in red), draws it one fixed way (its structure, the scenario as a sequence diagram, and the data at each step, with a key), and puts it on your station's screen like show's visuals; up close the captain steps through the scenario and clicks any part to see the code it cites. Use it rather than a hand-drawn diagram whenever the captain needs to understand how real code works, or to review what a slice changes (mark what it adds, changes or removes). Keep to one level of detail, 8 to 12 parts on the scenario's path; fix what the check reports and send it again under the same id.",
-        {
-          id: z.string().describe('A short name for it, lowercase with dashes (like "save-flow"): the same id again replaces it.'),
-          title: z.string().describe('What it shows, in a few words (at most 80 characters).'),
-          model: MODEL_SCHEMA,
-        },
-        (input) => answer(() => tools.model(input), "Couldn't show the model"),
       ),
       tool(
         'ask',

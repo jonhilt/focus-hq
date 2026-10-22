@@ -1,7 +1,6 @@
 // What the cartography plugin's views show and say (README.md), decided apart from drawing them: each project's map
-// card on the engineering station (client.ts), what the architecture space puts up and in what order (space.ts), and
-// how a kept diagram stands up close (panel.ts). Those draw what these decide.
-import type { KeptDiagram } from './diagrams';
+// card on the engineering station (client.ts), and what the architecture space puts up and in what
+// order (space.ts). Those draw what these decide.
 import { type Marks, TIES_KEY, tiesDrawing } from './draw';
 import { type CartographyState, type MapView, MODEL_FILE, type RepoMap } from './shared';
 import { sliceViews } from './slice';
@@ -49,7 +48,6 @@ export type Shown = { key: string; title: string } & (
   | { kind: 'view'; map: RepoMap; view: MapView }
   | { kind: 'slice'; caption: string; map: RepoMap; view: MapView; marks: Marks }
   | { kind: 'ties'; ties: TiesDrawing }
-  | { kind: 'diagram'; diagram: KeptDiagram }
 );
 
 /** A hint's name for a view. */
@@ -62,14 +60,9 @@ const sliceShown = ({ slice, map, view, marks, key }: SliceView): Shown => ({
   caption: `${slice.title} · TS-${slice.station + 1} · ${map.repo}, its lead's checkout against the default branch`,
 });
 
-/** A kept diagram as the space puts it up: drawn again once it's out of date, being drawn again, or failed to be. */
-const diagramShown = (d: KeptDiagram): Shown => ({
-  kind: 'diagram', key: `diagram|${d.id}|${d.at}|${(d.stale ?? []).join(',')}|${d.redrawing ? 'redrawing' : d.failed ?? ''}`, title: `the diagram: ${d.question}`, diagram: d,
-});
-
 /**
  * What the space puts up for project `projectId` from its `repos`' maps, in the order of its spots and no more than
- * fit: each repo's whole map, then the diagrams its leads drew (the newest first), then what ties its repos together
+ * fit: each repo's whole map, then what ties its repos together
  * (crossRepo.ts), then what each goal under way does to them, then the repos' own views and how each changes.
  */
 export function spaceShows(repos: readonly RepoMap[], state: CartographyState | undefined, projectId: string): Shown[] {
@@ -80,9 +73,8 @@ export function spaceShows(repos: readonly RepoMap[], state: CartographyState | 
   const called = state?.crossCalls[projectId] ?? [];
   const ties = tiesDrawing(repos, tied, called);
   const repoTies: Shown[] = ties ? [{ kind: 'ties', key: `ties|${JSON.stringify([tied, called])}`, title: 'how its repos connect', ties }] : [];
-  const kept = (state?.diagrams[projectId] ?? []).map(diagramShown);
   const slices = sliceViews(state?.slices[projectId] ?? [], repos).map(sliceShown);
-  return [...views.slice(0, wholes), ...kept, ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
+  return [...views.slice(0, wholes), ...repoTies, ...slices, ...views.slice(wholes)].slice(0, MAX_PANELS);
 }
 
 /**
@@ -96,14 +88,4 @@ export function spaceStands(state: CartographyState | undefined, projectId: stri
   if (shows.length) return { shows, key };
   const why = repos ? 'None of its repos has a model yet: each keeps one in .focus/cartography.yaml.' : 'It hasn’t been mapped yet: it will be in a moment.';
   return { shows, key, note: { title: `${name} has no map yet`, why } };
-}
-
-/** How a kept diagram stands up close: what it warns when it's out of date, and its Draw it again button (none while it's being drawn again). */
-export function diagramStands(d: Pick<KeptDiagram, 'stale' | 'redrawing'>): { warning?: string; redraw?: { class: string } } {
-  const stale = d.stale ?? [];
-  const warning = stale.length
-    ? `Out of date: ${stale.length === 1 ? 'a file it cites has' : `${stale.length} files it cites have`} changed on the default branch since it was drawn (${stale.join(', ')}).`
-    : undefined;
-  // out of date, it's what to do next, so it stands out
-  return { warning, redraw: d.redrawing ? undefined : { class: stale.length ? 'btn' : 'btn small' } };
 }
