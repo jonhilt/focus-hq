@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createSdkMcpServer, type SDKMessage, type SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Settings } from '../../shared/types';
-import { type Ask, blockActivity, type ReadOnlyRun, readOnlyOptions, runReadOnly, shipSession, turnFailure, turnResult } from './claudeCrew';
+import { asDraft, type Ask, blockActivity, type ReadOnlyRun, readOnlyOptions, runReadOnly, shipSession, turnFailure, turnResult } from './claudeCrew';
 import { paths } from '../config';
 
 const server = createSdkMcpServer({ name: 'office', tools: [] });
@@ -83,9 +83,35 @@ describe('blockActivity', () => {
     expect(blockActivity({ type: 'text', text: 'x'.repeat(200) } as never, at)?.length).toBeLessThanOrEqual(101);
   });
 
+  it('reads a tool call with no input as one with nothing set', () => {
+    const read = (input: unknown) => blockActivity({ type: 'tool_use', id: 't1', name: 'Read', input } as never, at);
+    expect(read(null)).toBe(read({}));
+    expect(read('a.ts')).toBe(read({}));
+  });
+
   it('shows nothing for blank text or a block it doesn’t know', () => {
     expect(blockActivity({ type: 'text', text: '  \n' } as never, at)).toBeUndefined();
     expect(blockActivity({ type: 'redacted_thinking', data: '' } as never, at)).toBeUndefined();
+  });
+});
+
+describe('asDraft', () => {
+  const repos = ['acme/web', 'acme/api'];
+
+  it('takes the issue the planner wrote, in the repo it named', () => {
+    expect(asDraft({ repo: 'acme/api', title: 'Add search', body: 'Context…', tooBig: 'Three features' }, repos)).toEqual({ repo: 'acme/api', title: 'Add search', body: 'Context…', tooBig: 'Three features' });
+  });
+
+  it('files it in the first repo when the planner named none', () => {
+    expect(asDraft({ title: 'Add search', body: 'Context…' }, repos)).toEqual({ repo: 'acme/web', title: 'Add search', body: 'Context…', tooBig: undefined });
+    expect(asDraft({ repo: 7, title: 'Add search', body: 'Context…', tooBig: '' }, repos)).toMatchObject({ repo: 'acme/web', tooBig: undefined });
+  });
+
+  it('refuses a result without a written title and body', () => {
+    expect(() => asDraft(undefined, repos)).toThrow('Finished without writing the issue');
+    expect(() => asDraft('Add search', repos)).toThrow('Finished without writing the issue');
+    expect(() => asDraft({ title: 'Add search', body: '' }, repos)).toThrow('Finished without writing the issue');
+    expect(() => asDraft({ title: { text: 'Add search' }, body: 'Context…' }, repos)).toThrow('Finished without writing the issue');
   });
 });
 

@@ -4,6 +4,7 @@ import { createInterface } from 'node:readline';
 import { fileURLToPath } from 'node:url';
 import { kokoro } from './config';
 import type { FromSpeechWorker, ToSpeechWorker } from './speech';
+import { fieldsOf } from '../shared/records';
 
 // The processes Kokoro can run in, for server/speech.ts: on the Apple GPU through mlx-audio (server/speechMlx.py),
 // which the agents' work on the CPU doesn't slow, or on the CPU through kokoro-js (server/speechWorker.ts). Each takes
@@ -43,12 +44,13 @@ export function speechHelpers(machine: { platform: string; arch: string; uv: boo
 /** One line of the GPU helper's stdout as a message (its WAVs come base64); anything else it printed, undefined. */
 export function fromHelperLine(line: string): FromSpeechWorker | undefined {
   if (!line.startsWith('{')) return undefined;
-  let m: Record<string, unknown>;
+  let parsed: unknown;
   try {
-    m = JSON.parse(line) as Record<string, unknown>;
+    parsed = JSON.parse(line);
   } catch {
     return undefined;
   }
+  const m = fieldsOf(parsed);
   const id = typeof m.id === 'number' ? m.id : -1;
   switch (m.type) {
     case 'ready':

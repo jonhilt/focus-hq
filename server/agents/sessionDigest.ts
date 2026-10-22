@@ -1,6 +1,7 @@
 import type { CaptainReply, LedgerEvent, SessionDigest, SessionFacts } from '../../shared/ledger';
 import type { Agent } from '../../shared/types';
 import { type Block, blocks, type Line, messageFrom, resultText, transcriptLines } from './transcript';
+import { fieldsOf } from '../../shared/records';
 
 // A digest of a span of an agent's session, from code alone: its Claude Code transcript (from the line after the last
 // digest's to the end) and the ledger's lines on its pull requests. Written when the agent goes home, when QA gives a
@@ -14,7 +15,7 @@ const REFUSED = /denied|blocked|hook error|not allowed|permission/i;
 
 /** Which call it is: the tool and its input, leaving out a Bash call's description of itself. */
 function callKey(b: Block): string {
-  const { description: _d, ...input } = (b.input ?? {}) as Record<string, unknown>;
+  const { description: _d, ...input } = fieldsOf(b.input);
   return `${b.name}:${JSON.stringify(input)}`;
 }
 

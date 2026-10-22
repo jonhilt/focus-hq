@@ -13,6 +13,7 @@ import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import { tidyGoalTitle } from '../../shared/goalTitle';
+import { fieldsOf } from '../../shared/records';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
 import { qaAgentModel } from '../../shared/qa';
 import { parseQaChat, QA_CHAT_SCHEMA, type QaChatAnswer, qaChatPrompt, type QaChatRequest, qaChatSystemPrompt, type QaChatter } from './qaChat';
@@ -114,7 +115,7 @@ export function blockActivity(block: Block, run: Pick<ReadOnlyRun, 'tools' | 'cw
   if (block.type === 'tool_use') {
     const prefix = run.tools ? toolPrefix(run.tools) : undefined;
     if (run.tools && prefix !== undefined && block.name.startsWith(prefix)) return run.tools.activity(block.name.slice(prefix.length));
-    return renderToolUse(block.name, (block.input ?? {}) as Record<string, unknown>, run.cwd).activity ?? '';
+    return renderToolUse(block.name, fieldsOf(block.input), run.cwd).activity ?? '';
   }
   if (block.type === 'thinking') return 'Thinking…';
   if (block.type === 'text' && block.text.trim()) return truncate(block.text.trim().split('\n')[0], 100);
@@ -176,10 +177,11 @@ export async function runReadOnly(run: ReadOnlyRun, ask: Ask = query): Promise<R
   }
 }
 
-function asDraft(out: unknown, repos: string[]): DraftResult {
-  const d = (out ?? {}) as Partial<DraftResult>;
-  if (!d.title || !d.body) throw new Error('Finished without writing the issue');
-  return { repo: String(d.repo ?? repos[0]), title: String(d.title), body: String(d.body), tooBig: d.tooBig ? String(d.tooBig) : undefined };
+/** The planner's structured result as a draft: its repo, or the first of `repos` when it named none. */
+export function asDraft(out: unknown, repos: string[]): DraftResult {
+  const { repo, title, body, tooBig } = fieldsOf(out);
+  if (typeof title !== 'string' || !title || typeof body !== 'string' || !body) throw new Error('Finished without writing the issue');
+  return { repo: typeof repo === 'string' && repo ? repo : String(repos[0]), title, body, tooBig: typeof tooBig === 'string' && tooBig ? tooBig : undefined };
 }
 
 /** The planner at a room's stand: one idea in, one issue draft out. */
@@ -331,6 +333,6 @@ export async function titleGoal(brief: string, settings: Settings): Promise<stri
     maxTurns: 2,
     timeoutMs: 60_000,
   });
-  return tidyGoalTitle((result.structured as { title?: unknown } | undefined)?.title);
+  return tidyGoalTitle(fieldsOf(result.structured).title);
 }
 

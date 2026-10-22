@@ -24,6 +24,8 @@ describe('parseTriage', () => {
     expect(parseTriage({ action: 'merge', note: 'looks fine' })).toBeNull();
     expect(parseTriage({ action: 'close', note: '  ' })).toBeNull();
     expect(parseTriage(undefined)).toBeNull();
+    expect(parseTriage('retry-qa')).toBeNull();
+    expect(parseTriage({ action: 'escalate', note: ['needs a secret'] })).toBeNull();
   });
 });
 
