@@ -1,6 +1,7 @@
 import type { Agent, Attention, CaptainAnswer, PluginGoals, PluginHost, ResumeHow } from '../../plugin-api/server';
 import { errorMessage, landed, openQuestion, shownProjects } from '../../plugin-api/server';
 import { answerText, type Decide, decideRefusal, type DecidedVia, type Inbox as InboxView, type InboxItem, inboxItem, recentDecisions, waiting } from './inbox';
+import { type LandedAnswer, landedAnswerText, type LandedItem, landedItems, landedMessage, landedWhere } from './landed';
 import { acked, held } from './lanes';
 import { readOf, SENDER } from './shared';
 
@@ -43,7 +44,35 @@ export class Inbox {
   }
 
   view(): InboxView {
-    return { open: this.items().map(({ item }) => item), decided: recentDecisions(this.host.ledger(), Date.now()) };
+    const ledger = this.host.ledger();
+    return { open: this.items().map(({ item }) => item), landed: this.landedNow(ledger), decided: recentDecisions(ledger, Date.now()) };
+  }
+
+  /** What landed in Show in the shown projects that the captain hasn't heard of yet (landed.ts). */
+  private landedNow(ledger = this.host.ledger()): LandedItem[] {
+    const shown = new Set(shownProjects(this.host.projects()).map((p) => p.id));
+    return landedItems(ledger, shown, Date.now(), (id) => this.host.agent(id)?.name);
+  }
+
+  /**
+   * Answers a slice that landed in Show, and records it: Got it, or words for its lead (Redirect) or the lead undoing
+   * it as their next slice (Revert), each going to them as the captain's message. Words need the goal still open.
+   */
+  decideLanded(id: string, answer: LandedAnswer, via: DecidedVia): { ok: true } {
+    const item = this.landedNow().find((l) => l.id === id);
+    if (!item) throw new Error('That’s no longer waiting on you');
+    const text = landedMessage(item, answer);
+    if (text) {
+      const lead = item.leadId ? this.host.agent(item.leadId) : undefined;
+      if (lead?.task !== 'lead') throw new Error(`${item.goal ? `“${item.goal}”` : 'Its goal'} is closed: nobody's there to hear it. Revert or follow up on GitHub instead.`);
+      const reply = this.host.goals.message(lead.id, text);
+      if (!landed(reply)) throw new Error(`${lead.name} couldn’t take it now: try again in a moment`);
+    }
+    this.host.record(item.projectId, {
+      kind: 'captain-decision', agent: item.who, ...(item.goal && { goal: item.goal }),
+      item: { id: item.id, kind: 'landed', what: `${landedWhere(item)} landed in Show` }, answer: landedAnswerText(answer), via,
+    });
+    return { ok: true };
   }
 
   /** Answers an item by its id, as the captain would from Comms, and records it. */

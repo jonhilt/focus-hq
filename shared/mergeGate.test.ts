@@ -170,9 +170,12 @@ describe('mergeStep for a goal’s lead’s PR, by its lane', () => {
     expect(mergeStep(pr(), review(), lead('ship'))).toEqual({ kind: 'merge', sha: HEAD });
   });
 
-  it('leaves one in Show or Ask to the captain, whatever QA says', () => {
-    expect(mergeStep(pr(), review(), lead('show'))).toEqual({ kind: 'blocked', reason: 'its lead put it in Show, so the captain merges it' });
-    expect(mergeStep(pr(), review(), lead('ask'))).toEqual({ kind: 'blocked', reason: 'its lead put it in Ask, so the captain merges it' });
+  it('merges one in Show the same way: the captain hears once it has landed', () => {
+    expect(mergeStep(pr(), review(), lead('show'))).toEqual({ kind: 'merge', sha: HEAD });
+  });
+
+  it('leaves one in Ask to the captain, whatever QA says', () => {
+    expect(mergeStep(pr(), review(), lead('ask'))).toEqual({ kind: 'blocked', reason: 'it’s in Ask, so the captain merges it' });
   });
 
   it('holds one in Ship that QA failed, passed with advice, or needs the captain for', () => {

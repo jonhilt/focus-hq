@@ -6,6 +6,8 @@ import { decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, s
 import { waitingNow } from './here';
 import { type DecisionEvent, hailKey as keyOf, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
+import type { LandedItem } from './landed';
+import { landedCard, landedRow } from './landedCard';
 import { needCard, TONE } from './needCard';
 import { readOf } from './shared';
 
@@ -71,6 +73,9 @@ export function openComms(ui: CommsUi): void {
   let order: string[] = [];
   let open: InboxItem[] = [];
   let decidedLately: DecisionEvent[] = [];
+  // what landed in Show for the captain to hear of, and the one of them picked, shown instead of a hail
+  let landedNow: LandedItem[] = [];
+  let pickedLanded: string | null = null;
   let trayOpen = false;
   const rows = new Map<string, HTMLElement>();
   // from Comms to an agent's panel, Esc comes back to it
@@ -83,6 +88,8 @@ export function openComms(ui: CommsUi): void {
   const queueHead = h('h3');
   const queue = h('div', { class: 'cos-needs' });
   const reading = h('small', { class: 'muted cos-reading' });
+  const landedHead = h('h3');
+  const landedList = h('div', { class: 'cos-needs cos-landed' });
   const decidedHead = h('h3', null, 'Recently decided');
   const decided = h('div', { class: 'cos-decided-list' });
   const trayLine = h('button', { class: 'cos-tray-line', title: 'The turns the chief of staff carries on or sends back: its words, ready to send', onclick: () => { trayOpen = !trayOpen; render(); } });
@@ -91,7 +98,7 @@ export function openComms(ui: CommsUi): void {
   const detail = h('div', { class: 'cos-inbox-detail' });
   const body = h('div', { class: 'cos-comms' },
     tabs,
-    h('div', { class: 'cos-inbox-left' }, queueHead, queue, reading, decidedHead, decided, trayLine, tray, keysHint),
+    h('div', { class: 'cos-inbox-left' }, queueHead, queue, reading, landedHead, landedList, decidedHead, decided, trayLine, tray, keysHint),
     h('div', { class: 'cos-inbox-right' }, detail),
   );
 
@@ -109,7 +116,7 @@ export function openComms(ui: CommsUi): void {
   // a row is built once per item and kept, so the list isn't rebuilt under the pointer
   const renderRows = (items: InboxItem[], ready: InboxItem[], pickable: InboxItem[], selected: string | undefined, local: Map<string, Attention>, now: number) => {
     const rowKey = (it: InboxItem) => `${it.id}|${it.lane}`;
-    const next = new Map(pickable.map((it) => [rowKey(it), rows.get(rowKey(it)) ?? itemRow(it, () => { picked = it.id; render(); })] as const));
+    const next = new Map(pickable.map((it) => [rowKey(it), rows.get(rowKey(it)) ?? itemRow(it, () => { picked = it.id; pickedLanded = null; render(); })] as const));
     for (const it of pickable) {
       const row = next.get(rowKey(it));
       row?.classList.toggle('read', !!it.read);
@@ -124,6 +131,19 @@ export function openComms(ui: CommsUi): void {
     }
     rows.clear();
     for (const [k, row] of next) rows.set(k, row);
+  };
+
+  // under the list: what landed in Show for the captain to hear of, a card each, nothing waiting on them
+  const renderLanded = () => {
+    const mine = landedNow.filter((l) => !project || l.projectId === project);
+    landedHead.hidden = landedList.hidden = !mine.length;
+    landedHead.textContent = `Landed in Show · ${mine.length}`;
+    fill(landedList, ...mine.map((l) => {
+      const row = landedRow(l, () => { pickedLanded = l.id; render(); });
+      row.classList.toggle('sel', l.id === pickedLanded);
+      return row;
+    }));
+    return mine.find((l) => l.id === pickedLanded);
   };
 
   // under the list: what the captain decided lately, then the chief of staff's tray line
@@ -169,8 +189,16 @@ export function openComms(ui: CommsUi): void {
     queueHead.textContent = items.length ? `Needs you · ${items.length}` : 'Needs you';
     reading.textContent = readingLine(judging);
     reading.hidden = !judging;
-    renderRows(items, ready, pickable, ids[i], local, now);
+    // moving through the queue leaves the landed card for the hail
+    if (step) pickedLanded = null;
+    const landedPick = renderLanded();
+    renderRows(items, ready, pickable, landedPick ? undefined : ids[i], local, now);
     renderFoot(ready.length, now);
+    if (landedPick) {
+      if (shown !== landedPick.id) fill(detail, landedCard(ui, landedPick, () => { pickedLanded = null; refresh(); }));
+      shown = landedPick.id;
+      return;
+    }
     renderDetail(ids[i], local.get(ids[i]));
   };
 
@@ -181,6 +209,7 @@ export function openComms(ui: CommsUi): void {
     asking = setTimeout(() => void inbox.view().then((view) => {
       open = view.open.filter((i) => !focus.isHidden(i.projectId));
       decidedLately = view.decided.filter((d) => !focus.isHidden(d.projectId));
+      landedNow = view.landed.filter((l) => !focus.isHidden(l.projectId));
       render();
     }, () => undefined), 250);
   };
@@ -208,7 +237,7 @@ export function openComms(ui: CommsUi): void {
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   window.addEventListener('keydown', onKey);
   ui.panels.own(() => window.removeEventListener('keydown', onKey));
-  decidedHead.hidden = decided.hidden = trayLine.hidden = true;
+  decidedHead.hidden = decided.hidden = trayLine.hidden = landedHead.hidden = landedList.hidden = true;
   render();
   refresh();
   // what the chief of staff has been reading a minute comes out of hiding by itself, and the countdowns move on

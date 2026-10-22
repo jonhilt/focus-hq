@@ -29,14 +29,17 @@ export class Ledger extends Part {
     if (!projectId) return;
     this.landed.add(key);
     // merged on GitHub, Ops doesn't know the final head: a goal's PR is at the commit its lead last shipped
-    const head = headSha ?? lead?.lead?.prs.find((p) => p.repo === repo && p.number === number)?.sha;
+    const shipped = lead?.lead?.prs.find((p) => p.repo === repo && p.number === number);
+    const head = headSha ?? shipped?.sha;
     const qa = qaBadge(review, { headSha: head ?? '' }).state;
     // the issues it closed: as the board last saw them, and the one its developer was given
     const owner = this.core.seating.prOwner(repo, number);
     const onBoard = [...this.store.boards.values()].flatMap((b) => b.prs).find((p) => p.repo === repo && p.number === number)?.closes ?? [];
     const closes = [...new Set([...onBoard, ...(owner?.task === 'issue' ? [owner.issue.number] : [])])];
     const common = { repo, pr: number, goal: lead?.lead?.title, by, qa, failedRounds: review?.failedRounds ?? 0, triages: review?.triages ?? 0 };
-    this.record(projectId, merged ? { kind: 'merged', ...common, ...(closes.length && { closes }) } : { kind: 'closed', ...common });
+    // a goal's lead's keeps who and the lane it merged in: a Show merge is the captain's to hear of (its landed card)
+    const theirs = lead && { lead: lead.id, lane: shipped?.lane ?? 'ask' };
+    this.record(projectId, merged ? { kind: 'merged', ...common, ...(closes.length && { closes }), ...theirs } : { kind: 'closed', ...common });
   }
 
   /**

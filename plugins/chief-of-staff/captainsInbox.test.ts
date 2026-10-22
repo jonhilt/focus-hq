@@ -16,12 +16,13 @@ afterEach(() => vi.unstubAllEnvs());
 async function waitingLead({ verdict, autoSend = false, since = Date.now }: { verdict?: Verdict; autoSend?: boolean; since?: () => number } = {}) {
   const o = focus();
   o.project.plugins = [CHIEF_OF_STAFF];
-  const inbox: { it?: Inbox } = {};
+  const inbox: { it?: Inbox; host?: PluginHost } = {};
   const plugin: FocusPlugin = {
     id: CHIEF_OF_STAFF,
     start: (host: PluginHost) => {
       const it = new Inbox(host, () => autoSend);
       inbox.it = it;
+      inbox.host = host;
       return {
         captainAnswered: (before, answer) => it.answered(before, answer),
         turn: (agent, phase) => {
@@ -41,7 +42,11 @@ async function waitingLead({ verdict, autoSend = false, since = Date.now }: { ve
   await until(() => o.store.agent(agent.id).status === 'done');
   const decisions = () => o.store.ledger.filter((e) => e.kind === 'captain-decision');
   if (!inbox.it) throw new Error('the plugin didn’t start');
-  return { ...o, inbox: inbox.it, id: agent.id, decisions, read: () => readOf(o.store.agent(agent.id)) };
+  const { host } = inbox;
+  /** Ops merging one of the lead's pull requests in `lane`, as the ledger has it. */
+  const merged = (pr: number, lane: 'ship' | 'show' | 'ask' = 'show', lead = agent.id) =>
+    host?.record(o.project.id, { kind: 'merged', repo: 'demo/webshop-frontend', pr, goal: 'Saved items', by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead, lane });
+  return { ...o, inbox: inbox.it, id: agent.id, decisions, merged, read: () => readOf(o.store.agent(agent.id)) };
 }
 
 describe('the captain’s inbox, as the API serves it', () => {
@@ -306,5 +311,40 @@ describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-in
     await o.botRoute('post', '/inbox/:id/decide')({ text: 'Build it', via: 'office' }, { id: view.open[0]?.id ?? '' });
     await until(() => o.claude.turns.length === 2);
     expect(o.decisions()).toMatchObject([{ answer: 'Build it', via: 'api' }]);
+  });
+});
+
+// README.md#landed-in-show: a slice that merged itself in Show is the captain's to hear of, on a card of its own
+describe('a slice that landed in Show', () => {
+  it('waits in the inbox, off the queue, until the captain says Got it, and nothing goes to the lead', async () => {
+    const { inbox, merged, decisions, claude, store, id } = await waitingLead();
+    merged(7);
+    merged(8, 'ship');
+    expect(inbox.view().landed).toMatchObject([{ repo: 'demo/webshop-frontend', number: 7, goal: 'Saved items', who: store.agent(id).name, leadId: id }]);
+    expect(inbox.view().open.every((i) => !i.id.startsWith('landed:'))).toBe(true);
+    inbox.decideLanded(inbox.view().landed[0].id, { ack: true }, 'office');
+    expect(inbox.view().landed).toEqual([]);
+    expect(decisions()).toMatchObject([{ item: { kind: 'landed', what: 'webshop-frontend#7 landed in Show' }, answer: 'Got it', via: 'office' }]);
+    expect(claude.turns).toHaveLength(1);
+  });
+
+  it('sends the lead the captain’s words for a Redirect or a Revert, as the captain', async () => {
+    const { inbox, merged, decisions, claude } = await waitingLead();
+    merged(7);
+    merged(9);
+    const [nine, seven] = inbox.view().landed;
+    inbox.decideLanded(seven.id, { redirect: 'Use the API instead.' }, 'office');
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toContain('About demo/webshop-frontend#7, which merged in Show: Use the API instead.');
+    inbox.decideLanded(nine.id, { revert: 'It broke search' }, 'api');
+    expect(decisions().map((d) => d.kind === 'captain-decision' && d.answer)).toEqual(['Redirect: Use the API instead.', 'Revert: It broke search']);
+  });
+
+  it('refuses words for a lead whose goal has closed, and leaves the card', async () => {
+    const { inbox, merged } = await waitingLead();
+    merged(7, 'show', 'lead_gone');
+    const [item] = inbox.view().landed;
+    expect(() => inbox.decideLanded(item.id, { revert: '' }, 'office')).toThrow('“Saved items” is closed');
+    expect(inbox.view().landed).toHaveLength(1);
   });
 });

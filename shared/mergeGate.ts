@@ -1,4 +1,4 @@
-import { type Lane, laneName } from './mergeLane';
+import type { Lane } from './mergeLane';
 import { prKey, qaBadge, sameCommit } from './qa';
 import type { Board, ConflictsOutcome, FailedCheck, MergeMethod, PullRequest, QaReview } from './types';
 
@@ -27,7 +27,7 @@ export type MergeStep =
 export interface GateOps {
   /** One of our agents opened it. Teammates' PRs never merge by themselves. */
   openedByOffice: boolean;
-  /** A goal's lead shipped it, in this lane: only Ship merges by itself (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
+  /** A goal's lead shipped it, in this lane: Ship and Show merge by themselves, Ask waits (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
   lane?: Lane;
   /** One of our agents is working on it right now (fixing it, resolving its conflicts). */
   developerBusy: boolean;
@@ -57,9 +57,9 @@ export function mergeStep(pr: GatePr, review: QaReview | undefined, ops: GateOps
   return ops.lane && step.kind === 'send-back' ? { kind: 'blocked', reason: 'checks fail, for its lead to fix' } : step;
 }
 
-/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, a lead's not in Ship, the captain's, a plugin's for now, or a draft. */
+/** Why Ops leaves the PR alone whatever QA and its checks say: someone else's, a lead's in Ask, the captain's, a plugin's for now, or a draft. */
 function heldBack(pr: GatePr, ops: GateOps): MergeStep | undefined {
-  if (ops.lane && ops.lane !== 'ship') return { kind: 'blocked', reason: `its lead put it in ${laneName(ops.lane)}, so the captain merges it` };
+  if (ops.lane === 'ask') return { kind: 'blocked', reason: 'it’s in Ask, so the captain merges it' };
   if (!ops.lane && !ops.openedByOffice) return { kind: 'blocked', reason: 'a teammate opened it' };
   if (ops.captainMerges) return { kind: 'blocked', reason: 'only the captain merges it' };
   if (ops.held) return { kind: 'wait', reason: ops.held };

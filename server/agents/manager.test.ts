@@ -995,6 +995,10 @@ describe('AgentManager', () => {
     const lead = [...store.agents.values()].find((a) => a.lead)!;
     expect(lead.lead!.prs.map((p) => p.lane)).toEqual(['ship', 'ship']);
     expect(agents.leadPrs(project.id).map((p) => p.lane)).toEqual(['ship', 'ship']);
+    // its merge keeps whose it was and its lane: what a Show merge's landed card is made of
+    const [pr] = lead.lead!.prs;
+    agents.recordLanding(pr.repo, pr.number, true, 'office');
+    expect(store.ledger.find((e) => e.kind === 'merged')).toMatchObject({ repo: pr.repo, pr: pr.number, by: 'office', lead: lead.id, lane: 'ship' });
   });
 
   it('ships through GitHub 5xx answers, trying the push and the PR again', async () => {

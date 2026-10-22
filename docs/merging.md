@@ -22,7 +22,7 @@ A goal's lead ships each slice in a lane, after [Ship/Show/Ask](https://martinfo
 - **A lane is only ever raised.** The slice's [recap](goals.md#the-system-recap) sets the lowest the lead may pick: a slice that only composes primitives may Ship, one that extends any may Show, one that adds one is Ask. Ops refuses a ship below that. A lead that picks none is in Ask, and so is a pull request shipped before lanes.
 - **Ship needs a clean pass at its head:** QA failing it, passing it with advice, or needing the captain holds it for the captain, as do a draft, a plugin claiming it, and the merge check refusing it. It goes through the merge check like every merge Ops makes.
 - **A lead's failing checks are theirs to fix.** Ops re-runs them once, as for any PR, but never sends a developer to a lead's slice. Conflicts are merged in by Ops, as before, and the lead hears of it.
-- **Show waits like Ask for now,** until Ops can tell the captain a slice landed on a card of its own.
+- **Show merges like Ship, then tells the captain:** each lead's pull request Ops merged in Show (its `merged` ledger line keeps the lead and the lane) is a card in Comms until they answer it Got it, Redirect or Revert ([chief of staff](../plugins/chief-of-staff/README.md#landed-in-show)).
 
 - **The chief of staff can raise a lane, never lower it.** Where it's on, it reads each ship's recap and may raise the lead's pick; a Ship or Show pull request waits until it has read it at its commit, and one it couldn't read goes to Ask ([chief of staff](../plugins/chief-of-staff/README.md#raising-a-ships-lane)). A raise is a `lane-raised` ledger line and a comment on the pull request, and a ship after it keeps it at least that high (`raisedPrs`).
 

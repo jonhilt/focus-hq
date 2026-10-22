@@ -1,3 +1,4 @@
+import type { LandedItem } from './landed';
 import type { Agent, Attention, CaptainAnswer, DecidedVia, LedgerEvent, PullRequest, QaReview, TermLine } from '../../plugin-api/shared';
 import { artifactUrl, isRecord, lastWords, needsYou, openQuestion, shownThisTurn, turnRead } from '../../plugin-api/shared';
 import { type Lane, laneOf, lineOf } from './lanes';
@@ -156,9 +157,10 @@ export function recentDecisions(ledger: readonly LedgerEvent[], now: number): De
   return out;
 }
 
-/** The inbox as the API gives it: what needs the captain, and what they decided lately. */
+/** The inbox as the API gives it: what needs the captain, what landed in Show for them to hear of, and what they decided lately. */
 export interface Inbox {
   open: InboxItem[];
+  landed: LandedItem[];
   decided: DecisionEvent[];
 }
 

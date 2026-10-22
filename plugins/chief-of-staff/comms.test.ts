@@ -7,12 +7,13 @@ import { CHIEF_OF_STAFF, type CosRead, type Verdict } from './shared';
 
 // Comms as the captain uses it: what waits comes from this browser's view of Focus (`waitingNow`) and the inbox Focus
 // serves, both stood in for here; the card's answers are its own test's (needCard.test.ts).
-const fake = vi.hoisted((): { waiting: Attention[]; inbox: Inbox; markRead: (agent: Agent) => void } => ({ waiting: [], inbox: { open: [], decided: [] }, markRead: vi.fn() }));
+const fake = vi.hoisted((): { waiting: Attention[]; inbox: Inbox; markRead: (agent: Agent) => void } => ({ waiting: [], inbox: { open: [], landed: [], decided: [] }, markRead: vi.fn() }));
 vi.mock('../../plugin-api/client', async () => {
   const phone = await import('../../plugin-api/phone');
   return {
     ...phone,
     focus: { ...phone.focus, shown: [], isHidden: () => false, markRead: fake.markRead, onShip: () => () => undefined },
+    confirmDialog: () => Promise.resolve(true),
     LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac' },
     markdownHtml: (text: string) => text,
     busy: async (_button: HTMLButtonElement, run: () => Promise<unknown>) => {
@@ -24,7 +25,8 @@ vi.mock('../../plugin-api/client', async () => {
   };
 });
 vi.mock('./here', () => ({ waitingNow: () => fake.waiting }));
-vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve(fake.inbox), decide: vi.fn(), hold: vi.fn() } }));
+vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve(fake.inbox), decide: vi.fn(), hold: vi.fn(), decideLanded: vi.fn(() => Promise.resolve({ ok: true })) } }));
+const { inbox: inboxApi } = await import('./inboxApi');
 
 const { openComms } = await import('./comms');
 
@@ -63,6 +65,9 @@ const ui = {
   error: vi.fn(),
 } satisfies CommsUi;
 
+/** A slice that merged itself in Show, as the inbox lists it. */
+const landedItem = { id: 'landed:p:acme/shop#7', projectId: 'p', repo: 'acme/shop', number: 7, goal: 'Wishlist', leadId: 'b', who: 'Lt. b', at: 900, why: 'It only wires parts in.' };
+
 const press = (key: string) => window.dispatchEvent(new KeyboardEvent('keydown', { key }));
 const picked = () => document.querySelector('.cos-inbox-row.sel .cos-need-what')?.textContent;
 /** Opens Comms, and lets it ask Focus for the inbox. */
@@ -84,6 +89,7 @@ describe('Comms', () => {
     fake.waiting = [hand, card, ready, qa];
     fake.inbox = {
       open: [item('hand:a:r1', { kind: 'hand' }), item('turn:b:1000', { cos: verdict(2) }), item('turn:c:1000', { lane: 'ready', cos: verdict(1) }), item('qa:p:acme/shop#7', { kind: 'qa' })],
+      landed: [],
       decided: [decision('office', 'Approved'), decision('chief-of-staff', 'Sent the chief of staff’s words')],
     };
     await open();
@@ -103,7 +109,7 @@ describe('Comms', () => {
 
   it('opens its tray of ready words, each counting down to going by itself', async () => {
     fake.waiting = [ready];
-    fake.inbox = { open: [item('turn:c:1000', { lane: 'ready', cos: verdict(1) })], decided: [] };
+    fake.inbox = { open: [item('turn:c:1000', { lane: 'ready', cos: verdict(1) })], landed: [], decided: [] };
     await open();
     expect(document.querySelector('.cos-card-clear')?.textContent).toContain('Nothing needs you.');
     document.querySelector<HTMLButtonElement>('.cos-tray-line')?.click();
@@ -113,7 +119,7 @@ describe('Comms', () => {
 
   it('goes by key to the one picked: an agent’s panel, or a pull request’s board, and back to Comms with Esc', async () => {
     fake.waiting = [hand, qa];
-    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' }), item('qa:p:acme/shop#7', { kind: 'qa' })], decided: [] };
+    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' }), item('qa:p:acme/shop#7', { kind: 'qa' })], landed: [], decided: [] };
     await open();
     press('g');
     expect(ui.openAgent).toHaveBeenCalledWith('a');
@@ -125,12 +131,44 @@ describe('Comms', () => {
 
   it('leaves out what this browser hasn’t heard of yet, and keys pressed while the captain writes', async () => {
     fake.waiting = [hand];
-    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' }), item('turn:z:5', {})], decided: [] };
+    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' }), item('turn:z:5', {})], landed: [], decided: [] };
     await open();
     expect([...document.querySelectorAll('.cos-inbox-tag')].map((t) => t.textContent)).toEqual(['Approve']);
     const reply = document.createElement('textarea');
     document.body.append(reply);
     reply.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }));
     expect(ui.openAgent).not.toHaveBeenCalled();
+  });
+
+  // README.md#landed-in-show: what landed in Show is listed under what needs the captain, a card each, off the count
+  it('lists what landed in Show under the queue, and shows its card with Got it, Redirect and Revert', async () => {
+    fake.waiting = [hand];
+    fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' })], landed: [landedItem], decided: [] };
+    await open();
+    expect([...document.querySelectorAll<HTMLElement>('h3')].filter((h) => !h.hidden).map((h) => h.textContent)).toEqual(['Needs you · 1', 'Landed in Show · 1']);
+    document.querySelector<HTMLButtonElement>('.cos-landed .cos-inbox-row')?.click();
+    expect(document.querySelector('.cos-card-what')?.textContent).toBe('✓shop#7 merged itself in Show');
+    expect(document.querySelector('.cos-card-context')?.textContent).toBe('Chief of Staff: It only wires parts in.');
+    expect([...document.querySelectorAll('.cos-quick button')].map((b) => b.textContent)).toEqual(['Got it', 'Redirect', 'Revert']);
+    // O says Got it, as on a lead's turn
+    press('o');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(inboxApi.decideLanded).toHaveBeenCalledWith(landedItem.id, { ack: true });
+  });
+
+  it('sends a Redirect only with the captain’s words, and a Revert with them as its reason', async () => {
+    fake.waiting = [];
+    fake.inbox = { open: [], landed: [landedItem], decided: [] };
+    await open();
+    document.querySelector<HTMLButtonElement>('.cos-landed .cos-inbox-row')?.click();
+    const [, redirect, revert] = document.querySelectorAll<HTMLButtonElement>('.cos-quick button');
+    redirect.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(inboxApi.decideLanded).not.toHaveBeenCalled();
+    const words = document.querySelector('textarea');
+    if (words) words.value = 'It broke search';
+    revert.click();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(inboxApi.decideLanded).toHaveBeenCalledWith(landedItem.id, { revert: 'It broke search' });
   });
 });

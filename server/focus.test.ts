@@ -85,16 +85,18 @@ describe('a goal’s lead’s pull request on a board refresh', () => {
     return r;
   }
 
-  it('merges one in Ship once QA passes it, with the project’s auto-merge off', async () => {
-    const { project, refresh, state, said } = await leads('ship');
-    await refresh();
-    expect(project.autoMerge).toBeUndefined();
-    await expect.poll(state).toBe('MERGED');
-    await expect.poll(() => said('success')).toEqual([expect.stringContaining('🤖 Auto-merged webshop-frontend#8')]);
+  it('merges one in Ship or Show once QA passes it, with the project’s auto-merge off', async () => {
+    for (const lane of ['ship', 'show'] as const) {
+      const { project, refresh, state, said } = await leads(lane);
+      await refresh();
+      expect(project.autoMerge).toBeUndefined();
+      await expect.poll(state).toBe('MERGED');
+      await expect.poll(() => said('success')).toEqual([expect.stringContaining('🤖 Auto-merged webshop-frontend#8')]);
+    }
   });
 
-  it('leaves one in Show or Ask, or shipped before lanes, for the captain', async () => {
-    for (const lane of ['show', 'ask', undefined] as const) {
+  it('leaves one in Ask, or shipped before lanes, for the captain', async () => {
+    for (const lane of ['ask', undefined] as const) {
       const { refresh, state, trials } = await leads(lane);
       await refresh();
       expect(trials).toEqual([]);

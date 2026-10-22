@@ -26,6 +26,15 @@ A goal's lead ships each slice in a [lane](../../docs/merging.md#lanes-how-a-goa
 - **One it couldn't read goes in Ask,** since a ship it hasn't read is the captain's, and the `cos-lane` line says why (`failed`).
 - **A raise is Ops'**, through `host.goals.raiseLane`: each pull request in a lower lane goes up, with a `lane-raised` line and a comment on it saying why.
 
+## Landed in Show
+
+A slice the lead (or the chief of staff) put in Show merges by itself once QA passes it, like Ship, and then the captain hears of it: a card of its own in Comms, under the queue in **Landed in Show**, off the badge, since nothing waits on them (`landed.ts`, `landedCard.ts`; `landed.test.ts`, `captainsInbox.test.ts`, `comms.test.ts`). The captain asked for a card a slice, not a daily digest, so each is heard of as it lands.
+
+- **It's the ledger's:** a `merged` line Ops made (`by: office`) in Show, with its lead, that no `captain-decision` answers yet, so the inbox keeps nothing and a restart loses nothing. A week on, it's let go.
+- **Its card** says where it landed, who, when, and why the chief of staff let it go in Show, with a link to the pull request, whose description opens with its [recap](../../docs/goals.md#the-system-recap).
+- **Got it** (O): heard, off Comms, nothing sent. **Redirect** sends the lead the captain's words about it, as the captain's message. **Revert** asks first, then has the lead revert it as their next slice, shipped in Ask, the captain's words as why. Nothing reverts by itself: Focus has no revert of its own, and the lead knows the work.
+- Each is a `captain-decision` (item kind `landed`). Redirect and Revert need the goal still open; a closed goal's is refused, and the card stays for the captain to follow up on GitHub.
+
 ## The lead's news it wakes them for
 
 Only the captain starts a goal lead's next turn in the core: Ops' and QA's news for the lead is a note, heard with the next message they get ([goals](../../docs/goals.md)). Where the chief of staff is on, it wakes the lead for the news that needs no captain, as whoever the note is from, and the note goes ahead of its words (`wake.ts`):

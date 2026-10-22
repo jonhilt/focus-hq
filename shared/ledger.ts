@@ -25,7 +25,11 @@ interface PrRef {
 export type LedgerEntry =
   | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number })
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
-  | (PrRef & { kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when Ops knew. */ closes?: number[] })
+  | (PrRef & {
+    kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when Ops knew. */ closes?: number[];
+    /** A goal's lead's: who (their agent id), and the lane it was in as it merged (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
+    lead?: string; lane?: Lane;
+  })
   | (PrRef & { kind: 'closed'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number })
   /**
    * The PR conflicted with its base: Ops merged the base in cleanly, settled the conflicts by the repo's rules

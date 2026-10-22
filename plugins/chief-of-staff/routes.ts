@@ -3,6 +3,7 @@ import { resumeHow } from '../../plugin-api/server';
 import { itemWithLinks } from './botHook';
 import type { Inbox } from './captainsInbox';
 import { decideOf } from './inbox';
+import { landedAnswerOf } from './landed';
 import type { CosState } from './shared';
 
 // The chief of staff's routes (docs/ledger.md#the-captains-inbox-api): the captain's inbox under
@@ -28,6 +29,7 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
       method: 'post', path: '/inbox/:id/decide',
       handle: ({ params, body }) => inbox.decide(id(params), decideOf(body), body.via === 'office' ? 'office' : 'api', resumeHow(body.how)),
     },
+    { method: 'post', path: '/landed/:id/decide', handle: ({ params, body }) => inbox.decideLanded(id(params), landedAnswerOf(body), body.via === 'office' ? 'office' : 'api') },
     // the same, for the bot, its answers recorded via the API
     {
       method: 'get', path: '/inbox', bot: true,
@@ -38,6 +40,7 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
     },
     { method: 'post', path: '/inbox/:id/hold', bot: true, handle: ({ params }) => inbox.hold(id(params)) },
     { method: 'post', path: '/inbox/:id/decide', bot: true, handle: ({ params, body }) => inbox.decide(id(params), decideOf(body), 'api', resumeHow(body.how)) },
+    { method: 'post', path: '/landed/:id/decide', bot: true, handle: ({ params, body }) => inbox.decideLanded(id(params), landedAnswerOf(body), 'api') },
     {
       // the captain's say on whether it sends its words by itself in a project: words counting down are held once it's off
       method: 'post', path: '/auto-send',
