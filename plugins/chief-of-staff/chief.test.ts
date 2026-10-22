@@ -4,6 +4,7 @@ import { demoWorkspace, focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
 import type { Router } from './jevRouter';
 import { JUDGE_VERSION } from './judge';
+import { UNATTENDED_ROUNDS } from './rounds';
 import { CHIEF_OF_STAFF, readOf } from './shared';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
@@ -126,6 +127,23 @@ describe('the chief of staff', () => {
     answer();
     await until(() => o.verdicts().length === 1);
     expect(o.read()).toBeUndefined();
+  });
+
+  it('files a turn it would carry on as a card once the lead has gone a few rounds without the captain', async () => {
+    const o = await aboard();
+    for (let turn = 0; turn <= UNATTENDED_ROUNDS; turn++) {
+      if (turn) {
+        // nobody's decided anything of theirs: the next turn starts unattended
+        o.agents.message(o.lead().id, 'Go on');
+        await until(() => o.claude.turns.length === turn + 1);
+      }
+      o.transcript.jsonl = jsonl([captain(`a${turn}`, 'Go on'), said(`b${turn}`, `Turn ${turn} done.`)]);
+      o.claude.turns[turn].end({ ok: true, summary: `Turn ${turn} done.` });
+      await until(() => !!o.read()?.judged);
+      expect(o.read()?.judged?.route).toBe(turn < UNATTENDED_ROUNDS ? 4 : 2);
+    }
+    // the ledger keeps what it judged
+    expect(o.verdicts().map((v) => v.kind === 'cos-verdict' && v.route)).toEqual(Array(UNATTENDED_ROUNDS + 1).fill(4));
   });
 
   it('marks nothing as read for a project it’s off for', async () => {

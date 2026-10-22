@@ -4,6 +4,7 @@ import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, verdictSch
 import { heldForRead, LANE_JUDGE_VERSION, lostRaise, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
 import { judged, reading, waking } from './lanes';
+import { capped, unattendedRounds } from './rounds';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
 import { wakeFor } from './wake';
@@ -162,7 +163,9 @@ export class ChiefOfStaff {
         ...(routing && { router: { by: 'jev', ...routing.how } }),
         ...(failed && { routerFailed: failed }),
       });
-      const read = judged(readOf(this.host.agent(agent.id)), verdict, since, this.autoSends(agent.projectId), Date.now());
+      // after a few rounds in a row without the captain, a turn it would carry on is theirs (rounds.ts)
+      const filed = capped(verdict, unattendedRounds(this.host.ledger(), agent));
+      const read = judged(readOf(this.host.agent(agent.id)), filed, since, this.autoSends(agent.projectId), Date.now());
       if (read && this.host.goals.mark(agent.id, read, since)) this.wakeDeferred(agent.id);
     } finally {
       this.judging.delete(key);

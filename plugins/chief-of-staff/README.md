@@ -44,6 +44,13 @@ Only the captain starts a goal lead's next turn in the core: Ops' and QA's news 
 
 It never wakes a lead the captain owes an answer: a turn it judged a card or an interrupt, one it never judged, a question, a goal ready to close, an error, read or not; nor one the captain stopped. A turn it would carry on or send back wakes them, read or not, and so does one the captain acknowledged (Got it: they're owed nothing). Waking them would start their next turn and take what waited on the captain from their inbox unanswered, so the note waits for the captain's next message instead. News for a turn it's still reading waits for its verdict: it wakes the lead then if the turn is one it would carry on or send back.
 
+## A cap on rounds without the captain
+
+Its words sending themselves and its wakes each start a lead's next turn without the captain, so a goal could go back and forth for hours unseen. After a few such rounds in a row (`UNATTENDED_ROUNDS`, `rounds.ts`), as `LEAD_FIX_ROUNDS` caps QA's send-backs, the next turn it would carry on or send back is a card instead: its words for the lead are offered as a reply (**Send its words**), not sent, and since the captain owes the lead an answer, Ops' news waits too. The `cos-verdict` line keeps what it judged.
+
+- **A round** is a lead's turn it judged, but the one the captain started: counted from the ledger, back to the captain's last `captain-decision` on that lead (its own sends don't count), so a restart loses nothing (`rounds.test.ts`, `chief.test.ts`).
+- **Anything the captain decides** starts the count again: a reply, Got it, a suggested reply, sending its words themselves. A message to a lead at work isn't a decision the inbox records, so it doesn't; the cap only comes sooner for it, the side P7 picks.
+
 ## The four routes, from its principles
 
 It reasons from seven principles, and the routes follow from them (`judge.ts`):
