@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+// @vitest-environment-options {"happyDOM":{"settings":{"disableIframePageLoading":true}}}
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Agent, Attention, PullRequest } from '../../plugin-api/client';
 import type { CosRead, Verdict } from './shared';
@@ -39,6 +40,7 @@ vi.mock('../../plugin-api/client', async () => {
 vi.mock('./inboxApi', () => ({ inbox: { decide: calls.decide, hold: calls.hold } }));
 
 const { needCard } = await import('./needCard');
+const { fitScale, zoomStep } = await import('./zoom');
 
 const verdict = (route: Verdict['route']): Verdict => ({ route, ask: 'Ship slice 2?', why: 'It changes the checkout.', message: 'Go ahead with the tests first.' });
 const lead = (more: Partial<Agent> = {}, read?: CosRead): Agent => ({
@@ -93,6 +95,35 @@ describe('a card in Comms', () => {
     button(el, 'Pick B').click();
     await settle();
     expect(calls.answerLead).toHaveBeenCalledWith('a1', 'q1', 'b', 'the grid reads better');
+  });
+
+  it('fits a lead’s page into the window, never larger than it is, and steps round its pictures', () => {
+    expect([fitScale(640, 800), fitScale(1280, 400), fitScale(4000, 4000)]).toEqual([0.5, 0.5, 1]);
+    expect([zoomStep(2, 1, 3), zoomStep(0, -1, 3), zoomStep(1, 0, 3)]).toEqual([0, 2, 1]);
+  });
+
+  it('opens an option large over Comms, steps to the next with →, picks it there, and Esc closes only the picture', async () => {
+    const question = { id: 'q1', question: 'Which layout?', context: '', options: [{ id: 'a', label: 'List', image: true }, { id: 'b', label: 'Grid', detail: 'Denser', image: true }], at: 900 };
+    const el = card({ kind: 'question', agent: lead({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], questions: [question] } }) });
+    document.body.append(el);
+    const panelEsc = vi.fn();
+    window.addEventListener('keydown', panelEsc);
+    el.querySelector<HTMLImageElement>('img.cos-zoomable')?.click();
+    const zoom = () => document.querySelector('.cos-zoom');
+    expect(zoom()?.querySelector('iframe')?.getAttribute('src')).toBe('/api/artifacts/a1/q1.a.html?v=900');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    expect(zoom()?.textContent).toContain('B · Grid');
+    expect(zoom()?.textContent).toContain('Denser');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(zoom()).toBeNull();
+    expect(panelEsc).not.toHaveBeenCalled();
+    el.querySelectorAll<HTMLImageElement>('img.cos-zoomable')[1]?.click();
+    button(zoom() as HTMLElement, 'Pick B').click();
+    await settle();
+    expect(zoom()).toBeNull();
+    expect(calls.answerLead).toHaveBeenCalledWith('a1', 'q1', 'b', undefined);
+    window.removeEventListener('keydown', panelEsc);
+    el.remove();
   });
 
   it('replies to a lead whose turn ended, unjudged, in the captain’s words', async () => {

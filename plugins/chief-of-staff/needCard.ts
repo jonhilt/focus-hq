@@ -5,6 +5,7 @@ import { inbox } from './inboxApi';
 import { lineOf } from './lanes';
 import { type BoardPr, mergePress, openPrsOf } from './merging';
 import { readOf } from './shared';
+import { openZoom, type Zoomable } from './zoom';
 
 // What needs the captain, one of them shown large to decide and answer: the right of Comms (comms.ts). Its answers go
 // as the agent's panel's do, so Ops hears each as the captain's (and records it, `captainAnswered`); sending its
@@ -33,12 +34,20 @@ const open = (go: OpenAgent, agent: Agent, label: string) => h('button', { class
 /** The id Ops shows a slice's system recap under on the lead's screen (docs/goals.md#the-system-recap). */
 const RECAP = 'system-recap';
 
+/** A press on one of a card's pictures opens it large over Comms; with ⌘ or Ctrl, a link still opens its own tab. */
+const zoomOn = (items: readonly Zoomable[], i: number) => (e: MouseEvent) => {
+  if (e.metaKey || e.ctrlKey || e.shiftKey) return;
+  e.preventDefault();
+  openZoom(items, i);
+};
+
 /** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. Their recap is the merge box's. */
 function shownBox(ui: CardUi, agent: Agent): HTMLElement[] {
   const shown = shownThisTurn(agent.lead?.artifacts, focus.lines(agent.id)).filter((a) => a.id !== RECAP);
   if (!shown.length) return [];
-  const cards = shown.map((a) =>
-    h('a', { class: 'cos-card-option', href: artifactUrl(agent.id, a, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' },
+  const large: Zoomable[] = shown.map((a) => ({ title: a.title, html: artifactUrl(agent.id, a, 'html') }));
+  const cards = shown.map((a, i) =>
+    h('a', { class: 'cos-card-option', href: artifactUrl(agent.id, a, 'html'), target: '_blank', rel: 'noopener', title: 'See it large here (⌘-click: a tab of its own)', onclick: zoomOn(large, i) },
       a.image ? h('img', { src: artifactUrl(agent.id, a, 'jpg'), alt: a.title }) : null,
       h('strong', null, a.title),
     ));
@@ -163,11 +172,21 @@ function pickBox(ui: CardUi, agent: Agent): HTMLElement[] {
   const q = openQuestion(agent);
   if (!q) return [];
   const note = h('input', { class: 'cos-card-note', placeholder: 'Add a word with your pick (optional)' });
-  const options = q.options.map((o, i) => {
+  const picks = q.options.map((o, i) => {
     const pick = h('button', { class: 'btn small primary', title: `Pick it (${i + 1})`, attrs: { 'data-act': `pick-${i + 1}` } }, `Pick ${o.id.toUpperCase()}`);
     pick.onclick = () => void busy(pick, () => answerLead(agent.id, q.id, o.id, note.value.trim() || undefined), ui.error);
+    return pick;
+  });
+  const large: Zoomable[] = q.options.map((o, i) => ({
+    title: `${o.id.toUpperCase()} · ${o.label}`,
+    ...(o.detail && { detail: o.detail }),
+    html: optionUrl(agent.id, q, o.id, 'html'),
+    pick: { label: `Pick ${o.id.toUpperCase()}`, run: () => picks[i]?.click() },
+  }));
+  const options = q.options.map((o, i) => {
+    const pick = picks[i];
     return h('div', { class: 'cos-card-option' },
-      o.image ? h('img', { src: optionUrl(agent.id, q, o.id, 'jpg'), alt: o.label }) : null,
+      o.image ? h('img', { class: 'cos-zoomable', src: optionUrl(agent.id, q, o.id, 'jpg'), alt: o.label, title: 'See it large here', onclick: zoomOn(large, i) }) : null,
       h('strong', null, `${o.id.toUpperCase()} · ${o.label}`),
       o.detail ? h('small', { class: 'muted' }, o.detail) : null,
       pick,
