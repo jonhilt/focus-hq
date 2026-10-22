@@ -19,6 +19,6 @@
   "server/secrets.ts": 100,
   "server/speech.ts": 8,
   "server/speechWorker.ts": 0,
-  "server/store.ts": 68,
+  "server/store.ts": 69,
   "server/voice.ts": 25
 }

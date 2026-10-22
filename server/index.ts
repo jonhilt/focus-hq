@@ -25,7 +25,7 @@ import { clampSpeed } from '../shared/demoPace';
 import { setDemoPace } from './demoPace';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
-import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
+import { allowedHosts, refusal } from './hostGuard';
 import { Hub } from './hub';
 import { flowRecorder } from './flows';
 import { loadPlugins, pluginCatalog } from './plugins/load';
@@ -35,6 +35,7 @@ import { mirrorHosts, PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
 import { settingsInForce } from './settings';
+import { openLines } from './startup';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage, run, seedShip } from './util';
@@ -194,17 +195,8 @@ async function main() {
   }
 
   server.listen(config.port, config.host, () => {
-    console.log(`\n  🖖  Focus is open: http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`);
-    console.log(`      mode: ${config.demo ? 'demo (fake GitHub, pretend agents)' : 'live (gh CLI + Claude Agent SDK)'}`);
-    if (!config.demo && keyFallback.mode === 'fallback') {
-      console.log(`      agents use your Claude login, and ANTHROPIC_API_KEY while your plan's usage limit is reached (up to $${keyFallback.budgetUsd} each time).`);
-    } else if (!config.demo && process.env.ANTHROPIC_API_KEY && keyFallback.mode === 'login') {
-      console.log('      note: ANTHROPIC_API_KEY is set but agents ignore it and use your Claude login (set FOCUS_USE_API_KEY=1 to use the key, or =fallback to use it when your plan runs out).');
-    }
-    if (listensBeyondLoopback(config.host)) {
-      console.log(`      ⚠ HOST=${config.host}: anyone who can reach this port can drive your agents, which act with your GitHub and Claude logins.`);
-    }
-    console.log('');
+    const lines = openLines({ host: config.host, port: config.port, demo: config.demo, keyMode: keyFallback.mode, budgetUsd: keyFallback.budgetUsd, apiKeySet: Boolean(process.env.ANTHROPIC_API_KEY) });
+    for (const line of lines) console.log(line);
   });
 
   await focus.start();

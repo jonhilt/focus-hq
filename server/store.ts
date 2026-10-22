@@ -292,9 +292,7 @@ export class Store {
 
   /** Deletes the screenshots of a review that its replacement no longer shows. */
   private dropShots(old: QaReview | undefined, replacement?: QaReview): void {
-    const keep = new Set(replacement?.screenshots?.map((s) => s.file));
-    for (const { file } of old?.screenshots ?? []) {
-      if (keep.has(file)) continue;
+    for (const file of shotsToDrop(old, replacement)) {
       this.shots.delete(file);
       if (this.persist) fs.rm(path.join(paths.qaShots, file), { force: true }, () => undefined);
     }
@@ -510,6 +508,12 @@ export class Store {
       return [];
     }
   }
+}
+
+/** The screenshots of review `old` that its replacement no longer shows (all of them when there's none). */
+export function shotsToDrop(old: Pick<QaReview, 'screenshots'> | undefined, replacement?: Pick<QaReview, 'screenshots'>): string[] {
+  const keep = new Set(replacement?.screenshots?.map((s) => s.file));
+  return (old?.screenshots ?? []).map((s) => s.file).filter((file) => !keep.has(file));
 }
 
 /** Why Focus won't open a data folder another Focus is using, and what to do instead. */

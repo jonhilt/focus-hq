@@ -11,6 +11,7 @@ import { whisper } from './config';
 import type { Hub } from './hub';
 import { type LineUrgency, Speech } from './speech';
 import { cpuKokoro, gpuKokoro, type SpeechHelper, speechHelpers } from './speechHelpers';
+import { downloadBody, expectedBytes, shortfall } from './modelDownload';
 import { errorMessage, newId, run } from './util';
 
 export const DEMO_TRANSCRIPT = 'This is a demo transcription.';
@@ -166,8 +167,8 @@ export class Voice {
     await mkdir(path.dirname(model), { recursive: true });
     try {
       const res = await fetch(whisper.modelUrl);
-      if (!res.ok || !res.body) throw new Error(`${res.status} ${res.statusText}`);
-      const total = Number(res.headers.get('content-length')) || undefined;
+      const body = downloadBody(res);
+      const total = expectedBytes(res.headers.get('content-length'));
       let bytes = 0;
       let sentAt = 0;
       const progress = new Transform({
@@ -181,8 +182,9 @@ export class Voice {
           done(null, chunk);
         },
       });
-      await pipeline(Readable.fromWeb(res.body as NodeReadableStream<Uint8Array>), progress, createWriteStream(partial));
-      if (total !== undefined && bytes !== total) throw new Error(`got ${bytes} of ${total} bytes`);
+      await pipeline(Readable.fromWeb(body as NodeReadableStream<Uint8Array>), progress, createWriteStream(partial));
+      const short = shortfall(bytes, total);
+      if (short) throw new Error(short);
       await rename(partial, model);
     } catch (err) {
       await rm(partial, { force: true });

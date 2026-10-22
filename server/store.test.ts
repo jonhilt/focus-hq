@@ -8,7 +8,7 @@ import { autoQaFor, autoSendBackFor, qaProofFor } from '../shared/qa';
 // paths come from the environment when config.ts loads, so the data folder is set before the store is imported
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-store-'));
 process.env.FOCUS_DATA_DIR = dir;
-const { agentAfterRestart, fileKey, prKeyOf, StateLockedError, Store, stateLocked } = await import('./store');
+const { agentAfterRestart, fileKey, prKeyOf, shotsToDrop, StateLockedError, Store, stateLocked } = await import('./store');
 const { seedShip, seedRandom } = await import('./util');
 
 afterAll(() => fs.rmSync(dir, { recursive: true, force: true }));
@@ -331,5 +331,20 @@ describe('a run’s path through its machine', () => {
     expect(store.machinePath('slice', 'l1').map((s) => s.state)).toEqual(['working', 'shipping']);
     expect(store.machinePath('review', 'acme/web#1').map((s) => s.state)).toEqual(['idle']);
     expect(store.machinePath('nonsense', 'a1')).toEqual([]);
+  });
+});
+
+describe('shotsToDrop', () => {
+  const shots = (...files: string[]) => ({ screenshots: files.map((file) => ({ caption: file, file })) });
+
+  it('drops the screenshots the replacement no longer shows, and keeps the ones it does', () => {
+    expect(shotsToDrop(shots('a.png', 'b.png', 'c.png'), shots('b.png', 'd.png'))).toEqual(['a.png', 'c.png']);
+  });
+
+  it('drops them all when nothing replaces the review, and none when there was none', () => {
+    expect(shotsToDrop(shots('a.png', 'b.png'))).toEqual(['a.png', 'b.png']);
+    expect(shotsToDrop(shots('a.png'), {})).toEqual(['a.png']);
+    expect(shotsToDrop(undefined, shots('a.png'))).toEqual([]);
+    expect(shotsToDrop({}, shots('a.png'))).toEqual([]);
   });
 });
