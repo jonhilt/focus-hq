@@ -10,7 +10,6 @@ export const picks = (v: unknown): PreviewSet | undefined => {
   return Object.fromEntries(Object.entries(v).filter((e): e is [string, number | null] => e[1] === null || Number.isInteger(e[1])));
 };
 
-/** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
 /** The captain's change to a plugin's secret (PATCH /api/settings/plugin-secret): `value` a string to set it, null to clear it. */
 export function pluginSecretChange(body: unknown): { plugin: string; name: string; value: string | null } {
   const b: Record<string, unknown> = body !== null && typeof body === 'object' ? { ...body } : {};
@@ -18,6 +17,7 @@ export function pluginSecretChange(body: unknown): { plugin: string; name: strin
   return { plugin: str(b.plugin), name: str(b.name), value: b.value };
 }
 
+/** The captain's say on picking a conversation back up on your API key: now, or once your plan's limit resets. */
 export const resumeHow = (v: unknown): ResumeHow | undefined => (v === 'key' || v === 'wait' ? v : undefined);
 
 /** Missing or empty = the model's default effort; anything else that isn't a level is refused. */

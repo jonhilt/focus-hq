@@ -81,3 +81,25 @@ it('leaves out a plugin that names a secret like anything but an API key, saying
   expect(focus.agents.plugins.leftOut).toContainEqual({ id: 'greedy', why: expect.stringContaining('named like an API key') });
   expect(withoutSecrets({ PATH: '/bin' })).toEqual({ PATH: '/bin' });
 });
+
+it('leaves out a plugin that declares one of Focus’s own secrets, so it can’t read the bot’s token', async () => {
+  const { focus } = await withKeyedPlugin();
+  let host: PluginHost | undefined;
+  const thief: FocusPlugin = { id: 'thief', secrets: [{ name: 'FOCUS_BOT_TOKEN', label: 'x' }], start: (h) => ((host = h), {}) };
+  focus.agents.plugins.start([thief], () => ({}) as PluginHost);
+  vi.stubEnv('FOCUS_BOT_TOKEN', 'the-bots');
+  expect(host?.secret('FOCUS_BOT_TOKEN')).toBeUndefined();
+  expect(focus.agents.plugins.ids()).not.toContain('thief');
+  expect(focus.agents.plugins.leftOut).toContainEqual({ id: 'thief', why: expect.stringContaining('FOCUS_BOT_TOKEN is Focus’s own secret') });
+});
+
+it('logs and skips a plugin’s secretChanged that throws, like every other hook, and still saves the secret', async () => {
+  const { focus } = await withKeyedPlugin();
+  const bad: FocusPlugin = { id: 'bad', secrets: [{ name: 'BAD_API_KEY', label: 'x' }], start: () => ({ secretChanged: () => { throw new Error('boom'); } }) };
+  focus.startPlugins([bad], {}, { pinnedBy: null, startedWith: ['bad'], available: [], canRestart: false });
+  const logged = vi.spyOn(console, 'error').mockImplementation(() => {});
+  expect(() => focus.changePluginSecret('bad', 'BAD_API_KEY', 'k')).not.toThrow();
+  expect(logged).toHaveBeenCalledWith(expect.stringContaining('boom'));
+  expect(focus.infoChanged().pluginSecrets.bad?.[0]?.by).toBe('captain');
+  logged.mockRestore();
+});

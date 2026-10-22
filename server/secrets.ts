@@ -5,6 +5,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseEnv } from 'node:util';
+import { isOneOf } from '../shared/records';
 
 /** Focus's own secrets, each the environment variable that overrides it. */
 export const SECRET_NAMES = ['FOCUS_BOT_TOKEN', 'FOCUS_BOT_WEBHOOK', 'FOCUS_BOT_WEBHOOK_AUTH'] as const;
@@ -20,10 +21,12 @@ export const PLUGIN_SECRET = /^[A-Z][A-Z0-9_]*_(?:KEY|TOKEN|SECRET)$/;
 /** Every name the file keeps: Focus's own, and those the plugins switched on keep. */
 const kept = new Set<string>(SECRET_NAMES);
 
-/** The plugins' secrets, kept too from as Focus starts them: a name that isn't a PLUGIN_SECRET is refused. */
+/** The plugins' secrets, kept too from as Focus starts them: a name that isn't a PLUGIN_SECRET, or is Focus's own, is refused. */
 export function keepSecrets(names: readonly string[]): void {
   const wrong = names.find((n) => !PLUGIN_SECRET.test(n));
   if (wrong) throw new Error(`A plugin's secret is named like an API key (OPENAI_API_KEY): "${wrong}" isn't`);
+  const focus = names.find((n) => isOneOf(SECRET_NAMES, n));
+  if (focus) throw new Error(`${focus} is Focus’s own secret: a plugin can’t keep it`);
   for (const name of names) kept.add(name);
 }
 

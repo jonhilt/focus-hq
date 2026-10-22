@@ -51,9 +51,10 @@ export class Plugins {
     return this.secretsOf.get(id) ?? [];
   }
 
-  /** Tells plugin `id` the captain changed its secret `name`. */
+  /** Tells plugin `id` the captain changed its secret `name`: a hook that throws is logged and skipped. */
   secretChanged(id: string, name: string): void {
-    this.parts.get(id)?.secretChanged?.(name);
+    const parts = this.parts.get(id);
+    if (parts) this.safely(id, 'secretChanged', () => parts.secretChanged?.(name));
   }
 
   /** Whether the started plugin `id` declared that it requires `other`. */

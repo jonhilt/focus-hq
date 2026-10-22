@@ -96,9 +96,10 @@ function ownSettings(ui: Ui, info: ServerInfo, e: PluginEntry): HTMLElement[] {
  */
 function secretFields(ui: Ui, secrets: readonly PluginSecretStatus[], plugin: string): HTMLElement[] {
   return secrets.map((s) => {
-    const send = (value: string | null) => api.changePluginSecret(plugin, s.name, value).catch((err: Error) => ui.error(err.message));
+    // true once it's taken: a field whose secret wasn't keeps what was typed, to try again
+    const send = (value: string | null) => api.changePluginSecret(plugin, s.name, value).then(() => true, (err: Error) => (ui.error(err.message), false));
     const input = h('input', { type: 'password', autocomplete: 'off', placeholder: s.by ? 'Paste a new one to replace it' : `Paste your ${s.label}`, style: 'flex:1' });
-    input.addEventListener('change', () => void send(input.value).then(() => (input.value = '')));
+    input.addEventListener('change', () => void send(input.value).then((taken) => taken && (input.value = '')));
     const clear = h('button', { class: 'btn small' }, 'Clear');
     clear.onclick = () => void busy(clear, () => send(null), ui.error);
     const chip =
