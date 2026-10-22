@@ -1,4 +1,4 @@
-import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
+import type { Board, BotChange, BotStatus, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM } from '../shared/types';
 import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
@@ -8,15 +8,17 @@ import { autoMergeFor, boardMergeSaid, conflictsSaid, forgottenMarks, type GateM
 import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalMark } from '../shared/personalLog';
 import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
 import type { AgentManager } from './agents/manager';
+import { BotSetup } from './bot';
 import type { Lent } from './agents/manager/pluginHost';
 import type { FocusPlugin } from './plugins/contract';
 import type { IssuePlanner } from './agents/planner';
-import { config } from './config';
+import { config, paths } from './config';
 import { demoPace } from './demoPace';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
+import { Secrets } from './secrets';
 import { changeSettings } from './settings';
 import { projectChangeFollowUps } from './projectChange';
 import { issueRefusal, previewTarget } from './focusRequests';
@@ -40,6 +42,8 @@ export class Focus {
   ownRepo: string | undefined;
   /** Shuts Focus down for its supervisor to start it again (server/supervise.ts), once Focus can. */
   restart?: () => Promise<void>;
+  /** A bot speaking for the captain: its settings as they are now, and the captain's changes to them. */
+  readonly bot = new BotSetup({ secrets: new Secrets(paths.secrets), publicUrl: () => this.store.settings.publicUrl });
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
@@ -65,6 +69,7 @@ export class Focus {
       deskCount: DESKS_PER_ROOM,
       plugins: [],
       shipPlugins: { pinnedBy: null, startedWith: [], available: [], canRestart: false },
+      bot: this.bot.status(),
     };
   }
 
@@ -85,9 +90,9 @@ export class Focus {
     return this.info.github.login;
   }
 
-  /** What Focus says of itself now: its settings, and in a demo ship the pace its agents go at. */
+  /** What Focus says of itself now: its settings, the bot's, and in a demo ship the pace its agents go at. */
   private served(): ServerInfo {
-    return { ...this.info, settings: this.store.settings, ...(config.demo && { demoPace: demoPace() }) };
+    return { ...this.info, settings: this.store.settings, bot: this.bot.status(), ...(config.demo && { demoPace: demoPace() }) };
   }
 
   /** Tells every browser what Focus says of itself now, as after the demo's pace changes. */
@@ -403,7 +408,7 @@ export class Focus {
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
   /** `ship`: how they were chosen, for the captain to change them from the ready room. */
   startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>, ship: ShipPlugins): void {
-    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, ...more });
+    this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, bot: () => this.bot.config(), ...more });
     this.info.plugins = this.agents.plugins.ids();
     this.info.shipPlugins = ship;
     // FOCUS_PLUGINS's plugins carry over as the captain's choice the first time, so taking it away later changes nothing
@@ -573,6 +578,26 @@ export class Focus {
     this.infoChanged();
     this.agents.schedule();
     return s;
+  }
+
+  /** The captain's change to the bot's webhook or its Authorization header (`BotSetup.change`), sent out. */
+  changeBot(change: BotChange): BotStatus {
+    const status = this.bot.change(change);
+    this.infoChanged();
+    return status;
+  }
+
+  /** A new bot token, for the captain to give the bot: told them this once. */
+  newBotToken(): { token: string } {
+    const token = this.bot.newToken();
+    this.infoChanged();
+    return { token };
+  }
+
+  clearBotToken(): BotStatus {
+    const status = this.bot.clearToken();
+    this.infoChanged();
+    return status;
   }
 
   async listRepos(): Promise<string[]> {

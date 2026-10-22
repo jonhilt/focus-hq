@@ -17,9 +17,9 @@ function switchOf(body: Record<string, unknown>): { projectId: string; on: boole
 
 /**
  * Its routes. `leadsIn` gives a project's leads, whose words are held once auto-send goes off there; `publicUrl` is
- * Focus as the bot reaches it, to make its links whole.
+ * Focus as the bot reaches it now, to make its links whole.
  */
-export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leadsIn: (projectId: string) => string[], publicUrl: string | undefined): PluginRoute[] {
+export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leadsIn: (projectId: string) => string[], publicUrl: () => string | undefined): PluginRoute[] {
   const id = (params: Record<string, string>) => params.id ?? '';
   return [
     { method: 'get', path: '/inbox', handle: () => inbox.view() },
@@ -33,7 +33,7 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
       method: 'get', path: '/inbox', bot: true,
       handle: () => {
         const view = inbox.view();
-        return { ...view, open: view.open.map((i) => itemWithLinks(i, publicUrl)) };
+        return { ...view, open: view.open.map((i) => itemWithLinks(i, publicUrl())) };
       },
     },
     { method: 'post', path: '/inbox/:id/hold', bot: true, handle: ({ params }) => inbox.hold(id(params)) },

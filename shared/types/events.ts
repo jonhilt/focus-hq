@@ -4,6 +4,7 @@ import type { ReportCard } from '../ledger';
 import type { PersonalEntry } from '../personalLog';
 import type { AvailablePlugin, PluginsPinnedBy } from '../shipPlugins';
 import type { Agent, BrowserFrame, TermLine } from './agents';
+import type { BotStatus } from './bot';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { PluginStates } from './plugins';
@@ -23,6 +24,8 @@ export interface ServerInfo {
   plugins: string[];
   /** How the plugins switched on for the whole ship were chosen, for the ready room's Plugins tab to change them. */
   shipPlugins: ShipPlugins;
+  /** A bot speaking for the captain: where each of its settings comes from (none of its secrets). */
+  bot: BotStatus;
   /** In a demo ship, how fast its pretend agents go (1 is `pnpm run demo`'s; shared/demoPace.ts). */
   demoPace?: number;
 }

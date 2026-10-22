@@ -35,7 +35,7 @@ describe('BotHook', () => {
   it('sends nothing for what was there when Focus started, then each change, signed', async () => {
     let look: BotLook = { open: [item('t1')], decided: [], leads: [] };
     const posts: { url: string; headers: Record<string, string>; body: string }[] = [];
-    const hook = new BotHook(() => look, { token: 'k', webhook: 'https://grok/hook' }, async (url, init) => {
+    const hook = new BotHook(() => look, () => ({ token: 'k', webhook: 'https://grok/hook' }), async (url, init) => {
       posts.push({ url, headers: init.headers, body: init.body });
       return { ok: true, status: 200 };
     });
@@ -58,7 +58,7 @@ describe('BotHook', () => {
     console.warn = (text: string) => void warned.push(text);
     try {
       let look: BotLook = { open: [], decided: [], leads: [] };
-      const hook = new BotHook(() => look, { token: 'k', webhook: 'https://grok/hook', auth: 'Authorization: Bearer grok-secret' }, async (_url, init) => {
+      const hook = new BotHook(() => look, () => ({ token: 'k', webhook: 'https://grok/hook', auth: 'Authorization: Bearer grok-secret' }), async (_url, init) => {
         posts.push({ headers: init.headers, body: init.body });
         return { ok: false, status: 401 };
       });
@@ -78,9 +78,28 @@ describe('BotHook', () => {
 
   it('carries on when the webhook fails', async () => {
     let look: BotLook = { open: [], decided: [], leads: [] };
-    const hook = new BotHook(() => look, { token: 'k', webhook: 'https://grok/hook' }, () => Promise.reject(new Error('down')));
+    const hook = new BotHook(() => look, () => ({ token: 'k', webhook: 'https://grok/hook' }), () => Promise.reject(new Error('down')));
     await hook.tick();
     look = { ...look, open: [item('t1')] };
     await expect(hook.tick()).resolves.toBeUndefined();
+  });
+
+  it('sends nothing without a token and a webhook, and once given them, nothing for what was there already', async () => {
+    let bot: { token?: string; webhook?: string } = {};
+    let look: BotLook = { open: [item('t1')], decided: [], leads: [] };
+    const posts: string[] = [];
+    const hook = new BotHook(() => look, () => bot, async (url) => {
+      posts.push(url);
+      return { ok: true, status: 200 };
+    });
+    await hook.tick();
+    look = { ...look, open: [item('t1'), item('t2')] };
+    await hook.tick();
+    bot = { token: 'k', webhook: 'https://grok/hook' };
+    await hook.tick();
+    expect(posts).toEqual([]);
+    look = { ...look, open: [item('t1'), item('t2'), item('t3')] };
+    await hook.tick();
+    expect(posts).toEqual(['https://grok/hook']);
   });
 });

@@ -48,7 +48,8 @@ type Post = (url: string, init: { method: 'POST'; headers: Record<string, string
 
 /**
  * Tells the bot's webhook what changed since it last looked (`tick`, every few seconds): what it hears of when the
- * Focus starts is what's there already, which it reads from the inbox, so nothing is sent for that.
+ * Focus starts is what's there already, which it reads from the inbox, so nothing is sent for that. The same goes
+ * for when the captain gives it a token and a webhook: with either missing, it sends nothing and looks afresh.
  */
 export class BotHook {
   private seen: BotSeen | undefined;
@@ -56,38 +57,40 @@ export class BotHook {
 
   constructor(
     private readonly look: () => BotLook,
-    private readonly bot: { token: string; webhook: string; publicUrl?: string; auth?: string },
+    private readonly bot: () => { token?: string; webhook?: string; publicUrl?: string; auth?: string },
     private readonly post: Post = fetch,
   ) {}
 
   async tick(): Promise<void> {
     if (this.ticking) return;
+    const { token, webhook, publicUrl, auth } = this.bot();
+    if (!token || !webhook) return void (this.seen = undefined);
     this.ticking = true;
     try {
       const { open, decided, leads } = this.look();
       const now: BotSeen = { items: heard(open), shown: shownBy(leads) };
       const before = this.seen;
       this.seen = now;
-      if (before) for (const e of botEvents(before, now, decided, leads)) await this.send(e);
+      if (before) for (const e of botEvents(before, now, decided, leads)) await this.send(e, { token, webhook, publicUrl, auth });
     } finally {
       this.ticking = false;
     }
   }
 
   /** Posts one event, signed; one that doesn't land is logged, not sent again (the bot can always read the inbox). */
-  private async send(e: BotEvent): Promise<void> {
-    const body = JSON.stringify({ ...withLinks(e, this.bot.publicUrl), at: Date.now() });
+  private async send(e: BotEvent, bot: { token: string; webhook: string; publicUrl?: string; auth?: string }): Promise<void> {
+    const body = JSON.stringify({ ...withLinks(e, bot.publicUrl), at: Date.now() });
     const timestamp = String(Date.now());
-    const auth = webhookAuth(this.bot.auth);
+    const auth = webhookAuth(bot.auth);
     const headers = {
       'content-type': 'application/json',
       'x-focus-event': e.event,
       'x-focus-timestamp': timestamp,
-      'x-focus-signature': signature(this.bot.token, timestamp, body),
+      'x-focus-signature': signature(bot.token, timestamp, body),
       ...(auth && { authorization: auth }),
     };
     try {
-      const res = await this.post(this.bot.webhook, { method: 'POST', headers, body, signal: AbortSignal.timeout(10_000) });
+      const res = await this.post(bot.webhook, { method: 'POST', headers, body, signal: AbortSignal.timeout(10_000) });
       if (!res.ok) console.warn(`[chief-of-staff] the bot’s webhook answered ${e.event} with ${res.status}`);
     } catch (err) {
       console.warn(`[chief-of-staff] sending ${e.event} to the bot’s webhook failed: ${errorMessage(err)}`);

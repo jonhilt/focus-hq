@@ -96,4 +96,11 @@ describe('changeSettings', () => {
   it('changes nothing for a body that isn’t an object', () => {
     for (const patch of [undefined, null, 'full', 3, true]) expect(changeSettings(settings, patch)).toEqual(settings);
   });
+
+  it('takes an http(s) public address without its trailing slash, clears it with empty, and ignores anything else', () => {
+    const set = changeSettings(settings, { publicUrl: ' https://focus.tail.ts.net/ ' });
+    expect(set.publicUrl).toBe('https://focus.tail.ts.net');
+    expect(changeSettings(set, { publicUrl: 'ftp://x' }).publicUrl).toBe('https://focus.tail.ts.net');
+    expect(changeSettings(set, { publicUrl: '' })).not.toHaveProperty('publicUrl');
+  });
 });

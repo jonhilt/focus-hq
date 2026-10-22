@@ -223,7 +223,7 @@ describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-in
   async function forTheBot() {
     const o = focus();
     o.project.plugins = [CHIEF_OF_STAFF];
-    o.agents.startPlugins([chiefOfStaff], { demo: false, ownRepo: () => undefined, bot: { token: 'k', publicUrl: PUBLIC } });
+    o.agents.startPlugins([chiefOfStaff], { demo: false, ownRepo: () => undefined, bot: () => ({ token: 'k', publicUrl: PUBLIC }) });
     const botRoute = (method: string, path: string) => {
       const found = o.agents.plugins.routes().find((r) => r.route.bot && r.route.method === method && r.route.path === path)?.route;
       if (!found) throw new Error(`no bot route ${method} ${path}`);

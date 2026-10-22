@@ -6,8 +6,8 @@ import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
 import { replay } from './agents/runJournal';
 import { artifactServing, effort, picks, qaShotServing, resumeHow, str } from './apiRequests';
-import { botGuard } from './bot';
-import { config, paths } from './config';
+import { botChange, botGuard } from './bot';
+import { paths } from './config';
 import { appendFrameStats } from './frameStats';
 import type { Focus } from './focus';
 import type { Store } from './store';
@@ -31,7 +31,7 @@ const param = (req: Request, name: string) => str(req.params[name]);
 /** A route's named path parts, each as text. */
 const pathParams = (req: Request): Record<string, string> => Object.fromEntries(Object.keys(req.params).map((name) => [name, param(req, name)]));
 
-export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = config.bot): express.Router {
+export function apiRouter(focus: Focus, store: Store, botToken: () => string | undefined = () => focus.bot.config().token): express.Router {
   const r = express.Router();
   r.use(express.json({ limit: '2mb' }));
   r.get('/state', h(() => focus.snapshot()));
@@ -56,6 +56,10 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.post('/github/check', h(() => focus.checkGitHub()));
   r.get('/github/repos', h(() => focus.listRepos()));
   r.patch('/settings', h((req) => focus.updateSettings(req.body ?? {})));
+  // a bot speaking for the captain (server/bot.ts): its secrets go in, never out (Focus's info says only where each comes from)
+  r.patch('/settings/bot', h((req) => focus.changeBot(botChange(req.body))));
+  r.post('/settings/bot/token', h(() => focus.newBotToken()));
+  r.delete('/settings/bot/token', h(() => focus.clearBotToken()));
   r.post('/restart', h(() => focus.restartFocus()));
 
   // projects (rooms)
@@ -226,7 +230,7 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
 
   // each plugin's own routes (docs/plugins.md), under its id; those for a bot speaking for the captain under /bot, open
   // only to Focus's bot token (server/bot.ts)
-  r.use('/bot', botGuard(bot.token));
+  r.use('/bot', botGuard(botToken));
   for (const { plugin, route } of focus.agents.plugins.routes()) {
     const handle = h((req) => route.handle({ body: req.body ?? {}, query: req.query, params: pathParams(req) }));
     r[route.method](route.bot ? `/bot${route.path}` : `/plugins/${plugin}${route.path}`, handle);

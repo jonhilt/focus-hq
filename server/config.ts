@@ -4,7 +4,6 @@ import { fileURLToPath } from 'node:url';
 
 const argv = new Set(process.argv.slice(2));
 const demo = argv.has('--demo') || process.env.FOCUS_MODE === 'demo';
-const botWebhookAuth = process.env.FOCUS_BOT_WEBHOOK_AUTH?.trim() || undefined;
 
 export const config = {
   /** The Focus checkout itself. */
@@ -32,22 +31,12 @@ export const config = {
    * (`pluginChoice` in shared/shipPlugins.ts).
    */
   pluginsEnv: process.env.FOCUS_PLUGINS,
-  /**
-   * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the /api/bot routes (the plugins' routes for
-   * bots) to it, and signs what FOCUS_BOT_WEBHOOK is sent; FOCUS_BOT_WEBHOOK_AUTH is sent as Authorization on each
-   * delivery; FOCUS_PUBLIC_URL (Focus as the bot reaches it) makes the links in it whole. A plugin is lent all four
-   * (`PluginHost.bot`).
-   */
-  bot: {
-    token: process.env.FOCUS_BOT_TOKEN?.trim() || undefined,
-    webhook: process.env.FOCUS_BOT_WEBHOOK?.trim() || undefined,
-    publicUrl: process.env.FOCUS_PUBLIC_URL?.trim().replace(/\/+$/, '') || undefined,
-    ...(botWebhookAuth && { auth: botWebhookAuth }),
-  },
 };
 
 export const paths = {
   state: path.join(config.dataDir, 'state.json'),
+  /** What the captain sets that mustn't reach the browser or the agents, the bot's token among them (server/secrets.ts). */
+  secrets: path.join(config.dataDir, 'secrets.env'),
   /** The ship's log of how work went (shared/ledger.ts): appended to, never rewritten. */
   ledger: path.join(config.dataDir, 'ledger.jsonl'),
   logs: path.join(config.dataDir, 'logs'),

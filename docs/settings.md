@@ -1,0 +1,25 @@
+# Settings
+
+Where Focus keeps what the captain sets, and why. Most people clone Focus and run it on their own machine, so setting something shouldn't mean editing a shell profile and restarting.
+
+## Three places
+
+- **Settings** (`state.json`, `server/settings.ts`): the captain's choices, set in the ready room. They're sent to every browser and lent to every plugin (`host.settings()`), so nothing secret goes here.
+- **Secrets** (`secrets.env` in the data folder, `server/secrets.ts`): what mustn't reach a browser or an agent: the bot's token, its webhook (often a secret in its path) and the webhook's header. Set from Settings, which only ever hears where each comes from, never the value; or edited by hand, read as Focus starts.
+- **The environment**: what Focus needs before it can read either (`FOCUS_DATA_DIR`, `PORT`, `HOST`, `FOCUS_ALLOWED_HOSTS`), and knobs for working on Focus itself. An environment variable named for a setting or secret wins over it, and Settings shows it as set there, unchangeable from the browser: a server's env file (`deploy/vps/env.example`) keeps working as it did.
+
+## Promises
+
+Held in `server/secretsInvariants.test.ts` and `server/secrets.test.ts`:
+
+- What you set in Settings is kept across a restart, and what you clear stays cleared.
+- A secret is never sent to a browser: Focus's info says only where each comes from (and the webhook's host).
+- A secret is never put in Focus's environment, which every agent's session is handed a copy of.
+- The file is readable by its owner alone, and changing one name from Settings keeps the rest of it (comments, other names) as it was.
+- An environment variable wins, and Settings refuses to change one it sets.
+
+## Rejected
+
+- **Secrets in `state.json`**: it's sent to the browser and lent to plugins, and copied into backups.
+- **A `.env` loaded into `process.env`**: the usual way, but every agent's Claude Code session is started with a copy of Focus's environment, so every agent (and every command it runs) could read the secrets. `secrets.env` has a `.env`'s format, so it reads as one, but it's parsed (`util.parseEnv`), not loaded.
+- **The OS keychain**: there's none on a headless server, and it means a different way on each platform.

@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, BotChange, BotStatus, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -39,6 +39,11 @@ export const api = {
   listRepos: () => call<string[]>('GET', '/github/repos'),
   checkGitHub: () => call('POST', '/github/check'),
   updateSettings: (patch: Partial<Settings>) => call<Settings>('PATCH', '/settings', patch),
+  /** The bot's webhook or its Authorization header: a string sets it, null clears it. */
+  changeBot: (change: BotChange) => call<BotStatus>('PATCH', '/settings/bot', change),
+  /** A new bot token, told this once. */
+  newBotToken: () => call<{ token: string }>('POST', '/settings/bot/token'),
+  clearBotToken: () => call<BotStatus>('DELETE', '/settings/bot/token'),
   /** Restarts Focus, under its supervisor: the page reconnects once it's back. */
   restart: () => call<{ restarting: true }>('POST', '/restart'),
 

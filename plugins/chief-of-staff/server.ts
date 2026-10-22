@@ -38,18 +38,16 @@ const chiefOfStaff: FocusPlugin = {
     const chief = new ChiefOfStaff(host, host.demo ? new DemoJudge() : new ClaudeJudge((run) => host.readOnlySession(run)), () => readIfThere(orders), autoSends);
     const inbox = new Inbox(host, autoSends);
     setInterval(() => void inbox.autoSend(), AUTO_SEND_EVERY).unref();
-    // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook
-    const { token, webhook, publicUrl, auth } = host.bot;
-    if (token && webhook) {
-      const hook = new BotHook(() => ({ ...inbox.view(), leads: inbox.leads() }), { token, webhook, publicUrl, auth });
-      setInterval(() => void hook.tick(), BOT_EVERY).unref();
-    }
+    // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook, once
+    // it has a token and a webhook (the captain sets them in Settings while Focus runs)
+    const hook = new BotHook(() => ({ ...inbox.view(), leads: inbox.leads() }), () => host.bot);
+    setInterval(() => void hook.tick(), BOT_EVERY).unref();
     const leadsIn = (projectId: string) => host.agents().filter((a) => a.projectId === projectId && a.task === 'lead').map((a) => a.id);
     return {
       turn: (agent, phase) => void chief.turn(agent, phase),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
-      routes: inboxRoutes(inbox, settings, leadsIn, publicUrl),
+      routes: inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl),
     };
   },
 };

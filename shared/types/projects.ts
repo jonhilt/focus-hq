@@ -41,6 +41,8 @@ export interface Settings {
    * (shared/shipPlugins.ts). Missing until they first choose. FOCUS_PLUGINS, where it's set, overrides it.
    */
   plugins?: string[];
+  /** Focus's address as a bot speaking for the captain reaches it (server/bot.ts), unless FOCUS_PUBLIC_URL is set. Missing = none. */
+  publicUrl?: string;
 }
 
 /**

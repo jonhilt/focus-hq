@@ -197,7 +197,7 @@ export interface PluginRoute {
   path: string;
   /**
    * A route for a bot speaking for the captain: mounted at `/api/bot<path>` instead, open only to Focus's bot token
-   * (`FOCUS_BOT_TOKEN`; with none set, there are no bot routes). Its path is what the bot calls, so keep it as it is.
+   * (set in Settings, or `FOCUS_BOT_TOKEN`; with none set, there are no bot routes). Its path is what the bot calls, so keep it as it is.
    */
   bot?: boolean;
   /**
@@ -237,9 +237,10 @@ export interface PluginHost {
   /** QA's reviews of the pull requests on the boards, by `prKey`. */
   reviews(): ReadonlyMap<string, Readonly<QaReview>>;
   /**
-   * A bot speaking for the captain, as Focus was started with: its `token` (`FOCUS_BOT_TOKEN`), which signs what's
-   * sent to its `webhook` (`FOCUS_BOT_WEBHOOK`); `auth` (`FOCUS_BOT_WEBHOOK_AUTH`) as the Authorization header on each
-   * delivery; and Focus's address as the bot reaches it (`FOCUS_PUBLIC_URL`).
+   * A bot speaking for the captain, as it is now (the captain changes it in Settings, so read it each time you use
+   * it): its `token` (`FOCUS_BOT_TOKEN`), which signs what's sent to its `webhook` (`FOCUS_BOT_WEBHOOK`); `auth`
+   * (`FOCUS_BOT_WEBHOOK_AUTH`) as the Authorization header on each delivery; and Focus's address as the bot reaches it
+   * (`FOCUS_PUBLIC_URL`). Each one missing is unset.
    */
   readonly bot: Readonly<{ token?: string; webhook?: string; auth?: string; publicUrl?: string }>;
   /** A file a goal's lead put on their station's screen (`<id>.html`, its picture `<id>.jpg`): undefined when there's none. */

@@ -44,13 +44,13 @@ What waits on the captain (Comms' queue) is also served to anything outside Focu
 
 ### A bot speaking for the captain
 
-A bot (Grok Bot, over Tailscale) gets the same inbox with a token of its own (`server/bot.ts` guards the routes, the chief of staff serves them), set when Focus starts:
+A bot (Grok Bot, over Tailscale) gets the same inbox with a token of its own (`server/bot.ts` guards the routes, the chief of staff serves them). Each of these is set in the ready room's **Settings → Bot** (which makes the token), taking effect at once, or by the environment variable named, which wins ([settings](settings.md)):
 
-- `FOCUS_BOT_TOKEN`: the bot sends it as `Authorization: Bearer <token>` to `GET /api/bot/inbox`, `POST /api/bot/inbox/:id/decide` and `POST /api/bot/inbox/:id/hold`, which work as the routes above; its answers are recorded `via: "api"`. Without the token they answer 401, and with no token set, 404.
-- `FOCUS_BOT_WEBHOOK`: a URL Focus posts each change to, within a few seconds, as JSON with `event` and `at`:
+- The token (`FOCUS_BOT_TOKEN`): the bot sends it as `Authorization: Bearer <token>` to `GET /api/bot/inbox`, `POST /api/bot/inbox/:id/decide` and `POST /api/bot/inbox/:id/hold`, which work as the routes above; its answers are recorded `via: "api"`. Without the token they answer 401, and with no token set, 404.
+- The webhook (`FOCUS_BOT_WEBHOOK`): a URL Focus posts each change to, within a few seconds, as JSON with `event` and `at`:
   - `item-opened` with the `item`, as `GET` lists it: as soon as it needs the captain (a card or an interrupt the moment it's judged) or has the chief of staff's words ready; not while it's still being read. Turns still being read are already in `GET /api/bot/inbox` (`lane: "judging"`); no webhook fires for them until they're judged.
   - `item-closed` with its `id` and `how`: `decided`, with the `decision` (its `captain-decision` line), or `withdrawn` (it went another way: the lead carried on, the hand was withdrawn).
   - `shown`: a lead put something on their station's screen (a briefing, a mockup, a diagram), with `projectId`, `agentId`, who, the goal, its `title`, `html` and `image`.
-  Each is signed: `X-Focus-Signature: sha256=<hex>` is the HMAC-SHA256, keyed by the token, of `X-Focus-Timestamp` (milliseconds), a dot, and the body. What was waiting when Focus started isn't sent (read the inbox for it), and a delivery that fails is logged, not sent again.
-- `FOCUS_BOT_WEBHOOK_AUTH`: sent as the `Authorization` header on every delivery to that URL, so a receiver that needs its own token (a Grok Bot routine webhook) can take the post without a signature-checking proxy. The HMAC headers stay. If the value starts with `Authorization:`, that prefix is stripped (pasting a full header line works). Unset, deliveries are as they were.
-- `FOCUS_PUBLIC_URL`: Focus as the bot reaches it (`https://<machine>.<tailnet>.ts.net:4477`), so the links in what's sent are whole.
+  Each is signed: `X-Focus-Signature: sha256=<hex>` is the HMAC-SHA256, keyed by the token, of `X-Focus-Timestamp` (milliseconds), a dot, and the body. What was waiting when Focus started, or when the bot was given its token and webhook, isn't sent (read the inbox for it), and a delivery that fails is logged, not sent again.
+- Its header (`FOCUS_BOT_WEBHOOK_AUTH`): sent as the `Authorization` header on every delivery to that URL, so a receiver that needs its own token (a Grok Bot routine webhook) can take the post without a signature-checking proxy. The HMAC headers stay. If the value starts with `Authorization:`, that prefix is stripped (pasting a full header line works). Unset, deliveries are as they were.
+- The public address (`FOCUS_PUBLIC_URL`): Focus as the bot reaches it (`https://<machine>.<tailnet>.ts.net:4477`), so the links in what's sent are whole.

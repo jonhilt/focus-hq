@@ -7,7 +7,7 @@ import { apiRouter } from './routes';
 /** Focus's API with one plugin's routes, a bot token of `k`, and a request to it. */
 async function withRoutes(routes: PluginRoute[], ask: (url: (path: string) => string) => Promise<void>) {
   const app = express();
-  app.use('/api', apiRouter({ agents: { plugins: { routes: () => routes.map((route) => ({ plugin: 'inbox', route })) } } } as never, { projects: [], agents: new Map() } as never, { token: 'k', webhook: undefined, publicUrl: undefined }));
+  app.use('/api', apiRouter({ agents: { plugins: { routes: () => routes.map((route) => ({ plugin: 'inbox', route })) } } } as never, { projects: [], agents: new Map() } as never, () => 'k'));
   const server = app.listen(0);
   try {
     const port = (server.address() as AddressInfo).port;

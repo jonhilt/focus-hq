@@ -14,6 +14,7 @@ import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
 import { demoPaceField } from './demoPace';
+import { botSection } from './botSettings';
 import { busy, fill, h } from './dom';
 import { SideNav, Switch } from './panels';
 import { plannerCard } from './plannerCard';
@@ -451,6 +452,7 @@ function settingsTab(ui: Ui): HTMLElement {
           ? 'Demo mode: GitHub and the agents are simulated. Run "pnpm run dev" for the real thing.'
           : 'Live mode: GitHub through the gh CLI, agents through the Claude Agent SDK using your Claude login.'),
     ),
+    botSection(ui),
     voiceSection(ui),
   );
 }

@@ -17,6 +17,7 @@
   "server/ledgerLog.ts": 0,
   "server/plugins/dataDir.ts": 6,
   "server/previews.ts": 0,
+  "server/secrets.ts": 100,
   "server/speech.ts": 0,
   "server/speechWorker.ts": 0,
   "server/store.ts": 51,
