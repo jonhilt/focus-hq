@@ -12,6 +12,7 @@ describe('commsKey', () => {
     expect(commsKey({ key: 'Enter' }, false)).toEqual({ press: 'send' });
     expect(commsKey({ key: 'h' }, false)).toEqual({ press: 'hold' });
     expect(commsKey({ key: 'o' }, false)).toEqual({ press: 'ack' });
+    expect(commsKey({ key: 'm' }, false)).toEqual({ press: 'merge' });
     expect(commsKey({ key: 'a' }, false)).toEqual({ press: 'allow' });
     expect(commsKey({ key: 'd' }, false)).toEqual({ press: 'decline' });
     expect(commsKey({ key: '3' }, false)).toEqual({ press: 'pick-3' });

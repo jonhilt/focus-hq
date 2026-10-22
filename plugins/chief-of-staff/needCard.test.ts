@@ -14,18 +14,28 @@ const calls = vi.hoisted(() => ({
   closeGoal: vi.fn(() => Promise.resolve(true)),
   decide: vi.fn(() => Promise.resolve({ ok: true })),
   hold: vi.fn(() => Promise.resolve()),
+  mergePr: vi.fn(() => Promise.resolve()),
+  mergeWhenPassed: vi.fn(() => Promise.resolve()),
+  confirmDialog: vi.fn(() => Promise.resolve(true)),
+  shownPrs: vi.fn((): { projectId: string; pr: PullRequest }[] => []),
 }));
-vi.mock('../../plugin-api/client', async () => ({
-  ...(await import('../../plugin-api/phone')),
-  ...calls,
-  LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac' },
-  markdownHtml: (text: string) => text,
-  busy: async (_button: HTMLButtonElement, run: () => Promise<unknown>) => {
-    await run();
-  },
-  timeAgo: () => '5 min ago',
-  goalTags: () => [],
-}));
+vi.mock('../../plugin-api/client', async () => {
+  const phone = await import('../../plugin-api/phone');
+  // the board's pull requests are the ones a test puts there
+  const focus = Object.create(phone.focus, { shownPrs: { value: calls.shownPrs } });
+  return {
+    ...phone,
+    ...calls,
+    focus,
+    LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac' },
+    markdownHtml: (text: string) => text,
+    busy: async (_button: HTMLButtonElement, run: () => Promise<unknown>) => {
+      await run();
+    },
+    timeAgo: () => '5 min ago',
+    goalTags: () => [],
+  };
+});
 vi.mock('./inboxApi', () => ({ inbox: { decide: calls.decide, hold: calls.hold } }));
 
 const { needCard } = await import('./needCard');
@@ -149,12 +159,28 @@ describe('a card in Comms', () => {
     expect(calls.closeGoal).toHaveBeenCalled();
   });
 
-  it('leaves a pull request to the board', () => {
+  it('merges a lead’s open pull request from their turn, without going to the board', async () => {
+    calls.shownPrs.mockReturnValue([{ projectId: 'p', pr }]);
+    const el = card({ kind: 'turn', agent: lead({ lead: { station: 2, title: 'Wishlist', repos: [], slice: 1, prs: [{ repo: 'acme/shop', number: 7, url: pr.url }] } }) });
+    expect(el.textContent).toContain('Their open pull request:');
+    expect(el.querySelector('[data-act="merge"]')?.textContent).toBe('squash & merge shop#7');
+    button(el, 'squash & merge shop#7').click();
+    await settle();
+    // QA hasn't tested it, so it asks first, saying so
+    expect(calls.confirmDialog).toHaveBeenCalledWith(expect.objectContaining({ message: expect.stringContaining('QA hasn’t tested it') }));
+    expect(calls.mergePr).toHaveBeenCalledWith('p', 'acme/shop', 7, false);
+  });
+
+  it('merges a pull request QA needs the captain on from its card, or leaves it to the board', async () => {
     const qa = card({ kind: 'qa', projectId: 'p', pr });
     expect(qa.textContent).toContain('acme/shop#7 · Wishlist endpoints');
     expect(qa.textContent).toContain('Pull requests: read QA’s report');
     button(qa, 'Pull requests').click();
     expect(ui.openBoard).toHaveBeenCalledWith('p', 'prs');
+    calls.confirmDialog.mockResolvedValueOnce(false);
+    button(qa, 'squash & merge shop#7').click();
+    await settle();
+    expect(calls.mergePr).not.toHaveBeenCalled();
     const conflicts = card({ kind: 'conflicts', projectId: 'p', pr });
     expect(conflicts.textContent).toContain('Resolve conflicts with its base branch');
   });

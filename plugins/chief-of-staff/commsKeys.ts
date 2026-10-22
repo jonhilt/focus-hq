@@ -5,7 +5,7 @@
 export type CommsAct = { move: 1 | -1 } | { press: string } | { reply: true } | { goal: true };
 
 /** The keys, as the hint under the queue lists them. */
-export const COMMS_KEYS = 'J/K move · Enter send the chief of staff’s words · H hold · 1–9 pick, or a suggested reply · O got it · A approve · D decline · R reply · G open the goal · Esc close';
+export const COMMS_KEYS = 'J/K move · Enter send the chief of staff’s words · H hold · 1–9 pick, or a suggested reply · O got it · M merge · A approve · D decline · R reply · G open the goal · Esc close';
 
 const KEYS: Record<string, CommsAct> = {
   j: { move: 1 },
@@ -15,6 +15,7 @@ const KEYS: Record<string, CommsAct> = {
   Enter: { press: 'send' },
   h: { press: 'hold' },
   o: { press: 'ack' },
+  m: { press: 'merge' },
   a: { press: 'allow' },
   d: { press: 'decline' },
   r: { reply: true },

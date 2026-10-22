@@ -19,6 +19,12 @@ export { handOffControl } from '../client/src/ui/goals';
  */
 export { answerLead, messageAgent } from '../client/src/ui/resume';
 export { closeGoal } from '../client/src/ui/goals';
+/**
+ * Merging a pull request as the captain, as the board's button does: Ops checks it merged onto its base first
+ * (`override` merges past a check that refused it), or merges it once QA passes it (`on`), or not (`!on`).
+ */
+export const mergePr = (projectId: string, repo: string, number: number, override = false): Promise<unknown> => api.mergePr(projectId, repo, number, override);
+export const mergeWhenPassed = (projectId: string, repo: string, number: number, on: boolean): Promise<unknown> => api.mergeWhenPassed(projectId, repo, number, on);
 export const allowTool = (agentId: string, requestId: string, allow: boolean): Promise<unknown> => api.permission(agentId, requestId, allow);
 /** Whether agent `id`'s panel is open: the captain's looking at them. */
 export { agentPanelOpen } from '../client/src/ui/agentPanel';

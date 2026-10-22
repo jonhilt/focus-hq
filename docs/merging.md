@@ -6,7 +6,7 @@ The reason is that a PR can be green on its own branch and still break main once
 
 ## What it promises
 
-Every merge Ops makes goes through it: the captain's merge button, **Merge when QA passes** and auto-merge ([QA](qa.md)). PRs merged on GitHub itself don't go through Ops, so the check never sees them. `server/agents/merges.test.ts`, `server/focus.test.ts` and `shared/mergeCheck.test.ts` hold it to these:
+Every merge Ops makes goes through it: the captain's merge button (the board's, or a card's in Comms), **Merge when QA passes** and auto-merge ([QA](qa.md)). PRs merged on GitHub itself don't go through Ops, so the check never sees them. `server/agents/merges.test.ts`, `server/focus.test.ts` and `shared/mergeCheck.test.ts` hold it to these:
 
 - A PR merges only if git merged it onto its base by itself and every check passed (a repo with no checks to run counts as passing). Conflicts, a failing check, or a merge Ops couldn't build or run all refuse it.
 - Ops merges exactly the head it checked. A PR that moved on from the commit the caller means to merge (QA's pass, say) is refused without checking.

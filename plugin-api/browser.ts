@@ -4,6 +4,7 @@
 // shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
 import type { Agent, IssueDraft, Project, QaReview, TermLine } from '../shared/types';
+import { mergeMethodFor } from '../shared/mergeGate';
 import { api } from '../client/src/net/api';
 import { markRead as markTurnRead, shownPrs } from '../client/src/net/attention';
 import { state } from '../client/src/net/state';
@@ -57,6 +58,8 @@ export const focus = {
   onLines: (fn: (agentId: string, lines: readonly TermLine[]) => void): (() => void) => state.on('lines', ({ id, lines }) => fn(id, lines)),
   /** Asks project `projectId`'s Ops officer to write `idea` up as an issue (it waits at their station). */
   draftIssue: (projectId: string, idea: string): Promise<unknown> => api.draftIssue(projectId, idea),
+  /** How a repo's pull requests merge in a project (squash, merge or rebase): its own choice, or Focus's. */
+  mergeMethod: (projectId: string, repo: string): string => mergeMethodFor(state.project(projectId), repo, state.info?.settings.mergeMethod ?? 'squash'),
   /** The ledger's report card as Focus last sent it: none until it has. */
   get report(): Readonly<ReportCard> | null {
     return state.report;

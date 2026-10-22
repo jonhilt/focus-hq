@@ -1,8 +1,9 @@
-import { allowTool, answerLead, artifactUrl, busy, closeGoal, focus, goalTags, h, LCARS, lastWords, markdownHtml, messageAgent, openQuestion, optionUrl, shownThisTurn, timeAgo, type Ui } from '../../plugin-api/client';
+import { allowTool, answerLead, artifactUrl, busy, closeGoal, confirmDialog, focus, goalTags, h, LCARS, lastWords, markdownHtml, mergeAction, mergePr, mergeWhenPassed, messageAgent, openQuestion, optionUrl, prKey, qaBadge, shownThisTurn, timeAgo, type Ui } from '../../plugin-api/client';
 import type { Agent, Attention } from '../../plugin-api/shared';
 import { hailKey as keyOf } from './inbox';
 import { inbox } from './inboxApi';
 import { lineOf } from './lanes';
+import { type BoardPr, mergePress, openPrsOf } from './merging';
 import { readOf } from './shared';
 
 // What needs the captain, one of them shown large to decide and answer: the right of Comms (comms.ts). Its answers go
@@ -96,6 +97,36 @@ function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
   return [h('div', { class: 'row cos-quick' }, ...buttons, got)];
 }
 
+/**
+ * The pull requests a card can merge, a line each with QA's word on it and its merge button, as the board's: merged
+ * from here, the captain doesn't go to the board to land what they've just read.
+ */
+function mergeBox(ui: CardUi, prs: readonly BoardPr[]): HTMLElement[] {
+  if (!prs.length) return [];
+  const rows = prs.map(({ projectId, pr }) => {
+    const review = focus.reviews.get(prKey(pr.repo, pr.number));
+    const press = mergePress(mergeAction(review, pr), pr, focus.mergeMethod(projectId, pr.repo));
+    const does = press.does;
+    // as on the board: what merges is green, what's under way or cancels it isn't
+    const go = does && ('merge' in does || does.whenPassed);
+    const b = h('button', { class: `btn small ${go ? 'go' : 'primary'}`, title: press.title, ...(press.act && { attrs: { 'data-act': press.act } }) }, press.label);
+    b.disabled = !does;
+    if (does) {
+      b.onclick = () =>
+        void busy(b, async () => {
+          if ('whenPassed' in does) return mergeWhenPassed(projectId, pr.repo, pr.number, does.whenPassed);
+          if (does.merge.confirm && !await confirmDialog({ title: 'Merge', message: does.merge.confirm, confirmLabel: 'Merge anyway' })) return;
+          return mergePr(projectId, pr.repo, pr.number, does.merge.override);
+        }, ui.error);
+    }
+    return h('div', { class: 'row cos-merge' }, b, h('a', { class: 'muted', href: pr.url, target: '_blank', rel: 'noopener', title: 'Open it on GitHub' }, `${pr.title} · ${qaBadge(review, pr).label}`));
+  });
+  return [h('small', { class: 'muted' }, prs.length > 1 ? 'Their open pull requests:' : 'Their open pull request:'), ...rows];
+}
+
+/** The lead's own pull requests still open, as the board has them. */
+const leadPrs = (agent: Agent): BoardPr[] => openPrsOf(agent, focus.shownPrs());
+
 /** A reply to a lead, written and sent from here. */
 function replyBox(ui: CardUi, agent: Agent, go: OpenAgent): HTMLElement[] {
   const text = h('textarea', { class: 'cos-card-reply', rows: 3, placeholder: `Reply to ${agent.name}…` });
@@ -152,24 +183,24 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answe
       const ready = cos && (cos.route === 1 || cos.route === 4) ? cos.message : '';
       const context = [cosContext(a.agent), said(a.agent)].filter(Boolean).join('\n\n---\n\n');
       const gotIt = 'Got it: off your queue, nothing sent, until their next turn.';
-      if (ready) return { context, answers: [...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
-      return { context, answers: [...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
+      if (ready) return { context, answers: [...mergeBox(ui, leadPrs(a.agent)), ...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
+      return { context, answers: [...mergeBox(ui, leadPrs(a.agent)), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
     }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
       const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
-      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
+      return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent)), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))], then: 'Close goal: it’s filed in the room’s log and the station frees. Carry on: their panel, to say what’s left.' };
     }
     case 'qa':
     case 'conflicts':
       return {
         context: `${a.pr.repo}#${a.pr.number} · ${a.pr.title}`,
-        answers: [h('div', { class: 'row' },
+        answers: [...(a.kind === 'qa' ? mergeBox(ui, [{ projectId: a.projectId, pr: a.pr }]) : []), h('div', { class: 'row' },
           h('button', { class: 'btn small primary', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Pull requests'),
           h('a', { class: 'btn small', href: a.pr.url, target: '_blank', rel: 'noopener' }, 'GitHub ↗'),
         )],
-        then: a.kind === 'qa' ? 'Pull requests: read QA’s report, then merge, close or send it back.' : 'Pull requests: send it back to its lead to resolve, or resolve it on GitHub.',
+        then: a.kind === 'qa' ? 'Merge it from here, or Pull requests: read QA’s report, then merge, close or send it back.' : 'Pull requests: send it back to its lead to resolve, or resolve it on GitHub.',
       };
   }
 }
