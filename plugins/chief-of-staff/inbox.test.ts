@@ -22,7 +22,8 @@ describe('deciding an inbox item', () => {
     expect(decideOf({ text: ' Go on ' })).toEqual({ text: 'Go on' });
     expect(decideOf({ close: true })).toEqual({ close: true });
     expect(decideOf({ send: true })).toEqual({ send: true });
-    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close or send/);
+    expect(decideOf({ ack: true })).toEqual({ ack: true });
+    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }, { ack: 'yes' }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close, send or ack/);
   });
 
   it('only answers an item with what fits it', () => {
@@ -43,6 +44,10 @@ describe('deciding an inbox item', () => {
     expect(decideRefusal({ kind: 'turn', cos: cos(2) }, { send: true })).toMatch(/words ready/);
     expect(decideRefusal({ kind: 'turn' }, { send: true })).toMatch(/words ready/);
     expect(decideRefusal({ kind: 'turn', cos: cos(1) }, { text: 'No, stop' })).toBeNull();
+    // any lead's turn is acknowledged, judged or not; nothing else is
+    expect(decideRefusal({ kind: 'turn' }, { ack: true })).toBeNull();
+    expect(decideRefusal({ kind: 'turn', cos: cos(2) }, { ack: true })).toBeNull();
+    for (const kind of ['hand', 'question', 'wrap-up', 'error', 'qa'] as const) expect(decideRefusal({ kind }, { ack: true })).toMatch(/Only a lead’s turn is acknowledged/);
   });
 
   it('says what was decided in a few words', () => {
@@ -51,6 +56,7 @@ describe('deciding an inbox item', () => {
     expect(answerText({ close: true })).toBe('Closed the goal');
     expect(answerText({ text: 'Go on' })).toBe('Go on');
     expect(answerText({ send: true })).toBe('Sent the chief of staff’s words');
+    expect(answerText({ ack: true })).toBe('Acknowledged');
   });
 });
 
@@ -134,6 +140,12 @@ describe('a lead’s turn and the chief of staff', () => {
     leads[3] = lead('read', undefined, { lead: { title: 'read', readTurn: 1000 } as never });
     const order = waiting(leads, [], new Map(), leads, 2000).map((a) => ('agent' in a ? a.agent.id : ''));
     expect(order).toEqual(['card', 'plain', 'read', 'ready', 'reading']);
+  });
+
+  it('leaves out a turn the captain acknowledged, read or not, in any lane, until the lead’s next turn', () => {
+    const set = (id: string, read: object) => lead(id, { ...read, acked: 1500 }, { lead: { title: id, readTurn: 1000, marks: { [CHIEF_OF_STAFF]: { ...read, acked: 1500 } } } as never });
+    const leads = [lead('card', judged(2)), set('card-set', judged(2)), set('ready-set', judged(1)), set('reading-set', { at: 1000 }), lead('unread-set', { at: 1, acked: 1500 })];
+    expect(waiting(leads, [], new Map(), leads, 2000).map((a) => ('agent' in a ? a.agent.id : ''))).toEqual(['card']);
   });
 });
 

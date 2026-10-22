@@ -19,9 +19,9 @@ export function laneOf(a: Attention, now: number): Lane {
   return forLead(read.judged) ? 'ready' : 'needs-you';
 }
 
-/** What needs the captain now: every hail (`needsYou`) but the turns it's reading or has words ready for. */
+/** What needs the captain now: every hail (`needsYou`) but the turns it's reading or has words ready for, or they acknowledged. */
 export function needingYou(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, now: number): Attention[] {
-  return needsYou(agents, prs, reviews).filter((a) => laneOf(a, now) === 'needs-you');
+  return needsYou(agents, prs, reviews).filter((a) => laneOf(a, now) === 'needs-you' && !(a.kind === 'turn' && readOf(a.agent)?.acked !== undefined));
 }
 
 /** What a hail needs, in a line: a lead's turn as it judged it (an interrupt, a card, or its words ready), when it has. */
@@ -50,8 +50,11 @@ export function waking(lead: Agent, now: number): Waking {
   // a question, a goal ready to close: the captain's whatever it made of the turn
   const [hail] = needsYou([lead], [], new Map());
   if (hail && hail.kind !== 'turn') return 'no';
-  // its read of the turn, whether the captain has read the turn or not (`needsYou` leaves a read turn out)
+  // its read of the turn, whether the captain has read the turn or not (`needsYou` leaves a read turn out); one they
+  // acknowledged owes them nothing (they've had their say: Got it), so news carries the lead on, as the captain's
+  // standing order to carry on by default has it
   const read = readOf(lead);
+  if (read?.acked !== undefined) return 'now';
   if (read?.judged) return forLead(read.judged) ? 'now' : 'no';
   return read && now - read.at < JUDGING_MS ? 'once-judged' : 'no';
 }
@@ -66,7 +69,17 @@ export const reading = (now: number): CosRead => ({ at: now });
  */
 export function judged(read: CosRead | undefined, verdict: Verdict, since: number, autoSend: boolean, now: number): CosRead | undefined {
   if (!read || read.judged || since < read.at) return undefined;
-  return { ...read, judged: verdict, ...(autoSend && forLead(verdict) && { sendsAt: now + AUTO_SEND_MS }) };
+  return { ...read, judged: verdict, ...(autoSend && forLead(verdict) && read.acked === undefined && { sendsAt: now + AUTO_SEND_MS }) };
+}
+
+/**
+ * Its read once the captain acknowledges the turn (Got it) at `now`: whatever it made of the turn kept, its words no
+ * longer going by themselves. With no read of the turn (it's off for the project, say), one is begun from when the
+ * turn ended (`ended`), so the acknowledgement is kept until the lead's next turn all the same.
+ */
+export function acked(read: CosRead | undefined, ended: number, now: number): CosRead {
+  const { sendsAt: _, ...rest } = read ?? { at: ended };
+  return { ...rest, acked: now };
 }
 
 /** Its read with its words held for the captain, or nothing when they weren't going by themselves. */

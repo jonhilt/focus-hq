@@ -1,7 +1,7 @@
 import type { Agent, Attention, CaptainAnswer, PluginGoals, PluginHost, ResumeHow } from '../../plugin-api/server';
 import { errorMessage, landed, openQuestion, shownProjects } from '../../plugin-api/server';
 import { answerText, type Decide, decideRefusal, type DecidedVia, type Inbox as InboxView, type InboxItem, inboxItem, recentDecisions, waiting } from './inbox';
-import { held } from './lanes';
+import { acked, held } from './lanes';
 import { readOf, SENDER } from './shared';
 
 // The captain's inbox, as the API serves it (docs/ledger.md#the-captains-inbox-api): what needs them across the shown
@@ -11,7 +11,7 @@ import { readOf, SENDER } from './shared';
 
 /** What the inbox needs of Focus. */
 export type InboxHost = Pick<PluginHost, 'projects' | 'agent' | 'agents' | 'boardPrs' | 'reviews' | 'recentLines' | 'ledger' | 'record'> & {
-  goals: Pick<PluginGoals, 'resolvePermission' | 'answer' | 'closeGoal' | 'message' | 'mark'>;
+  goals: Pick<PluginGoals, 'resolvePermission' | 'answer' | 'closeGoal' | 'message' | 'mark' | 'readTurn'>;
 };
 
 export class Inbox {
@@ -120,9 +120,24 @@ export class Inbox {
     if (read && kept) this.host.goals.mark(agentId, kept, read.at);
   }
 
+  /**
+   * The captain acknowledged a lead's turn (Got it): it's read, and marked so (`CosRead.acked`), which takes it off
+   * their queue and stops its words going by themselves, until the lead's next turn clears the mark. Nothing's sent.
+   */
+  private acknowledge(agent: Agent): void {
+    const read = readOf(agent);
+    const ended = agent.finishedAt ?? Date.now();
+    this.host.goals.readTurn(agent.id);
+    if (!this.host.goals.mark(agent.id, acked(read, ended, Date.now()), read?.at ?? ended)) throw new Error('That turn can’t be acknowledged now: the lead is at work again');
+  }
+
   /** Does what the captain decided. `words` are the chief of staff's, for `send`. */
   private act(agent: Agent, d: Decide, words: string, how?: ResumeHow): unknown {
     const { goals } = this.host;
+    if ('ack' in d) {
+      this.acknowledge(agent);
+      return undefined;
+    }
     if ('allow' in d) return goals.resolvePermission(agent.id, agent.permission?.id ?? '', d.allow);
     if ('option' in d) return goals.answer(agent.id, openQuestion(agent)?.id ?? '', d.option, d.note, how);
     if ('close' in d) return goals.closeGoal(agent.id);

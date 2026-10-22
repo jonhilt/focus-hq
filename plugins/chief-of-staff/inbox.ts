@@ -1,7 +1,7 @@
 import type { Agent, Attention, CaptainAnswer, DecidedVia, LedgerEvent, PullRequest, QaReview, TermLine } from '../../plugin-api/shared';
 import { artifactUrl, isRecord, lastWords, needsYou, openQuestion, shownThisTurn, turnRead } from '../../plugin-api/shared';
 import { type Lane, laneOf, lineOf } from './lanes';
-import { readOf, SENT_WORDS, type Verdict } from './shared';
+import { ACKNOWLEDGED, readOf, SENT_WORDS, type Verdict } from './shared';
 
 // The captain's inbox, as the chief of staff keeps it (docs/ledger.md#the-captains-inbox-api): what needs them now,
 // each with an id that stays the same from look to look, and what they decided lately, from the ledger's
@@ -27,14 +27,18 @@ export function hailKey(a: Attention): string {
   }
 }
 
+/** Whether the captain acknowledged a lead's latest turn (Got it): it's off their queue until the lead's next turn. */
+export const acknowledged = (lead: Pick<Agent, 'lead'>): boolean => readOf(lead)?.acked !== undefined;
+
 /**
  * Everything waiting on the captain: what needs them (`needsYou`, in the `needs-you` lane), most urgent first, then the
  * leads whose turn they've read but not answered, then the turns it has words ready for or is still reading (`laneOf`).
+ * A turn they acknowledged isn't among them: it waits for their next message, but asks nothing more of them.
  */
 export function waiting(agents: Agent[], prs: { projectId: string; pr: PullRequest & { resolver?: Agent } }[], reviews: ReadonlyMap<string, QaReview>, leads: Agent[], now: number): Attention[] {
-  const all = needsYou(agents, prs, reviews);
+  const all = needsYou(agents, prs, reviews).filter((a) => a.kind !== 'turn' || !acknowledged(a.agent));
   const hailing = new Set(all.flatMap((a) => ('agent' in a ? [a.agent.id] : [])));
-  const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l)).map((agent): Attention => ({ kind: 'turn', agent }));
+  const read = leads.filter((l) => !hailing.has(l.id) && turnRead(l) && !acknowledged(l)).map((agent): Attention => ({ kind: 'turn', agent }));
   return [...all.filter((a) => laneOf(a, now) === 'needs-you'), ...read, ...all.filter((a) => laneOf(a, now) !== 'needs-you')];
 }
 
@@ -91,13 +95,14 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
 
 /**
  * How the captain answers an item: approve or decline a hand, pick a question's option, say something, close the goal,
- * or send the chief of staff's words to the lead (a turn in the `ready` lane).
+ * send the chief of staff's words to the lead (a turn in the `ready` lane), or acknowledge a lead's turn (`ack`: read,
+ * nothing sent, the lead not woken).
  */
-export type Decide = CaptainAnswer | { send: true };
+export type Decide = CaptainAnswer | { send: true } | { ack: true };
 
 export type { DecidedVia };
 
-const SAY_HOW = 'Say how you decide: allow, option, text, close or send';
+const SAY_HOW = 'Say how you decide: allow, option, text, close, send or ack';
 
 /** A decision's body, as it comes over the API: one of `Decide`'s shapes, or why not. */
 export function decideOf(body: unknown): Decide {
@@ -107,12 +112,14 @@ export function decideOf(body: unknown): Decide {
   if (typeof body.text === 'string' && body.text.trim()) return { text: body.text.trim() };
   if (body.close === true) return { close: true };
   if (body.send === true) return { send: true };
+  if (body.ack === true) return { ack: true };
   throw new Error(SAY_HOW);
 }
 
 /** Why a decision doesn't answer this kind of item, if it doesn't: a hand is allowed or not, a pull request is the board's. */
 export function decideRefusal({ kind, cos }: Pick<InboxItem, 'kind' | 'cos'>, d: Decide): string | null {
   if ('send' in d) return cos && (cos.route === 1 || cos.route === 4) ? null : 'Only a turn the chief of staff has words ready for can be sent them';
+  if ('ack' in d) return kind === 'turn' ? null : 'Only a lead’s turn is acknowledged: answer the rest';
   if (kind === 'qa' || kind === 'conflicts') return 'A pull request is decided on the board: merge, close or send it back there';
   if (kind === 'hand') return 'allow' in d ? null : 'A raised hand is approved or declined: allow true or false';
   if ('allow' in d) return 'Only a raised hand is approved or declined';
@@ -127,6 +134,7 @@ export function answerText(d: Decide): string {
   if ('option' in d) return `Picked ${d.option.toUpperCase()}${d.note ? `: ${d.note}` : ''}`;
   if ('close' in d) return 'Closed the goal';
   if ('send' in d) return SENT_WORDS;
+  if ('ack' in d) return ACKNOWLEDGED;
   return d.text;
 }
 

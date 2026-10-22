@@ -11,6 +11,9 @@ export const SENDER = 'Chief of Staff';
 /** What a `captain-decision` line says was decided when its words for a lead were sent (by the captain, or itself). */
 export const SENT_WORDS = 'Sent the chief of staff’s words';
 
+/** What a `captain-decision` line says was decided when the captain acknowledged a lead's turn (Got it): nothing sent. */
+export const ACKNOWLEDGED = 'Acknowledged';
+
 /** Where it sends a turn: 1 carry on, 2 a card for the captain, 3 interrupt the captain, 4 back to the lead. */
 export type CosRoute = VerdictRoute;
 
@@ -25,7 +28,24 @@ export const AUTO_SEND_MS = 120_000;
 /** How often its server part sends the words whose time has come. */
 export const AUTO_SEND_EVERY = 5000;
 
-/** A turn as it judged it: its route, the line on what's decided, why, and its words. */
+/** How many replies it suggests on a turn at most: a button each. */
+export const MAX_REPLIES = 3;
+
+/** The longest label a reply's button takes: a button doesn't wrap, so a longer one would run off the card. */
+export const MAX_REPLY_LABEL = 30;
+
+/** The longest words a reply sends: a short answer, not a letter. */
+export const MAX_REPLY_TEXT = 500;
+
+/** A reply it suggests the captain send the lead, a button on the turn: its label, and the words that go. */
+export interface Reply {
+  /** A few words on the button ("Keep it open"). */
+  label: string;
+  /** The reply itself, as the captain would write it, sent as theirs. */
+  text: string;
+}
+
+/** A turn as it judged it: its route, the line on what's decided, why, its words, and the replies it suggests. */
 export interface Verdict {
   route: CosRoute;
   /** What's being decided, in a line: the captain's inbox leads with it. */
@@ -34,6 +54,8 @@ export interface Verdict {
   why: string;
   /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
   message: string;
+  /** Replies to what the lead asked or offered, a button each; none when the turn asks nothing a button answers. */
+  replies?: Reply[];
 }
 
 /**
@@ -49,19 +71,56 @@ export interface CosRead {
    * carry on or send back, in a project that lets it (`autoSendFor`); cleared by Hold.
    */
   sendsAt?: number;
+  /**
+   * When the captain acknowledged the turn (Got it): read, nothing sent and the lead not woken, so it's off their queue
+   * until the lead's next turn, its words don't go by themselves, and the move waits quietly on the captain.
+   */
+  acked?: number;
 }
 
-/** A verdict, if `v` is one. */
+const trimmed = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+
+/**
+ * A reply, if `v` is one: a label and words, both said and neither too long (`MAX_REPLY_LABEL`, `MAX_REPLY_TEXT`). An
+ * overlong one is dropped rather than clipped: a clipped label misnames the button, and clipped words would go to the
+ * lead half said.
+ */
+function replyOf(v: unknown): Reply | undefined {
+  if (!isRecord(v)) return undefined;
+  const label = trimmed(v.label);
+  const text = trimmed(v.text);
+  const fits = label.length <= MAX_REPLY_LABEL && text.length <= MAX_REPLY_TEXT;
+  return label && text && fits ? { label, text } : undefined;
+}
+
+/** The replies in `v`, if it lists any: each with a label and words, no label twice, `MAX_REPLIES` at most. */
+export function repliesOf(v: unknown): Reply[] {
+  if (!Array.isArray(v)) return [];
+  const out: Reply[] = [];
+  for (const r of v.map(replyOf)) {
+    if (r && out.length < MAX_REPLIES && !out.some((o) => o.label.toLowerCase() === r.label.toLowerCase())) out.push(r);
+  }
+  return out;
+}
+
+/** A verdict, if `v` is one: one from before it suggested replies reads as suggesting none. */
 export function verdictOf(v: unknown): Verdict | undefined {
   if (!isRecord(v) || !isOneOf(ROUTES, v.route) || typeof v.ask !== 'string' || typeof v.why !== 'string' || typeof v.message !== 'string') return undefined;
-  return { route: v.route, ask: v.ask, why: v.why, message: v.message };
+  const replies = repliesOf(v.replies);
+  return { route: v.route, ask: v.ask, why: v.why, message: v.message, ...(replies.length && { replies }) };
 }
 
 /** A read, if `v` is one: what the lead's mark holds, from this plugin (or an older one of it). */
 export function cosReadOf(v: unknown): CosRead | undefined {
   if (!isRecord(v) || typeof v.at !== 'number') return undefined;
   const judged = verdictOf(v.judged);
-  return { at: v.at, ...(judged && { judged }), ...(judged && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }) };
+  const acked = typeof v.acked === 'number' ? v.acked : undefined;
+  return {
+    at: v.at,
+    ...(judged && { judged }),
+    ...(judged && acked === undefined && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }),
+    ...(acked !== undefined && { acked }),
+  };
 }
 
 /** Its read of a lead's latest turn, from the lead's marks. */

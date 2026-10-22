@@ -34,6 +34,13 @@ describe('the chief of staff’s hold on a goal’s move', () => {
     expect(cosMove(lead({ at: 1, judged: verdict(4) }), 2)?.captain).toBe(true);
   });
 
+  it('hands the captain a turn they acknowledged, quietly, whatever it made of it', () => {
+    for (const r of [{ at: 1, acked: 2 }, { at: 1, judged: verdict(2), acked: 2 }, { at: 1, judged: verdict(1), acked: 2, sendsAt: 100 }]) {
+      expect(cosMove(lead(r), 3)).toEqual({ why: 'You’ve read it: it waits for your next message, or Ops’ news', captain: true, quiet: true });
+    }
+    expect(cosMove(lead({ at: 1, acked: 2 }, 'working'), 3)).toBeUndefined();
+  });
+
   it('claims nothing without a read of the turn, or once the lead’s at work again', () => {
     expect(cosMove(lead(), 0)).toBeUndefined();
     expect(cosMove(lead({ at: 1000 }, 'working'), 1000)).toBeUndefined();

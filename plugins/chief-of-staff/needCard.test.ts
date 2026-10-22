@@ -89,7 +89,7 @@ describe('a card in Comms', () => {
   it('replies to a lead whose turn ended, unjudged, in the captain’s words', async () => {
     const el = card({ kind: 'turn', agent: lead() });
     expect(el.textContent).toContain('Waiting for your reply');
-    expect(el.textContent).toContain('Send: they carry on with your reply.');
+    expect(el.textContent).toContain('A reply, or Send: they carry on with it.');
     const text = el.querySelector('textarea');
     if (text) text.value = 'Carry on';
     button(el, 'Send').click();
@@ -115,6 +115,29 @@ describe('a card in Comms', () => {
     await settle();
     expect(calls.hold).toHaveBeenCalledWith(id);
     expect(calls.decide).toHaveBeenCalledWith(id, { send: true });
+  });
+
+  it('sends a reply it suggests as the captain’s own, numbered for the keys, beside a typed one', async () => {
+    const replies = [{ label: 'Keep it open', text: 'Keep the goal open.' }, { label: 'Close it', text: 'Close it: it’s done.' }];
+    const el = card({ kind: 'turn', agent: lead({}, { at: 1000, judged: { ...verdict(2), replies } }) });
+    expect([...el.querySelectorAll('[data-act^="pick-"]')].map((b) => [b.getAttribute('data-act'), b.textContent])).toEqual([['pick-1', '1 · Keep it open'], ['pick-2', '2 · Close it']]);
+    button(el, '2 · Close it').click();
+    await settle();
+    expect(calls.decide).toHaveBeenCalledWith('turn:a1:1000', { text: 'Close it: it’s done.' });
+    expect(calls.messageAgent).not.toHaveBeenCalled();
+    expect(el.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('acknowledges any lead’s turn with Got it, judged or not, sending nothing', async () => {
+    for (const read of [undefined, { at: 1000 }, { at: 1000, judged: verdict(2) }, { at: 1000, judged: verdict(1), sendsAt: Date.now() + 90_000 }]) {
+      const el = card({ kind: 'turn', agent: lead({}, read) });
+      expect(el.querySelector('[data-act="ack"]')?.textContent).toBe('Got it');
+      expect(el.querySelectorAll('[data-act^="pick-"]')).toHaveLength(0);
+      button(el, 'Got it').click();
+    }
+    await settle();
+    expect(calls.decide.mock.calls).toEqual(Array(4).fill(['turn:a1:1000', { ack: true }]));
+    expect(calls.messageAgent).not.toHaveBeenCalled();
   });
 
   it('closes a goal ready to close, saying what done looked like', async () => {

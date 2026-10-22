@@ -384,6 +384,11 @@ export interface PluginGoals {
    * Like `message`, it can come back `costly`, for the captain to say `how`.
    */
   answer(agentId: string, questionId: string, option: string, note?: string, how?: ResumeHow): Agent | MessageReply;
+  /**
+   * Marks a goal lead's ended turn read, as the captain reading it in their panel does (`lead.readTurn`): it stops
+   * hailing them until the lead's next turn ends. Nothing for a lead at work.
+   */
+  readTurn(agentId: string): void;
   /** Closes a goal, as the captain would: it warns first (`warn`) about work that would be lost, unless `force`. */
   closeGoal(agentId: string, force?: boolean): Promise<{ closed: true } | { warn: string[] }>;
   /**

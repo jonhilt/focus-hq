@@ -80,6 +80,22 @@ function cosContext(agent: Agent): string {
   return [`**Chief of Staff:** ${cos.why}`, toCaptain && cos.message ? `> ${cos.message.replaceAll('\n', '\n> ')}` : ''].filter(Boolean).join('\n\n');
 }
 
+/**
+ * The replies the chief of staff suggests to what the lead asked, a button each that sends its words as the captain's
+ * (numbered, as a question's picks are), and Got it: the turn's read and off the queue, nothing sent, the lead not woken.
+ */
+function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
+  const replies = readOf(a.agent)?.judged?.replies ?? [];
+  const buttons = replies.map((r, i) => {
+    const b = h('button', { class: 'btn small primary cos-reply', title: `Send “${r.text}” (${i + 1})`, attrs: { 'data-act': `pick-${i + 1}` } }, `${i + 1} · ${r.label}`);
+    b.onclick = () => void busy(b, () => inbox.decide(keyOf(a), { text: r.text }), ui.error);
+    return b;
+  });
+  const got = h('button', { class: 'btn small cos-got-it', title: 'You’ve read it: off your queue until their next turn. Nothing is sent, and they aren’t woken (O)', attrs: { 'data-act': 'ack' } }, 'Got it');
+  got.onclick = () => void busy(got, () => inbox.decide(keyOf(a), { ack: true }), ui.error);
+  return [h('div', { class: 'row cos-quick' }, ...buttons, got)];
+}
+
 /** A reply to a lead, written and sent from here. */
 function replyBox(ui: CardUi, agent: Agent, go: OpenAgent): HTMLElement[] {
   const text = h('textarea', { class: 'cos-card-reply', rows: 3, placeholder: `Reply to ${agent.name}…` });
@@ -135,8 +151,9 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; answe
       const cos = readOf(a.agent)?.judged;
       const ready = cos && (cos.route === 1 || cos.route === 4) ? cos.message : '';
       const context = [cosContext(a.agent), said(a.agent)].filter(Boolean).join('\n\n---\n\n');
-      if (ready) return { context, answers: [...sendBox(ui, a, ready), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: 'Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words.' };
-      return { context, answers: [...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: 'Send: they carry on with your reply.' };
+      const gotIt = 'Got it: off your queue, nothing sent, until their next turn.';
+      if (ready) return { context, answers: [...sendBox(ui, a, ready), ...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `Send the chief of staff’s words: they hear them from it and carry on. Or reply in your own words. ${gotIt}` };
+      return { context, answers: [...quickBox(ui, a), ...shownBox(ui, a.agent), ...replyBox(ui, a.agent, go)], then: `A reply, or Send: they carry on with it. ${gotIt}` };
     }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;

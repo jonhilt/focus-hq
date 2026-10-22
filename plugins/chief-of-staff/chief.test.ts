@@ -43,7 +43,7 @@ describe('the chief of staff', () => {
     await until(() => o.verdicts().length === 1);
     expect(o.verdicts()[0]).toMatchObject({
       kind: 'cos-verdict', projectId: o.project.id, sessionId: 'session-1', agent: o.lead().name, goal: o.lead().lead?.title, turnUuid: 'b',
-      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: 'v7', costUsd: 0.001,
+      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: 'v8', costUsd: 0.001,
     });
     expect(o.asked[0].prompt).toBe(`Goal: ${o.lead().lead?.title}\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2?\n>>>`);
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');
@@ -177,6 +177,15 @@ describe('the chief of staff', () => {
       o.agents.message(o.lead().id, 'Filters first');
       await until(() => o.claude.turns.length === 2);
       expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*Filters first$/s);
+    });
+
+    it('carries on a lead whose card the captain acknowledged: Got it owes them nothing, so the landing wakes it', async () => {
+      const o = await shipped(card);
+      const lead = o.lead();
+      o.store.putAgent({ ...lead, lead: { ...lead.lead!, marks: { [CHIEF_OF_STAFF]: { ...o.read(), acked: Date.now() } } } });
+      land(o);
+      await until(() => o.claude.turns.length === 2);
+      expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed/);
     });
 
     it('sends no QA fail back to a lead the captain owes a card, nor one whose turn has ended unjudged', async () => {

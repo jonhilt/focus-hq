@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../plugin-api/shared';
-import { held, judged, laneOf, lineOf, needingYou, reading, waking } from './lanes';
+import { acked, held, judged, laneOf, lineOf, needingYou, reading, waking } from './lanes';
 import { AUTO_SEND_MS, CHIEF_OF_STAFF, type CosRead, JUDGING_MS, type Verdict } from './shared';
 
 const verdict = (route: Verdict['route']): Verdict => ({ route, ask: route === 3 ? 'Spend $40?' : 'Carry on', why: 'w', message: 'm' });
@@ -32,6 +32,9 @@ describe('where a hail goes', () => {
     const ready = lead({ at: 1, judged: verdict(1) }, { id: 'r' });
     const card = lead({ at: 1, judged: verdict(2) }, { id: 'c' });
     expect(needingYou([ready, card], [], new Map(), 2).map((a) => ('agent' in a ? a.agent.id : ''))).toEqual(['c']);
+    // a card the captain acknowledged asks nothing more of them
+    const set = lead({ at: 1, judged: verdict(2), acked: 5 }, { id: 's' });
+    expect(needingYou([card, set], [], new Map(), 6).map((a) => ('agent' in a ? a.agent.id : ''))).toEqual(['c']);
   });
 });
 
@@ -66,6 +69,10 @@ describe('waking a lead for Ops’ news', () => {
     expect(waking(read({ at: 1 }), 1 + JUDGING_MS)).toBe('no');
   });
 
+  it('wakes a lead whose turn the captain acknowledged, whatever it made of it: the captain is owed nothing', () => {
+    for (const r of [{ at: 1, acked: 3 }, { at: 1, judged: verdict(2), acked: 3 }, { at: 1, judged: verdict(3), acked: 3 }]) expect(waking(lead(r), 4)).toBe('now');
+  });
+
   it('leaves a lead the captain stopped, whatever it made of their turn; wakes one queued or setting up', () => {
     expect(waking(lead(undefined, { status: 'stopped' }), 2)).toBe('no');
     expect(waking(lead({ at: 1, judged: verdict(1) }, { status: 'stopped' }), 2)).toBe('no');
@@ -92,6 +99,17 @@ describe('its read of a turn', () => {
     expect(judged(reading(10), verdict(1), 10, true, 20)).toEqual({ at: 10, judged: verdict(1), sendsAt: 20 + AUTO_SEND_MS });
     expect(judged(reading(10), verdict(2), 10, true, 20)).toEqual({ at: 10, judged: verdict(2) });
     expect(judged(reading(10), verdict(4), 10, false, 20)).toEqual({ at: 10, judged: verdict(4) });
+  });
+
+  it('never counts down its words on a turn the captain acknowledged while it read it', () => {
+    expect(judged({ at: 10, acked: 15 }, verdict(1), 10, true, 20)).toEqual({ at: 10, acked: 15, judged: verdict(1) });
+  });
+
+  it('keeps what it made of a turn the captain acknowledges, its words going nowhere by themselves', () => {
+    expect(acked({ at: 10, judged: verdict(1), sendsAt: 99 }, 10, 50)).toEqual({ at: 10, judged: verdict(1), acked: 50 });
+    expect(acked({ at: 10 }, 10, 50)).toEqual({ at: 10, acked: 50 });
+    // with no read of the turn, one begins from when it ended
+    expect(acked(undefined, 1000, 2000)).toEqual({ at: 1000, acked: 2000 });
   });
 
   it('holds words that were going by themselves, and has nothing to hold otherwise', () => {

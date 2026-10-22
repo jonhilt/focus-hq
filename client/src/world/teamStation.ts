@@ -513,13 +513,13 @@ export class TeamStation {
   /**
    * Lights the lamps either side of the door: off while the station's free, and calling the captain only while the
    * goal's move is theirs (pulsing while something needs them, steady while it's their turn); dim and still, in the
-   * holder's colour, while it's the lead's, QA's or a plugin's (`lampGlow`).
+   * holder's colour, while it's the lead's, QA's or a plugin's, or theirs but quiet (`GoalMove.quiet`, `lampGlow`).
    */
   update(t: number): void {
     this.panes.update();
     this.askWhose();
     const whose = this.view?.whose;
-    const glow = lampGlow(this.tone, whose?.move.holder === 'you', t);
+    const glow = lampGlow(this.tone, whose?.move.holder === 'you' && !whose.move.quiet, t);
     const colour = whose?.colour ?? TONE[this.tone];
     this.lamp.color.set(HULL.dado).lerp(LIT.set(colour), glow);
     // the team screen's outline glows as the lamps do, but from dim rather than the bulkhead's colour; a free one's in

@@ -118,6 +118,47 @@ describe('the captain’s inbox, with the chief of staff reading the leads’ tu
   });
 });
 
+describe('acknowledging a lead’s turn (Got it)', () => {
+  const card = { route: 2 as const, ask: 'Keep the goal open, or close it?', why: 'A pick.', message: 'Close it, the lead says.', replies: [{ label: 'Close it', text: 'Close it: it’s done.' }] };
+
+  it('reads it and takes it off the queue, sends nothing, and records it as the captain’s', async () => {
+    const { inbox, claude, id, store, decisions } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    expect(item.cos?.replies).toEqual(card.replies);
+    await inbox.decide(item.id, { ack: true }, 'office');
+    expect(inbox.view().open).toEqual([]);
+    expect(store.agent(id).lead?.readTurn).toBe(store.agent(id).finishedAt);
+    expect(readOf(store.agent(id))).toMatchObject({ judged: card, acked: expect.any(Number) });
+    expect(decisions()).toMatchObject([{ item: { id: item.id, kind: 'turn', what: card.ask }, answer: 'Acknowledged', via: 'office' }]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(claude.turns).toHaveLength(1);
+    await expect(inbox.decide(item.id, { ack: true }, 'office')).rejects.toThrow(/no longer waiting/);
+  });
+
+  it('acknowledges a turn nobody judged, and the lead’s next turn brings the queue back', async () => {
+    const { inbox, agents, claude, id, store } = await waitingLead();
+    const [item] = inbox.view().open;
+    await inbox.decide(item.id, { ack: true }, 'api');
+    expect(inbox.view().open).toEqual([]);
+    expect(readOf(store.agent(id))?.acked).toEqual(expect.any(Number));
+    // the captain's next message wakes them, and their next turn starts afresh
+    agents.message(id, 'Close it');
+    await until(() => claude.turns.length === 2);
+    expect(readOf(store.agent(id))).toBeUndefined();
+    claude.turns[1].end({ ok: true, summary: 'Closed. Anything else?' });
+    await until(() => inbox.view().open.length === 1);
+  });
+
+  it('stops its words going by themselves', async () => {
+    const { inbox, claude, read } = await waitingLead({ verdict: { route: 1, ask: 'Carry on', why: 'Progress.', message: 'Go on.' }, autoSend: true });
+    const sendsAt = read()?.sendsAt ?? 0;
+    await inbox.decide(inbox.view().open[0].id, { ack: true }, 'office');
+    expect(read()?.sendsAt).toBeUndefined();
+    await inbox.autoSend(sendsAt + 1);
+    expect(claude.turns).toHaveLength(1);
+  });
+});
+
 describe('the chief of staff’s words, sent by themselves where the captain lets it', () => {
   const carryOn = { route: 1 as const, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' };
 
@@ -248,6 +289,15 @@ describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-in
     // the captain's own inbox, in Focus, keeps them as they are
     const own = o.agents.plugins.routes().find((r) => !r.route.bot && r.route.path === '/inbox')?.route.handle({ body: {}, query: {}, params: {} }) as { open: { shown?: { html: string }[] }[] };
     expect(own.open[0]?.shown?.[0]?.html.startsWith('/api/artifacts/')).toBe(true);
+  });
+
+  it('takes the bot’s acknowledgement, waking nobody', async () => {
+    const o = await forTheBot();
+    const view = o.botRoute('get', '/inbox')() as { open: { id: string }[] };
+    expect(await o.botRoute('post', '/inbox/:id/decide')({ ack: true }, { id: view.open[0]?.id ?? '' })).toEqual({ ok: true });
+    expect(o.botRoute('get', '/inbox')()).toMatchObject({ open: [] });
+    expect(o.decisions()).toMatchObject([{ answer: 'Acknowledged', via: 'api' }]);
+    expect(o.claude.turns).toHaveLength(1);
   });
 
   it('records the bot’s answers via the API, whatever it says it is', async () => {

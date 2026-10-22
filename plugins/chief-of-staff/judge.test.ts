@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict } from './judge';
+import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, VERDICT_SCHEMA } from './judge';
+import { MAX_REPLIES, MAX_REPLY_LABEL } from './shared';
+import { demoReplies } from './demoJudge';
 
 describe('the judge', () => {
   it('puts the captain’s standing orders in their place, or says there are none yet', () => {
@@ -8,7 +10,9 @@ describe('the judge', () => {
     expect(prompt).toContain('message: always the actual words you would send');
     expect(judgeSystemPrompt(undefined)).toContain('past replies:\nNone yet');
     expect(judgeSystemPrompt('  \n')).toContain('past replies:\nNone yet');
-    expect(JUDGE_VERSION).toBe('v7');
+    expect(JUDGE_VERSION).toBe('v8');
+    expect(prompt).toContain('- replies: buttons for the captain');
+    expect(prompt).toContain('3 at most');
     expect(prompt).toContain('Spending money is always 3');
     expect(prompt).toContain('- ask: the headline');
   });
@@ -26,5 +30,27 @@ describe('the judge', () => {
     expect(parseVerdict({ route: 5, why: 'x', message: '' })).toBeUndefined();
     expect(parseVerdict({ route: 1, why: '', message: '' })).toBeUndefined();
     expect(parseVerdict('1')).toBeUndefined();
+  });
+
+  it('takes the replies it suggests, each a label and the captain’s words, and none when it gives none', () => {
+    const replies = [{ label: ' Keep it open ', text: ' Keep the goal open: there’s more. ' }, { label: 'Close it', text: 'Close it.' }, { label: 'Close it', text: 'Twice' }, { label: 'No words' }];
+    expect(parseVerdict({ route: 2, ask: 'Close?', why: 'A pick.', message: 'm', replies })?.replies).toEqual([{ label: 'Keep it open', text: 'Keep the goal open: there’s more.' }, { label: 'Close it', text: 'Close it.' }]);
+    expect(parseVerdict({ route: 1, why: 'Progress.', message: '', replies: [] })).not.toHaveProperty('replies');
+    expect(VERDICT_SCHEMA.required).toContain('replies');
+  });
+
+  it('asks for short labels and three replies at most, and drops a label too long for its button', () => {
+    expect(judgeSystemPrompt()).toContain(`${MAX_REPLY_LABEL} characters at most`);
+    expect(VERDICT_SCHEMA.properties.replies.maxItems).toBe(MAX_REPLIES);
+    const replies = [{ label: 'Keep the goal open and start the settings page slice next', text: 'Keep it open.' }, { label: 'Close it', text: 'Close it.' }];
+    expect(parseVerdict({ route: 2, ask: 'Close?', why: 'A pick.', message: 'm', replies })?.replies).toEqual([{ label: 'Close it', text: 'Close it.' }]);
+  });
+});
+
+describe('the demo’s judge', () => {
+  it('suggests replies fitted to the question it knows, yes or not yet otherwise', () => {
+    expect(demoReplies('Keep the goal open, or close it?').map((r) => r.label)).toEqual(['Keep it open', 'Close it']);
+    expect(demoReplies('Want me to redraw that part?').map((r) => r.label)).toEqual(['Yes, redraw it', 'No need']);
+    expect(demoReplies('Shall I go ahead?').map((r) => r.label)).toEqual(['Go ahead', 'Not yet']);
   });
 });

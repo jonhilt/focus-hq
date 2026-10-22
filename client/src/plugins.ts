@@ -305,10 +305,12 @@ export interface GoalPart {
    * goes on its pill. With `captain`, it hands the move to the captain instead, `why` saying what it leaves them (ahead
    * of the lead, QA and a pull request to merge, which can't see what it knows). Undefined when it has no say, so the
    * move is the lead's, QA's or the captain's. What only the captain can answer (a raised hand, a question, an error, a
-   * goal ready to close) stays theirs whatever it says. Asked again about once a second while it holds the move, so a
+   * goal ready to close) stays theirs whatever it says. With `captain` and `quiet`, the move is the captain's but asks
+   * nothing of them now (a turn they've read and set aside): it steps aside for the lead at work, QA and a pull request
+   * to merge, and the lamps don't call them for it. Asked again about once a second while it holds the move, so a
    * countdown ticks and a claim can lapse.
    */
-  move?: (lead: Agent, now: number) => { why: string; counter?: string; captain?: boolean } | undefined;
+  move?: (lead: Agent, now: number) => { why: string; counter?: string; captain?: boolean; quiet?: boolean } | undefined;
 }
 
 export type GoalTagPlace = 'card' | 'line';
@@ -404,7 +406,7 @@ export function goalClaim(lead: Agent, now: number, plugins = clientPlugins(), p
   for (const { plugin, holder } of movers(plugins, project)) {
     try {
       const claim = plugin.goal?.move?.(lead, now);
-      if (claim) return { key: holder.key, label: holder.label, why: claim.why, ...(claim.counter !== undefined && { counter: claim.counter }), ...(claim.captain && { captain: true }) };
+      if (claim) return { key: holder.key, label: holder.label, why: claim.why, ...(claim.counter !== undefined && { counter: claim.counter }), ...(claim.captain && { captain: true }), ...(claim.captain && claim.quiet && { quiet: true }) };
     } catch (err) {
       console.error(`The ${plugin.id} plugin's move on a goal failed`, err);
     }

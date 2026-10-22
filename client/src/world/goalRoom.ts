@@ -162,6 +162,8 @@ export interface GoalMove {
   why: string;
   sign: string;
   counter?: string;
+  /** The captain's move, but asking nothing of them now (a plugin's `quiet` claim): the lamps don't call them for it. */
+  quiet?: boolean;
 }
 
 /** A plugin's claim on a goal's next move (`GoalPart.move`), by the holder key it declared. */
@@ -173,6 +175,8 @@ export interface MoveClaim {
   counter?: string;
   /** It hands the move to the captain, rather than holding it: what it read leaves them something (`why`). */
   captain?: boolean;
+  /** With `captain`: theirs, but asking nothing of them now, so it steps aside for anyone else's move and doesn't call them. */
+  quiet?: boolean;
 }
 
 /** A pull request of the slice's, as the move reads it: its number and how it stands. */
@@ -196,14 +200,14 @@ function captainsNow(lead: Agent): string | undefined {
  * Whose move it is on `lead`'s goal, with the slice's pull requests `prs` and a plugin's `claim`, if one has a say:
  * what only the captain can answer comes first, then a plugin's claim (for itself, or handing it to the captain), then
  * the lead at work, then QA testing what they shipped, then the captain's (a pull request to merge, one QA failed, or
- * the turn that's ended).
+ * the turn that's ended, quietly when a plugin's quiet claim says it asks nothing of them now).
  */
 export function goalMove(lead: Agent, prs: readonly MovePr[], claim: MoveClaim | undefined): GoalMove {
   const { label } = goalRoomState(lead);
   const owed = captainsNow(lead);
   if (owed) return { holder: 'you', why: owed, sign: label };
-  if (claim?.captain) return { holder: 'you', why: claim.why, sign: label };
-  if (claim) return { holder: claim.key, why: claim.why, sign: claim.label, ...(claim.counter !== undefined && { counter: claim.counter }) };
+  if (claim?.captain && !claim.quiet) return { holder: 'you', why: claim.why, sign: label };
+  if (claim && !claim.captain) return { holder: claim.key, why: claim.why, sign: claim.label, ...(claim.counter !== undefined && { counter: claim.counter }) };
   if (lead.status !== 'done') return { holder: 'lead', why: leadNow(lead), sign: label };
   const testing = prs.filter((p) => p.state === 'testing').map((p) => `#${p.number}`);
   if (testing.length) return { holder: 'qa', why: `Shipped ${testing.join(', ')}; QA is testing it. Nothing asked of you.`, sign: 'QA testing' };
@@ -211,6 +215,7 @@ export function goalMove(lead: Agent, prs: readonly MovePr[], claim: MoveClaim |
   if (passed) return { holder: 'you', why: `QA passed #${passed.number}: it waits for you to merge it.`, sign: `Merge #${passed.number}` };
   const failed = prs.find((p) => p.state === 'failed');
   if (failed) return { holder: 'you', why: `QA failed #${failed.number}: send it back to the lead, or look yourself.`, sign: 'QA failed' };
+  if (claim?.quiet) return { holder: 'you', why: claim.why, sign: label, quiet: true };
   return { holder: 'you', why: leadNow(lead), sign: label };
 }
 

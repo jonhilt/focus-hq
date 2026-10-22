@@ -52,8 +52,9 @@ export function readyLine(read: CosRead | undefined, now: number): { ask: string
 }
 
 /**
- * The turns it would carry on or send back, its words ready: each sent with a tap, or held when they'd otherwise go by
- * themselves (`CosRead.sendsAt`). Out of Needs you, as in Comms' tray, and gone when there are none.
+ * The turns it would carry on or send back, its words ready: each sent with a tap, held when they'd otherwise go by
+ * themselves (`CosRead.sendsAt`), or acknowledged (Got it: off the list, nothing sent). Out of Needs you, as in Comms'
+ * tray, and gone when there are none.
  */
 function readyStrip(host: PhoneHost, ready: Agent[], now: number): HTMLElement | null {
   if (!ready.length) return null;
@@ -74,6 +75,7 @@ function readyEntry(host: PhoneHost, lead: Agent, now: number): HTMLElement {
     h('div', { class: 'actions' },
       host.button(`${key}:send`, '▶ Send', () => inbox.decide(id, { send: true }), { class: 'go' }),
       line.holdable ? host.button(`${key}:hold`, '✋ Hold', () => inbox.hold(id)) : null,
+      host.button(`${key}:ack`, '✓ Got it', () => inbox.decide(id, { ack: true })),
       h('small', { class: 'sends-in' }, line.when),
     ),
     host.errors(key),

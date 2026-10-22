@@ -5,7 +5,7 @@
 export type CommsAct = { move: 1 | -1 } | { press: string } | { reply: true } | { goal: true };
 
 /** The keys, as the hint under the queue lists them. */
-export const COMMS_KEYS = 'J/K move · Enter send the chief of staff’s words · H hold · 1–9 pick · A approve · D decline · R reply · G open the goal · Esc close';
+export const COMMS_KEYS = 'J/K move · Enter send the chief of staff’s words · H hold · 1–9 pick, or a suggested reply · O got it · A approve · D decline · R reply · G open the goal · Esc close';
 
 const KEYS: Record<string, CommsAct> = {
   j: { move: 1 },
@@ -14,6 +14,7 @@ const KEYS: Record<string, CommsAct> = {
   ArrowUp: { move: -1 },
   Enter: { press: 'send' },
   h: { press: 'hold' },
+  o: { press: 'ack' },
   a: { press: 'allow' },
   d: { press: 'decline' },
   r: { reply: true },
@@ -22,7 +23,8 @@ const KEYS: Record<string, CommsAct> = {
 
 /**
  * What a key does in Comms, if anything. Never while the captain is writing (`typing`: in a reply or a note), nor
- * with Ctrl, Alt or Cmd held (the panel's own shortcuts, and the browser's). 1 to 9 pick a question's options in order.
+ * with Ctrl, Alt or Cmd held (the panel's own shortcuts, and the browser's). 1 to 9 pick a question's options in order,
+ * or send a lead's turn's suggested replies (a card has one or the other, never both).
  */
 export function commsKey(e: { key: string; ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean }, typing: boolean): CommsAct | null {
   if (typing || e.ctrlKey || e.altKey || e.metaKey) return null;

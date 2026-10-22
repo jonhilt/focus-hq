@@ -1,5 +1,5 @@
 import type { JournalEntry, TurnKind, VerdictRoute } from '../../plugin-api/server';
-import { CHIEF_OF_STAFF, SENDER, SENT_WORDS } from './shared';
+import { ACKNOWLEDGED, CHIEF_OF_STAFF, SENDER, SENT_WORDS } from './shared';
 
 // The life of every card the captain was owed, replayed from what Focus kept (`pnpm run card-replay`): each work
 // turn a goal lead ends opens one, the chief of staff's verdict on it says how much it needed the captain, and it closes
@@ -137,11 +137,17 @@ export function verdictFor(verdicts: readonly VerdictFact[], session: string | u
   return fits.sort((a, b) => a.at - b.at)[0];
 }
 
-/** How a card that was woken ended, from what woke it and what the captain decided while it was open. */
+/** Whether the captain acknowledged the card (Got it) while it was open: read and set aside, their answer though nothing went. */
+export const acknowledgedIn = (decisions: readonly DecisionFact[]): boolean => decisions.some((d) => d.answer === ACKNOWLEDGED);
+
+/**
+ * How a card that was woken ended, from what woke it and what the captain decided while it was open. One they
+ * acknowledged was answered by them, whatever woke the lead after.
+ */
 export function outcomeOf(waker: CardMessage | undefined, decisions: readonly DecisionFact[]): Pick<Card, 'outcome' | 'by' | 'cosSentBy'> {
-  if (!waker) return { outcome: 'superseded', by: 'none' };
-  if (captainVoiced(waker.sender)) return { outcome: 'captain', by: waker.sender };
-  if (waker.sender !== 'chief-of-staff') return { outcome: 'superseded', by: waker.sender };
+  const by = waker?.sender ?? 'none';
+  if (waker && captainVoiced(waker.sender)) return { outcome: 'captain', by: waker.sender };
+  if (waker?.sender !== 'chief-of-staff') return { outcome: acknowledgedIn(decisions) ? 'captain' : 'superseded', by };
   const sent = decisions.find((d) => d.answer === SENT_WORDS);
   return { outcome: 'cos-sent', by: waker.sender, ...(sent && { cosSentBy: sent.via === CHIEF_OF_STAFF ? 'auto' : 'captain' }) };
 }
@@ -158,7 +164,8 @@ function close(open: Open, at: number, decisions: readonly DecisionFact[], ended
 function leftOpen(open: Open, decisions: readonly DecisionFact[]): Card {
   const { card } = open;
   const inWindow = decisions.filter((d) => d.at >= card.openedAt);
-  return { ...card, outcome: 'open', decisions: inWindow, captainSpoke: inWindow.length > 0 || card.messages.some((m) => captainVoiced(m.sender)) };
+  // one they acknowledged is theirs answered, though the lead waits on their next message
+  return { ...card, outcome: acknowledgedIn(inWindow) ? 'captain' : 'open', decisions: inWindow, captainSpoke: inWindow.length > 0 || card.messages.some((m) => captainVoiced(m.sender)) };
 }
 
 /** A card opened by `turn` ending at `at`, judged by the chief of staff's verdict if there was one. */

@@ -17,8 +17,14 @@ export function countdown(ms: number): string {
  */
 export const SENDING_MS = 3 * AUTO_SEND_EVERY;
 
-/** Its hold on a goal's move, or the move handed to the captain (`captain`), and why. */
-export type CosMove = { why: string; counter?: string; captain?: boolean };
+/**
+ * Its hold on a goal's move, or the move handed to the captain (`captain`), and why; `quiet` when it's theirs but asks
+ * nothing of them now (a turn they acknowledged), so the lamps don't call them for it.
+ */
+export type CosMove = { why: string; counter?: string; captain?: boolean; quiet?: boolean };
+
+/** What it says of a turn the captain acknowledged: theirs, since only they wake the lead, but not calling them. */
+export const ACKED_MOVE: CosMove = { why: 'You’ve read it: it waits for your next message, or Ops’ news', captain: true, quiet: true };
 
 const yours = (why: string): CosMove => ({ why, captain: true });
 
@@ -36,11 +42,13 @@ function wordsMove(judged: Verdict, sendsAt: CosRead['sendsAt'], now: number): C
  * Its say on `lead`'s next move at `now`, if it has one: it holds it while it reads their ended turn (until
  * `JUDGING_MS`), and while its words for them go by themselves at `sendsAt`, counted down (and a little past, as they
  * go). Otherwise what it read is the captain's, so it hands them the move: a card, an interrupt, words they held (or
- * that don't send themselves, or didn't go), and a turn it took too long to read. Nothing when it has no read.
+ * that don't send themselves, or didn't go), and a turn it took too long to read; quietly, a turn they acknowledged.
+ * Nothing when it has no read.
  */
 export function cosMove(lead: Pick<Agent, 'status' | 'lead'>, now: number): CosMove | undefined {
   const read = lead.status === 'done' ? readOf(lead) : undefined;
   if (!read) return undefined;
+  if (read.acked !== undefined) return ACKED_MOVE;
   const { judged, sendsAt } = read;
   if (!judged) return now - read.at < JUDGING_MS ? { why: 'Reading the turn, to see where it goes' } : yours('The chief of staff couldn’t read the turn in time: it’s yours');
   if (!forLead(judged)) return yours(`${judged.route === 2 ? 'A card' : 'An interrupt'} for you: ${judged.ask}`);

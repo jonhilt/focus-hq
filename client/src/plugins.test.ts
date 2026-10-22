@@ -135,4 +135,10 @@ describe('a plugin’s hold on a goal’s move', () => {
     const plugins: ClientPlugin[] = [{ id: 'cos', goal: { holder: holder('cos'), move: () => ({ why: 'A card for you', captain: true }) } }];
     expect(goalClaim(lead, 0, plugins, project())).toEqual({ key: 'cos', label: 'cos', why: 'A card for you', captain: true });
   });
+
+  it('passes on a quiet hand-over to the captain, and quiet alone as nothing', () => {
+    const quiet = (captain: boolean): ClientPlugin[] => [{ id: 'cos', goal: { holder: holder('cos'), move: () => ({ why: 'You’ve read it', captain, quiet: true }) } }];
+    expect(goalClaim(lead, 0, quiet(true), project())).toEqual({ key: 'cos', label: 'cos', why: 'You’ve read it', captain: true, quiet: true });
+    expect(goalClaim(lead, 0, quiet(false), project())).toEqual({ key: 'cos', label: 'cos', why: 'You’ve read it' });
+  });
 });

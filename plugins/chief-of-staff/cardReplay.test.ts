@@ -148,6 +148,17 @@ describe('leadCards', () => {
     expect(leadCards(lead, entries, none)[0]).toMatchObject({ outcome: 'superseded', by: 'qa', waitMs: 500 });
   });
 
+  it('a card the captain acknowledged is theirs answered, whatever woke the lead after, or left open', () => {
+    const ack: DecisionFact[] = [{ kind: 'turn', answer: answerText({ ack: true }), via: 'office', at: 20_000 }];
+    const woken = journal(...turn('t1', 10_000), { kind: 'queued', text: '[QA officer Lt. Varga] QA failed jonhilt/focus#1: broken', at: 'end', t: 40_000 }, { kind: 'waiting' }, next('t2', 42_000));
+    const [card] = leadCards(lead, woken, { verdicts: [verdict(2, 15_000)], decisions: ack });
+    expect(card).toMatchObject({ outcome: 'captain', by: 'qa', captainSpoke: true });
+    expect(missed([card])).toEqual([]);
+    const [still] = leadCards(lead, journal(...turn('t1', 10_000)), { verdicts: [verdict(2, 15_000)], decisions: ack });
+    expect(still).toMatchObject({ outcome: 'captain', captainSpoke: true });
+    expect(still.closedAt).toBeUndefined();
+  });
+
   it('a lead sent home ends the card; one never woken stays open', () => {
     const ended = leadCards(lead, journal(...turn('t1', 10_000), { kind: 'reset', t: 20_000 }), { verdicts: [], decisions: [{ kind: 'wrap-up', answer: 'Closed the goal', via: 'office', at: 19_000 }] });
     expect(ended[0]).toMatchObject({ outcome: 'ended', closedAt: 20_000, captainSpoke: true });

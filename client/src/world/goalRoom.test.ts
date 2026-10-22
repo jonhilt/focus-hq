@@ -233,6 +233,16 @@ describe('goalMove', () => {
     expect(goalMove(lead('done'), [pr(44, 'testing')], claim)).toEqual({ holder: 'cos', why: 'Carry on: tests next', sign: 'Chief of staff', counter: '1:40' });
   });
 
+  it('is the captain’s, quietly, when a plugin hands it to them asking nothing now, after anyone else’s move', () => {
+    const read = { key: 'cos', label: 'Chief of staff', why: 'You’ve read it: it waits for your next message', captain: true, quiet: true };
+    expect(goalMove(lead('done'), [], read)).toEqual({ holder: 'you', why: 'You’ve read it: it waits for your next message', sign: 'Your turn', quiet: true });
+    expect(goalMove(lead('done'), [pr(44, 'testing')], read).holder).toBe('qa');
+    expect(goalMove(lead('done'), [pr(44, 'passed')], read)).toEqual({ holder: 'you', why: 'QA passed #44: it waits for you to merge it.', sign: 'Merge #44' });
+    expect(goalMove(lead('working'), [], read).holder).toBe('lead');
+    // quiet means nothing without handing it to the captain
+    expect(goalMove(lead('done'), [], { ...claim, quiet: true })).toMatchObject({ holder: 'cos' });
+  });
+
   it('is the captain’s when a plugin hands it to them, ahead of QA testing and a pass to merge', () => {
     const card = { key: 'cos', label: 'Chief of staff', why: 'A card for you: Which colours?', captain: true };
     for (const prs of [[pr(44, 'testing')], [pr(44, 'passed')], []]) expect(goalMove(lead('done'), prs, card)).toEqual({ holder: 'you', why: 'A card for you: Which colours?', sign: 'Your turn' });
