@@ -109,3 +109,12 @@ export function miniature(maps: readonly RepoMap[]): Miniature {
 /** Changes whenever the miniature of `maps` would. */
 export const miniatureKey = (maps: readonly RepoMap[]): string =>
   maps.map((m) => `${m.repo}@${m.commit ?? ''}:${m.model?.parts.length ?? 0}:${m.connections.length}:${m.history?.commits ?? 0}`).join('|');
+
+/**
+ * What a chart showing the miniature under key `shown` draws next, so it follows its project's `maps`: their
+ * miniature and its key (`unmapped` with none), or nothing while it already shows them.
+ */
+export function chartRedraw(shown: string, maps: readonly RepoMap[]): { key: string; miniature: Miniature } | undefined {
+  const key = miniatureKey(maps) || 'unmapped';
+  return key === shown ? undefined : { key, miniature: miniature(maps) };
+}

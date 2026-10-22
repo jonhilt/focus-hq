@@ -5,7 +5,7 @@
 import * as THREE from 'three';
 import { callPlugin, canvasTexture, type ClientPlugin, h, Hologram, hover, makeCanvas, focus, OVERLAY_LAYER, pluginOn, pluginState, type ShipHost, type ShipPart, type Ui } from '../../plugin-api/client';
 import { drawChart } from './chart';
-import { miniature, miniatureKey } from './miniature';
+import { chartRedraw } from './miniature';
 import { TIES_QUESTION } from './draw';
 import { drawingBody, viewBody } from './panel';
 import { CARTOGRAPHY, type CartographyState, MODEL_FILE, type RepoMap } from './shared';
@@ -103,6 +103,13 @@ function ship(host: ShipHost): ShipPart | null {
     host.interactive(mesh, () => `Step into stellar cartography: ${project.name}'s architecture`, (ui) => space.enter(ui, project.id, project.name, back), HALL_CHART.reach);
     return [{ project, mesh, hologram, texture, ctx, shown: '' }];
   });
+  const redraw = (c: (typeof charts)[number]) => {
+    const next = chartRedraw(c.shown, maps()?.maps[c.project.id] ?? []);
+    if (!next) return;
+    c.shown = next.key;
+    drawChart(c.ctx, CHART_PX.w, CHART_PX.h, c.project.name, next.miniature);
+    c.texture.needsUpdate = true;
+  };
   let checked = -Infinity;
   let last = 0;
   return {
@@ -114,17 +121,10 @@ function ship(host: ShipHost): ShipPart | null {
         hover(c.mesh, spot.at.y, t, 7);
         c.hologram.update(dt);
       }
-      // each chart follows its project's maps
+      // each chart follows its project's maps, looked at once a second
       if (t - checked < 1) return;
       checked = t;
-      for (const c of charts) {
-        const repos = maps()?.maps[c.project.id] ?? [];
-        const key = miniatureKey(repos) || 'unmapped';
-        if (key === c.shown) continue;
-        c.shown = key;
-        drawChart(c.ctx, CHART_PX.w, CHART_PX.h, c.project.name, miniature(repos));
-        c.texture.needsUpdate = true;
-      }
+      for (const c of charts) redraw(c);
     },
     dispose: () => {
       space.dispose();

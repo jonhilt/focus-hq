@@ -1,4 +1,4 @@
-import { changeMark, type ComparedRow, compared, duration, formatValue, type Glance, type Overview, overviewOf, type ScorecardHead, scorecardHeadOf, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
+import { changeMark, type ComparedRow, duration, formatValue, type Glance, type Overview, overviewOf, type ScorecardHead, scorecardHeadOf, shownSections, sparkShape, type Tile, tileFace, type Trend, verdictPhrases } from './scorecard';
 import { aboutMetric, SECTION_ABOUT } from './about';
 import { busy, callPlugin, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
 import { type Metric, type Scorecard, SCORECARD, type Scorecards, type ScorecardSection } from './types';
@@ -31,21 +31,15 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
  * than two. `points` names each one (`3 h ago: 224`) for its hover, in the bigger chart a number opens to.
  */
 function sparkline(series: number[], tone: Trend | 'bad', size: { w: number; h: number }, points?: string[]): SVGElement | null {
-  if (series.length < 2) return null;
-  const { w, h: hgt } = size;
-  const pad = 4;
-  const lo = Math.min(...series);
-  const span = Math.max(...series) - lo || 1;
-  const xy = series.map((v, i) => [pad + (i / (series.length - 1)) * (w - 2 * pad), hgt - pad - ((v - lo) / span) * (hgt - 2 * pad)]);
-  const el = svg('svg', { class: `spark ${tone}`, viewBox: `0 0 ${w} ${hgt}`, width: w, height: hgt });
-  el.append(svg('polyline', { points: xy.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ') }));
-  xy.forEach(([x, y], i) => {
-    const last = i === xy.length - 1;
-    if (!last && !points) return;
-    const dot = svg('circle', { cx: x.toFixed(1), cy: y.toFixed(1), r: last ? 3.5 : 2.5, class: last ? 'now' : 'then' });
-    if (points) dot.append(Object.assign(svg('title', {}), { textContent: points[i] }));
+  const shape = sparkShape(series, size, points);
+  if (!shape) return null;
+  const el = svg('svg', { class: `spark ${tone}`, viewBox: `0 0 ${size.w} ${size.h}`, width: size.w, height: size.h });
+  el.append(svg('polyline', { points: shape.line }));
+  for (const d of shape.dots) {
+    const dot = svg('circle', { cx: d.x, cy: d.y, r: d.r, class: d.class });
+    if (d.title !== undefined) dot.append(Object.assign(svg('title', {}), { textContent: d.title }));
     el.append(dot);
-  });
+  }
   return el;
 }
 
@@ -174,18 +168,14 @@ function gateBar(rows: ComparedRow[]): HTMLElement | null {
 /** Each of `sections` in full: what it's for, and every number in it, each opening to explain itself. */
 export function scorecardSections(sections: ScorecardSection[], open: Set<string>, after?: Partial<Record<ScorecardSection, HTMLElement | null>>): HTMLElement[] {
   const history = scorecards()?.history ?? [];
-  return compared(history).filter((s) => sections.includes(s.section)).map(({ section, title, rows }) => {
-    const better = rows.filter((r) => r.trend === 'better').length;
-    const worse = rows.filter((r) => r.trend === 'worse').length;
-    return h('section', { class: 'card eng-section', id: `sc-${section}`, style: `--c:${SECTION_TONE[section]}` },
+  return shownSections(history, sections).map(({ section, title, rows, pills }) =>
+    h('section', { class: 'card eng-section', id: `sc-${section}`, style: `--c:${SECTION_TONE[section]}` },
       h('div', { class: 'row' },
         h('h4', { class: 'grow' }, title, h('span', null, SECTION_ABOUT[section].question)),
-        better ? h('span', { class: 'sc-pill better' }, `▲ ${better} better`) : null,
-        worse ? h('span', { class: 'sc-pill worse' }, `▼ ${worse} worse`) : null),
+        ...pills.map((p) => h('span', { class: `sc-pill ${p.trend}` }, p.text))),
       h('p', { class: 'muted sc-section-about' }, SECTION_ABOUT[section].about),
       section === 'gate' ? gateBar(rows) : null,
       h('div', { class: 'sc-rows' }, ...rows.map((r) => metricRow(r, history, open))),
       after?.[section] ?? null,
-    );
-  });
+    ));
 }

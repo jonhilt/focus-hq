@@ -3,7 +3,7 @@
 import {
   busy, callPlugin, chiefEngineer, type EngineeringGo, FIX_SESSIONS, type FixEffect, type FixStatus, frictionBars, h, markdownHtml, focus, pluginState, timeAgo, type Ui,
 } from '../../plugin-api/client';
-import { type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, retroStanding, startReading, windowInput, type WindowInput } from './shared';
+import { draftDecision, fileInChoices, type FixKind, RETRO, type Retro, retroCardLine, type RetroDraft, type RetroPage, retroPage, retroStanding, startReading, windowInput, type WindowInput } from './shared';
 
 const KIND: Record<FixKind, string> = { check: 'Check', 'qa-rule': 'QA rule', pointer: 'Pointer', delete: 'Delete' };
 
@@ -99,27 +99,31 @@ function draft(ui: Ui, d: RetroDraft, i: number): HTMLElement {
   text.innerHTML = markdownHtml(d.body);
   const details = h('details', null, h('summary', null, 'The issue as it would be filed'), text);
   const tags = h('p', null, h('span', { class: 'label' }, 'Measure '), d.measure, h('br'), h('small', { class: 'muted' }, d.signatures.join(' · ')));
-  if (d.decision) {
-    const issue = d.decision.issue;
-    const said = d.decision.accepted
-      ? h('span', { class: 'chip ok' }, issue ? h('a', { href: issue.url, target: '_blank' }, `Filed ${issue.repo}#${issue.number}`) : 'Accepted')
-      : h('span', { class: 'chip off' }, 'Rejected');
-    return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, said, h('small', { class: 'muted' }, timeAgo(d.decision.at))));
-  }
-  const repos = focus.projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, label: `${repo} (${p.name})` })));
-  const pick = h('select', null, ...repos.map((r) => h('option', { value: `${r.projectId} ${r.repo}` }, r.label)));
-  const last = localStorage.getItem(FILE_IN);
-  if (last && repos.some((r) => `${r.projectId} ${r.repo}` === last)) pick.value = last;
+  const card = (...row: (HTMLElement | null)[]) => h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, ...row));
+  return d.decision ? card(decided(d.decision), h('small', { class: 'muted' }, timeAgo(d.decision.at))) : card(...undecided(ui, d));
+}
+
+function decided(decision: NonNullable<RetroDraft['decision']>): HTMLElement {
+  const said = draftDecision(decision);
+  return h('span', { class: `chip ${said.tone}` }, said.url ? h('a', { href: said.url, target: '_blank' }, said.text) : said.text);
+}
+
+/** Where to file it, and Accept and Reject. */
+function undecided(ui: Ui, d: RetroDraft): HTMLElement[] {
+  const { options, picked } = fileInChoices(focus.projects, localStorage.getItem(FILE_IN));
+  const pick = h('select', null, ...options.map((o) => h('option', { value: o.value }, o.label)));
+  if (picked) pick.value = picked.value;
   const accept = h('button', { class: 'btn primary small' }, 'Accept and file');
   const reject = h('button', { class: 'btn small' }, 'Reject');
-  accept.disabled = !repos.length;
+  accept.disabled = !picked;
   accept.onclick = () => {
-    const [projectId, repo] = pick.value.split(' ');
-    localStorage.setItem(FILE_IN, pick.value);
-    void busy(accept, () => call<RetroDraft>('/decide', { id: d.id, accept: true, projectId, repo }).then(() => undefined), ui.error);
+    const chosen = options.find((o) => o.value === pick.value);
+    if (!chosen) return;
+    localStorage.setItem(FILE_IN, chosen.value);
+    void busy(accept, () => call<RetroDraft>('/decide', { id: d.id, accept: true, projectId: chosen.projectId, repo: chosen.repo }).then(() => undefined), ui.error);
   };
   reject.onclick = () => void busy(reject, () => call<RetroDraft>('/decide', { id: d.id, accept: false }).then(() => undefined), ui.error);
-  return h('div', { class: 'card retro-draft' }, head, tags, details, h('div', { class: 'row' }, h('small', { class: 'muted' }, 'File in'), pick, accept, reject));
+  return [h('small', { class: 'muted' }, 'File in'), pick, accept, reject];
 }
 
 const FIX: Record<FixStatus, { tone: string; label: string }> = {

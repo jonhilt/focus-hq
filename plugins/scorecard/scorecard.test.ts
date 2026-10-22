@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { changeMark, changeWords, compared, deltaText, direction, duration, flowPhrases, glance, measuredAt, msdBoard, noiseOf, overviewOf, scorecardHeadOf, shownMoved, tileFace, verdictPhrases, wobble } from './scorecard';
+import { changeMark, changeWords, compared, deltaText, direction, duration, flowPhrases, glance, measuredAt, msdBoard, noiseOf, overviewOf, scorecardHeadOf, shownMoved, shownSections, sparkShape, tileFace, verdictPhrases, wobble } from './scorecard';
 import type { Metric, Scorecard, Scorecards } from './types';
 
 const m = (value: number, better: Metric['better'], format: Metric['format'] = 'count', key = 'k'): Metric => ({ section: 'fence', key, label: key, value, better, format });
@@ -84,6 +84,41 @@ describe('compared', () => {
 
   it('has nothing to show with no scorecards', () => {
     expect(compared([])).toEqual([]);
+  });
+});
+
+describe('shownSections', () => {
+  const history = [card('a', { asserts: 9, casts: 4, gate: 1 }), card('b', { asserts: 8, casts: 5, gate: 1 })];
+
+  it('shows only the sections asked for that have numbers, in the scorecard’s order', () => {
+    expect(shownSections(history, ['tests', 'fence', 'gate']).map((s) => s.section)).toEqual(['gate', 'fence']);
+  });
+
+  it('gives a section a pill for what got better and one for what got worse, and none for a trend nothing took', () => {
+    const [gate, fence] = shownSections(history, ['gate', 'fence']);
+    expect(fence.pills).toEqual([{ trend: 'better', text: '▲ 1 better' }, { trend: 'worse', text: '▼ 1 worse' }]);
+    expect(gate.pills).toEqual([]);
+  });
+});
+
+describe('sparkShape', () => {
+  const box = { w: 108, h: 28 };
+
+  it('runs oldest to latest across the box, inside its padding, the highest at the top', () => {
+    expect(sparkShape([1, 3, 2], box)?.line).toBe('4.0,24.0 54.0,4.0 104.0,14.0');
+  });
+
+  it('puts a dot on the latest only, unless every point is named for its hover', () => {
+    expect(sparkShape([1, 3, 2], box)?.dots).toEqual([{ x: '104.0', y: '14.0', r: 3.5, class: 'now' }]);
+    expect(sparkShape([1, 3], box, ['then: 1', 'now: 3'])?.dots).toEqual([
+      { x: '4.0', y: '24.0', r: 2.5, class: 'then', title: 'then: 1' },
+      { x: '104.0', y: '4.0', r: 3.5, class: 'now', title: 'now: 3' },
+    ]);
+  });
+
+  it('draws a number that never moved along the bottom, and nothing with fewer than two', () => {
+    expect(sparkShape([5, 5], box)?.line).toBe('4.0,24.0 104.0,24.0');
+    expect(sparkShape([5], box)).toBeNull();
   });
 });
 

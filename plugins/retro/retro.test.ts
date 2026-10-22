@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FrictionGroup } from '../../plugin-api/shared';
 import { parseDrafts, renderFrictions } from './retro';
-import { freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
+import { draftDecision, fileInChoices, freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 const group = (key: string, sessions: number): FrictionGroup => {
@@ -119,5 +119,27 @@ describe('the retro on the engineering panel', () => {
   it('says what starting one reads first, and what that costs', () => {
     expect(startReading('Lt. Cmdr. Okafor', 14, 40, 3.5)).toBe('Lt. Cmdr. Okafor first reads the 40 sessions of the last 14 days no one has read yet, for their frictions: roughly $3.50 of Claude usage, a batch at a time with a pause between. Sessions read before aren’t read again.');
     expect(startReading('Lt. Cmdr. Okafor', 7, 0, 0)).toBe('Every session of the last 7 days has been read already, so this only drafts.');
+  });
+});
+
+describe('a draft on its card', () => {
+  it('says a filed draft’s issue, linked, and an accepted one with none or a rejected one plainly', () => {
+    expect(draftDecision({ accepted: true, at: 0, issue: { repo: 'jonhilt/focus', number: 227, url: 'https://x/227' } })).toEqual({ tone: 'ok', text: 'Filed jonhilt/focus#227', url: 'https://x/227' });
+    expect(draftDecision({ accepted: true, at: 0 })).toEqual({ tone: 'ok', text: 'Accepted' });
+    expect(draftDecision({ accepted: false, at: 0, issue: { repo: 'r', number: 1, url: 'u' } })).toEqual({ tone: 'off', text: 'Rejected' });
+  });
+
+  const projects = [{ id: 'p1', name: 'Focus', repos: ['jonhilt/focus', 'jonhilt/site'] }, { id: 'p2', name: 'Pets', repos: ['vets/pets'] }];
+
+  it('offers every project’s repos, and picks the one picked last while it’s still on offer', () => {
+    const { options, picked } = fileInChoices(projects, 'p2 vets/pets');
+    expect(options.map((o) => o.label)).toEqual(['jonhilt/focus (Focus)', 'jonhilt/site (Focus)', 'vets/pets (Pets)']);
+    expect(picked).toMatchObject({ projectId: 'p2', repo: 'vets/pets' });
+  });
+
+  it('picks the first repo when the last one’s gone or there wasn’t one, and none with no repos', () => {
+    expect(fileInChoices(projects, 'p3 gone/repo').picked).toMatchObject({ projectId: 'p1', repo: 'jonhilt/focus' });
+    expect(fileInChoices(projects, null).picked?.value).toBe('p1 jonhilt/focus');
+    expect(fileInChoices([], 'p1 jonhilt/focus')).toEqual({ options: [], picked: undefined });
   });
 });

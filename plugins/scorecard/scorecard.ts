@@ -87,6 +87,52 @@ export function compared(history: Scorecard[], noise?: ScorecardNoise): { sectio
   })).filter((s) => s.rows.length);
 }
 
+/** A section as the panel shows it in full (view.ts): its numbers, and a pill for how many got better and for how many worse. */
+export interface ShownSection {
+  section: ScorecardSection;
+  title: string;
+  rows: ComparedRow[];
+  pills: { trend: 'better' | 'worse'; text: string }[];
+}
+
+/** Those of `sections` the history has numbers for, in the scorecard's order: no pill for a trend none of its numbers took. */
+export function shownSections(history: Scorecard[], sections: readonly ScorecardSection[]): ShownSection[] {
+  return compared(history).filter((s) => sections.includes(s.section)).map((s) => ({
+    ...s,
+    pills: (['better', 'worse'] as const).flatMap((trend) => {
+      const n = s.rows.filter((r) => r.trend === trend).length;
+      return n ? [{ trend, text: `${MARK[trend]} ${n} ${trend}` }] : [];
+    }),
+  }));
+}
+
+/** One of a sparkline's dots: where it sits, how big, and its class (`now` the latest, bigger). `title` names it, for its hover. */
+export interface SparkDot {
+  x: string;
+  y: string;
+  r: number;
+  class: 'now' | 'then';
+  title?: string;
+}
+
+/**
+ * A number's measurements as a sparkline in a `w` × `h` box, oldest at the left: its line's points, and its dots. The
+ * latest always has one; the rest only when `points` names them (`3 h ago: 224`). Null with fewer than two.
+ */
+export function sparkShape(series: readonly number[], size: { w: number; h: number }, points?: readonly string[]): { line: string; dots: SparkDot[] } | null {
+  if (series.length < 2) return null;
+  const pad = 4;
+  const lo = Math.min(...series);
+  const span = Math.max(...series) - lo || 1;
+  const xy = series.map((v, i) => ({ x: (pad + (i / (series.length - 1)) * (size.w - 2 * pad)).toFixed(1), y: (size.h - pad - ((v - lo) / span) * (size.h - 2 * pad)).toFixed(1) }));
+  const dots = xy.flatMap((p, i) => {
+    const now = i === xy.length - 1;
+    if (!now && !points) return [];
+    return [{ ...p, r: now ? 3.5 : 2.5, class: now ? 'now' : 'then', ...(points ? { title: points[i] } : {}) } satisfies SparkDot];
+  });
+  return { line: xy.map((p) => `${p.x},${p.y}`).join(' '), dots };
+}
+
 /** Which commit a card measured, to say under it: `main @ f6f4c667`, marked when uncommitted changes went in too. */
 export const measuredAt = (card: Scorecard) => `${card.branch} @ ${card.commit.slice(0, 8)}${card.dirty ? ' (uncommitted changes)' : ''}`;
 

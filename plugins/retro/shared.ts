@@ -121,6 +121,31 @@ export function retroStanding(retro: Retro, ago: (at: number) => string): { tone
   };
 }
 
+/** What a decided draft says on its card (view.ts): filed (with its issue, when there's one), accepted, or rejected. */
+export function draftDecision(decision: NonNullable<RetroDraft['decision']>): { tone: 'ok' | 'off'; text: string; url?: string } {
+  if (!decision.accepted) return { tone: 'off', text: 'Rejected' };
+  const { issue } = decision;
+  return issue ? { tone: 'ok', text: `Filed ${issue.repo}#${issue.number}`, url: issue.url } : { tone: 'ok', text: 'Accepted' };
+}
+
+/** Where an accepted draft can be filed: a project's repo, as its pick list's option. */
+export interface FileIn {
+  projectId: string;
+  repo: string;
+  /** The option's value, and what it says. */
+  value: string;
+  label: string;
+}
+
+/**
+ * The repos an undecided draft can be filed in, every project's, and the one picked first: `last` (the one picked
+ * the time before) while it's still on offer, else the first.
+ */
+export function fileInChoices(projects: readonly { id: string; name: string; repos: readonly string[] }[], last: string | null): { options: FileIn[]; picked: FileIn | undefined } {
+  const options = projects.flatMap((p) => p.repos.map((repo) => ({ projectId: p.id, repo, value: `${p.id} ${repo}`, label: `${repo} (${p.name})` })));
+  return { options, picked: options.find((o) => o.value === last) ?? options[0] };
+}
+
 /** The window input on the retro's view, and the retro it was started from (by its `startedAt`). */
 export interface WindowInput<I> {
   input: I;

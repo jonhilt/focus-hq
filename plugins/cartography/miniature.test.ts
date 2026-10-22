@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bandOrder, MINI_LINKS, miniature, miniatureKey } from './miniature';
+import { bandOrder, chartRedraw, MINI_LINKS, miniature, miniatureKey } from './miniature';
 import type { RepoMap } from './shared';
 import { MAP } from './views.test';
 
@@ -62,6 +62,20 @@ describe('miniature', () => {
   it('is empty with nothing mapped, and changes its key with a new commit', () => {
     expect(miniature([])).toEqual({ bands: [], parts: [], links: [], imports: 0 });
     expect(miniatureKey([MAP])).not.toBe(miniatureKey([{ ...MAP, commit: 'abc' }]));
+  });
+});
+
+describe('chartRedraw', () => {
+  it('draws a chart again when its project’s maps change, and leaves it while they don’t', () => {
+    const first = chartRedraw('', [MAP]);
+    expect(first).toEqual({ key: miniatureKey([MAP]), miniature: miniature([MAP]) });
+    expect(chartRedraw(first?.key ?? '', [MAP])).toBeUndefined();
+    expect(chartRedraw(first?.key ?? '', [{ ...MAP, commit: 'abc' }])?.key).toBe(miniatureKey([{ ...MAP, commit: 'abc' }]));
+  });
+
+  it('draws a project with no maps once, as unmapped', () => {
+    expect(chartRedraw('', [])).toEqual({ key: 'unmapped', miniature: miniature([]) });
+    expect(chartRedraw('unmapped', [])).toBeUndefined();
   });
 });
 
