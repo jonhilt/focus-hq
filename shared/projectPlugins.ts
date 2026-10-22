@@ -5,6 +5,9 @@ import type { Project } from './types';
 /** A plugin's id as Focus takes one: lowercase letters, digits and dashes. */
 const ID = /^[a-z][a-z0-9-]{0,40}$/;
 
+/** Whether `id` could be a plugin's id. */
+export const isPluginId = (id: unknown): id is string => typeof id === 'string' && ID.test(id);
+
 /** Whether plugin `id` is switched on for `project` (missing = off). */
 export const pluginOn = (project: Pick<Project, 'plugins'> | undefined, id: string): boolean => !!project?.plugins?.includes(id);
 

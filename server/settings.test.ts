@@ -87,6 +87,12 @@ describe('changeSettings', () => {
     expect(changeSettings(settings, { model: 'x' }).conflictsEffort).toBe('low');
   });
 
+  it('keeps the plugins switched on for the ship to what could be plugins’ ids, each once', () => {
+    expect(changeSettings(settings, { plugins: ['flow', 'Flow', '../evil', 3, 'flow', 'retro'] }).plugins).toEqual(['flow', 'retro']);
+    expect(changeSettings(settings, { plugins: [] }).plugins).toEqual([]);
+    expect(changeSettings(settings, { plugins: 'flow' }).plugins).toBe(settings.plugins);
+  });
+
   it('changes nothing for a body that isn’t an object', () => {
     for (const patch of [undefined, null, 'full', 3, true]) expect(changeSettings(settings, patch)).toEqual(settings);
   });

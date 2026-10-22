@@ -1,4 +1,4 @@
-import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, Snapshot } from '../shared/types';
+import type { Board, ConflictsOutcome, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM } from '../shared/types';
 import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
@@ -38,6 +38,8 @@ export class Focus {
   agents!: AgentManager;
   /** Focus's own repo (`owner/repo`, from its checkout's remote), lent to plugins (main engineering's climber works on it). */
   ownRepo: string | undefined;
+  /** Shuts Focus down for its supervisor to start it again (server/supervise.ts), once Focus can. */
+  restart?: () => Promise<void>;
   private info: ServerInfo;
   private refreshTimers = new Map<string, NodeJS.Timeout>();
   private refreshing = new Map<string, Promise<void>>();
@@ -62,6 +64,7 @@ export class Focus {
       settings: store.settings,
       deskCount: DESKS_PER_ROOM,
       plugins: [],
+      shipPlugins: { pinnedBy: null, startedWith: [], available: [], canRestart: false },
     };
   }
 
@@ -398,11 +401,26 @@ export class Focus {
 
   /** Starts the plugins switched on (docs/plugins.md), lending them Focus's own repo, and in the demo its agents' transcripts. */
   /** `more`: the demo's transcripts, and the ship's status, which needs GitHub and the agents' worktrees. */
-  startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>): void {
+  /** `ship`: how they were chosen, for the captain to change them from the ready room. */
+  startPlugins(plugins: FocusPlugin[], more: Pick<Lent, 'transcript' | 'shipStatus'>, ship: ShipPlugins): void {
     this.agents.startPlugins(plugins, { demo: config.demo, ownRepo: () => this.ownRepo, fileIssue: (...issue) => this.fileIssue(...issue), snapshot: () => this.snapshot(), personalLog: { entries: () => this.store.personalEntries, note: (text, via) => this.notePersonal(text, 'office', via) }, githubLogin: () => this.githubLogin, ...more });
     this.info.plugins = this.agents.plugins.ids();
+    this.info.shipPlugins = ship;
+    // FOCUS_PLUGINS's plugins carry over as the captain's choice the first time, so taking it away later changes nothing
+    if (ship.pinnedBy === 'FOCUS_PLUGINS' && !this.store.settings.plugins && !config.demo) {
+      this.store.settings.plugins = ship.startedWith.filter((id) => ship.available.some((a) => a.id === id));
+      this.store.save();
+    }
     // its saved state is kept, but nothing of it runs: no briefs, hooks, or pull requests kept for the captain
-    for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: add it to FOCUS_PLUGINS to bring it back`);
+    for (const id of this.agents.plugins.dormant()) console.warn(`Plugin ${id} has saved state but isn't switched on: switch it on in the ready room's Plugins tab to bring it back`);
+  }
+
+  /** Restarts Focus, as the captain asks to apply the plugins they switched: only under its supervisor, which starts it again. */
+  restartFocus(): { restarting: true } {
+    const restart = this.info.shipPlugins.canRestart ? this.restart : undefined;
+    if (!restart) throw new Error('Focus can’t restart itself here: it isn’t running under pnpm start or pnpm run dev. Stop it and start it again.');
+    setTimeout(() => void restart(), 200);
+    return { restarting: true };
   }
 
   /** Merges the PRs the captain asked to merge once QA passed them, at exactly the commit QA passed. */

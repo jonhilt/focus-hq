@@ -27,7 +27,8 @@ import { GitHub, toProvider } from './github/service';
 import { allowedHosts, listensBeyondLoopback, refusal } from './hostGuard';
 import { Hub } from './hub';
 import { flowRecorder } from './flows';
-import { loadPlugins } from './plugins/load';
+import { loadPlugins, pluginCatalog } from './plugins/load';
+import { pluginChoice } from '../shared/shipPlugins';
 import { Focus } from './focus';
 import { PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
@@ -89,9 +90,17 @@ async function main() {
   }
   // plugins read the agents' transcripts as Ops does; in the demo, its pretend leads keep transcripts of their
   // own, and its older sessions are the scripted ones
-  focus.startPlugins(await loadPlugins(config.plugins, config.root), {
+  const choice = pluginChoice(config.pluginsEnv, config.demo, store.settings.plugins);
+  const plugins = await loadPlugins(choice.names, config.root);
+  focus.startPlugins(plugins, {
     transcript: demoRunner && (async (id) => demoRunner.transcript(id) ?? (await demoTranscripts()).find((t) => t.sessionId === id)?.read()),
     shipStatus,
+  }, {
+    pinnedBy: choice.pinnedBy,
+    startedWith: plugins.map((p) => p.id),
+    available: await pluginCatalog(config.root),
+    // the supervisor's ipc channel carries the restart request
+    canRestart: typeof process.send === 'function',
   });
   // turns Focus stopped part way through carry on, from each agent's run journal
   focus.agents.recover();
@@ -229,6 +238,7 @@ async function main() {
     process.send?.(RESTART_MESSAGE);
     return shutdown();
   };
+  focus.restart = restart;
   if (config.autoUpdate) await new Updater(store, hub, restart).start();
 }
 

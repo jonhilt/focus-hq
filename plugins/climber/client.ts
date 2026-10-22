@@ -46,7 +46,6 @@ const climber: ClientPlugin = {
     adds: [
       'The climber’s card on the engineering panel, with Keep climbing',
       'Pull requests on Focus’s own repo, each waiting for you to merge',
-      'Needs the scorecard plugin',
     ],
     cost: 'background',
     costDetail: 'While Keep climbing is on, it runs a full agent session for each climb, one after another: the most tokens of any plugin. Off, it spends nothing.',

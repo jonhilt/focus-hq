@@ -26,10 +26,11 @@ export const config = {
   /** How often auto update fetches the upstream branch. */
   updateCheckMs: Number(process.env.FOCUS_UPDATE_CHECK_MS ?? 5 * 60_000),
   /**
-   * The plugins to switch on (docs/plugins.md): names of folders under plugins/, paths to plugin folders anywhere, or
-   * `all` for every one under plugins/. None unless FOCUS_PLUGINS says, except in the demo, which shows them all.
+   * FOCUS_PLUGINS, the plugins to switch on (docs/plugins.md): names of folders under plugins/, paths to plugin folders
+   * anywhere, or `all` for every one under plugins/. Where it's set, it overrides the captain's choice in the ready room
+   * (`pluginChoice` in shared/shipPlugins.ts).
    */
-  plugins: (process.env.FOCUS_PLUGINS ?? (demo ? 'all' : '')).split(',').map((name) => name.trim()).filter(Boolean),
+  pluginsEnv: process.env.FOCUS_PLUGINS,
   /**
    * A bot speaking for the captain (server/bot.ts): FOCUS_BOT_TOKEN opens the /api/bot routes (the plugins' routes for
    * bots) to it, and signs what FOCUS_BOT_WEBHOOK is sent; FOCUS_PUBLIC_URL (Focus as the bot reaches it) makes the

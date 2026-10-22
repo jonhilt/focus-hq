@@ -4,7 +4,9 @@ Focus's core is what anyone who adds a project needs: rooms and boards, goal lea
 
 ## Switching plugins on
 
-`FOCUS_PLUGINS` lists the plugins to switch on, comma-separated, in the order they start:
+The captain switches plugins on and off for the whole ship in the ready room's Plugins tab, which saves the choice (`Settings.plugins`). Focus can't start or stop a plugin while it runs (nothing unloads one), so a change applies from Focus's next start. The tab says so, and restarts Focus when asked, but only under its supervisor (`pnpm start`, `pnpm run dev`); anywhere else the captain stops it and starts it again. Switching a plugin on switches on what it requires, and switching one off switches off what requires it (`switchShipPlugin`, `shared/shipPlugins.test.ts`).
+
+`FOCUS_PLUGINS`, where it's set (even empty), decides instead, and the tab's switches lock (`pluginChoice`). The first time Focus starts with it and no choice saved, what it switched on is saved as the captain's choice, so taking it away later changes nothing. It lists the plugins to switch on, comma-separated, in the order they start:
 
 ```sh
 FOCUS_PLUGINS=scorecard,climber pnpm start
@@ -14,7 +16,7 @@ FOCUS_PLUGINS=scorecard,climber pnpm start
 - **A path** (anything with a slash, relative to where Focus starts) is a plugin folder anywhere, like `../my-plugins/auditor`.
 - **`all`** is every folder under Focus's own `plugins/`, so `FOCUS_PLUGINS=all` switches the lot on (and `all,../my-plugins/auditor` one more besides).
 
-A fresh Focus has none switched on. The demo ship (`pnpm run demo`, `demo:start`) has them all unless `FOCUS_PLUGINS` says otherwise (`FOCUS_PLUGINS= pnpm run demo` for one with none, or a list to check a feature with and without it). The scripts that start a demo ship of their own (smoke, perf, flows, the gap and z-fighting scans) always switch every plugin on, whatever `FOCUS_PLUGINS` the caller has (an agent inherits Focus's), so none of them quietly loses a feature.
+A fresh Focus has none switched on. The demo ship (`pnpm run demo`, `demo:start`) saves nothing across a restart, so it has them all, its switches locked, unless `FOCUS_PLUGINS` says otherwise (`FOCUS_PLUGINS= pnpm run demo` for one with none, or a list to check a feature with and without it). The scripts that start a demo ship of their own (smoke, perf, flows, the gap and z-fighting scans) always switch every plugin on, whatever `FOCUS_PLUGINS` the caller has (an agent inherits Focus's), so none of them quietly loses a feature.
 
 A plugin that can't be found, or doesn't load, is left out with a line in Focus's log saying why. A typo never keeps Focus from starting.
 

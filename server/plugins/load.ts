@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { errorMessage } from '../util';
+import type { AvailablePlugin } from '../../shared/shipPlugins';
 import type { FocusPlugin } from './contract';
 
 /**
@@ -29,6 +30,12 @@ export function ownPlugins(root: string): string[] {
   const dir = path.join(root, 'plugins');
   const names = fs.existsSync(dir) ? fs.readdirSync(dir).sort() : [];
   return names.filter((name) => fs.existsSync(pluginEntry(name, root)));
+}
+
+/** Every plugin of Focus's own, and what each requires, for the captain to choose from: a plugin that won't load is left out. */
+export async function pluginCatalog(root: string): Promise<AvailablePlugin[]> {
+  // importing a plugin only reads it: it does nothing until it's started
+  return (await loadPlugins(ownPlugins(root), root)).map((plugin) => ({ id: plugin.id, requires: plugin.requires ?? [] }));
 }
 
 const isPlugin = (value: unknown): value is FocusPlugin =>

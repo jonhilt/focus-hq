@@ -56,6 +56,7 @@ export function apiRouter(focus: Focus, store: Store, bot: typeof config.bot = c
   r.post('/github/check', h(() => focus.checkGitHub()));
   r.get('/github/repos', h(() => focus.listRepos()));
   r.patch('/settings', h((req) => focus.updateSettings(req.body ?? {})));
+  r.post('/restart', h(() => focus.restartFocus()));
 
   // projects (rooms)
   r.post('/projects', h((req) => focus.createProject(str(req.body.name), req.body.color, Array.isArray(req.body.repos) ? req.body.repos : [], req.body.theme)));

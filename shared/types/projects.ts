@@ -36,6 +36,11 @@ export interface Settings {
   leadEffort: Effort;
   /** A goal lead's conversation is compacted before their next turn once it holds this many tokens. 0 = only when the captain asks. */
   leadCompactAt: number;
+  /**
+   * The plugins the captain switched on for the whole ship in the ready room's Plugins tab, by id, from Focus's next start
+   * (shared/shipPlugins.ts). Missing until they first choose. FOCUS_PLUGINS, where it's set, overrides it.
+   */
+  plugins?: string[];
 }
 
 /**

@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { describe, expect, it } from 'vitest';
-import { pluginEntries } from './pluginList';
+import { pluginEntries, shipStatus } from './pluginList';
 import { type ClientPlugin, everyPlugin } from './plugins';
 
 // The ready room's Plugins tab: what it lists, in what order, and that each of Focus's own plugins says what it costs.
@@ -21,6 +21,13 @@ describe('the Plugins tab’s list', () => {
     const [labelled, bare] = pluginEntries([{ id: 'maps', project: { label: 'Maps', about: 'Draws maps' } }, { id: 'zed' }], []);
     expect(labelled?.about).toMatchObject({ name: 'Maps', summary: 'Draws maps', cost: null });
     expect(bare?.about).toMatchObject({ name: 'zed', cost: null });
+  });
+});
+
+describe('a plugin’s switch for the whole ship', () => {
+  it('reads on or off, or what it will be once Focus restarts', () => {
+    expect(pluginEntries([{ id: 'a' }, { id: 'b' }], ['a'], ['b']).map((e) => [e.plugin.id, shipStatus(e)])).toEqual([['a', 'Off after a restart'], ['b', 'On after a restart']]);
+    expect(pluginEntries([{ id: 'a' }, { id: 'b' }], ['a']).map((e) => [e.plugin.id, shipStatus(e)])).toEqual([['a', 'On'], ['b', 'Off']]);
   });
 });
 

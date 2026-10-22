@@ -2,6 +2,7 @@
 
 import type { ReportCard } from '../ledger';
 import type { PersonalEntry } from '../personalLog';
+import type { AvailablePlugin, PluginsPinnedBy } from '../shipPlugins';
 import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
@@ -18,10 +19,23 @@ export interface ServerInfo {
   github: GitHubStatus;
   settings: Settings;
   deskCount: number;
-  /** The plugins switched on (FOCUS_PLUGINS), by id. */
+  /** The plugins switched on, by id. */
   plugins: string[];
+  /** How the plugins switched on for the whole ship were chosen, for the ready room's Plugins tab to change them. */
+  shipPlugins: ShipPlugins;
   /** In a demo ship, how fast its pretend agents go (1 is `pnpm run demo`'s; shared/demoPace.ts). */
   demoPace?: number;
+}
+
+export interface ShipPlugins {
+  /** What keeps the captain's choice (`Settings.plugins`) from deciding, if anything. */
+  pinnedBy: PluginsPinnedBy | null;
+  /** The plugins Focus started with, by id: when the captain's choice differs, it waits on a restart. */
+  startedWith: string[];
+  /** Every plugin of Focus's own, and what each requires. */
+  available: AvailablePlugin[];
+  /** Focus runs under its supervisor (`pnpm start`, `pnpm run dev`), so it can restart itself from the browser. */
+  canRestart: boolean;
 }
 
 export interface Snapshot {

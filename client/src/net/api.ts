@@ -39,6 +39,8 @@ export const api = {
   listRepos: () => call<string[]>('GET', '/github/repos'),
   checkGitHub: () => call('POST', '/github/check'),
   updateSettings: (patch: Partial<Settings>) => call<Settings>('PATCH', '/settings', patch),
+  /** Restarts Focus, under its supervisor: the page reconnects once it's back. */
+  restart: () => call<{ restarting: true }>('POST', '/restart'),
 
   createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; cloud?: boolean; fromDraft?: boolean }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
