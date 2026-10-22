@@ -41,9 +41,19 @@ export interface Settings {
    * (shared/shipPlugins.ts). Missing until they first choose. FOCUS_PLUGINS, where it's set, overrides it.
    */
   plugins?: string[];
+  /** Pull, rebuild and restart when Focus's checkout's upstream branch moves (server/updater.ts). Missing = on. */
+  autoUpdate?: boolean;
+  /** The command that opens a terminal for a cloud session (e.g. "kitty -e"), the script's path after it. Missing = the usual ones, in turn. */
+  terminal?: string;
+  /** The browser agents drive (its executable's path). Missing = Playwright's Chromium, else Chrome, else Edge. */
+  browserPath?: string;
   /** Focus's address as a bot speaking for the captain reaches it (server/bot.ts), unless FOCUS_PUBLIC_URL is set. Missing = none. */
   publicUrl?: string;
 }
+
+/** The settings an environment variable can set, each with its name: where it's set, it wins over the captain's. */
+export const SETTINGS_ENV = { autoUpdate: 'FOCUS_AUTO_UPDATE', terminal: 'FOCUS_TERMINAL', browserPath: 'FOCUS_BROWSER_PATH' } as const satisfies Partial<Record<keyof Settings, string>>;
+export type PinnedSettings = Partial<Record<keyof typeof SETTINGS_ENV, (typeof SETTINGS_ENV)[keyof typeof SETTINGS_ENV]>>;
 
 /**
  * What a room's walls show. Every theme but 'office' turns the walls and ceiling into a window on a

@@ -2,6 +2,7 @@ import { ACTIVE_STATUSES } from '../shared/types';
 import { config } from './config';
 import type { Hub } from './hub';
 import { dependenciesChanged, installCommand, missingPackageManager, packageManagerFor } from './packageManager';
+import { settingsInForce } from './settings';
 import type { Store } from './store';
 import { errorMessage, run } from './util';
 
@@ -57,12 +58,13 @@ export class Updater {
       console.log('  Auto update: off (this checkout has no upstream branch to follow)');
       return;
     }
-    console.log(`  Auto update: following ${upstream}`);
+    console.log(`  Auto update: following ${upstream}${settingsInForce(this.store.settings).autoUpdate === false ? ' (off in Settings for now)' : ''}`);
     setInterval(() => void this.check(), config.updateCheckMs).unref();
   }
 
+  /** Only while the captain has it on (Settings, or FOCUS_AUTO_UPDATE=0 off), looked at afresh each time. */
   private async check(): Promise<void> {
-    if (this.checking) return;
+    if (this.checking || settingsInForce(this.store.settings).autoUpdate === false) return;
     this.checking = true;
     try {
       await this.tryUpdate();

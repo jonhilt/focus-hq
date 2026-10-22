@@ -82,6 +82,7 @@ const JOURNAL_MEMORY = 2000;
 
 /** Projects, agents and settings, saved to data/state.json. Terminal output goes to data/logs/<agent>.jsonl. */
 export class Store {
+  /** The captain's settings: one object for Focus's life, so what holds it sees each change (`replaceSettings`). */
   settings: Settings = { ...DEFAULT_SETTINGS };
   projects: Project[] = [];
   agents = new Map<string, Agent>();
@@ -169,6 +170,15 @@ export class Store {
   }
 
   /** Saves soon: changes that come close together are written once. */
+  /**
+   * Makes the settings `next`, in the same object: a field `next` doesn't have goes (a merge would keep one the captain
+   * cleared). Saved with the rest by `save`.
+   */
+  replaceSettings(next: Settings): Settings {
+    for (const key of Object.keys(this.settings)) if (!(key in next)) Reflect.deleteProperty(this.settings, key);
+    return Object.assign(this.settings, next);
+  }
+
   save(): void {
     if (!this.persist) return;
     if (this.saveTimer) return;

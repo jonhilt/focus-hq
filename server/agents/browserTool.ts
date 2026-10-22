@@ -127,12 +127,16 @@ interface Tab {
  */
 export class BrowserPool {
   private browser: Promise<Browser> | null = null;
+
+  /** `executablePath`: the captain's browser (Settings, or FOCUS_BROWSER_PATH) as it is when the browser first starts. */
+  constructor(private readonly executablePath: () => string | undefined = () => process.env.FOCUS_BROWSER_PATH) {}
   private tabs = new Map<string, Promise<Tab>>();
 
   private async launch(): Promise<Browser> {
     const { chromium } = await import('playwright');
     const attempts: LaunchOptions[] = [];
-    if (process.env.FOCUS_BROWSER_PATH) attempts.push({ executablePath: process.env.FOCUS_BROWSER_PATH });
+    const executablePath = this.executablePath();
+    if (executablePath) attempts.push({ executablePath });
     attempts.push({}, { channel: 'chrome' }, { channel: 'msedge' });
     let lastError: unknown;
     for (const opts of attempts) {
@@ -144,7 +148,7 @@ export class BrowserPool {
       }
     }
     throw new Error(
-      `No browser available for agents (${truncate(errorMessage(lastError), 200)}). Run "npx playwright install chromium" or set FOCUS_BROWSER_PATH.`,
+      `No browser available for agents (${truncate(errorMessage(lastError), 200)}). Run "npx playwright install chromium" or set the browser for agents in Settings.`,
     );
   }
 

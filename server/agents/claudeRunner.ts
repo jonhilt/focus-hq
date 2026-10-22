@@ -312,7 +312,11 @@ export function failedOutcome(
 }
 
 export class ClaudeRunner implements AgentRunner {
-  constructor(private readonly browsers: BrowserPool) {}
+  constructor(
+    private readonly browsers: BrowserPool,
+    /** The captain's command for opening a terminal (Settings, or FOCUS_TERMINAL), as it is now. */
+    private readonly terminal: () => string | undefined = () => process.env.FOCUS_TERMINAL,
+  ) {}
 
   /**
    * A terminal running `claude --cloud`: Claude Code starts a new cloud session only from a terminal. On macOS and
@@ -321,7 +325,7 @@ export class ClaudeRunner implements AgentRunner {
   async cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
     const dir = join(paths.cloudTerminals, req.agentId);
     const log = process.platform === 'win32' ? undefined : join(dir, 'terminal.log');
-    await openTerminal(dir, { cwd: req.cwd, claude: bundledClaude(), description: req.description, agentName: req.agentName, log });
+    await openTerminal(dir, { cwd: req.cwd, claude: bundledClaude(), description: req.description, agentName: req.agentName, log }, this.terminal());
     return { read: () => (log ? readTerminal(log) : Promise.resolve(undefined)) };
   }
 

@@ -21,8 +21,6 @@ export const config = {
   dataDir: path.resolve(process.env.FOCUS_DATA_DIR ?? path.join(os.homedir(), '.focus')),
   /** How often each project's issues and pull requests are re-read from GitHub. */
   boardRefreshMs: Number(process.env.FOCUS_BOARD_REFRESH_MS ?? 60_000),
-  /** Pull, rebuild and restart when the checkout's upstream branch moves. Off in demo mode or with FOCUS_AUTO_UPDATE=0. */
-  autoUpdate: process.env.FOCUS_AUTO_UPDATE !== '0' && !demo,
   /** How often auto update fetches the upstream branch. */
   updateCheckMs: Number(process.env.FOCUS_UPDATE_CHECK_MS ?? 5 * 60_000),
   /**

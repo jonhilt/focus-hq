@@ -120,7 +120,7 @@ export function bundledClaude(): string {
  * tried in turn: one that isn't installed, or that exits with an error at once (no display, say), makes way for the
  * next. Terminals are started detached rather than through `run()`, which would wait for the window to close.
  */
-export async function openTerminal(dir: string, s: TerminalScript, custom = process.env.FOCUS_TERMINAL): Promise<void> {
+export async function openTerminal(dir: string, s: TerminalScript, custom?: string): Promise<void> {
   await fs.mkdir(dir, { recursive: true });
   const script = terminalScript(process.platform, s);
   const file = path.join(dir, script.name);
@@ -132,7 +132,7 @@ export async function openTerminal(dir: string, s: TerminalScript, custom = proc
     if (!failed) return;
     tried.push(`${cmd} (${failed})`);
   }
-  throw new Error(`Couldn't open a terminal: tried ${tried.join(', ')}. Set FOCUS_TERMINAL to the command that opens one (e.g. "kitty -e"), or start the session on claude.ai and paste its link.`);
+  throw new Error(`Couldn't open a terminal: tried ${tried.join(', ')}. Set the command that opens one in Settings (e.g. "kitty -e"), or start the session on claude.ai and paste its link.`);
 }
 
 /** Starts a launcher; resolves with why it failed, or undefined once it has opened (or is still running after a moment). */

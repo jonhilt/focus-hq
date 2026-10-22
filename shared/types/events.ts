@@ -9,7 +9,7 @@ import type { IssueDraft } from './drafts';
 import type { Board, GitHubStatus } from './github';
 import type { PluginStates } from './plugins';
 import type { Preview, PreviewLog } from './previews';
-import type { Project, Settings } from './projects';
+import type { PinnedSettings, Project, Settings } from './projects';
 import type { QaReview } from './qa';
 import type { VoiceStatus } from './voice';
 
@@ -18,7 +18,10 @@ export interface ServerInfo {
   /** Commit the server runs. Browsers reload when it changes, so an auto update reaches the client too. */
   version: string;
   github: GitHubStatus;
+  /** The captain's settings, with any an environment variable sets (`settingsPinned`) as it sets them. */
   settings: Settings;
+  /** The settings an environment variable sets, each by its name: the browser can't change them. */
+  settingsPinned: PinnedSettings;
   deskCount: number;
   /** The plugins switched on, by id. */
   plugins: string[];

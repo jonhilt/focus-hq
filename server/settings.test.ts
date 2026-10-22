@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Settings } from '../shared/types';
-import { changeSettings, LEAD_COMPACT_MIN } from './settings';
+import { changeSettings, LEAD_COMPACT_MIN, pinnedSettings, settingsInForce } from './settings';
 
 const settings: Settings = {
   maxConcurrent: 4,
@@ -102,5 +102,32 @@ describe('changeSettings', () => {
     expect(set.publicUrl).toBe('https://focus.tail.ts.net');
     expect(changeSettings(set, { publicUrl: 'ftp://x' }).publicUrl).toBe('https://focus.tail.ts.net');
     expect(changeSettings(set, { publicUrl: '' })).not.toHaveProperty('publicUrl');
+  });
+
+  it('takes auto update on or off, and the terminal and browser commands trimmed, empty clearing them', () => {
+    const set = changeSettings(settings, { autoUpdate: false, terminal: ' kitty -e ', browserPath: '/Applications/Chromium.app/x' });
+    expect(set).toMatchObject({ autoUpdate: false, terminal: 'kitty -e', browserPath: '/Applications/Chromium.app/x' });
+    const cleared = changeSettings(set, { autoUpdate: 'no', terminal: '', browserPath: '  ' });
+    expect(cleared.autoUpdate).toBe(false);
+    expect(cleared).not.toHaveProperty('terminal');
+    expect(cleared).not.toHaveProperty('browserPath');
+  });
+});
+
+describe('the settings in force', () => {
+  it('are the captain’s where no environment variable sets them', () => {
+    const mine = { ...settings, autoUpdate: false, terminal: 'kitty -e' };
+    expect(settingsInForce(mine, {})).toEqual(mine);
+    expect(pinnedSettings({})).toEqual({});
+  });
+
+  it('take each an environment variable sets, and say which', () => {
+    const env = { FOCUS_AUTO_UPDATE: '0', FOCUS_TERMINAL: ' wezterm start -- ', FOCUS_BROWSER_PATH: '', PATH: '/bin' };
+    expect(settingsInForce({ ...settings, autoUpdate: true, terminal: 'kitty -e', browserPath: '/mine' }, env)).toMatchObject({ autoUpdate: false, terminal: 'wezterm start --', browserPath: '/mine' });
+    expect(pinnedSettings(env)).toEqual({ autoUpdate: 'FOCUS_AUTO_UPDATE', terminal: 'FOCUS_TERMINAL' });
+  });
+
+  it('turn auto update on for FOCUS_AUTO_UPDATE set to anything but 0', () => {
+    expect(settingsInForce({ ...settings, autoUpdate: false }, { FOCUS_AUTO_UPDATE: '1' }).autoUpdate).toBe(true);
   });
 });

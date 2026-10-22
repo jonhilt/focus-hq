@@ -33,6 +33,7 @@ import { Focus } from './focus';
 import { PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
 import { apiRouter } from './routes';
+import { settingsInForce } from './settings';
 import { StateLockedError, Store } from './store';
 import { currentVersion, RESTART_MESSAGE, Updater } from './updater';
 import { errorMessage, run, seedShip } from './util';
@@ -58,9 +59,9 @@ async function main() {
   // one GitHub for the whole ship (the demo's lives in memory), as an Effect service and through the Promise adapter
   const gitHub = Layer.succeed(GitHub, await ManagedRuntime.make(config.demo ? demoLayer : ghCliLayer).runPromise(GitHub.use(Effect.succeed)));
   const github = toProvider(gitHub);
-  const browsers = new BrowserPool();
+  const browsers = new BrowserPool(() => settingsInForce(store.settings).browserPath);
   const demoRunner = config.demo ? new DemoRunner() : undefined;
-  const runner = demoRunner ?? new ClaudeRunner(browsers);
+  const runner = demoRunner ?? new ClaudeRunner(browsers, () => settingsInForce(store.settings).terminal);
   const previews = new Previews(hub, github, config.demo, undefined, config.demo ? undefined : new PreviewMirrors());
   const planner = new IssuePlanner(store, hub, config.demo ? new DemoDrafter() : new ClaudeDrafter());
   const workspace = config.demo ? demoWorkspace : git.liveWorkspace;
@@ -239,7 +240,7 @@ async function main() {
     return shutdown();
   };
   focus.restart = restart;
-  if (config.autoUpdate) await new Updater(store, hub, restart).start();
+  if (!config.demo) await new Updater(store, hub, restart).start();
 }
 
 main().catch((err: unknown) => {

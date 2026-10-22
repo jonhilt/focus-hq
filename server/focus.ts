@@ -19,7 +19,7 @@ import type { Hub } from './hub';
 import type { Previews } from './previews';
 import type { Store } from './store';
 import { Secrets } from './secrets';
-import { changeSettings } from './settings';
+import { changeSettings, pinnedSettings, settingsInForce } from './settings';
 import { projectChangeFollowUps } from './projectChange';
 import { issueRefusal, previewTarget } from './focusRequests';
 import { errorMessage, newId } from './util';
@@ -65,7 +65,8 @@ export class Focus {
       mode: config.demo ? 'demo' : 'live',
       version,
       github: { ok: false, error: 'Checking…' },
-      settings: store.settings,
+      settings: settingsInForce(store.settings),
+      settingsPinned: pinnedSettings(),
       deskCount: DESKS_PER_ROOM,
       plugins: [],
       shipPlugins: { pinnedBy: null, startedWith: [], available: [], canRestart: false },
@@ -92,7 +93,7 @@ export class Focus {
 
   /** What Focus says of itself now: its settings, the bot's, and in a demo ship the pace its agents go at. */
   private served(): ServerInfo {
-    return { ...this.info, settings: this.store.settings, bot: this.bot.status(), ...(config.demo && { demoPace: demoPace() }) };
+    return { ...this.info, settings: settingsInForce(this.store.settings), settingsPinned: pinnedSettings(), bot: this.bot.status(), ...(config.demo && { demoPace: demoPace() }) };
   }
 
   /** Tells every browser what Focus says of itself now, as after the demo's pace changes. */
@@ -573,7 +574,7 @@ export class Focus {
 
   /** The captain's change to the settings (any JSON: `changeSettings` takes what it gets right), saved and sent out. */
   updateSettings(patch: unknown): Settings {
-    const s = Object.assign(this.store.settings, changeSettings(this.store.settings, patch));
+    const s = this.store.replaceSettings(changeSettings(this.store.settings, patch));
     this.store.save();
     this.infoChanged();
     this.agents.schedule();
