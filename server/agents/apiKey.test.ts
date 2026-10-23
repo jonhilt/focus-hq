@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { afterLimit, DEFAULT_BUDGET_USD, KeyFallback, keyBudget, keyMode, limitHit, limitReached, requestUsd, rereadUsd, resumeChoice, UNKNOWN_RESET_MS, useKey } from './apiKey';
+import { afterLimit, DEFAULT_BUDGET_USD, KeyFallback, keyBudget, keyMode, limitHit, limitReached, requestUsd, rereadUsd, resumeChoice, signInToast, UNKNOWN_RESET_MS, useKey } from './apiKey';
 
 const NOW = 1_800_000_000_000;
 
@@ -106,6 +106,26 @@ describe('afterLimit', () => {
     expect(afterLimit(undefined, true)).toBe('carry-on');
     expect(afterLimit(3, true)).toBe('hold');
     expect(afterLimit(0.3, false)).toBe('hold');
+  });
+});
+
+describe('signInToast', () => {
+  const spell = { until: NOW + 3_600_000, spentUsd: 4.567 };
+
+  it('says agents carry on with the key, up to its budget, until the plan’s limit resets', () => {
+    const toast = signInToast(true, spell, 10, NOW);
+    expect(toast.level).toBe('info');
+    expect(toast.text).toMatch(/usage limit is reached until .+: agents carry on with your API key \(up to \$10\)/);
+  });
+
+  it('warns that agents wait, when the key’s budget is spent before the limit resets', () => {
+    const toast = signInToast(false, spell, 10, NOW);
+    expect(toast.level).toBe('error');
+    expect(toast.text).toMatch(/^🔑 Your API key has spent its \$10: agents wait .+ reset at /);
+  });
+
+  it('says agents are back on the plan once its limit has reset, with what the key spent', () => {
+    expect(signInToast(false, { ...spell, until: NOW }, 10, NOW)).toEqual({ level: 'success', text: "🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $4.57)" });
   });
 });
 

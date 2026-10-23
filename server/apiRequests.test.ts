@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { artifactServing, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
+import type { Board, PullRequest } from '../shared/types';
+import { artifactServing, effort, picks, pluginSecretChange, pushedPr, pushKind, qaShotServing, resumeHow, str } from './apiRequests';
 
 const PAGE_SANDBOX = 'sandbox allow-scripts allow-popups';
 const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
@@ -88,5 +89,50 @@ describe('a change to a plugin’s secret', () => {
     expect(pluginSecretChange({ plugin: 'number-one', name: 'OPENAI_API_KEY', value: null })).toMatchObject({ value: null });
     expect(() => pluginSecretChange({ plugin: 'p', name: 'N', value: 3 })).toThrow('as a string, or null');
     expect(() => pluginSecretChange(undefined)).toThrow('as a string, or null');
+  });
+});
+
+describe('pushKind', () => {
+  it('changes the PR’s own code when asked, and otherwise merges its base in', () => {
+    expect(pushKind('change')).toBe('change');
+    expect(pushKind('merge-base')).toBe('merge-base');
+    expect(pushKind(undefined)).toBe('merge-base');
+    expect(pushKind(['change'])).toBe('merge-base');
+  });
+});
+
+describe('pushedPr', () => {
+  const pr = (repo: string, number: number): PullRequest => ({
+    repo,
+    number,
+    title: `PR ${number}`,
+    url: '',
+    branch: `focus/${number}`,
+    baseBranch: 'main',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    checks: 'passing',
+    failedChecks: [],
+    closes: [],
+    createdAt: '2026-10-01T00:00:00Z',
+  });
+  const projects = [{ id: 'p1', repos: ['acme/shop'] }, { id: 'p2', repos: ['acme/api', 'acme/web'] }];
+  const boards = new Map<string, Board>([
+    ['p1', { projectId: 'p1', issues: [], prs: [pr('acme/shop', 7)], updatedAt: 0 }],
+    ['p2', { projectId: 'p2', issues: [], prs: [pr('acme/web', 7), pr('acme/api', 8)], updatedAt: 0 }],
+  ]);
+
+  it('finds the PR on the board of the project its repo belongs to', () => {
+    expect(pushedPr(projects, boards, 'acme/api', 8)).toEqual({ projectId: 'p2', title: 'PR 8' });
+  });
+
+  it('tells a PR from one of the same number in another repo', () => {
+    expect(pushedPr(projects, boards, 'acme/web', 7)).toEqual({ projectId: 'p2', title: 'PR 7' });
+    expect(pushedPr(projects, boards, 'acme/api', 7)).toBeUndefined();
+  });
+
+  it('finds nothing for a repo no project has, or a project with no board yet', () => {
+    expect(pushedPr(projects, boards, 'acme/other', 7)).toBeUndefined();
+    expect(pushedPr(projects, new Map(), 'acme/shop', 7)).toBeUndefined();
   });
 });

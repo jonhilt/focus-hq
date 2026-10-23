@@ -1,4 +1,5 @@
 import type { SDKRateLimitInfo } from '@anthropic-ai/claude-agent-sdk';
+import { clock } from '../../shared/clock';
 import type { ResumeHow, SignIn } from '../../shared/types';
 
 /**
@@ -126,6 +127,13 @@ export function resumeChoice(costUsd: number | undefined, how: ResumeHow | undef
  */
 export function afterLimit(costUsd: number | undefined, onKey: boolean): 'carry-on' | 'hold' {
   return onKey && (costUsd === undefined || costUsd < RESUME_WARN_USD) ? 'carry-on' : 'hold';
+}
+
+/** What the captain is told when new sessions move to the key (`onKey`), or off it: its budget spent, or the plan's limit reset. */
+export function signInToast(onKey: boolean, spell: Spell, budgetUsd: number, now: number): { level: 'info' | 'error' | 'success'; text: string } {
+  if (onKey) return { level: 'info', text: `🔑 Your plan's usage limit is reached until ${clock(spell.until, now)}: agents carry on with your API key (up to $${budgetUsd})` };
+  if (spell.until > now) return { level: 'error', text: `🔑 Your API key has spent its $${budgetUsd}: agents wait for your plan's usage limit to reset at ${clock(spell.until, now)}` };
+  return { level: 'success', text: `🔑 Your plan's usage limit has reset: agents are back on it (the key spent about $${spell.spentUsd.toFixed(2)})` };
 }
 
 /**

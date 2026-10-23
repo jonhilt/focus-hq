@@ -1,6 +1,6 @@
 // What the REST API (routes.ts) makes of a request: the fields it reads from a body or query, and which files it
 // serves and how. Pure, so each is tested next to it; the routes only do the I/O.
-import { EFFORT_LEVELS, type Effort, type PreviewSet, type ResumeHow } from '../shared/types';
+import { type Board, EFFORT_LEVELS, type Effort, type PreviewSet, type Project, type ResumeHow } from '../shared/types';
 
 export const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 
@@ -27,6 +27,16 @@ export const effort = (v: unknown): Effort | undefined => {
   if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
   return level;
 };
+
+/** What a demo push (`POST /demo-push/…?kind=`) does to the PR: `change` its own code, or (by default) merge its base in. */
+export const pushKind = (v: unknown): 'merge-base' | 'change' => (v === 'change' ? 'change' : 'merge-base');
+
+/** The open PR a demo push is for, and the project whose board it's on: none when no board shows `repo#number`. */
+export function pushedPr(projects: readonly Pick<Project, 'id' | 'repos'>[], boards: ReadonlyMap<string, Board>, repo: string, number: number): { projectId: string; title: string } | undefined {
+  const project = projects.find((p) => p.repos.includes(repo));
+  const pr = project && boards.get(project.id)?.prs.find((p) => p.repo === repo && p.number === number);
+  return project && pr ? { projectId: project.id, title: pr.title } : undefined;
+}
 
 /** How a file is sent: its type (an extension, for `res.type`) and its headers. */
 export interface Serving {
