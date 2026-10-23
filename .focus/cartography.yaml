@@ -87,6 +87,12 @@ parts:
     layer: Server
     kind: service
     paths: [server/agents/]
+  crew-files:
+    label: Crew files
+    does: "Each agent role's prompt and settings, read from .focus/crew/ and checked at start"
+    layer: Server
+    kind: store
+    paths: [server/agents/crewFiles.ts, server/agents/crewRoles.ts, server/agents/crewTemplate.ts]
   github:
     label: GitHub
     does: "Talks to GitHub through gh"

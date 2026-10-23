@@ -2,58 +2,18 @@ import type { Agent } from '../../shared/types';
 import type { IssueDetail } from '../github/provider';
 import { truncate } from '../util';
 import type { BriefSpec } from '../plugins/contract';
-import { SCRATCH_RULE } from './scratch';
-import { WAIT_RULE } from './wait';
-import { PUBLIC_WORDS_RULE } from '../../shared/wording';
+import { CREW_RULES, crewPrompt, crewText } from './crewFiles';
 
-const PULL_REQUEST_SUMMARY = 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.';
-
-/** A brief whose plugin was switched off since: the brief itself is in their first message. */
-const UNKNOWN_BRIEF = { assignment: 'Your manager handed you a brief: it\'s in your first message.', summary: PULL_REQUEST_SUMMARY };
-
-/** `brief` is what a plugin's brief says of the work (task `brief`). */
+/** `brief` is what a plugin's brief says of the work (task `brief`); without one, its plugin was switched off since. */
 export function systemAppend(agent: Agent, brief?: Pick<BriefSpec, 'assignment' | 'summary'>): string {
   if (agent.task === 'review') throw new Error('The QA officer gets qaSystemAppend (qa.ts)');
   if (agent.task === 'lead') throw new Error('The project lead gets leadSystemAppend (lead.ts)');
-  const { assignment, summary } = agent.task === 'brief' ? brief ?? UNKNOWN_BRIEF : {
-    assignment: {
-      issue: `Your manager assigned you GitHub issue #${agent.issue.number} in ${agent.repo}.`,
-      conflicts: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it has merge conflicts with \`${agent.baseBranch}\` that you need to resolve.`,
-      fix: `Your manager assigned you pull request #${agent.issue.number} in ${agent.repo}: it failed QA and you need to fix what QA found.`,
-    }[agent.task],
-    summary: {
-      issue: PULL_REQUEST_SUMMARY,
-      conflicts: 'Your final message goes to the manager: say briefly how you resolved each conflict and what you checked. No preamble.',
-      fix: 'Your final message goes to the manager: say briefly what you fixed and how you checked it. No preamble.',
-    }[agent.task],
+  const at = { repo: agent.repo, number: String(agent.issue.number), baseBranch: agent.baseBranch };
+  const { assignment, summary } = agent.task === 'brief' ? brief ?? { assignment: crewText('worker', 'assignment.unknownBrief', at), summary: crewText('worker', 'summary.pullRequest', at) } : {
+    assignment: crewText('worker', `assignment.${agent.task}`, at),
+    summary: crewText('worker', ({ issue: 'summary.pullRequest', conflicts: 'summary.conflicts', fix: 'summary.fix' } as const)[agent.task], at),
   };
-  const where = agent.cloud
-    ? [
-        `- You work in a Claude Code cloud session, in a clone of ${agent.repo}. Work on branch \`${agent.branch}\` (created from \`${agent.baseBranch}\`): if you're on any other branch, run \`git fetch origin ${agent.branch}\` and \`git checkout ${agent.branch}\` first. This overrides any other branch you were told to develop on.`,
-        '- Commit your work as you go with clear messages. Never commit secrets, build output or dependency folders.',
-        `- Push your commits with \`git push origin HEAD:${agent.branch}\`, and always before your final message: your work only reaches Ops through that branch. Never push to any other branch, and do NOT open a pull request: Ops opens it from your branch.`,
-        '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
-        '- If the change touches a web UI, start the dev server in the background and check your work in a headless browser (e.g. a Playwright script). Save screenshots of what you check as PNG files and look at each one with the Read tool: that\'s how the manager sees them on your laptop screen.',
-      ]
-    : [
-        `- Your current directory is a dedicated git worktree on branch \`${agent.branch}\`, created from \`${agent.baseBranch}\`. Stay inside it.`,
-        '- Commit your work as you go with clear messages. Never commit secrets, build output or dependency folders.',
-        '- Do NOT push and do NOT open a pull request: when you finish, Ops pushes your branch and opens the PR for you.',
-        '- Run the project\'s tests, type checks and linters when they exist, and fix what you break.',
-        '- If the change touches a web UI, start the dev server in the background and check your work with the mcp__browser__ tools (open, click, type, screenshot, console).',
-        `- ${SCRATCH_RULE}`,
-        `- ${WAIT_RULE}`,
-      ];
-  return `
-# You are ${agent.name}, an agent aboard the Focus
-
-${assignment} You work autonomously; the manager watches your terminal and browser on your laptop screen and may send you messages.
-
-${where.join('\n')}
-- Nobody can answer questions while you work. Make sensible decisions and mention them in your summary.
-- ${PUBLIC_WORDS_RULE}
-- ${summary}
-`.trim();
+  return crewPrompt('worker', { ...at, name: agent.name, branch: agent.branch, assignment, summary, cloud: !!agent.cloud, ...CREW_RULES }).trim();
 }
 
 export function issuePrompt(agent: Agent, issue: IssueDetail): string {
