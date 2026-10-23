@@ -27,6 +27,7 @@ vi.mock('../../plugin-api/client', async () => {
 vi.mock('./here', () => ({ waitingNow: () => fake.waiting }));
 vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve(fake.inbox), decide: vi.fn(), hold: vi.fn(), decideLanded: vi.fn(() => Promise.resolve({ ok: true })) } }));
 const { inbox: inboxApi } = await import('./inboxApi');
+const { focus } = await import('../../plugin-api/client');
 
 const { openComms } = await import('./comms');
 
@@ -132,7 +133,6 @@ describe('Comms', () => {
   it('brings a decision back up from Recently decided, with a reply to follow it up while its lead is aboard', async () => {
     fake.waiting = [hand];
     const lead = agent('a');
-    const { focus } = await import('../../plugin-api/client');
     const spy = vi.spyOn(focus, 'agent').mockImplementation((id) => (id === 'a' ? lead : undefined));
     fake.inbox = { open: [item('hand:a:r1', { kind: 'hand' })], landed: [], decided: [{ ...decision('office', 'Ship it'), item: { id: 'turn:a:900', kind: 'turn', what: 'Ship slice 2?' } }] };
     await open();
