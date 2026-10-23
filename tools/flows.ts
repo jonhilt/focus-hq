@@ -13,23 +13,27 @@ const seconds = Number(process.argv[process.argv.indexOf('--seconds') + 1]) || 1
 const SPEED = 3;
 const RUN = `the demo ship at speed ${SPEED} for ${seconds} s, the captain opening the engineering station, its Maps, the ledger and comms`;
 
-type Hq = { ui: Record<string, (...args: unknown[]) => void> & { panels: { close(): void } }; state: { projects: { id: string }[] } };
-
 /** What the captain does, through Focus's own panels, so each request is made by the file that makes it for real. */
 async function captain(page: Page): Promise<void> {
+  const panel = (act: 'openEngineering' | 'openLedger' | 'close') => page.evaluate((act) => {
+    if (!window.focusHQ) throw new Error("the ship isn't loaded: window.focusHQ is missing");
+    const { ui } = window.focusHQ;
+    if (act === 'close') ui.panels.close();
+    else ui[act]();
+  }, act);
   const step = async (what: string, act: () => Promise<unknown>) => {
     console.log(`  · ${what}`);
     await act();
     await page.waitForTimeout(2500);
-    await page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.panels.close());
+    await panel('close');
   };
-  await step('the engineering station', () => page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.openEngineering()));
+  await step('the engineering station', () => panel('openEngineering'));
   await step('its Maps, and Map again', async () => {
-    await page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.openEngineering());
+    await panel('openEngineering');
     await page.getByText('Maps', { exact: true }).first().click().catch(() => undefined);
     await page.getByRole('button', { name: 'Map again' }).first().click().catch(() => undefined);
   });
-  await step('the ledger', () => page.evaluate(() => (window as unknown as { focusHQ: Hq }).focusHQ.ui.openLedger()));
+  await step('the ledger', () => panel('openLedger'));
 }
 
 async function main(): Promise<void> {

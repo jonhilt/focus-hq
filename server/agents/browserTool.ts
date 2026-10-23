@@ -207,14 +207,14 @@ export class BrowserPool {
       });
       await page.setContent(html, { waitUntil: 'networkidle', timeout: 15_000 }).catch(() => undefined);
       // a page with moments says when it has drawn its resting frame (a 3D stage only starts once three.js has loaded)
-      await page.waitForFunction(() => (window as { kitReady?: boolean }).kitReady !== false, undefined, { timeout: 5000 }).catch(() => undefined);
+      await page.waitForFunction(() => window.kitReady !== false, undefined, { timeout: 5000 }).catch(() => undefined);
       // scripts that draw after loading (mermaid, charts) get a moment to finish
       await page.waitForTimeout(400);
       const image = await page.screenshot({ type: 'jpeg', quality: 85 });
       if (!frames?.at.length) return { image, errors };
       const taken: Frame[] = [];
       for (const at of frames.at) {
-        await page.evaluate((t) => (window as { kitSeek?: (t: number) => void }).kitSeek?.(t), at);
+        await page.evaluate((t) => window.kitSeek?.(t), at);
         const shot = await page.screenshot({ type: 'jpeg', quality: 70, clip: frames.clip });
         taken.push({ at, image: shot, seen: await page.evaluate(pageSeen, shot.toString('base64')) });
       }

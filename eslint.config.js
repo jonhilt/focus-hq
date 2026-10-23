@@ -2,6 +2,33 @@
 import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 
+// Casts that claim what one honest helper or type would check instead (each one's message says which).
+const CASTS = [{
+  selector: "TSAsExpression > CallExpression.expression[callee.object.name='Object'][callee.property.name=/^(keys|entries|fromEntries)$/]",
+  message: 'Use keysOf or recordOf (shared/records.ts) instead of casting what Object.keys/entries/fromEntries return.',
+}, {
+  // `(o as THREE.Mesh).isMesh` checks a cast it has already made: isMesh (client/src/world/isMesh.ts) checks and narrows at once.
+  selector: "TSAsExpression > TSTypeReference.typeAnnotation[typeName.left.name='THREE'][typeName.right.name=/^(Mesh|SkinnedMesh|InstancedMesh)$/]",
+  message: 'Narrow an Object3D with isMesh (client/src/world/isMesh.ts), or `instanceof` for a SkinnedMesh or InstancedMesh, instead of casting it.',
+}, {
+  // `(LIST as readonly string[]).includes(v)` or `LIST.includes(v as T)` casts to check a membership it then has
+  // to cast again: isOneOf (shared/records.ts) checks and narrows at once.
+  selector: "MemberExpression[property.name=/^(includes|has)$/] > TSAsExpression.object",
+  message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the list.',
+}, {
+  selector: "CallExpression[callee.property.name=/^(includes|has)$/] > TSAsExpression.arguments",
+  message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the value.',
+}];
+
+// `(window as { focusHQ?: … })` guesses what a page put on it: a page's globals are declared on Window once, beside
+// what promises them (client/src/focusHQ.ts, server/plugins/contract.ts), so a tool reads them typed. Tests build
+// pages of their own (happy-dom's Window) and may still cast them.
+const WINDOW_MESSAGE = "Declare the page's global on Window (client/src/focusHQ.ts, or server/plugins/contract.ts for an explainer's kit) and read it straight.";
+const WINDOW_CASTS = [
+  { selector: "TSAsExpression[expression.type='Identifier'][expression.name='window']", message: `${WINDOW_MESSAGE} Don't cast window.` },
+  { selector: "VariableDeclaration[declare=true] > VariableDeclarator[id.name='window']", message: `${WINDOW_MESSAGE} Don't declare a window of your own.` },
+];
+
 export default tseslint.config(
   { ignores: ['dist/', 'node_modules/', 'data/'] },
   {
@@ -35,22 +62,7 @@ export default tseslint.config(
     // (shared/records.ts) read and build such a record, tested.
     files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'tools/**/*.ts'],
     rules: {
-      'no-restricted-syntax': ['error', {
-        selector: "TSAsExpression > CallExpression.expression[callee.object.name='Object'][callee.property.name=/^(keys|entries|fromEntries)$/]",
-        message: 'Use keysOf or recordOf (shared/records.ts) instead of casting what Object.keys/entries/fromEntries return.',
-      }, {
-        // `(o as THREE.Mesh).isMesh` checks a cast it has already made: isMesh (client/src/world/isMesh.ts) checks and narrows at once.
-        selector: "TSAsExpression > TSTypeReference.typeAnnotation[typeName.left.name='THREE'][typeName.right.name=/^(Mesh|SkinnedMesh|InstancedMesh)$/]",
-        message: 'Narrow an Object3D with isMesh (client/src/world/isMesh.ts), or `instanceof` for a SkinnedMesh or InstancedMesh, instead of casting it.',
-      }, {
-        // `(LIST as readonly string[]).includes(v)` or `LIST.includes(v as T)` casts to check a membership it then has
-        // to cast again: isOneOf (shared/records.ts) checks and narrows at once.
-        selector: "MemberExpression[property.name=/^(includes|has)$/] > TSAsExpression.object",
-        message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the list.',
-      }, {
-        selector: "CallExpression[callee.property.name=/^(includes|has)$/] > TSAsExpression.arguments",
-        message: 'Check that a value is one of a list with isOneOf (shared/records.ts) instead of casting the value.',
-      }],
+      'no-restricted-syntax': ['error', ...CASTS],
     },
   },
   {
@@ -59,6 +71,14 @@ export default tseslint.config(
     ignores: ['**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'error',
+    },
+  },
+  {
+    // the same casts, and a cast of window, outside the tests
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts', 'tools/**/*.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...CASTS, ...WINDOW_CASTS],
     },
   },
 );

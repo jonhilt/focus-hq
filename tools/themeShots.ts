@@ -8,9 +8,6 @@ import { launchBrowser } from './demoShip';
 
 const [url = 'http://127.0.0.1:5173/', out = 'smoke-shots/theme', css = ''] = process.argv.slice(2);
 
-type Hooks = { ui: Record<string, (...a: unknown[]) => unknown> & { places(): { label: string }[]; pluginPanels(): { id: string }[]; panels: { close(): void } }; state: { projects: { id: string }[]; agents: Map<string, { id: string; task: string }> } };
-declare const window: { focusHQ: Hooks };
-
 async function shot(page: Page, name: string, act: string): Promise<void> {
   await page.evaluate(`(() => { const { ui, state } = window.focusHQ; ui.panels.close(); ${act} })()`);
   await page.waitForTimeout(2500);
@@ -36,7 +33,10 @@ try {
   await shot(page, 'bridge', place('Bridge'));
   await shot(page, 'agent-panel', `ui.openAgent(${lead})`);
   // each plugin switched on's own panel, by its id: whichever the ship has on
-  const panels = await page.evaluate(() => window.focusHQ.ui.pluginPanels().map((p) => p.id));
+  const panels = await page.evaluate(() => {
+    if (!window.focusHQ) throw new Error("the ship isn't loaded: window.focusHQ is missing");
+    return window.focusHQ.ui.pluginPanels().map((p) => p.id);
+  });
   for (const id of panels) await shot(page, `plugin-${id}`, `ui.openPlugin(${JSON.stringify(id)})`);
   await shot(page, 'goals', 'ui.openGoals(state.projects[0].id)');
   await shot(page, 'board', 'ui.openBoard(state.projects[0].id)');

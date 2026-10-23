@@ -19,7 +19,8 @@ async function scan(browser: Browser, url: string): Promise<{ pairs: FightingPai
   const modulePath = '/src/world/zfight.ts';
   return page.evaluate(async (modulePath) => {
     const { findZFighting } = (await import(modulePath)) as typeof import('../client/src/world/zfight');
-    const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
+    if (!window.focusHQ) throw new Error("the ship isn't loaded: window.focusHQ is missing");
+    const { world } = window.focusHQ;
     const scene = world.root.parent ?? world.root;
     let meshes = 0;
     let padds = 0;

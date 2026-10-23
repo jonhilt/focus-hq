@@ -733,7 +733,7 @@ async function main() {
   loop();
 
   // handy for debugging from the console
-  Object.assign(window, { focusHQ: { state, world, player, ui } });
+  window.focusHQ = { state, world, player, ui };
 }
 
 void main();

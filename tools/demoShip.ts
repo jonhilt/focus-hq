@@ -94,13 +94,14 @@ export async function openScene(browser: Browser, url: string): Promise<Page> {
   // the world is built once the first snapshot arrives
   const built = await page
     .waitForFunction(() => {
-      const hq = (window as { focusHQ?: { world: { rooms: Map<string, unknown> } } }).focusHQ;
+      const hq = window.focusHQ;
       return !!hq && hq.world.rooms.size > 0;
     }, null, { timeout: 30_000 })
     .then(() => true, () => false);
   if (!built) throw new CheckFailed('the ship is built within 30s');
   await page.evaluate(() => {
-    const world = (window as unknown as { focusHQ: { world: { root: import('three').Object3D } } }).focusHQ.world;
+    if (!window.focusHQ) throw new Error("the ship isn't loaded: window.focusHQ is missing");
+    const { world } = window.focusHQ;
     // team stations' briefing rooms are only drawn while you're in one or looking in through its door (teamStation.ts)
     (world.root.parent ?? world.root).traverse((o) => {
       if (o.name === 'briefing_room' && o.parent) o.parent.visible = true;

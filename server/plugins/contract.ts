@@ -154,6 +154,16 @@ export interface PageFrames {
   clip: { x: number; y: number; width: number; height: number };
 }
 
+declare global {
+  /** What a page with moments puts on its window for Ops to drive it by (`PageFrames`); a page without any has none. */
+  interface Window {
+    /** False until the page has drawn its resting frame. */
+    kitReady?: boolean;
+    kitSeek?: (at: number) => void;
+    kitSeen?: (jpeg: string) => unknown;
+  }
+}
+
 /** What a plugin's lead tool gets: whose lead it is, their checkouts, and their station's screen. */
 export interface LeadToolContext {
   agent: Agent;
