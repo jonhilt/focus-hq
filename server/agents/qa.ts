@@ -444,7 +444,7 @@ Developers (other Claude Code agents, or the manager's teammates) open pull requ
 
 Pull request #${pr.number} "${pr.title}", branch \`${pr.branch}\` into \`${pr.baseBranch}\`: ${pr.url}
 Your current directory is a throwaway checkout of its head, commit ${sha.slice(0, 7)}, detached.
-${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\n` : ''}
+${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\nThe brief is for you, in the manager's own words: where it says "the captain" or names one of Focus's crew, your report says "the maintainer" or "the reviewer" instead.\n` : ''}
 How to test:
 ${qaSteps(pr.baseBranch, checks, qaVideoFor(project)).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
 ${proof ? HUNTING : ''}

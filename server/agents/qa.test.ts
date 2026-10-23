@@ -208,6 +208,11 @@ describe('QA instructions', () => {
     expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).not.toContain('from the manager');
   });
 
+  it('keep the brief’s ship words out of the report', () => {
+    const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop', qaBrief: '- Tell the captain if the layout breaks' }, pr, pr.headSha);
+    expect(text).toContain('your report says "the maintainer" or "the reviewer" instead');
+  });
+
   it('ask QA to read the changed lines no test exercises, since a green suite says nothing about them', () => {
     const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha);
     expect(text).toContain('go through every file the diff changes (`git diff --stat origin/main...HEAD` lists them all: however many there are, don\'t pick a few)');

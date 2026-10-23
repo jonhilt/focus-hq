@@ -33,6 +33,11 @@ describe('the QA officer’s talk with the captain', () => {
     expect(system).toContain('You change nothing yourself');
   });
 
+  it('writes the brief in plain words, since QA’s reports on pull requests come from it', () => {
+    expect(qaChatSystemPrompt(request)).toContain('never "the captain", "the crew"');
+    expect(String((QA_CHANGE_PROPERTIES.qaBrief as { description: string }).description)).toContain('none of the ship’s');
+  });
+
   it('gives it the Playbook as it is, and the talk ending with the captain’s words', () => {
     const prompt = qaChatPrompt(request);
     expect(prompt).toContain('- Test every PR: off. Runs only when you press Send to QA');

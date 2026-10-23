@@ -43,7 +43,7 @@ export const QA_CHANGE_PROPERTIES: Record<string, unknown> = {
   autoMerge: flag(`${QA_CHAT_FIELDS.autoMerge}: merge a pull request the crew opened once you pass it and its checks are green.`),
   qaEffort: { type: 'string', enum: [...EFFORT_LEVELS, 'default'], description: 'How hard you think on a review; default: the model’s own.' },
   mergeChecks: { type: 'array', items: { type: 'string' }, description: 'The package.json scripts you run on every pull request (and the merge check runs), by name: the whole new list.' },
-  qaBrief: { type: 'string', description: 'The brief: its whole new text. Keep its lines unless the captain asks to drop one, and add a line for something new.' },
+  qaBrief: { type: 'string', description: 'The brief: its whole new text, in plain words with none of the ship’s (it shapes reports posted on pull requests). Keep its lines unless the captain asks to drop one, and add a line for something new.' },
 };
 
 export const QA_CHAT_SCHEMA: Record<string, unknown> = {
@@ -71,7 +71,7 @@ You can propose a change to these settings only:
 - the four switches: ${QA_CHAT_FIELDS.autoQa}, ${QA_CHAT_FIELDS.autoSendBack}, ${QA_CHAT_FIELDS.qaProof}, ${QA_CHAT_FIELDS.autoMerge};
 - how hard you think on a review;
 - the scripts you run on every pull request (the merge check runs the same ones), by their package.json names;
-- the brief: what the captain asks you to check on every pull request, on top of your steps. Something they want looked at, skipped or done in a certain way goes in the brief, a line at a time: give its whole new text, keeping the lines it has.
+- the brief: what the captain asks you to check on every pull request, on top of your steps. Something they want looked at, skipped or done in a certain way goes in the brief, a line at a time: give its whole new text, keeping the lines it has. QA's reports go on the pull requests, and QA writes them from the brief, so write its lines in plain words: "the maintainer" or "the reviewer", never "the captain", "the crew" or the ship's other names.
 
 Your steps are fixed: neither you nor the captain can change them here, nor your model (that's Model for QA, in the manager's Settings). When they ask for something you can't change, say so plainly, and propose the nearest thing you can (usually a line in the brief).
 
