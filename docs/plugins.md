@@ -24,7 +24,7 @@ A plugin's saved state stays in `state.json` while it's switched off, so switchi
 
 ## Plugins today
 
-Each folder under `plugins/` is one, and its README (where it has one) says what it does: `flow`, `number-one`, `retro`, `scorecard`, `cartography`, `briefings`, `usage`, `astrometrics`, `captains-log`, `chief-of-staff` and `climber`. Without a plugin, what it brings isn't there, but the vocabulary the core shares with it stays the core's: the ledger's frictions and retro decisions are still read and shown without the retro, voice mode (dictation and Kokoro) stays the core's kit without Number One, and carrying on with your API key when the plan's limit is reached stays the core's without the usage plugin.
+Each folder under `plugins/` is one, and its README (where it has one) says what it does: `flow`, `number-one`, `retro`, `scorecard`, `cartography`, `briefings`, `usage`, `astrometrics`, `captains-log`, `chief-of-staff`, `climber` and `scheduler`. Without a plugin, what it brings isn't there, but the vocabulary the core shares with it stays the core's: the ledger's frictions and retro decisions are still read and shown without the retro, voice mode (dictation and Kokoro) stays the core's kit without Number One, and carrying on with your API key when the plan's limit is reached stays the core's without the usage plugin.
 
 ## Plugins that need each other
 

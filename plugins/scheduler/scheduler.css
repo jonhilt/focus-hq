@@ -1,0 +1,8 @@
+/* the scheduler's panel: a row per schedule, its latest runs as chips coloured by how they went */
+.scheduler-panel h3 { margin: 14px 0 6px; color: var(--lcars-peach); font-size: 15px; }
+.scheduler-row { background: var(--surface-2); border-radius: var(--radius); padding: 8px 12px; margin-bottom: 6px; display: grid; gap: 4px; }
+.scheduler-head { display: flex; gap: 10px; align-items: center; }
+.scheduler-runs { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip.scheduler-on-time { --tone: var(--lcars-sky); }
+.chip.scheduler-late { --tone: var(--lcars-gold); }
+.chip.scheduler-missed, .chip.scheduler-held { --tone: var(--lcars-red); }
