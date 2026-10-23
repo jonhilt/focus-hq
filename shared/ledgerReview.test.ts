@@ -70,6 +70,17 @@ describe('ledgerRow', () => {
     expect(ledgerRow(decided('api')).detail).toBe('Cmdr. Vale · Engineering deck · via the API');
   });
 
+  it('says what a plugin alerted the captain of, about whom, among the goals shown at first', () => {
+    const alert = ev({ kind: 'alert', by: 'scheduler', agent: 'Lt. Quintero', goal: GOAL, text: 'Lt. Quintero hasn’t answered the 15:07 check (sch-2) after 20 min.' }, 8);
+    expect(ledgerRow(alert)).toEqual({
+      seq: alert.seq, at: alert.at, projectId: 'p1', group: 'goals', tag: 'Alert', tone: 'bad',
+      title: 'Lt. Quintero hasn’t answered the 15:07 check (sch-2) after 20 min.', detail: 'Lt. Quintero · Engineering deck · from the scheduler', goal: GOAL,
+    });
+    expect(SHOWN_AT_FIRST).toContain('goals');
+    expect(trace([alert], { kind: 'goal', title: GOAL }).steps.map((s) => s.tag)).toEqual(['Alert']);
+    expect(trace([alert], { kind: 'pr', repo: REPO, pr: 236 }).steps).toEqual([]);
+  });
+
   it('says a closed pull request was closed, never merged', () => {
     const closed = ev({ kind: 'closed', repo: REPO, pr: 240, by: 'officer', qa: 'passed', failedRounds: 1, triages: 2, goal: GOAL, closes: [226] }, 8);
     expect(ledgerRow(closed)).toMatchObject({ group: 'merged', tag: 'Closed', tone: 'warn', title: 'focus #240 · by the operations officer · QA passed after 1 failed round', detail: 'Engineering deck · 2 triages' });

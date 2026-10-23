@@ -43,7 +43,9 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
       return 'merged';
     case 'conflicts':
       return 'conflicts';
+    // an alert (raised to the captain directly) shows from the start, beside the goals it's about
     case 'goal-closed':
+    case 'alert':
       return 'goals';
     case 'retro-decision':
       return 'retro';
@@ -52,7 +54,6 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'captain-decision':
     case 'cos-verdict':
     case 'cos-lane':
-    case 'alert':
       return 'sessions';
     case 'session-frictions':
       return 'frictions';
