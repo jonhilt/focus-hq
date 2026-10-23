@@ -1,9 +1,9 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheck';
-import { autoMergeFor, checkMergesFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, qaVideoFor, spotCheckUrl } from '../../../shared/qa';
-import { type QaSwitch, qaSwitchSays, qaWhoLine } from '../../../shared/qaPlaybook';
+import { checkMergesFor } from '../../../shared/mergeGate';
+import { filesCovered, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
+import { qaWhoLine } from '../../../shared/qaPlaybook';
 import { triageLabel } from '../../../shared/triage';
 import { qaSettingsNow } from '../../../shared/qaChat';
 import type { Project, QaReview, QaScreenshot } from '../../../shared/types';
@@ -14,24 +14,12 @@ import { effortPicker, pickedEffort } from './agentPanel';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { type NavItem, shownView, SideNav, Switch } from './panels';
+import { type NavItem, shownView, SideNav } from './panels';
 import { qaChat } from './qaChat';
-import { checksList, fullPrompt, stepsList } from './qaPlaybook';
+import { checksList, fullPrompt, stepsList, toggle, whenQaRuns } from './qaPlaybook';
 
 /** The QA station's views: the reports, and the playbook: what QA does on this project, with the switches that change it. */
 type QaView = 'reports' | 'playbook';
-
-/** A switch with what it means for the project, as it's set, beside it. */
-function toggle(label: string, which: QaSwitch, on: boolean, save: (on: boolean) => void): HTMLElement {
-  const says = h('span', { class: 'muted' }, qaSwitchSays(which, on));
-  const s = new Switch(label, on, {
-    changed: (now) => {
-      says.textContent = qaSwitchSays(which, now);
-      save(now);
-    },
-  });
-  return h('div', { class: 'qa-toggle' }, s.el, says);
-}
 
 /**
  * The room's QA station: what the QA officer is doing and the reports they've written on the open pull requests, and on
@@ -112,13 +100,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
     const section = (title: string, ...children: (HTMLElement | string | null)[]) => h('section', { class: 'qa-playbook-section' }, h('h3', null, title), ...children);
     return [
       h('p', { class: 'muted' }, `What ${officer.name} does on ${p.name}, read from QA's instructions and these settings as they are now.`),
-      section('When QA runs',
-        toggle('Test every PR', 'autoQa', autoQaFor(p), (on) => void save({ autoQa: on })),
-        toggle('Send failed PRs back', 'autoSendBack', autoSendBackFor(p), (on) => void save({ autoSendBack: on })),
-        toggle('Block only with proof', 'qaProof', qaProofFor(p), (on) => void save({ qaProof: on })),
-        toggle('Record proof video', 'qaVideo', qaVideoFor(p), (on) => void save({ qaVideo: on })),
-        toggle('Auto-merge', 'autoMerge', autoMergeFor(p), (on) => void save({ autoMerge: on })),
-      ),
+      section('When QA runs', ...whenQaRuns(p, (change) => void save(change))),
       section('Who, and how hard', h('div', { class: 'qa-toggle' }, effort, who)),
       section('Its steps', steps),
       section('The checks it runs',

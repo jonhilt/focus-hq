@@ -1,9 +1,35 @@
-import { repoChecksLine } from '../../../shared/qaPlaybook';
-import type { QaPlaybook } from '../../../shared/types';
+import { autoMergeFor } from '../../../shared/mergeGate';
+import { autoQaFor, autoSendBackFor, qaProofFor, qaVideoFor } from '../../../shared/qa';
+import { type QaSwitch, qaSwitchSays, repoChecksLine } from '../../../shared/qaPlaybook';
+import type { Project, QaPlaybook } from '../../../shared/types';
 import { h } from './dom';
+import { Switch } from './panels';
 
 // The parts of the QA station's Playbook the server builds from QA's own instructions (GET /projects/:id/qa-playbook):
-// its steps, what it runs on each repo, and the instructions in full. qaPanel.ts puts them beside QA's switches.
+// its steps, what it runs on each repo, and the instructions in full; and QA's switches, which qaPanel.ts saves.
+
+/** A switch with what it means for the project, as it's set, beside it. */
+export function toggle(label: string, which: QaSwitch, on: boolean, save: (on: boolean) => void): HTMLElement {
+  const says = h('span', { class: 'muted' }, qaSwitchSays(which, on));
+  const s = new Switch(label, on, {
+    changed: (now) => {
+      says.textContent = qaSwitchSays(which, now);
+      save(now);
+    },
+  });
+  return h('div', { class: 'qa-toggle' }, s.el, says);
+}
+
+/** The switches for when QA runs and what it does with a pull request, set as the project has them; `save` gets each change. */
+export function whenQaRuns(p: Project, save: (change: Partial<Pick<Project, 'autoQa' | 'autoSendBack' | 'qaProof' | 'qaVideo' | 'autoMerge'>>) => void): HTMLElement[] {
+  return [
+    toggle('Test every PR', 'autoQa', autoQaFor(p), (on) => save({ autoQa: on })),
+    toggle('Send failed PRs back', 'autoSendBack', autoSendBackFor(p), (on) => save({ autoSendBack: on })),
+    toggle('Block only with proof', 'qaProof', qaProofFor(p), (on) => save({ qaProof: on })),
+    toggle('Record proof video', 'qaVideo', qaVideoFor(p), (on) => save({ qaVideo: on })),
+    toggle('Auto-merge', 'autoMerge', autoMergeFor(p), (on) => save({ autoMerge: on })),
+  ];
+}
 
 /** QA's steps in order, each title opening to the exact text QA gets. */
 export function stepsList(playbook: QaPlaybook): HTMLElement {

@@ -43,11 +43,12 @@ export interface FastForward {
  * (ms since the epoch). A wait plays at a whole number of times its real speed, so the badge saying so is exact; one
  * too short to speed up by two plays as it was. Nothing when there's nothing to show.
  */
-export function editPlan(frames: readonly RecordedFrame[], actions: readonly number[], rules: EditRules = EDIT_RULES): Edit | null {
-  if (frames.length < 2) return null;
-  const last = frames[frames.length - 1];
+export function editPlan(recorded: readonly RecordedFrame[], actions: readonly number[], rules: EditRules = EDIT_RULES): Edit | null {
+  if (recorded.length < 2) return null;
+  const last = recorded[recorded.length - 1];
   const kept = [...actions.map((a) => [a - rules.before, a + rules.after]), [last.at - rules.tail, Infinity]];
   const keeps = (at: number) => kept.some(([from, to]) => at >= from && at < to);
+  const frames = splitAt(recorded, kept.flat());
   const shows: Edit['shows'] = [];
   const fastForwards: FastForward[] = [];
   let shown = 0;
@@ -69,6 +70,20 @@ export function editPlan(frames: readonly RecordedFrame[], actions: readonly num
     if (speed > 1) fastForwards.push({ from, to: shown, speed });
   }
   return { shows, fastForwards, realSeconds: (last.at - frames[0].at) / 1000, shownSeconds: shown };
+}
+
+/**
+ * The frames with one more at each of `cuts` that falls between two of them: the frame showing then, again. The
+ * screencast sends a frame only when the page changes, so on a still page the frame showing as an action's moment
+ * begins may have come long before it, and without a cut there its moment would play sped up with the wait.
+ */
+function splitAt(frames: readonly RecordedFrame[], cuts: readonly number[]): RecordedFrame[] {
+  const split = [...frames];
+  for (const cut of cuts) {
+    const after = split.findIndex((f) => f.at >= cut);
+    if (after > 0 && split[after].at !== cut) split.splice(after, 0, { file: split[after - 1].file, at: cut });
+  }
+  return split;
 }
 
 /** How long the last frame stays up at the end of the clip, in seconds. */

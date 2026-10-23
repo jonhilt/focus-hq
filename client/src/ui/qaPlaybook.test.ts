@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
-import { describe, expect, it } from 'vitest';
-import type { QaPlaybook } from '../../../shared/types';
-import { checksList, fullPrompt, stepsList } from './qaPlaybook';
+import { describe, expect, it, vi } from 'vitest';
+import type { Project, QaPlaybook } from '../../../shared/types';
+import { checksList, fullPrompt, stepsList, whenQaRuns } from './qaPlaybook';
 
 const playbook: QaPlaybook = {
   steps: [
@@ -41,5 +41,31 @@ describe('the QA Playbook', () => {
     expect(prompt.querySelector('pre')?.textContent).toBe(playbook.prompt);
     expect(prompt.textContent).toContain('in acme/shop');
     expect(prompt.textContent).toContain('CLAUDE.md, and your Claude Code settings (user, project and local)');
+  });
+});
+
+describe('the switches for when QA runs', () => {
+  const project = (fields: Partial<Project> = {}): Project => ({ id: 'p1', name: 'Shop', color: '#f90', repos: ['acme/shop'], maxAgents: 3, autoAssign: false, autoLabel: '', createdAt: 0, ...fields });
+  const recordSwitch = (switches: HTMLElement[]) => switches.find((s) => s.textContent?.startsWith('Record proof video'))!;
+
+  it('starts Record proof video off, then saves it on with a click, saying what it now does', () => {
+    const save = vi.fn();
+    const row = recordSwitch(whenQaRuns(project(), save));
+    const button = row.querySelector('button')!;
+    expect(button.getAttribute('aria-pressed')).toBe('false');
+    expect(row.textContent).toContain('no recording (Record proof video is off)');
+    button.click();
+    expect(save).toHaveBeenCalledWith({ qaVideo: true });
+    expect(button.getAttribute('aria-pressed')).toBe('true');
+    expect(row.textContent).toContain('every action at real speed, the waits between them fast-forwarded');
+    button.click();
+    expect(save).toHaveBeenLastCalledWith({ qaVideo: false });
+  });
+
+  it('shows it on for a project that records, and saves nothing until it’s clicked', () => {
+    const save = vi.fn();
+    const row = recordSwitch(whenQaRuns(project({ qaVideo: true }), save));
+    expect(row.querySelector('button')!.getAttribute('aria-pressed')).toBe('true');
+    expect(save).not.toHaveBeenCalled();
   });
 });

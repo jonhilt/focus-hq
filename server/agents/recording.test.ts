@@ -45,6 +45,18 @@ describe('editPlan', () => {
     expect(tail.every((s) => s.seconds === 0.1)).toBe(true);
   });
 
+  it('keeps the lead-in to an action on a still page, which sends no frames while nothing changes', () => {
+    // one frame at 0 s, then nothing until the action at 20 s
+    const still = [{ file: 'still.jpg', at: 0 }, ...frames(20_000, 25_000)];
+    const edit = editPlan(still, [20_000], RULES)!;
+    // the still page shows sped up until half a second before the action, then for that half second as it was
+    expect(edit.shows.slice(0, 2)).toEqual([
+      { file: 'still.jpg', seconds: 19.5 / 20 },
+      { file: 'still.jpg', seconds: 0.5 },
+    ]);
+    expect(edit.fastForwards).toEqual([{ from: 0, to: 19.5 / 20, speed: 20 }]);
+  });
+
   it('has nothing to edit without two frames', () => {
     expect(editPlan([], [0], RULES)).toBeNull();
     expect(editPlan(frames(0, 100), [0], RULES)).toBeNull();
