@@ -40,10 +40,11 @@ interface Import {
 
 /** Every module a file's source imports or re-exports from, and whether only for types (erased as it runs). */
 export function importsOf(file: string, text: string): Import[] {
-  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  // without parent pointers, which only walking up needs: setting them costs a whole-repo walk about a third again
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, false);
   const found: Import[] = [];
   const add = (spec: ts.Expression, node: ts.Node, typeOnly: boolean) => {
-    if (ts.isStringLiteral(spec)) found.push({ spec: spec.text, line: source.getLineAndCharacterOfPosition(node.getStart()).line + 1, typeOnly });
+    if (ts.isStringLiteral(spec)) found.push({ spec: spec.text, line: source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1, typeOnly });
   };
   const visit = (node: ts.Node) => {
     if (ts.isImportDeclaration(node)) {
@@ -65,8 +66,10 @@ export function importsOf(file: string, text: string): Import[] {
 /** The crossings in `files` (absolute paths) the line refuses, each import resolved as the repo's tsconfig resolves it. */
 export function crossings(root: string, files: string[], read: (file: string) => string, options: ts.CompilerOptions): Crossing[] {
   const rel = (file: string) => path.relative(root, file).split(path.sep).join('/');
+  // shared across the files: each folder's lookups (node_modules, package.json, tsconfig paths) are made once, not per import
+  const cache = ts.createModuleResolutionCache(root, (f) => f, options);
   return files.flatMap((file) => importsOf(file, read(file)).flatMap((imp) => {
-    const resolved = ts.resolveModuleName(imp.spec, file, options, ts.sys).resolvedModule;
+    const resolved = ts.resolveModuleName(imp.spec, file, options, ts.sys, cache).resolvedModule;
     if (!resolved || resolved.isExternalLibraryImport) return [];
     const to = rel(resolved.resolvedFileName);
     const why = refusal(rel(file), to);
