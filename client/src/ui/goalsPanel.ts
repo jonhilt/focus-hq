@@ -5,7 +5,7 @@ import { leftOn } from '../../../shared/goalLog';
 import { type Agent, type GoalRecord, type QueuedGoal, TEAM_STATIONS } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
-import { clientPlugin, everyGoalButtons, goalTags } from '../plugins';
+import { clientPlugin, everyGoalButtons, type GoalsPanelView, goalsPanelViews, goalTags } from '../plugins';
 import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
@@ -15,8 +15,8 @@ import { type NavItem, readout, shownView, SideNav } from './panels';
 import { openClosedGoalChart, openGoalChart } from './chartPanel';
 import { openClosedGoalShown } from './screenPanel';
 
-/** The goals panel's views: the goals under way (and any waiting for a station), a new one, and the closed ones. */
-type GoalsView = 'goals' | 'new' | 'log';
+/** The goals panel's views: the goals under way (and any waiting for a station), a new one, the closed ones, and the plugins'. */
+type GoalsView = 'goals' | 'new' | 'log' | GoalsPanelView['key'];
 
 /** What the lead says it's doing, from the task list Claude keeps for itself. */
 const doing = (lead: Agent) => {
@@ -144,10 +144,21 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   const jump = h('button', { class: 'btn', title: 'Start it at the first free team station, ahead of the goals in line' }, 'Start it now');
   const intro = h('p', { style: 'margin-top:0' });
   const hint = h('small', { class: 'muted' });
-  const views: Record<GoalsView, HTMLElement> = {
+  const views = {
     goals: h('div', null, list, queue),
     new: h('div', null, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, hint)),
     log,
+  };
+  const body = h('div', null, ...Object.values(views));
+  // the plugins' views (`goalsView`), each made the first time it's offered; only the one shown is drawn
+  const pluginViews = new Map<GoalsPanelView['key'], HTMLElement>();
+  const showPluginViews = (offered: GoalsPanelView[], view: GoalsView) => {
+    for (const v of offered) if (!pluginViews.has(v.key)) pluginViews.set(v.key, body.appendChild(h('div', null)));
+    for (const [key, el] of pluginViews) {
+      const shown = key === view ? offered.find((v) => v.key === key) : undefined;
+      el.hidden = !shown;
+      if (shown) fill(el, shown.render());
+    }
   };
 
   // the free station the captain walked up to opens on a new goal; otherwise the goals under way, if there are any
@@ -189,16 +200,22 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     const leads = state.leadsIn(projectId);
     const waiting = p.goalQueue ?? [];
     const done = p.goals ?? [];
+    const offered = goalsPanelViews(ui, p);
     const open = TEAM_STATIONS - leads.length;
     const startsNow = here() !== undefined || (open > 0 && !waiting.length);
     const items: NavItem<GoalsView>[] = [
       { key: 'goals', label: 'Under way', readout: `${leads.length}/${TEAM_STATIONS}${waiting.length ? ` +${waiting.length}` : ''}`, standby: !leads.length && !waiting.length },
       { key: 'new', label: 'New goal', readout: startsNow ? `${open} free` : 'Queue' },
       { key: 'log', label: 'Closed', readout: done.length ? String(done.length) : '', standby: !done.length },
+      ...offered.map((v) => {
+        const count = v.readout();
+        return { key: v.key, label: v.label, readout: count, standby: !count };
+      }),
     ];
     const view = shownView(items, picked) ?? 'new';
     nav.show(items, view);
     for (const [key, el] of Object.entries(views)) el.hidden = key !== view;
+    showPluginViews(offered, view);
 
     fill(list, ...leads.map((lead) => goalCard(ui, lead)));
     fill(queue, ...(waiting.length ? [h('h3', null, `Waiting for a team station (${waiting.length})`), ...waiting.map((g, i) => queuedCard(ui, projectId, g, i, waiting.length, open > 0, station))] : []));
@@ -218,12 +235,15 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
   // back out to a plugin's view of every goal on the ship, when one offers it
-  ui.panels.open({ title: `${project.name} · goals`, body: h('div', null, ...Object.values(views)), nav, accent: project.color, headerExtra: everyGoalButtons(ui) });
+  ui.panels.open({ title: `${project.name} · goals`, body, nav, accent: project.color, headerExtra: everyGoalButtons(ui) });
   render();
   if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));
   ui.panels.own(state.on('agent-removed', (a) => a.projectId === projectId && render()));
   ui.panels.own(state.on('projects', render));
-  // the plugins' words on each goal follow their state
-  ui.panels.own(state.on('plugin', (id) => !!clientPlugin(id)?.goal && render()));
+  // the plugins' words on each goal, and their views, follow their state
+  ui.panels.own(state.on('plugin', (id) => {
+    const plugin = clientPlugin(id);
+    if (plugin?.goal || plugin?.goalsView) render();
+  }));
 }

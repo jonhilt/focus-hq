@@ -33,11 +33,18 @@ export function demoLedger(shopId: string, gameId: string, now: number): LedgerE
     [70.4, shopId, { kind: 'merged', ...api, by: 'office', qa: 'passed', failedRounds: 1, triages: 0 }],
     [50, shopId, { kind: 'qa-verdict', ...web, verdict: 'pass', reviewer: 'Lt. Castellanos', checks: { pass: 6, fail: 0, skip: 1 }, failedRounds: 0 }],
     [49, shopId, { kind: 'merged', ...web, by: 'captain', qa: 'passed', failedRounds: 0, triages: 0 }],
-    [48, shopId, { kind: 'goal-closed', goal: { id: 'demo_goal_checkout', title: checkout, slices: 2, prs: [], leadName: 'Lt. Nakamura', openedAt: now - 80 * HOUR, closedAt: now - 48 * HOUR } }],
+    [48, shopId, { kind: 'goal-closed', goal: { id: 'demo_goal_checkout', title: checkout, slices: 2, prs: [], leadName: 'Lt. Nakamura', openedAt: now - 80 * HOUR, closedAt: now - 48 * HOUR, contacts: [
+      // two loose threads it left open, and one it dropped, for the threads plugin's view
+      { id: 'c1', text: 'Saved addresses aren’t checked against the postcode lookup: a typo ships to nowhere', slice: 1, at: now - 76 * HOUR },
+      { id: 'c2', text: 'Guest checkout still asks for an address twice on mobile', slice: 2, at: now - 60 * HOUR },
+      { id: 'c3', text: 'Try a map picker for the address', slice: 2, at: now - 58 * HOUR, closed: { as: 'dropped', why: 'Nobody asked for it', slice: 2, at: now - 50 * HOUR } },
+    ] } }],
     [30, gameId, session('demo-s4', 'Lt. Okafor', 'lead', split, facts(30, 1.9))],
     [28, gameId, { kind: 'conflicts', ...split, resolved: 'agent', files: ['src/game.ts', 'src/asteroid.ts'] }],
     [27.5, gameId, session('demo-s5', 'Ensign Moreau', 'conflicts', split, facts(9, 0.7, { wastedCalls: 3 }))],
     [26, gameId, { kind: 'merged', ...split, by: 'captain', qa: 'testing', failedRounds: 0, triages: 0 }],
+    // and the captain parked one of them since, in the threads plugin's view
+    [24, shopId, { kind: 'thread-decided', goalId: 'demo_goal_checkout', goal: checkout, contact: 'c2', text: 'Guest checkout still asks for an address twice on mobile', as: 'parked', note: 'until the mobile checkout redesign' }],
     [20, shopId, read('demo-s1', [PORT_IN_USE])],
     [20, shopId, read('demo-s2')],
     [20, shopId, read('demo-s3', [PORT_IN_USE])],

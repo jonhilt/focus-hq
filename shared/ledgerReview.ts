@@ -1,4 +1,4 @@
-import { verdictAddressee, type VerdictRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, viaNote } from './ledger';
+import { verdictAddressee, type VerdictRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, type ThreadDecidedAs, viaNote } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -43,8 +43,9 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
       return 'merged';
     case 'conflicts':
       return 'conflicts';
-    // an alert (raised to the captain directly) shows from the start, beside the goals it's about
+    // an alert (raised to the user directly) shows from the start, beside the goals it's about
     case 'goal-closed':
+    case 'thread-decided':
     case 'alert':
       return 'goals';
     case 'retro-decision':
@@ -158,6 +159,8 @@ function rowParts(e: LedgerEvent): RowParts {
       return { tag: 'Triage', tone: e.action === 'escalate' ? 'bad' : 'warn', title: `${short(e.repo)} #${e.pr} · ${e.officer} ${TRIAGE[e.action] ?? e.action}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
     case 'goal-closed':
       return goalClosedRow(e);
+    case 'thread-decided':
+      return { tag: 'Thread', tone: 'info', title: `${THREAD_DECIDED[e.as]}: ${e.text}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), goal: e.goal };
     case 'retro-decision':
       return retroRow(e);
     case 'session-digest': {
@@ -221,6 +224,9 @@ function mergeCheckRow(e: Of<'merge-check'>): RowParts {
   const tone = MERGE_CHECK_TONE[e.outcome] ?? 'bad';
   return { tag: 'Merge check', tone, title: `${short(e.repo)} #${e.pr} · ${said} ${BY[e.by] ?? e.by}${at}`, detail: [e.failed, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
 }
+
+/** A loose thread's end, as its row says it. */
+const THREAD_DECIDED: Record<ThreadDecidedAs, string> = { next: 'Taken on', parked: 'Parked', dropped: 'Dropped', resolved: 'Resolved', open: 'Back to decide' };
 
 function goalClosedRow(e: Of<'goal-closed'>): RowParts {
   const g = e.goal;
@@ -323,6 +329,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
       case 'captain-replies':
       case 'captain-decision':
       case 'cos-verdict':
+      case 'thread-decided':
       case 'alert':
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'cos-lane':

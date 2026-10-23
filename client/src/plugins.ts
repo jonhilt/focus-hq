@@ -66,6 +66,12 @@ export interface ClientPlugin {
    */
   everyGoal?: { label: string; title?: string; open(ui: Ui): void };
   /**
+   * A view of its own in each project's goals panel, after Closed, for the projects it's on for (when it works per
+   * project): `label` names it in the panel's sidebar with `readout` beside it (empty when there's nothing in it, which
+   * dims it), and `render` draws it afresh each time the panel does, as the project's goals or the plugin's state change.
+   */
+  goalsView?: { label: string; readout?(projectId: string): string; render(ui: Ui, projectId: string): HTMLElement };
+  /**
    * It puts what waits on the captain in front of them its own way (a badge of its own, toasts of its own): while it's
    * on, the core's plain count of what needs the captain on the HUD (`needsYou`) and its toast as an agent comes to
    * need them (`hailNews`) step aside.
@@ -390,6 +396,40 @@ export function goalTags(lead: Agent, where: GoalTagPlace): { label: string; el:
     const tag = plugin.goal?.tag?.(lead, where);
     tag?.el.classList.add(where === 'card' ? 'goal-readout' : 'goal-tag');
     return tag ? [tag] : [];
+  });
+}
+
+/** A plugin's view in a project's goals panel: its sidebar entry, keyed by the plugin, and what it draws, each safe to call. */
+export interface GoalsPanelView {
+  key: `plugin:${string}`;
+  label: string;
+  readout(): string;
+  render(): HTMLElement | null;
+}
+
+/**
+ * The plugins' views in `project`'s goals panel (`goalsView`): those switched on, and on for it if they work per
+ * project, in the order they're switched on. A readout or a view that throws is logged, and shows nothing.
+ */
+export function goalsPanelViews(ui: Ui, project: Pick<Project, 'id' | 'plugins'>, plugins = clientPlugins()): GoalsPanelView[] {
+  return plugins.flatMap((plugin) => {
+    const view = plugin.goalsView;
+    if (!view || (plugin.project && !pluginOn(project, plugin.id))) return [];
+    const safely = <T>(what: string, fn: () => T, none: T): T => {
+      try {
+        return fn();
+      } catch (err) {
+        console.error(`The ${plugin.id} plugin's ${what} failed`, err);
+        return none;
+      }
+    };
+    const key: GoalsPanelView['key'] = `plugin:${plugin.id}`;
+    return [{
+      key,
+      label: view.label,
+      readout: () => safely('goals view readout', () => view.readout?.(project.id) ?? '', ''),
+      render: () => safely('goals view', () => view.render(ui, project.id), null),
+    }];
   });
 }
 

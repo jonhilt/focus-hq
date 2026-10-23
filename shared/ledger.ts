@@ -85,6 +85,13 @@ export type LedgerEntry =
    */
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /**
+   * The captain decided where a loose thread a closed goal left open ends (a plugin that keeps a project's threads
+   * records it): which goal (`goalId`, titled `goal`) and which of its contacts (`contact`, saying `text`), and `as`
+   * what. `note` goes with it: who takes it on (next), until when (parked), why (dropped) or what resolved it
+   * (resolved). `open` takes a decision back, to be decided again.
+   */
+  | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string }
+  /**
    * Something a plugin (`by`, its id) raised to the captain directly, not through anyone's routing: a lead not answering
    * a scheduled run, say. `agent` is who it's about, `text` what the captain was told.
    */
@@ -98,6 +105,9 @@ export type LedgerEntry =
  * plugin acting on its own where the captain let it (the plugin's id).
  */
 export type DecidedVia = string;
+
+/** Where a loose thread ends, as the captain decides it, or `open`: the decision taken back. */
+export type ThreadDecidedAs = 'next' | 'parked' | 'dropped' | 'resolved' | 'open';
 
 /** Where a decision came from, said after it: nothing for the captain in Focus, and a plugin by its id in words. */
 export const viaNote = (via: DecidedVia): string => (via === 'office' ? '' : via === 'api' ? 'via the API' : `sent by the ${via.replace(/-/g, ' ')}`);

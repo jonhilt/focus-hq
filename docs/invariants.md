@@ -39,6 +39,7 @@ What each part caught and found goes in the sections below, with every live bug 
 | a developer's work going onto GitHub (`manager/delivery.ts`) | `server/agents/deliveryInvariants.test.ts` | both |
 | the captain's replies to leads kept in the ledger (`manager/ledger.ts`) | `server/agents/repliesInvariants.test.ts` | both |
 | the chief of staff's verdicts on leads' turns (each turn judged once however often it ends) | `plugins/chief-of-staff/invariants.test.ts` | both |
+| the threads plugin's decisions on a project's loose threads (each a ledger line, the register read back from them) | `plugins/threads/invariants.test.ts` | both |
 | the captain's secrets, the bot's among them (`secrets.ts`) | `server/secretsInvariants.test.ts` | both |
 | the captain's settings, a cleared one staying cleared (`store.replaceSettings`) | `server/settingsInvariants.test.ts` | both |
 | the scheduler plugin's book (each slot claimed once, through a restart) | `plugins/scheduler/invariants.test.ts` | both |

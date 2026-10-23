@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 import type { Agent, Project } from '../../shared/types';
-import { type ClientPlugin, everyGoalButtons, goalClaim, goalHolders, goalsFor, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, pluginSettings, projectSettings } from './plugins';
+import { type ClientPlugin, everyGoalButtons, goalClaim, goalHolders, goalsFor, goalsPanelViews, hudStats, openPluginPanel, pluginChair, pluginHails, pluginPanels, pluginSettings, projectSettings } from './plugins';
 import type { Ui } from './ui/context';
 import { hailStat } from './ui/hails';
 
@@ -34,6 +34,34 @@ describe('a plugin’s own settings', () => {
     expect(pluginSettings({ id: 'bare' }, ui)).toEqual([]);
     expect(pluginSettings({ id: 'broken', settings: () => { throw new Error('no state'); } }, ui)).toEqual([]);
     expect(error).toHaveBeenCalledWith('The broken plugin\'s settings failed', expect.any(Error));
+    error.mockRestore();
+  });
+});
+
+describe('a plugin’s view in a project’s goals panel', () => {
+  it('is there for a plugin switched on, and on for the project if it works per project, in order', () => {
+    const el = document.createElement('div');
+    const view = (label: string) => ({ label, readout: (id: string) => `${label} in ${id}`, render: () => el });
+    const plugins: ClientPlugin[] = [
+      { id: 'ship-wide', goalsView: view('Ship') },
+      { id: 'threads', project: { label: 'Threads', about: '' }, goalsView: view('Threads') },
+      { id: 'elsewhere', project: { label: 'Elsewhere', about: '' }, goalsView: view('Elsewhere') },
+      { id: 'bare' },
+    ];
+    const views = goalsPanelViews(ui, project(['threads']), plugins);
+    expect(views.map((v) => [v.key, v.label, v.readout()])).toEqual([['plugin:ship-wide', 'Ship', 'Ship in p'], ['plugin:threads', 'Threads', 'Threads in p']]);
+    expect(views[1]?.render()).toBe(el);
+    expect(goalsPanelViews(ui, project(), plugins).map((v) => v.key)).toEqual(['plugin:ship-wide']);
+  });
+
+  it('shows nothing, logged, where its readout or view throws, and no readout where it has none', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const [broken] = goalsPanelViews(ui, project(), [{ id: 'broken', goalsView: { label: 'Broken', readout: () => { throw new Error('no state'); }, render: () => { throw new Error('no state'); } } }]);
+    expect(broken?.readout()).toBe('');
+    expect(broken?.render()).toBeNull();
+    expect(error).toHaveBeenCalledWith('The broken plugin\'s goals view failed', expect.any(Error));
+    const [plain] = goalsPanelViews(ui, project(), [{ id: 'plain', goalsView: { label: 'Plain', render: () => document.createElement('p') } }]);
+    expect(plain?.readout()).toBe('');
     error.mockRestore();
   });
 });
