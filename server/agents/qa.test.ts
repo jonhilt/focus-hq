@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, repoChecks, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, repoChecks, siblingList, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
-import { HUNTING, HUNTING_STEPS } from './qaProof';
+import { huntingSteps } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
@@ -252,9 +252,9 @@ describe('QA instructions', () => {
   });
 
   it('build proof mode’s section from its steps', () => {
-    expect(HUNTING.startsWith('\n## Hunting the bugs that get past review\n\n')).toBe(true);
-    for (const step of HUNTING_STEPS) expect(HUNTING).toContain(step.text);
-    expect(HUNTING).toContain(`${HUNTING_STEPS[1].text}\n\n## Fail only with proof\n\n${HUNTING_STEPS[2].text}\n`);
+    const [hunt, probe, proof] = huntingSteps();
+    const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha);
+    expect(text).toContain(`\n\n## Hunting the bugs that get past review\n\n${hunt.text}\n\n${probe.text}\n\n## Fail only with proof\n\n${proof.text}\n\nRules:`);
   });
 
   it('diff against the PR’s base and name the commit under test', () => {
@@ -355,7 +355,7 @@ describe('qaPlaybook', () => {
 
   it('lists the steps QA gets, proof mode’s only when it’s on', () => {
     const on = qaPlaybook('Lt. Q', { name: 'Shop', repos: ['acme/shop'] }, repos);
-    expect(on.steps.map((s) => s.title)).toEqual([...qaSteps('main').map((s) => s.title), ...HUNTING_STEPS.map((s) => s.title)]);
+    expect(on.steps.map((s) => s.title)).toEqual([...qaSteps('main').map((s) => s.title), ...huntingSteps().map((s) => s.title)]);
     expect(qaPlaybook('Lt. Q', { name: 'Shop', repos: ['acme/shop'], qaProof: false }, repos).steps).toHaveLength(qaSteps('main').length);
   });
 
@@ -423,13 +423,14 @@ describe('spot-checks', () => {
   });
 });
 
-describe('siblingsSection', () => {
-  it('says nothing for a PR tested on its own', () => {
-    expect(siblingsSection([])).toBe('');
+describe('the slice’s other pull requests', () => {
+  it('says nothing of them for a PR tested on its own', () => {
+    expect(siblingList([])).toBe('');
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).not.toContain('one of a slice');
   });
 
   it('points QA at the slice’s other PRs beside them, and keeps the verdict on their own PR', () => {
-    const text = siblingsSection([
+    const text = qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha, [
       { repo: 'acme/web', number: 40, folder: 'web', sha: 'abcdef1234' },
       { repo: 'acme/docs', number: 3, folder: 'docs', error: 'no such ref' },
     ]);

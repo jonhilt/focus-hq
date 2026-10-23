@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../shared/types';
+import type { PullRequestDetail } from '../github/provider';
 import { leadSystemAppend } from './lead';
+import { qaPlaybook, qaSystemAppend } from './qa';
 import { systemAppend } from './prompts';
 
 // The crew's system prompts, word for word, as they were before they moved out of the code into .focus/crew/: a
@@ -49,5 +51,44 @@ describe('a desk agent’s system prompt', () => {
     const briefed = agent({ task: 'brief', issue: { number: 0, title: 'Auditing', url: '' } });
     await expect(systemAppend(briefed, { assignment: 'You are the auditor.', summary: 'End with the findings.' })).toMatchFileSnapshot(golden('worker-brief'));
     await expect(systemAppend(briefed)).toMatchFileSnapshot(golden('worker-brief-unknown'));
+  });
+});
+
+describe('the QA officer’s system prompt', () => {
+  const pr: PullRequestDetail = {
+    number: 42,
+    title: 'Save items for later',
+    body: '',
+    url: 'https://github.com/acme/shop/pull/42',
+    branch: 'focus/7-save-items-for-later-ab12',
+    baseBranch: 'main',
+    headSha: '0123456789abcdef',
+    linkedIssues: [7],
+  };
+  const qa = { name: 'Lt. Nakamura' };
+  const shop = { name: 'Acme Shop' };
+  const checks = ['pnpm run typecheck', 'pnpm test'];
+  const siblings = [
+    { repo: 'acme/api', number: 43, folder: 'api', sha: 'fedcba9876543210' },
+    { repo: 'acme/docs', number: 44, folder: 'docs' },
+    { repo: 'acme/app', number: 45, folder: 'app', error: 'the branch is gone' },
+  ];
+
+  it('is word for word what it was, with proof mode on (the default) or off', async () => {
+    await expect(qaSystemAppend(qa, shop, pr, pr.headSha)).toMatchFileSnapshot(golden('qa'));
+    await expect(qaSystemAppend(qa, { ...shop, qaProof: false }, pr, pr.headSha)).toMatchFileSnapshot(golden('qa-no-proof'));
+  });
+
+  it('is word for word what it was, with the repo’s checks, a brief, a recording and the slice’s other pull requests', async () => {
+    const project = { ...shop, qaBrief: '  Check the basket survives a reload.\nAnd the totals.  ', qaVideo: true };
+    await expect(qaSystemAppend(qa, project, pr, pr.headSha, siblings, checks)).toMatchFileSnapshot(golden('qa-everything'));
+    await expect(qaSystemAppend(qa, { ...project, qaProof: false }, pr, pr.headSha, siblings, checks)).toMatchFileSnapshot(golden('qa-everything-no-proof'));
+  });
+
+  it('lists the same steps at the Playbook', async () => {
+    const repos = [{ repo: 'acme/shop', cloned: true, packageJson: true, claudeMd: false, commands: checks }];
+    const steps = (proof: boolean) => qaPlaybook('Lt. Nakamura', { ...shop, repos: ['acme/shop'], qaProof: proof, qaVideo: true }, repos).steps.map((s) => `## ${s.title}\n\n${s.text}`).join('\n\n');
+    await expect(steps(true)).toMatchFileSnapshot(golden('qa-playbook-steps'));
+    await expect(steps(false)).toMatchFileSnapshot(golden('qa-playbook-steps-no-proof'));
   });
 });

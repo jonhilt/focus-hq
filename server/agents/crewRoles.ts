@@ -30,6 +30,21 @@ export const CREW_ROLES = {
     texts: ['assignment.issue', 'assignment.conflicts', 'assignment.fix', 'assignment.unknownBrief', 'summary.pullRequest', 'summary.conflicts', 'summary.fix'],
     textVars: { repo: 'text', number: 'text', baseBranch: 'text' },
   },
+  /** The QA officer reviewing a pull request: `qaSystemAppend`, and the steps the Playbook lists (`qaSteps`, `huntingSteps`). */
+  qa: {
+    vars: {
+      name: 'text', project: 'text', number: 'text', title: 'text', branch: 'text', baseBranch: 'text', url: 'text', sha: 'text',
+      siblings: 'flag', siblingList: 'text', brief: 'flag', briefText: 'text', steps: 'text', proof: 'flag', hunt: 'text', probe: 'text', proofStep: 'text',
+      spotChecks: 'text', publicWordsRule: 'text',
+    },
+    texts: [
+      ...(['criteria', 'diff', 'checks', 'unread', 'browser', 'scripts'] as const).flatMap((step) => [`steps.${step}.title`, `steps.${step}.text`] as const),
+      ...(['hunt', 'probe', 'proof'] as const).flatMap((step) => [`hunting.${step}.title`, `hunting.${step}.text`] as const),
+      'run.listed',
+      'run.unknown',
+    ],
+    textVars: { baseBranch: 'text', run: 'text', checks: 'text', maxScreenshots: 'text', recorded: 'flag', scratchRule: 'text', waitRule: 'text' },
+  },
 } as const satisfies Record<string, CrewRole>;
 
 export type CrewRoleName = keyof typeof CREW_ROLES;

@@ -43,7 +43,7 @@ Every holodeck has a QA officer, and each goal a reviewer of its own.
 
 ## Proof
 
-QA blocks a pull request only with proof Ops checks itself (`server/agents/qaProof.ts`, tested beside it). In [the bug replay](bug-corpus.md#replaying-qa), QA as it was, failing on its own say-so, caught none of 26 real bugs that had got past it; a review told to hunt with probe tests, and stopped only by a proof test that failed, caught 3, and every change it stopped came with a failing test. That review is now QA's (`HUNTING`, in its instructions on every review).
+QA blocks a pull request only with proof Ops checks itself (`server/agents/qaProof.ts`, tested beside it). In [the bug replay](bug-corpus.md#replaying-qa), QA as it was, failing on its own say-so, caught none of 26 real bugs that had got past it; a review told to hunt with probe tests, and stopped only by a proof test that failed, caught 3, and every change it stopped came with a failing test. That review is now QA's (`hunting:` in `.focus/crew/qa.md`, in its instructions on every review).
 
 - **What counts as proof:**
   - **test**: a test file that fails, and the command that runs just it. Usually one of QA's probes, or an existing test the change breaks. Any test runner: the report carries the command. Ops runs it in QA's checkout, without a shell, and only if it names the file (so a whole suite failing for something else can't stand in). It holds when the command fails and its output shows a test failing, and nothing says it never really ran: an import that isn't there, a compile error, no tests found. QA's typo isn't proof.

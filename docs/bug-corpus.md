@@ -70,7 +70,7 @@ Whether the report merely named the bug's file is kept beside it: in the first b
 It replays Focus's QA as it is, which since the results below blocks a change only with proof ([QA → Proof](qa.md#proof)): `tools/qaReview.ts` checks the report's proofs in the clone the way Ops checks them in its checkout (`prove` in `server/agents/qaProof.ts`), so a review stops a change when its checked verdict is a fail, and a fail without a proof that held counts as passed. Runs are saved with the arm `proof`. The two arms below were the experiment it came from, run before that, and the replay no longer runs them:
 
 - **`qa`**: QA as it was, stopping a change on its own say-so.
-- **`hunt`**: that QA with the hunting guidance after its instructions (the corpus's kinds of bug, probed with tests that drive those paths rather than read for them) and every finding proved by a `*.proof.test.ts` the replay ran itself, stopping a change only when one failed on an assertion. Its guidance, made general for other repos and test runners, is now QA's (`HUNTING`).
+- **`hunt`**: that QA with the hunting guidance after its instructions (the corpus's kinds of bug, probed with tests that drive those paths rather than read for them) and every finding proved by a `*.proof.test.ts` the replay ran itself, stopping a change only when one failed on an assertion. Its guidance, made general for other repos and test runners, is now QA's (`hunting:` in `.focus/crew/qa.md`).
 
 | | |
 | --- | --- |
