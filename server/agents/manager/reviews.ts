@@ -1,23 +1,24 @@
 import { Effect } from 'effect';
 import { plannerFor, qaFor, qaOfficerFor } from '../../../shared/crew';
 import { goneReply } from '../../../shared/mergeGate';
-import { autoSendBackFor, prKey, pullUrl, qaProofFor, sameCommit } from '../../../shared/qa';
+import { autoSendBackFor, prKey, pullUrl, qaProofFor, qaVideoFor, sameCommit } from '../../../shared/qa';
 import { qaChatChange, qaChatTurns, qaSettingsNow } from '../../../shared/qaChat';
 import { qaWhoLine } from '../../../shared/qaPlaybook';
-import type { Agent, FailedCheck, FixFor, Project, QaChatReply, QaPlaybook, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
+import type { Agent, FailedCheck, FixFor, Project, QaChatReply, QaPlaybook, QaRecording, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPlaybook, qaPrompt, type QaSibling, qaSystemAppend, repoChecks, verdictMark } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPlaybook, qaPrompt, type QaSibling, qaSystemAppend, recordingPath, repoChecks, verdictMark } from '../qa';
+import { clock } from '../recording';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
 import { PROOF_MS, prove } from '../qaProof';
 import { carriedComment, retestStep, shippedSinceTested } from '../retest';
 import { leftWithoutVerdict, type Reported, type ReviewFact, type ReviewRecovery, resumedFacts, reviewRecovery } from '../reviewJournal';
 import { recovery } from '../runJournal';
-import { QaChat, Workspace } from '../services';
+import { QaChat, Recordings, Workspace } from '../services';
 import { reviewCheckoutId, reviewRepoId, triageWorkspaceId } from '../worktrees';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
@@ -209,6 +210,7 @@ export class Reviews extends Part {
       if (review) this.record(prKey(agent.repo, pr.number), { kind: 'testing', sha, title: pr.title });
       rt.qaSystem = qaSystemAppend(agent, project, pr, sha, siblings, yield* this.checksIn(agent));
       rt.shots = undefined;
+      if (qaVideoFor(project)) yield* (yield* Recordings).start(agent.id);
       let prompt = qaPrompt(agent.repo, pr, issues, review ?? {}, rt.qaFiles.changed);
       if (rt.inbox.length) prompt += `\n\nNotes from your manager:\n${rt.inbox.take().map((m) => `- ${m}`).join('\n')}`;
       yield* this.core.sessions.runSession(agent, prompt);
@@ -241,14 +243,19 @@ export class Reviews extends Part {
       .map((s) => ({ repo: s.repo, number: s.number, folder: this.folderOf(agent.projectId, s.repo), sha: s.sha }));
   }
 
-  /** The QA officer's instructions; rebuilt from GitHub and their checkout if Focus restarted since the review began. */
-  qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace> {
+  /**
+   * The QA officer's instructions; rebuilt from GitHub and their checkout if Focus restarted since the review began,
+   * when the recording of their browser starts again too (what it had so far went with the restart).
+   */
+  qaSystem(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace | Recordings> {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       if (!rt.qaSystem) {
         const pr = yield* (yield* GitHub).getPullRequest(agent.repo, agent.issue.number);
         const sha = this.store.reviews.get(prKey(agent.repo, agent.issue.number))?.sha ?? pr.headSha;
-        rt.qaSystem = qaSystemAppend(agent, this.store.project(agent.projectId), pr, sha, this.siblingsOf(agent), yield* this.checksIn(agent));
+        const project = this.store.project(agent.projectId);
+        rt.qaSystem = qaSystemAppend(agent, project, pr, sha, this.siblingsOf(agent), yield* this.checksIn(agent));
+        if (qaVideoFor(project)) yield* (yield* Recordings).start(agent.id);
       }
       return rt.qaSystem;
     });
@@ -385,9 +392,10 @@ export class Reviews extends Part {
       if (agent.prGone) return;
       const review = this.store.reviews.get(prKey(agent.repo, number));
       const screenshots = yield* this.keepScreenshots(agent, report, review?.sha);
+      const recording = yield* this.keepRecording(agent, review?.sha);
       const account = files && { changed: files.changed, opened: opened && [...opened], sentBack: files.sentBack };
       // marked as this verdict's own, so a restart can tell whether it went up (`deliverVerdict`)
-      const body = `${qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account)}${verdictMark(newId('verdict'))}`;
+      const body = `${qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account, recording)}${verdictMark(newId('verdict'))}`;
       const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
       // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
       this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
@@ -499,6 +507,32 @@ export class Reviews extends Part {
       const uploaded = screenshots.filter((s) => s.url).length;
       if (uploaded) this.print(agent, [{ kind: 'system', text: `✻ Uploaded ${uploaded} screenshot${uploaded === 1 ? '' : 's'} to the QA evidence branch` }]);
       return screenshots;
+    });
+  }
+
+  /**
+   * Edits the recording of the QA officer's browser down and uploads it to the repo's QA evidence branch: nothing when
+   * it wasn't recorded or they never acted in the browser. One that can't be edited, or whose MP4 can't be uploaded,
+   * stays off the PR comment (without its GIF, the comment links the MP4 alone), and why goes to their terminal.
+   */
+  private keepRecording(agent: Agent, sha: string | undefined): Effect.Effect<QaRecording | undefined, never, GitHub | Recordings> {
+    return Effect.gen({ self: this }, function* () {
+      const github = yield* GitHub;
+      const failed = (what: string) => (err: { message: string }) => Effect.sync(() => {
+        this.print(agent, [{ kind: 'error', text: `✘ Couldn't ${what}: ${err.message}` }]);
+        return undefined;
+      });
+      if (qaVideoFor(this.store.project(agent.projectId))) this.update(agent, { activity: 'Editing the recording of the browser' });
+      const edited = yield* (yield* Recordings).finish(agent.id).pipe(Effect.catch(failed('edit the recording of the browser')));
+      if (!edited) return undefined;
+      const at = Date.now();
+      const upload = (ext: string, bytes: Buffer) =>
+        github.uploadQaEvidence(agent.repo, recordingPath(agent.issue.number, sha, at, ext), bytes).pipe(Effect.catch(failed(`upload the recording's ${ext.toUpperCase()}`)));
+      const mp4Url = yield* upload('mp4', edited.mp4);
+      if (!mp4Url) return undefined;
+      const gifUrl = edited.gif ? yield* upload('gif', edited.gif) : undefined;
+      this.print(agent, [{ kind: 'system', text: `✻ Uploaded the recording of the browser (${clock(edited.realSeconds)} shown in ${clock(edited.shownSeconds)}) to the QA evidence branch` }]);
+      return { mp4Url, ...(gifUrl && { gifUrl }), realSeconds: edited.realSeconds, shownSeconds: edited.shownSeconds, actions: edited.actions };
     });
   }
 

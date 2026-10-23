@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
+import { editRecording, type EditedRecording, Recording } from './recorder';
 import type { Frame, Frames, Picture } from './services';
 import type { RunHooks } from './types';
 
@@ -131,6 +132,8 @@ export class BrowserPool {
   /** `executablePath`: the captain's browser (Settings, or FOCUS_BROWSER_PATH) as it is when the browser first starts. */
   constructor(private readonly executablePath: () => string | undefined = () => process.env.FOCUS_BROWSER_PATH) {}
   private tabs = new Map<string, Promise<Tab>>();
+  /** Agents whose browser is being recorded, across their tabs, until the recording's finished. */
+  private recordings = new Map<string, Recording>();
 
   private async launch(): Promise<Browser> {
     const { chromium } = await import('playwright');
@@ -176,6 +179,8 @@ export class BrowserPool {
           if (t.console.length > 200) t.console.splice(0, 100);
         });
         page.on('pageerror', (err) => t.console.push(`[pageerror] ${err.message}`));
+        // a recording that can't watch the page misses it, and the agent's browser works on
+        await this.recordings.get(agentId)?.watch(context, page).catch(() => undefined);
         return t;
       })();
       tab.catch(() => this.tabs.delete(agentId));
@@ -219,13 +224,52 @@ export class BrowserPool {
     }
   }
 
+  /** Records the agent's browser from now on, starting afresh: a recording they had before is thrown away. */
+  async record(agentId: string): Promise<void> {
+    await this.recordings.get(agentId)?.discard();
+    const recording = await Recording.start();
+    this.recordings.set(agentId, recording);
+    const tab = await this.tabs.get(agentId)?.catch(() => undefined);
+    if (tab) await recording.watch(tab.context, tab.page).catch(() => undefined);
+  }
+
+  /** The agent acted in their browser just now: the recording's edit keeps the moment at real speed. */
+  acted(agentId: string): void {
+    this.recordings.get(agentId)?.acted();
+  }
+
+  /** Stops recording the agent's browser and edits what was recorded down; nothing if it wasn't, or they never acted in it. */
+  async finishRecording(agentId: string): Promise<EditedRecording | null> {
+    const recording = this.recordings.get(agentId);
+    this.recordings.delete(agentId);
+    return recording ? editRecording(recording, (text) => this.badge(text)) : null;
+  }
+
+  /** A fast-forward badge as a PNG with a see-through background, to lay over a recording. */
+  private async badge(text: string): Promise<Buffer> {
+    const browser = await this.shared();
+    const context = await browser.newContext({ deviceScaleFactor: 1 });
+    try {
+      const page = await context.newPage();
+      const html = `<span style="display:inline-block;padding:6px 14px;border-radius:999px;background:rgba(17,17,17,.8);color:#ffb347;font:bold 22px system-ui,sans-serif">${text}</span>`;
+      await page.setContent(`<body style="margin:0;background:transparent">${html}</body>`);
+      return await page.locator('span').screenshot({ type: 'png', omitBackground: true });
+    } finally {
+      await context.close().catch(() => undefined);
+    }
+  }
+
+  /** Closes the agent's tab; a recording of their browser stops until they open another, and is kept. */
   async close(agentId: string): Promise<void> {
     const tab = this.tabs.get(agentId);
     this.tabs.delete(agentId);
+    await this.recordings.get(agentId)?.unwatch();
     if (tab) await tab.then((t) => t.context.close()).catch(() => undefined);
   }
 
   async shutdown(): Promise<void> {
+    await Promise.all([...this.recordings.values()].map((r) => r.discard()));
+    this.recordings.clear();
     await Promise.all([...this.tabs.keys()].map((id) => this.close(id)));
     if (this.browser) await this.browser.then((b) => b.close()).catch(() => undefined);
   }
@@ -287,6 +331,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
   const act = async (fn: (tab: Tab) => Promise<string>, keep?: (frame: BrowserFrame) => void): Promise<CallResult> => {
     try {
       const tab = await pool.tab(agentId);
+      pool.acted(agentId);
       const note = await fn(tab);
       await tab.page.waitForLoadState('domcontentloaded', { timeout: 5000 }).catch(() => undefined);
       return await snapshot(tab, note, keep);
@@ -353,6 +398,7 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
         async ({ expression }) => {
           try {
             const { page } = await pool.tab(agentId);
+            pool.acted(agentId);
             const result = await withTimeout(
               page.evaluate((body) => {
                 const Async = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;

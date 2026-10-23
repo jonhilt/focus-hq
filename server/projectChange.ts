@@ -35,6 +35,7 @@ export function changeProject(project: Project, patch: unknown): Project {
     autoSendBack: flag(p.autoSendBack, project.autoSendBack),
     autoMerge: flag(p.autoMerge, project.autoMerge),
     qaProof: flag(p.qaProof, project.qaProof),
+    qaVideo: flag(p.qaVideo, project.qaVideo),
     checkMerges: flag(p.checkMerges, project.checkMerges),
     hidden: flag(p.hidden, project.hidden),
   };

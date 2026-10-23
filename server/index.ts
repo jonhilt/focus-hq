@@ -13,7 +13,7 @@ import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
-import { QaChat, Renderer, Sessions, Triage, Workspace } from './agents/services';
+import { QaChat, Recordings, Renderer, Sessions, Triage, Workspace } from './agents/services';
 import { closedGoalPrs, lookUpPrStates, type ShipStatus, summariseShip } from './agents/shipStatus';
 import { type Drafter, IssuePlanner } from './agents/planner';
 import type { QaChatter } from './agents/qaChat';
@@ -141,7 +141,7 @@ async function main() {
   };
   const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo, () => settingsInForce(store.settings)), await currentVersion());
   focus.voice.warmSpeech();
-  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(parts.workspace), Sessions.fromRunner(parts.runner), Triage.fromTriager(parts.triager), Renderer.fromBrowser(browsers), QaChat.fromChatter(parts.qaChat));
+  const crew = Layer.mergeAll(gitHub, Workspace.fromOps(parts.workspace), Sessions.fromRunner(parts.runner), Triage.fromTriager(parts.triager), Renderer.fromBrowser(browsers), Recordings.fromBrowser(browsers), QaChat.fromChatter(parts.qaChat));
   focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id));
   focus.ownRepo = await parts.ownRepo();
   parts.readTranscripts(focus.agents);

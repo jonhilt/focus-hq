@@ -13,6 +13,7 @@ import { Hub } from '../hub';
 import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
 import { focus, restarted, until } from './fakeFocus';
+import { Recordings } from './services';
 import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
@@ -215,6 +216,38 @@ describe('AgentManager', () => {
     claude.turns[1].end({ ok: true, summary: '', structured: report(['src/cart.ts']) });
     await until(() => store.reviews.get(prKey(pr.repo, pr.number))?.status === 'passed');
     expect(claude.turns).toHaveLength(2);
+  });
+
+  it('records QA’s browser when the project asks, and puts the edited recording on the PR with the verdict', async () => {
+    const uploaded: string[] = [];
+    const comments: string[] = [];
+    const github = Layer.effect(GitHub, Effect.gen(function* () {
+      const gh = yield* GitHub;
+      return GitHub.of({
+        ...gh,
+        uploadQaEvidence: (repo, path, bytes) => Effect.suspend(() => (uploaded.push(path), gh.uploadQaEvidence(repo, path, bytes))),
+        commentOnPullRequest: (repo, number, body) => Effect.suspend(() => (comments.push(body), gh.commentOnPullRequest(repo, number, body))),
+      });
+    })).pipe(Layer.provide(demoLayer));
+    const started: string[] = [];
+    const recordings = Layer.succeed(Recordings, Recordings.of({
+      start: (agentId) => Effect.sync(() => void started.push(agentId)),
+      finish: () => Effect.succeed({ mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9 }),
+    }));
+    const { agents, claude, store, project } = focus(demoWorkspace, github, undefined, undefined, recordings);
+    project.qaVideo = true;
+    const [pr] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    agents.requestReview(project.id, pr.repo, pr.number, pr.title);
+    await until(() => claude.turns.length === 1);
+    expect(started).toEqual([claude.turns[0].req.agentId]);
+    expect(claude.turns[0].req.systemAppend).toContain('Your browser is recorded');
+    claude.turns[0].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] } });
+    await until(() => store.reviews.get(prKey(pr.repo, pr.number))?.status === 'passed');
+    expect(uploaded.map((p) => p.split('/').pop())).toEqual(['recording.mp4', 'recording.gif']);
+    expect(comments.at(-1)).toContain('### 🎬 Recording');
+    expect(comments.at(-1)).toContain('The session took 5:00; the clip shows it in 0:45.');
   });
 
   it('sends QA back to a changed file its session never opened, whatever its report says, by its transcript', async () => {

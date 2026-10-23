@@ -10,7 +10,7 @@ import { agentAfterRestart, Store } from '../store';
 import type { Autonomy } from '../../shared/types';
 import { demoWorkspace } from './demoRunner';
 import { AgentManager } from './manager';
-import { type Frames, type Picture, QaChat, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
+import { type Frames, type Picture, QaChat, Recordings, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import { DemoQaChat } from './demoQaChat';
 import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
@@ -57,22 +57,22 @@ const noOfficer: Triager = { triage: () => Promise.reject(new Error('no officer 
 /** Takes a page's picture; Focus's own stand-in answers at once unless a test hands it one of its own. */
 export type Render = (html: string, frames?: Frames) => Promise<Picture>;
 
-export function focus(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer, render?: Render) {
+export function focus(workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, triager: Triager = noOfficer, render?: Render, recordings?: Layer.Layer<Recordings>) {
   const store = new Store(false);
   const project = store.addProject('Shop');
   project.repos = ['demo/webshop-frontend', 'demo/webshop-api'];
   // a new project waits for the captain to send a PR to QA: Focus's tests follow QA by itself, as a project from before does
   project.autoQa = true;
-  return { store, project, ...crew(store, workspace, github, triager, render) };
+  return { store, project, ...crew(store, workspace, github, triager, render, recordings) };
 }
 
 /**
  * Focus after it restarts: its store as it loads again (whoever was at work stopped, their run journals as they
  * were), and a new manager and Claude Code, which haven't recovered anyone yet (`agents.recover()`).
  */
-export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, render?: Render) {
+export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, render?: Render, recordings?: Layer.Layer<Recordings>) {
   for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
-  return crew(store, workspace, github, noOfficer, render);
+  return crew(store, workspace, github, noOfficer, render, recordings);
 }
 
 /** Focus's stand-in for the headless browser: a page with "unrenderable" in it can't be pictured, one with "throws" reports an error. */
@@ -83,7 +83,7 @@ const pictured: Render = (html, frames) => (html.includes('unrenderable') ? Prom
   ...(frames && { frames: frames.at.map((at) => ({ at, image: Buffer.from(`beat at ${at}`), seen: { flat: html.includes('blank') ? 1 : 0.7, labels: [] } })) }),
 }));
 
-function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager, render: Render = pictured) {
+function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager, render: Render = pictured, recordings: Layer.Layer<Recordings> = Recordings.none()) {
   const claude = new FakeClaude();
   const services = Layer.mergeAll(
     github,
@@ -93,6 +93,7 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     Sessions.fromRunner(claude),
     Triage.fromTriager(triager),
     Renderer.fromBrowser({ render }),
+    recordings,
     // the demo's QA officer at the Playbook, answering at once
     QaChat.fromChatter(new DemoQaChat(0)),
   );

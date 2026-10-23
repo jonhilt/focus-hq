@@ -2,7 +2,7 @@ import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
 import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheck';
 import { autoMergeFor, checkMergesFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, spotCheckUrl } from '../../../shared/qa';
+import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, qaVideoFor, spotCheckUrl } from '../../../shared/qa';
 import { type QaSwitch, qaSwitchSays, qaWhoLine } from '../../../shared/qaPlaybook';
 import { triageLabel } from '../../../shared/triage';
 import { qaSettingsNow } from '../../../shared/qaChat';
@@ -116,6 +116,7 @@ export function openQaPanel(ui: Ui, projectId: string): void {
         toggle('Test every PR', 'autoQa', autoQaFor(p), (on) => void save({ autoQa: on })),
         toggle('Send failed PRs back', 'autoSendBack', autoSendBackFor(p), (on) => void save({ autoSendBack: on })),
         toggle('Block only with proof', 'qaProof', qaProofFor(p), (on) => void save({ qaProof: on })),
+        toggle('Record proof video', 'qaVideo', qaVideoFor(p), (on) => void save({ qaVideo: on })),
         toggle('Auto-merge', 'autoMerge', autoMergeFor(p), (on) => void save({ autoMerge: on })),
       ),
       section('Who, and how hard', h('div', { class: 'qa-toggle' }, effort, who)),

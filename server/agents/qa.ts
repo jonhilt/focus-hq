@@ -1,12 +1,13 @@
 import { createHash } from 'node:crypto';
-import type { Agent, FailedCheck, FileAccount, Project, QaPlaybook, QaProof, QaRepoChecks, QaReport, QaReview, QaScreenshot, QaSpotCheck, QaStep } from '../../shared/types';
-import { filesCovered, mustOpen, qaProofFor, spotCheckUrl } from '../../shared/qa';
+import type { Agent, FailedCheck, FileAccount, Project, QaPlaybook, QaProof, QaRepoChecks, QaReport, QaRecording, QaReview, QaScreenshot, QaSpotCheck, QaStep } from '../../shared/types';
+import { filesCovered, mustOpen, qaProofFor, qaVideoFor, spotCheckUrl } from '../../shared/qa';
 import { fieldsOf, isRecord } from '../../shared/records';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { mergeCheckCommands, type PackageFacts } from '../packageManager';
 import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
 import { HUNTING, HUNTING_STEPS, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
+import { clock } from './recording';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 import { PUBLIC_WORDS_RULE } from './wording';
@@ -239,8 +240,15 @@ export function keptCaptions(captions: string[], taken: number, kept: number): s
 
 /** Where a screenshot goes on the QA evidence branch: one folder per review round, so re-tests never collide. */
 export function evidencePath(pr: number, sha: string | undefined, at: number, index: number, ext: string): string {
-  return `pr-${pr}/${sha ? `${sha.slice(0, 7)}-` : ''}${at}/${index + 1}.${ext}`;
+  return `${evidenceFolder(pr, sha, at)}/${index + 1}.${ext}`;
 }
+
+/** Where the recording of QA's browser goes on the QA evidence branch: beside the round's screenshots. */
+export function recordingPath(pr: number, sha: string | undefined, at: number, ext: string): string {
+  return `${evidenceFolder(pr, sha, at)}/recording.${ext}`;
+}
+
+const evidenceFolder = (pr: number, sha: string | undefined, at: number) => `pr-${pr}/${sha ? `${sha.slice(0, 7)}-` : ''}${at}`;
 
 /**
  * Where a file (and a line in it, on the new side) is in a pull request's changed files on GitHub: its anchor there is
@@ -322,8 +330,11 @@ export function proofSection(report: Pick<QaReport, 'proofs' | 'verdict' | 'advi
   ];
 }
 
-/** The QA report as a pull request comment, with the screenshots that made it to GitHub and, when known, how it covered each changed file. */
-export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean, account?: FileAccount): string {
+/**
+ * The QA report as a pull request comment, with the screenshots that made it to GitHub, the recording of QA's browser
+ * when there is one, and, when known, how it covered each changed file.
+ */
+export function qaComment(report: QaReport, by: { officer: string; sha?: string; pr?: string }, screenshots: QaScreenshot[], attribution: boolean, account?: FileAccount, recording?: QaRecording): string {
   const pass = report.verdict === 'pass';
   const commit = by.sha ? `commit \`${by.sha.slice(0, 7)}\`` : '';
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
@@ -346,6 +357,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
   };
   if (report.spotChecks?.length) lines.push('', '### 🔦 Worth a human look', '', ...report.spotChecks.map((c) => `- ${spot(c)}: ${c.why}`));
   lines.push(...filesSection(report, account));
+  if (recording) lines.push(...recordingSection(recording));
   lines.push('', '### 📸 Screenshots');
   if (!screenshots.length) lines.push('', 'No screenshots were taken during this review.');
   screenshots.forEach((s, i) => {
@@ -354,6 +366,16 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
   });
   if (attribution) lines.push('', `<sub>Posted by Ops, aboard the Focus. QA reviews and tests; the manager decides what merges.</sub>`);
   return lines.join('\n');
+}
+
+/** The recording of QA's browser in the comment: the GIF, which plays there, linking to the MP4, and how it was edited. */
+export function recordingSection(r: QaRecording): string[] {
+  const actions = `${r.actions} browser action${r.actions === 1 ? '' : 's'}`;
+  return [
+    '', '### 🎬 Recording',
+    ...(r.gifUrl ? ['', `[![QA's browser session](${r.gifUrl})](${r.mp4Url})`] : []),
+    '', `The session took ${clock(r.realSeconds)}; the clip shows it in ${clock(r.shownSeconds)}. Each of its ${actions} plays at real speed, and the waits between them are fast-forwarded (marked ⏩), never cut. [Watch the MP4](${r.mp4Url})`,
+  ];
 }
 
 /** Another pull request of the same slice, checked out beside the one under test at `../<folder>` (`error` if that failed). */
@@ -377,12 +399,17 @@ Test this PR on its own first, as below. Then, where the repos depend on each ot
 `;
 }
 
+/** What QA hears when its browser is recorded for the pull request. */
+const RECORDED =
+  "\n   Your browser is recorded, and the recording goes on the pull request with your report, edited down: each browser action at real speed, the waits between them fast-forwarded. So walk through the change in the browser as you would show it to a reviewer, one step at a time, ending on the state that proves it works (or doesn't).";
+
 /**
  * QA's "How to test" steps for a pull request into `baseBranch`, numbered in this order in its instructions
  * (`qaSystemAppend`) and listed by title at the QA station's Playbook. `checks` are the commands of the repo's own checks
- * when Ops knows them (`repoChecks`); without them QA works out which there are.
+ * when Ops knows them (`repoChecks`); without them QA works out which there are. `recorded`: QA's browser is recorded
+ * for the pull request (the project's `qaVideo`).
  */
-export function qaSteps(baseBranch: string, checks: readonly string[] = []): QaStep[] {
+export function qaSteps(baseBranch: string, checks: readonly string[] = [], recorded = false): QaStep[] {
   const run = checks.length
     ? `run these checks: ${checks.map((c) => `\`${c}\``).join(', ')}, and anything else the repo's CLAUDE.md asks.`
     : "run the project's test suite, linters, type checks and build (whichever exist).";
@@ -400,14 +427,14 @@ export function qaSteps(baseBranch: string, checks: readonly string[] = []): QaS
     {
       title: 'Clicks through UI changes in a browser',
       text: `If the change touches a web UI, start its dev server in the background and exercise the change with the mcp__browser__ tools: click through it, try the edge cases, and check the console for errors. Stop the server afterwards.
-   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.`,
+   Call mcp__browser__screenshot on each state that shows the change working or failing: the last ${MAX_SCREENSHOTS} go on the pull request with your report, each with the caption you give it.${recorded ? RECORDED : ''}`,
     },
     { title: 'Probes with throwaway scripts', text: `You may write throwaway scripts to probe behaviour, but don't commit them. ${SCRATCH_RULE} ${WAIT_RULE}` },
   ];
 }
 
 /** QA's instructions for reviewing `pr` at `sha`: `checks` are the commands of its repo's checks, for step 3 (`qaSteps`). */
-export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = [], checks: readonly string[] = []): string {
+export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean; qaVideo?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = [], checks: readonly string[] = []): string {
   const brief = project.qaBrief?.trim();
   const proof = project.qaProof !== false;
   return `
@@ -419,7 +446,7 @@ Pull request #${pr.number} "${pr.title}", branch \`${pr.branch}\` into \`${pr.ba
 Your current directory is a throwaway checkout of its head, commit ${sha.slice(0, 7)}, detached.
 ${siblingsSection(siblings)}${brief ? `\nWhat to check on every PR of this project (from the manager):\n${brief}\n` : ''}
 How to test:
-${qaSteps(pr.baseBranch, checks).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
+${qaSteps(pr.baseBranch, checks, qaVideoFor(project)).map((step, i) => `${i + 1}. ${step.text}`).join('\n')}
 ${proof ? HUNTING : ''}
 Rules: don't change the code under test${proof ? ' (your proof tests are the only files you add)' : ''}, don't commit or push, and don't comment on, review or merge anything on GitHub: Ops posts your report. Nobody can answer questions while you work, so make sensible calls and say what you assumed. ${PUBLIC_WORDS_RULE}
 
@@ -450,11 +477,11 @@ function examplePr(repo: string): PullRequestDetail {
  * proof mode's only when it's on, the checks it runs on each repo, and the whole instructions for an example pull request
  * in the first repo, whose checks step 3 names.
  */
-export function qaPlaybook(officer: string, project: Pick<Project, 'name' | 'repos' | 'qaBrief' | 'qaProof'>, repos: QaRepoChecks[]): QaPlaybook {
+export function qaPlaybook(officer: string, project: Pick<Project, 'name' | 'repos' | 'qaBrief' | 'qaProof' | 'qaVideo'>, repos: QaRepoChecks[]): QaPlaybook {
   const checks = repos[0]?.commands ?? [];
   const pr = examplePr(project.repos[0] ?? 'owner/repo');
   return {
-    steps: [...qaSteps(pr.baseBranch, checks), ...(qaProofFor(project) ? HUNTING_STEPS : [])],
+    steps: [...qaSteps(pr.baseBranch, checks, qaVideoFor(project)), ...(qaProofFor(project) ? HUNTING_STEPS : [])],
     repos,
     prompt: qaSystemAppend({ name: officer }, project, pr, pr.headSha, [], checks),
   };

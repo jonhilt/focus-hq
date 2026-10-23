@@ -5,6 +5,7 @@ import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { QaChatAnswer, QaChatRequest, QaChatter } from './qaChat';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
+import type { EditedRecording } from './recorder';
 import type { PackageFacts } from '../packageManager';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
@@ -236,6 +237,34 @@ export class Renderer extends Context.Service<Renderer, {
     return Layer.succeed(Renderer, Renderer.of({
       render: (html, frames) => Effect.tryPromise({ try: () => browser.render(html, frames), catch: failed }),
     }));
+  }
+}
+
+/** Ops couldn't edit a recording of an agent's browser (no ffmpeg, say). */
+export class RecordingFailed extends Data.TaggedError('RecordingFailed')<{ reason: string }> {
+  override get message() {
+    return this.reason;
+  }
+}
+
+/** Recordings of agents' browser sessions, edited down to show on a pull request (recording.ts). */
+export class Recordings extends Context.Service<Recordings, {
+  /** Records the agent's browser from now on, throwing away any recording of it before. */
+  start(agentId: string): Effect.Effect<void>;
+  /** Stops recording and edits it down: nothing if it wasn't recorded or the agent never acted in it. */
+  finish(agentId: string): Effect.Effect<EditedRecording | null, RecordingFailed>;
+}>()('focus/agents/Recordings') {
+  /** In the agents' shared headless Chromium (`BrowserPool`), edited with the machine's ffmpeg. */
+  static fromBrowser(browser: { record(agentId: string): Promise<void>; finishRecording(agentId: string): Promise<EditedRecording | null> }): Layer.Layer<Recordings> {
+    return Layer.succeed(Recordings, Recordings.of({
+      start: (agentId) => Effect.promise(() => browser.record(agentId).catch(() => undefined)),
+      finish: (agentId) => Effect.tryPromise({ try: () => browser.finishRecording(agentId), catch: (err) => new RecordingFailed({ reason: errorMessage(err) }) }),
+    }));
+  }
+
+  /** Records nothing: every recording finishes as `recorded` (none by default). */
+  static none(recorded: EditedRecording | null = null): Layer.Layer<Recordings> {
+    return Layer.succeed(Recordings, Recordings.of({ start: () => Effect.void, finish: () => Effect.succeed(recorded) }));
   }
 }
 

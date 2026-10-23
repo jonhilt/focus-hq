@@ -123,6 +123,11 @@ export interface Project {
    * of a failure in the browser. A fail without one goes up as advice and the verdict is a pass (missing = on).
    */
   qaProof?: boolean;
+  /**
+   * QA records its browser session and puts it on the pull request with its report, edited down: each action at real
+   * speed, the waits between them fast-forwarded (missing = off).
+   */
+  qaVideo?: boolean;
   /** What QA must check on every PR of this project, on top of the usual review. Goes into the QA officer's prompt. */
   qaBrief?: string;
   /**

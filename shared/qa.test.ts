@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, sameCommit, spotCheckUrl, verdictBehindHead } from './qa';
+import { autoQaFor, autoSendBackFor, filesCovered, pullUrl, qaBadge, qaProofFor, qaVideoFor, sameCommit, spotCheckUrl, verdictBehindHead } from './qa';
 import type { QaReport, QaReview } from './types';
 
 const review = (r: Partial<QaReview> = {}): QaReview => ({
@@ -101,6 +101,13 @@ describe('qaProofFor', () => {
   it('blocks only with proof unless the project switched it off', () => {
     expect(qaProofFor({})).toBe(true);
     expect(qaProofFor({ qaProof: false })).toBe(false);
+  });
+});
+
+describe('qaVideoFor', () => {
+  it('records QA’s browser only once the project switched it on', () => {
+    expect(qaVideoFor({})).toBe(false);
+    expect(qaVideoFor({ qaVideo: true })).toBe(true);
   });
 });
 

@@ -6,7 +6,7 @@ import type { Effort, QaRepoChecks, Settings } from './types';
 // shows it beside the steps and instructions the server builds from QA's prompt (`qaPlaybook` in server/agents/qa.ts).
 
 /** QA's switches at the QA station, by the project field each sets. */
-export type QaSwitch = 'autoQa' | 'autoSendBack' | 'qaProof' | 'autoMerge' | 'checkMerges';
+export type QaSwitch = 'autoQa' | 'autoSendBack' | 'qaProof' | 'qaVideo' | 'autoMerge' | 'checkMerges';
 
 /** What a switch means for the project, set as it is (`on`). */
 export function qaSwitchSays(which: QaSwitch, on: boolean): string {
@@ -23,6 +23,10 @@ export function qaSwitchSays(which: QaSwitch, on: boolean): string {
       return on
         ? 'Fails a pull request only with proof Ops checks itself: a test that fails when it runs it, a failing check, or a screenshot of a broken page. Findings without proof go on the PR as advice.'
         : 'Fails a pull request on its own judgement, no proof needed (Block only with proof is off).';
+    case 'qaVideo':
+      return on
+        ? 'Records its browser on each pull request it tests, and puts the recording on the PR with its report: every action at real speed, the waits between them fast-forwarded and marked. Needs ffmpeg on this machine.'
+        : 'Puts screenshots on the pull request, no recording (Record proof video is off).';
     case 'autoMerge':
       return on
         ? 'Merges a pull request the crew opened once QA passed its latest commit, its checks are green and its merge check passes.'

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, repoChecks, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, repoChecks, siblingsSection, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
 import { HUNTING, HUNTING_STEPS } from './qaProof';
 import { SCRATCH_RULE } from './scratch';
@@ -86,6 +86,10 @@ describe('evidencePath', () => {
   it('gives each review round its own folder', () => {
     expect(evidencePath(12, 'abc1234def', 1700000000000, 0, 'jpg')).toBe('pr-12/abc1234-1700000000000/1.jpg');
     expect(evidencePath(12, undefined, 1700000000000, 2, 'svg')).toBe('pr-12/1700000000000/3.svg');
+  });
+
+  it('puts the recording of the browser beside the round’s screenshots', () => {
+    expect(recordingPath(12, 'abc1234def', 1700000000000, 'mp4')).toBe('pr-12/abc1234-1700000000000/recording.mp4');
   });
 });
 
@@ -173,6 +177,23 @@ describe('qaComment', () => {
     expect(qaComment(report(), { officer: 'X' }, [], true)).toContain('### 📸 Screenshots\n\nNo screenshots were taken during this review.');
   });
 
+  it('shows the recording of the browser as a GIF that links to its MP4, and says how it was edited', () => {
+    const recording = { mp4Url: 'https://x/recording.mp4', gifUrl: 'https://x/recording.gif', realSeconds: 312, shownSeconds: 48, actions: 14 };
+    const body = qaComment(report(), { officer: 'X' }, [], true, undefined, recording);
+    expect(body).toContain("### 🎬 Recording\n\n[![QA's browser session](https://x/recording.gif)](https://x/recording.mp4)");
+    expect(body).toContain('The session took 5:12; the clip shows it in 0:48. Each of its 14 browser actions plays at real speed');
+    expect(body).toContain('fast-forwarded (marked ⏩), never cut');
+    expect(body.indexOf('🎬 Recording')).toBeLessThan(body.indexOf('📸 Screenshots'));
+  });
+
+  it('links the MP4 alone when there’s no GIF of it, and has no recording section without a recording', () => {
+    const section = recordingSection({ mp4Url: 'https://x/recording.mp4', realSeconds: 60, shownSeconds: 20, actions: 1 }).join('\n');
+    expect(section).not.toContain('![');
+    expect(section).toContain('Each of its 1 browser action plays');
+    expect(section).toContain('[Watch the MP4](https://x/recording.mp4)');
+    expect(qaComment(report(), { officer: 'X' }, [], true)).not.toContain('Recording');
+  });
+
   it('keeps the caption but leaves out an image that failed to upload', () => {
     const body = qaComment(report(), { officer: 'X' }, [{ caption: 'Empty cart', file: 'a.jpg' }], true);
     expect(body).toContain('**1. Empty cart**\n\n_The image couldn\'t be uploaded._');
@@ -192,6 +213,11 @@ describe('QA instructions', () => {
     expect(text).toContain('go through every file the diff changes (`git diff --stat origin/main...HEAD` lists them all: however many there are, don\'t pick a few)');
     expect(text).toContain('Read each of those files\' changed lines one by one');
     expect(text).toContain('an argument or index read from the wrong place');
+  });
+
+  it('tell QA its browser is recorded only when the project records it', () => {
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop', qaVideo: true }, pr, pr.headSha)).toContain('Your browser is recorded');
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).not.toContain('Your browser is recorded');
   });
 
   it('ask QA to look for tests that only raise coverage', () => {

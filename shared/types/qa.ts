@@ -106,6 +106,19 @@ export interface QaScreenshot {
   url?: string;
 }
 
+/** QA's browser session, recorded and edited down (server/agents/recording.ts), as it went on the pull request. */
+export interface QaRecording {
+  /** The clip on the repo's QA evidence branch. */
+  mp4Url: string;
+  /** The same clip as a GIF that plays in the comment. Missing when it was too big or didn't upload. */
+  gifUrl?: string;
+  /** How long the session took, and how long the clip lasts. */
+  realSeconds: number;
+  shownSeconds: number;
+  /** How many browser actions it shows. */
+  actions: number;
+}
+
 export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
 
 /** What a developer was sent back to fix: QA's findings, or the PR's checks failing on GitHub after QA passed it. */

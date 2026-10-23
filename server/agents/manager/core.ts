@@ -5,7 +5,7 @@ import type { Hub } from '../../hub';
 import { Plugins } from '../../plugins/registry';
 import type { Store } from '../../store';
 import { errorMessage } from '../../util';
-import { type GitFailed, type QaChat, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
+import { type GitFailed, type QaChat, type Recordings, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
 import { Inbox } from '../inbox';
 import type { RunFact } from '../runJournal';
 import type { AgentSession } from '../types';
@@ -25,7 +25,7 @@ import type { Slices } from './slices';
 import type { Triages } from './triages';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
-export type ManagerServices = GitHub | Workspace | Sessions | Triage | Renderer | QaChat;
+export type ManagerServices = GitHub | Workspace | Sessions | Triage | Renderer | Recordings | QaChat;
 
 /** The repository has no commits yet, so there's no branch to work from. */
 export class EmptyRepository extends Data.TaggedError('EmptyRepository')<{ repo: string }> {

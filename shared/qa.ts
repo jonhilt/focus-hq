@@ -83,6 +83,11 @@ export function qaProofFor(project: { qaProof?: boolean }): boolean {
   return project.qaProof !== false;
 }
 
+/** Whether QA records its browser session for this project's pull requests (missing = off). */
+export function qaVideoFor(project: { qaVideo?: boolean }): boolean {
+  return project.qaVideo === true;
+}
+
 export function autoSendBackFor(project: { autoSendBack?: boolean }): boolean {
   return project.autoSendBack !== false;
 }

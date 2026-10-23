@@ -13,7 +13,7 @@ import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFi
 import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
-import { Sessions, Workspace } from '../services';
+import { type Recordings, Sessions, Workspace } from '../services';
 import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, probedWaypoints } from '../waypoints';
 import { BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
@@ -218,7 +218,7 @@ export class AgentSessions extends Part {
   }
 
   /** The agent's instructions. The QA officer's may need GitHub, and that can fail. */
-  instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace> {
+  instructions(agent: Agent): Effect.Effect<string, GitHubError, GitHub | Workspace | Recordings> {
     if (agent.task === 'review') return this.core.reviews.qaSystem(agent);
     if (agent.task === 'lead' && agent.lead) return Effect.succeed(leadSystemAppend(agent, this.store.project(agent.projectId).name, agent.lead.station));
     return Effect.succeed(systemAppend(agent, this.core.plugins.brief(agent.brief)));

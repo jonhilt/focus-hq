@@ -11,6 +11,8 @@ describe('qaSwitchSays', () => {
     expect(qaSwitchSays('autoSendBack', false)).toContain('comes to you');
     expect(qaSwitchSays('qaProof', true)).toContain('only with proof');
     expect(qaSwitchSays('qaProof', false)).toContain('own judgement');
+    expect(qaSwitchSays('qaVideo', true)).toContain('fast-forwarded');
+    expect(qaSwitchSays('qaVideo', false)).toContain('no recording');
     expect(qaSwitchSays('autoMerge', false)).toContain('you merge from the board');
     expect(qaSwitchSays('autoMerge', true)).toContain('merge check passes');
     expect(qaSwitchSays('checkMerges', true)).toContain('one merge at a time');

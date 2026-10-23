@@ -5,6 +5,7 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
 import { focus, restarted } from './fakeFocus';
+import { Recordings } from './services';
 import type { WorkspaceOps } from './types';
 import { checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 
@@ -34,6 +35,17 @@ const workspace = (later: Later): WorkspaceOps => ({
   pull: () => later('pull', () => Promise.resolve()),
   runIn: () => Promise.resolve({ code: 1, output: 'AssertionError: expected 1 to be 2' }),
 });
+/**
+ * The browser's recordings: each review Ops started recording in this life finishes with a clip once edited (through
+ * `later`, as ffmpeg runs outside); one it didn't (a recording lost to a restart) finishes with none.
+ */
+const recordings = (later: Later) => {
+  const started = new Set<string>();
+  return Layer.succeed(Recordings, Recordings.of({
+    start: (agentId) => Effect.sync(() => void started.add(agentId)),
+    finish: (agentId) => Effect.promise(() => later('edit recording', () => Promise.resolve(started.delete(agentId) ? { mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9 } : null))),
+  }));
+};
 const [first, second] = await Effect.runPromise(Effect.gen(function* () {
   return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
 }).pipe(Effect.provide(demoLayer)));
@@ -58,6 +70,8 @@ interface Kept {
   followUp?: string;
   verdicts: number;
   comments: number;
+  /** Of them, the ones with QA's browser recording. */
+  recorded: number;
 }
 
 const reviews: Subject<Kept[]> = {
@@ -84,6 +98,7 @@ const reviews: Subject<Kept[]> = {
         followUp: store.reviews.get(prKey(pr.repo, pr.number))?.followUp?.kind,
         verdicts: store.ledger.filter((e) => e.kind === 'qa-verdict' && e.pr === pr.number).length,
         comments: comments.get(pr.number)?.length ?? 0,
+        recorded: comments.get(pr.number)?.filter((c) => c.includes('🎬 Recording')).length ?? 0,
       }));
     const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
       const ended = new Set<number>();
@@ -108,13 +123,16 @@ const reviews: Subject<Kept[]> = {
         close: () => o.agents.shutDown(),
         restart: (later) => {
           o.agents.shutDown();
-          const after = restarted(o.store, workspace(later), github(later));
+          const after = restarted(o.store, workspace(later), github(later), undefined, recordings(later));
           after.agents.recover();
           return life({ ...after, store: o.store });
         },
       };
     };
-    return life(focus(workspace(start), github(start)));
+    const o = focus(workspace(start), github(start), undefined, undefined, recordings(start));
+    // the project has QA's browser recorded, so its recording is part of each verdict that goes up
+    if (o.store.projects[0]) o.store.projects[0].qaVideo = true;
+    return life(o);
   },
 };
 
