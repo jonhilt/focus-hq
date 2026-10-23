@@ -46,9 +46,7 @@
 .cos-inbox-row-head small { white-space: nowrap; flex-shrink: 0; }
 .cos-inbox-tag { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
 .cos-inbox-goal { color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.cos-decided-list { display: flex; flex-direction: column; gap: 6px; }
-.cos-decided { display: block; width: 100%; text-align: left; font: inherit; color: inherit; border-top: 0; border-right: 0; border-bottom: 0; cursor: pointer; background: var(--surface-2); border-radius: 0 var(--radius) var(--radius) 0; border-left: 8px solid var(--muted); padding: 6px 10px; opacity: 0.7; }
-.cos-decided-answer { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.cos-decided-list { display: flex; flex-direction: column; }
 .cos-tray-line { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
 .cos-tray-line:hover { color: var(--text); }
 .cos-tray:empty { display: none; }
@@ -90,10 +88,20 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-zoom-bar { display: flex; align-items: center; gap: 10px; }
 .cos-zoom-says { flex: 1; display: flex; flex-direction: column; }
 
-/* the list under a heading each for its goal */
-.cos-inbox-goal-head { display: flex; align-items: baseline; gap: 4px; margin: 8px 0 -2px; white-space: nowrap; overflow: hidden; min-width: 0; }
+/* the list under a heading each for its goal: the goal small and spaced out, its items a quiet line each under it */
+.cos-inbox-goal-head { display: flex; align-items: baseline; gap: 4px; margin: 12px 0 0; font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; min-width: 0; }
 .cos-inbox-goal-head:first-child { margin-top: 0; }
 .cos-inbox-goal-head .cos-inbox-goal { overflow: hidden; text-overflow: ellipsis; color: var(--lcars-peach); }
-.cos-inbox-row .cos-inbox-row-head .cos-need-what { flex: 1; min-width: 0; margin-top: 0; }
-.cos-decided:hover { opacity: 0.9; }
-.cos-decided.sel { opacity: 1; outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }
+.cos-needs .cos-inbox-row { border-left-width: 4px; padding: 7px 10px; background: color-mix(in srgb, var(--surface-2) 70%, #000); }
+.cos-needs .cos-inbox-row-head { align-items: center; gap: 10px; }
+.cos-inbox-row .cos-inbox-row-head .cos-need-what { flex: 1; min-width: 0; margin-top: 0; font-size: 17px; font-weight: 400; color: var(--text); }
+.cos-needs .cos-inbox-tag { font-size: 13px; font-weight: 400; }
+.cos-needs { gap: 4px; }
+/* Recently decided: a line each, the goal, what was said, and when; pressed, it's brought back up */
+.cos-decided-list { gap: 4px; }
+.cos-decided { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 14px; color: inherit; border: 0; cursor: pointer; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 6px 10px; }
+.cos-decided .cos-inbox-goal { flex-shrink: 1; max-width: 45%; color: var(--lcars-peach); }
+.cos-decided-answer { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cos-decided small { flex-shrink: 0; }
+.cos-decided:hover { background: var(--surface-2); }
+.cos-decided.sel { outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }

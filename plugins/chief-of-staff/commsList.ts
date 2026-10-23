@@ -12,6 +12,12 @@ export function tagOf(item: Pick<InboxItem, 'kind' | 'cos' | 'lane'>): string {
   return ({ hand: 'Approve', error: 'Stuck', question: 'Pick', 'wrap-up': 'Close', qa: 'QA', conflicts: 'Conflicts' } as const)[item.kind];
 }
 
+/** How a hail's line opens (`needLine`), which its tag on the list already says. */
+const SAID_BY_TAG = /^(Approve|Stuck|Pick|Ready to close|QA needs you): (?=\S)/;
+
+/** What's needed, as a row under its tag says it: without the opening the tag already says ("Pick: Which layout?" → "Which layout?"). */
+export const rowWhat = (what: string): string => what.replace(SAID_BY_TAG, '');
+
 /** How long it's waited, in a few characters: 40s, 4m, 2.6h, 8.5d. */
 export function waited(since: number, now: number): string {
   const s = Math.max(0, (now - since) / 1000);

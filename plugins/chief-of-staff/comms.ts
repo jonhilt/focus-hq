@@ -2,7 +2,7 @@ import { fill, focus, h, LCARS, type Ui, viaNote } from '../../plugin-api/client
 import type { Attention } from '../../plugin-api/shared';
 import { focusIndex, keptOrder } from './briefing';
 import { COMMS_KEYS, commsKey } from './commsKeys';
-import { agentOfDecision, byGoal, decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine as trayLineText, waited } from './commsList';
+import { agentOfDecision, byGoal, decidedBy, decidedByCaptain, lanes, rowWhat, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine as trayLineText, waited } from './commsList';
 import { waitingNow } from './here';
 import { type DecisionEvent, hailKey as keyOf, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -36,7 +36,7 @@ function itemRow(i: InboxItem, pick: () => void): HTMLElement {
   return h('button', { class: 'cos-need cos-inbox-row', style: `--tone:${toneOf(i)}`, onclick: pick },
     h('div', { class: 'cos-inbox-row-head' },
       h('span', { class: 'cos-inbox-tag' }, tagOf(i)),
-      h('span', { class: 'cos-need-what', title: i.what }, i.what),
+      h('span', { class: 'cos-need-what', title: i.what }, rowWhat(i.what)),
       i.since ? h('small', { class: 'muted' }, waited(i.since, Date.now())) : null,
     ),
     h('small', { class: 'cos-need-sends' }),
@@ -54,8 +54,9 @@ const grouped = (list: readonly InboxItem[], rowOf: (it: InboxItem) => HTMLEleme
 function decidedRow(d: DecisionEvent, pick: () => void): HTMLElement {
   const via = viaNote(d.via);
   return h('button', { class: 'cos-decided', title: `${d.item.what}${via ? ` (${via})` : ''}: press to bring it back up`, onclick: pick },
-    h('div', { class: 'cos-inbox-row-head' }, h('span', { class: 'cos-inbox-goal' }, d.goal ?? d.agent), h('small', { class: 'muted' }, `· ${waited(d.at, Date.now())}`)),
-    h('div', { class: 'cos-decided-answer' }, `${decidedBy(d)}: “${d.answer}”`),
+    h('span', { class: 'cos-inbox-goal' }, d.goal ?? d.agent),
+    h('span', { class: 'cos-decided-answer' }, `${decidedBy(d)}: “${d.answer}”`),
+    h('small', { class: 'muted' }, waited(d.at, Date.now())),
   );
 }
 

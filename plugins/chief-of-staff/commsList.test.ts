@@ -1,11 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { DecisionEvent, InboxItem } from './inbox';
-import { agentOfDecision, byGoal, decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine, waited } from './commsList';
+import { agentOfDecision, byGoal, rowWhat, decidedBy, decidedByCaptain, lanes, perProject, readingLine, sendsIn, sentByCos, stepped, tagOf, trayLine, waited } from './commsList';
 
 const item = (over: Partial<InboxItem>): InboxItem => ({ id: 'x', kind: 'turn', projectId: 'p', who: 'Ada', goal: 'Wishlist', what: 'w', lane: 'needs-you', ...over });
 const cos = (route: 1 | 2 | 3 | 4) => ({ route, ask: 'a', why: 'w', message: 'm' });
 
 describe('Comms list', () => {
+  it('leaves off a row what its tag already says, keeping a line that is only that', () => {
+    expect(rowWhat('Pick: Which layout should it start with?')).toBe('Which layout should it start with?');
+    expect(rowWhat('Approve: Ship the slice')).toBe('Ship the slice');
+    expect(rowWhat('Ready to close: All shipped')).toBe('All shipped');
+    expect(rowWhat('Ready to close')).toBe('Ready to close');
+    expect(rowWhat('Ship slice 2: the checkout?')).toBe('Ship slice 2: the checkout?');
+  });
+
   it('groups the list by goal, each where its most urgent item is, a pull request without a lead its own', () => {
     const list = [
       item({ id: '1', agentId: 'a', goal: 'Wishlist' }),
