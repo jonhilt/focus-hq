@@ -11,11 +11,11 @@ describe('the scheduler’s panel and toasts', () => {
   it('groups schedules by lead, with the next run and the latest runs', () => {
     const groups = panelGroups({
       schedules: [{ ...s, next: at('2026-10-24T08:07:00Z') }],
-      runs: [run('2026-10-23T14:07:00Z', 'on-time'), run('2026-10-23T20:07:00Z', 'late', 3 * 3_600_000)],
+      runs: [run('2026-10-23T14:07:00Z', 'on-time'), { ...run('2026-10-23T20:07:00Z', 'late', 3 * 3_600_000), alertedAt: at('2026-10-23T23:27:00Z') }],
     }, at('2026-10-23T22:30:00Z'));
     expect(groups).toEqual([{
       leadId: 'lead-1', leadName: 'Novak',
-      rows: [{ id: 'sch-1', times: 'cron “7 9,15,21 * * *” (Europe/London)', next: 'Sat 24 Oct 09:07', what: 'Check the rollout.', runs: [{ label: '15:07', outcome: 'on-time' }, { label: '21:07 · 3 h 0 min late', outcome: 'late' }] }],
+      rows: [{ id: 'sch-1', times: 'cron “7 9,15,21 * * *” (Europe/London)', next: 'Sat 24 Oct 09:07', what: 'Check the rollout.', runs: [{ label: '15:07', outcome: 'on-time', unanswered: false }, { label: '21:07 · 3 h 0 min late · unanswered', outcome: 'late', unanswered: true }] }],
     }]);
   });
 

@@ -16,6 +16,8 @@ interface Durable {
   schedules: { id: string; lastSlot?: number }[];
   runs: string[];
   heard: string[];
+  /** The captain's alerts that a lead hadn't answered (out in the world too). */
+  alerts: string[];
 }
 
 type Keeper = (dir: string) => { read(): Kept; write(kept: Kept): void };
@@ -29,7 +31,7 @@ function schedulerSubject(keep: Keeper): Subject<Durable> {
     start: () => {
       const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'scheduler-'));
       // the world outside Focus: the clock, and what the leads have heard, carry on through a restart
-      const world = { clock: Date.parse('2026-10-23T11:00:00Z'), heard: [] as string[] };
+      const world = { clock: Date.parse('2026-10-23T11:00:00Z'), heard: [] as string[], alerts: [] as string[] };
       const life = (): Running<Durable> => {
         const sched = new Scheduler({
           book: keep(dir),
@@ -40,6 +42,8 @@ function schedulerSubject(keep: Keeper): Subject<Durable> {
             return 'sent';
           },
           heard: () => undefined,
+          unanswered: (run) => void world.alerts.push(`${run.scheduleId}@${new Date(run.slot).toISOString()}`),
+          answeredLate: () => undefined,
           publish: () => undefined,
           wake: () => () => undefined,
         });
@@ -55,11 +59,13 @@ function schedulerSubject(keep: Keeper): Subject<Durable> {
             { name: 'unschedule the first', run: () => sched.remove(LEAD.leadId, sched.of(LEAD.leadId)[0]?.id ?? 'none') },
             { name: 'six minutes pass', run: () => pass(6 * MINUTE) },
             { name: 'an hour passes', run: () => pass(60 * MINUTE) },
+            { name: 'the lead answers', run: () => sched.turnEnded(LEAD.leadId) },
           ],
           durable: () => ({
             schedules: sched.of(LEAD.leadId).map((s) => ({ id: s.id, ...(s.lastSlot !== undefined && { lastSlot: s.lastSlot }) })),
             runs: sched.runs().map((r) => `${r.scheduleId}@${r.slot}:${r.outcome}`),
             heard: [...world.heard],
+            alerts: [...world.alerts],
           }),
           settle: () => Promise.resolve(),
           restart: () => {
@@ -120,6 +126,25 @@ describe('the scheduler’s book, under Focus’s two rules', () => {
     take('an hour passes');
     expect(r.durable()).toMatchObject({ schedules: [], runs: [expect.stringMatching(/^sch-1@\d+:late$/)] });
     r.close?.();
+  });
+
+  // README: "The captain hears once when a lead doesn't answer a run within 20 minutes, a restart included"
+  it('alerts an unanswered run once, through a restart after the alert', async () => {
+    const r = await scheduler.start((_l, work) => work());
+    const take = (name: string) => r.actions().find((a) => a.name === name)?.run();
+    take('schedule once, in a quarter of an hour');
+    take('six minutes pass');
+    take('six minutes pass');
+    take('six minutes pass');
+    // sent at 11:18; 20 minutes on, nobody has answered
+    take('six minutes pass');
+    take('six minutes pass');
+    take('six minutes pass');
+    take('six minutes pass');
+    const again = await r.restart((_l, work) => work());
+    again.actions().find((a) => a.name === 'six minutes pass')?.run();
+    expect(again.durable().alerts).toEqual(['sch-1@2026-10-23T11:15:00.000Z']);
+    again.close?.();
   });
 
   it('reaches a damaged book, kept aside, and starts again empty', () => {

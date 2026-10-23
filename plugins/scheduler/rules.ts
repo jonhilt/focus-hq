@@ -1,10 +1,12 @@
 // The scheduler's decisions, pure: what a lead may schedule, which slots have fallen due, and what to do with them.
 // croner does the calendar (cron patterns, time zones, the clocks changing); nothing here reads the clock or a file.
 import { Cron } from 'croner';
-import type { RunOutcome, Schedule } from './shared';
+import type { RunOutcome, RunRecord, Schedule } from './shared';
 
 /** A run this long after its slot is late: Focus was down, or the machine asleep, as it fell due. */
 export const LATE_MS = 60_000;
+/** How long a lead has to answer a run (a turn of theirs ending after it) before the captain is alerted. */
+export const ANSWER_MS = 20 * 60_000;
 /** The closest two runs of one schedule may be: every run is a lead turn, so none more often than this. */
 export const MIN_GAP_MS = 5 * 60_000;
 /** The most schedules one lead may keep at once. */
@@ -130,6 +132,32 @@ export function runMessage(s: Schedule, d: Due, now: number): string {
 
 /** The outcome of the slot that ran, before the message's reply says whether it's held. */
 export const ranOutcome = (d: Due): RunOutcome => (d.late ? 'late' : 'on-time');
+
+/** Whether the watchdog waits on a run's answer: one that woke its lead (not missed or held) with a deadline to answer by. */
+const watched = (r: RunRecord): r is RunRecord & { answerBy: number } => (r.outcome === 'on-time' || r.outcome === 'late') && r.answerBy !== undefined;
+
+/** Runs a lead hasn't answered whose time to answer is up, and the captain hasn't been alerted of yet. */
+export const overdue = (runs: readonly RunRecord[], now: number): RunRecord[] =>
+  runs.filter((r) => watched(r) && r.answeredAt === undefined && r.alertedAt === undefined && now >= r.answerBy);
+
+/** When the soonest run still waiting on its lead's answer falls overdue, or null when none is waiting. */
+export function nextDeadline(runs: readonly RunRecord[]): number | null {
+  const waiting = runs.filter(watched).filter((r) => r.answeredAt === undefined && r.alertedAt === undefined).map((r) => r.answerBy);
+  return waiting.length ? Math.min(...waiting) : null;
+}
+
+/** A lead's turn ended at `now`: every run of theirs sent by then and not yet answered is answered. */
+export const answering = (runs: readonly RunRecord[], leadId: string, now: number): RunRecord[] =>
+  runs.filter((r) => r.leadId === leadId && watched(r) && r.answeredAt === undefined && r.at <= now);
+
+/** What the captain is told when a lead hasn't answered a run, and when they answer after all. */
+export function unansweredText(s: Pick<Schedule, 'id' | 'leadName' | 'tz'>, run: RunRecord, now: number): string {
+  return `${s.leadName} hasn’t answered the ${slotTime(run.slot, s.tz, now)} check (${s.id}) after ${lateBy(now - run.at)}.`;
+}
+
+export function answeredLateText(s: Pick<Schedule, 'id' | 'leadName' | 'tz'>, run: RunRecord, now: number): string {
+  return `${s.leadName} answered the ${slotTime(run.slot, s.tz, now)} check (${s.id}) after all, ${lateBy(now - run.at)} after it was sent.`;
+}
 
 /** A schedule's times in words, for the lead and the panel. */
 export function describeTimes(s: Pick<Schedule, 'cron' | 'at' | 'until' | 'tz'>, now: number): string {

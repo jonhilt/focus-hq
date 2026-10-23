@@ -37,6 +37,15 @@ export interface RunRecord {
   /** When the scheduler dealt with it (epoch ms). */
   at: number;
   outcome: RunOutcome;
+  /**
+   * When the lead has to have answered it by (a run that woke them): the watchdog's deadline. Runs from before the
+   * watchdog have none, so it never alerts on them.
+   */
+  answerBy?: number;
+  /** When a turn of the lead's ended after it was sent: they answered. */
+  answeredAt?: number;
+  /** When the captain was alerted that the lead hadn't answered it. */
+  alertedAt?: number;
 }
 
 /** A schedule as the panel shows it: with its next run, or null once it has none left. */

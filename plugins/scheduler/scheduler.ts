@@ -4,7 +4,7 @@
 // while Focus was down runs as it starts again.
 import { Cron } from 'croner';
 import type { Kept } from './book';
-import { type Due, due, finished, MOST_PER_LEAD, nextSlot, ranOutcome, runMessage, type ScheduleAsk, scheduleTimes } from './rules';
+import { ANSWER_MS, answering, type Due, due, finished, MOST_PER_LEAD, nextDeadline, nextSlot, overdue, ranOutcome, runMessage, type ScheduleAsk, scheduleTimes } from './rules';
 import type { RunOutcome, RunRecord, Schedule, SchedulerState } from './shared';
 
 /** How the lead's message went: sent (or waiting to be heard), held on the API key's cost, or there's no such lead any more. */
@@ -26,6 +26,10 @@ export interface SchedulerDeps {
   deliver(s: Schedule, text: string): Delivery;
   /** A slot went other than on time (late, missed, held): for the captain to hear. */
   heard(s: Schedule, run: RunRecord): void;
+  /** The watchdog: a lead hasn't answered `run` in time (a turn of theirs ending after it was sent), for the captain to hear. */
+  unanswered(run: RunRecord, now: number): void;
+  /** A lead answered `run` after the captain was alerted that they hadn't. */
+  answeredLate(run: RunRecord, now: number): void;
   /** The schedules and runs, as the browser shows them. */
   publish(state: SchedulerState): void;
   /** Calls `fire` at `at` (epoch ms); returns how to call it off. croner's by default. */
@@ -98,13 +102,26 @@ export class Scheduler {
     return this.kept.runs;
   }
 
-  /** Runs every schedule's due slot, claiming each in the book before its lead hears of it; finished schedules go. */
+  /** A turn of the lead's ended: the runs sent them by then are answered, and the captain hears of one they'd been alerted of. */
+  turnEnded(leadId: string): void {
+    const now = this.deps.now();
+    const done = answering(this.kept.runs, leadId, now);
+    if (!done.length) return;
+    this.mark(done, { answeredAt: now });
+    for (const r of done) if (r.alertedAt !== undefined) this.deps.answeredLate(r, now);
+  }
+
+  /** Runs every schedule's due slot, claiming each in the book before its lead hears of it; alerts runs gone unanswered; finished schedules go. */
   tick(): void {
     const now = this.deps.now();
     for (const s of this.kept.schedules) {
       const d = due(s, now);
       if (d) this.run(s, d, now);
     }
+    // each alert is claimed in the book before the captain hears it, as a slot is, so a restart never alerts it twice
+    const unanswered = overdue(this.kept.runs, now);
+    if (unanswered.length) this.mark(unanswered, { alertedAt: now });
+    for (const r of unanswered) this.deps.unanswered(r, now);
     const left = this.kept.schedules.filter((s) => !finished(s, now));
     if (left.length !== this.kept.schedules.length) this.save({ ...this.kept, schedules: left });
     else this.arm();
@@ -115,12 +132,19 @@ export class Scheduler {
     const record = (slot: number, outcome: RunOutcome): RunRecord => ({ scheduleId: s.id, leadId: s.leadId, slot, at: now, outcome });
     const missed = d.missed.map((slot) => record(slot, 'missed'));
     const claimed = { ...s, lastSlot: d.run };
-    this.save({ ...this.kept, schedules: this.kept.schedules.map((x) => (x.id === s.id ? claimed : x)), runs: [...this.kept.runs, ...missed, record(d.run, ranOutcome(d))] });
+    this.save({ ...this.kept, schedules: this.kept.schedules.map((x) => (x.id === s.id ? claimed : x)), runs: [...this.kept.runs, ...missed, { ...record(d.run, ranOutcome(d)), answerBy: now + ANSWER_MS }] });
     const delivery = this.deps.deliver(claimed, runMessage(claimed, d, now));
     if (delivery === 'gone') this.save({ ...this.kept, schedules: this.kept.schedules.filter((x) => x.id !== s.id) });
     if (delivery === 'held') this.save({ ...this.kept, runs: this.kept.runs.map((r) => (r.scheduleId === s.id && r.slot === d.run ? { ...r, outcome: 'held' } : r)) });
     const ran = record(d.run, delivery === 'held' ? 'held' : ranOutcome(d));
     for (const r of [...missed, ran]) if (r.outcome !== 'on-time') this.deps.heard(claimed, r);
+  }
+
+  /** Sets `patch` on each of `runs` in the book. */
+  private mark(runs: readonly RunRecord[], patch: Partial<RunRecord>): void {
+    const key = (r: RunRecord) => `${r.scheduleId}@${r.slot}`;
+    const keys = new Set(runs.map(key));
+    this.save({ ...this.kept, runs: this.kept.runs.map((r) => (keys.has(key(r)) ? { ...r, ...patch } : r)) });
   }
 
   /** Keeps the book (on disk before anything else hears of it), tells the browser, and times the next slot. */
@@ -135,11 +159,11 @@ export class Scheduler {
     this.deps.publish({ schedules: this.kept.schedules.map((s) => ({ ...s, next: this.next(s) })), runs: this.kept.runs.slice(-50) });
   }
 
-  /** One timer, for the soonest slot of any schedule. */
+  /** One timer, for the soonest slot of any schedule or the soonest run falling overdue. */
   private arm(): void {
     this.timer?.();
     this.timer = undefined;
-    const soonest = Math.min(...this.kept.schedules.map((s) => this.next(s) ?? Infinity));
+    const soonest = Math.min(...this.kept.schedules.map((s) => this.next(s) ?? Infinity), nextDeadline(this.kept.runs) ?? Infinity);
     if (soonest !== Infinity) this.timer = this.wake(soonest, () => this.tick());
   }
 }

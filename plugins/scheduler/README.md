@@ -18,7 +18,10 @@ Each is a test in `invariants.test.ts`, `scheduler.test.ts` or `rules.test.ts`.
 - **A run held on the API key is said to be.** The lead's message goes as the Scheduler's, which Focus holds rather than refuses when picking their conversation up would cost; the run is marked held and the captain told.
 - **A schedule goes with its goal.** One whose lead is gone, or whose project the plugin's switched off for, is dropped at its next slot, and one with no slots left is dropped once its last has run.
 - **No more often than every 5 minutes, and no more than 10 a lead**: each run is a turn of the lead's.
+- **The captain hears once when a lead doesn't answer a run within 20 minutes, a restart included.** A run is answered when a turn of the lead's ends after it was sent. One unanswered 20 minutes on alerts the captain directly, not through the chief of staff: an error toast, an `alert` line in the ledger, and an `alert` on the bot's webhook when Focus has one ([the bot](../../docs/ledger.md#the-captains-inbox-api)). The alert is claimed in the book before it's sent, so a restart never sends it twice, and a run that fell overdue while Focus was down is alerted as it starts. A lead answering after the alert is toasted too, and the panel shows the run unanswered until then. A run held on the API key or missed has its own toast, so the watchdog doesn't wait on it.
+
+- **A lead can alert the captain directly** (`alert`): the same toast, ledger line and webhook as the watchdog's, for what can't wait for their turn to end, at most every 10 minutes a lead.
 
 ## What it can't tell
 
-A slot runs only while Focus is up: nothing restarts Focus after a crash, so a schedule waits for Focus to start again. Whether the lead answers a run isn't watched yet.
+A slot runs only while Focus is up: nothing restarts Focus after a crash, so a schedule waits for Focus to start again, and so does the watchdog. A lead mid-turn as a run is sent hears it in that turn, so that turn's end answers it; a lead whose turn ends without hearing it (it waited in their inbox behind the turn) counts as having answered too.

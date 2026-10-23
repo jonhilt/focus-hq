@@ -84,6 +84,11 @@ export type LedgerEntry =
    * (`DecidedVia`). `agent` is who it was for.
    */
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
+  /**
+   * Something a plugin (`by`, its id) raised to the captain directly, not through anyone's routing: a lead not answering
+   * a scheduled run, say. `agent` is who it's about, `text` what the captain was told.
+   */
+  | { kind: 'alert'; by: string; agent: string; goal?: string; text: string }
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 

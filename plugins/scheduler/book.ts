@@ -23,7 +23,9 @@ const scheduleShape = z.object({
   cron: z.string().optional(), at: z.number().optional(), until: z.number().optional(), tz: z.string(),
   createdAt: z.number(), lastSlot: z.number().optional(),
 });
-const runShape = z.object({ scheduleId: z.string(), leadId: z.string(), slot: z.number(), at: z.number(), outcome: z.enum(['on-time', 'late', 'missed', 'held']) });
+const runShape = z.object({ scheduleId: z.string(), leadId: z.string(), slot: z.number(), at: z.number(), outcome: z.enum(['on-time', 'late', 'missed', 'held']),
+  answerBy: z.number().optional(), answeredAt: z.number().optional(), alertedAt: z.number().optional(),
+});
 const keptShape = z.object({ made: z.number(), schedules: z.array(scheduleShape), runs: z.array(runShape) });
 
 export class Book {

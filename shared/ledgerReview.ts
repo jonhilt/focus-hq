@@ -52,6 +52,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'captain-decision':
     case 'cos-verdict':
     case 'cos-lane':
+    case 'alert':
       return 'sessions';
     case 'session-frictions':
       return 'frictions';
@@ -170,6 +171,8 @@ function rowParts(e: LedgerEvent): RowParts {
       return cosRow(e);
     case 'lane-raised':
       return { tag: 'Lane', tone: 'warn', title: `${short(e.repo)} #${e.pr} · raised from ${e.from} to ${e.to} by the ${e.by.replace(/-/g, ' ')}`, detail: [e.why, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+    case 'alert':
+      return { tag: 'Alert', tone: 'bad', title: e.text, detail: [e.agent, e.goal, `from the ${e.by.replace(/-/g, ' ')}`].filter(Boolean).join(' · '), goal: e.goal };
     case 'cos-lane':
       return { tag: 'Lane', tone: e.failed ? 'bad' : 'info', title: `${e.to === e.from ? `Kept ${e.agent}’s ship in ${e.from}` : `Raised ${e.agent}’s ship from ${e.from} to ${e.to}`}`, detail: [e.failed ?? e.why, e.goal].filter(Boolean).join(' · '), ...(e.prs[0] && { pr: e.prs[0] }), goal: e.goal };
     case 'session-frictions':
@@ -319,6 +322,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
       case 'captain-replies':
       case 'captain-decision':
       case 'cos-verdict':
+      case 'alert':
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'cos-lane':
         return subject.kind === 'pr' ? e.prs.some(samePr) : e.goal === subject.title || e.prs.some(ofGoal);

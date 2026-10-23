@@ -1,10 +1,12 @@
 // The scheduler: a goal's lead asks to be woken later or regularly (schedule / schedules / unschedule), the
 // schedule is kept in the plugin's own book through restarts, and each slot wakes the lead once, as a message from
-// the scheduler; a slot run late, missed or held is toasted. FOCUS_PLUGINS=scheduler, then switched on per project.
+// the scheduler; a slot run late, missed or held is toasted, and a run the lead doesn't answer within 20 minutes alerts
+// the captain directly (alert.ts). FOCUS_PLUGINS=scheduler, then switched on per project.
 import { z } from 'zod';
 import type { FocusPlugin, LeadTool, PluginHost } from '../../plugin-api/server';
 import { Book } from './book';
-import { describeTimes, lateBy, slotTime } from './rules';
+import { alertCaptain, alertWait } from './alert';
+import { answeredLateText, describeTimes, lateBy, slotTime, unansweredText } from './rules';
 import { type Delivery, Scheduler } from './scheduler';
 import { freshScheduler, type RunRecord, SCHEDULER, type Schedule, type SchedulerState } from './shared';
 
@@ -36,6 +38,27 @@ const line = (sched: Scheduler, s: Schedule, now: number) => {
   const next = sched.next(s);
   return `${s.id}: ${describeTimes(s, now)}, next ${next === null ? 'none' : slotTime(next, s.tz, now)}: ${s.what}`;
 };
+
+/** The alert tool: a lead raises something to the captain directly (toast, ledger, the bot's webhook), at most every 10 minutes. */
+function alertTool(host: PluginHost, now: () => number): LeadTool {
+  const last = new Map<string, number>();
+  return {
+    name: 'alert',
+    description: 'Alert the captain directly, now, not through anyone’s routing: a toast, a line in the ship’s log, and their phone when Focus has a bot. Only for what can’t wait for your turn to end (a rollout going wrong, something you’re watching breaking); everything else goes in your turn as usual. At most one every 10 minutes.',
+    input: { text: z.string().describe('What the captain needs to know, in a sentence or two: it’s all they see.') },
+    run: async (lead, input) => {
+      const { text } = z.object({ text: z.string() }).parse(input);
+      if (!text.trim()) throw new Error('Say what the captain needs to know (`text`).');
+      const at = now();
+      const wait = alertWait(last.get(lead.agent.id), at);
+      if (wait) throw new Error(`You alerted the captain a moment ago: the next can go in ${lateBy(wait)}. Put this in your turn instead, or wait.`);
+      last.set(lead.agent.id, at);
+      const goal = lead.agent.lead?.title;
+      await alertCaptain(host, { projectId: lead.agent.projectId, agentId: lead.agent.id, agentName: lead.agent.name, ...(goal && { goal }), text: `${lead.agent.name}: ${text.trim()}` }, at);
+      return 'The captain has been alerted.';
+    },
+  };
+}
 
 function leadTools(sched: Scheduler, now: () => number): LeadTool[] {
   return [
@@ -84,27 +107,48 @@ function leadTools(sched: Scheduler, now: () => number): LeadTool[] {
   ];
 }
 
+/** Who a run's alert is about, as the captain reads it: none once the goal's gone, since there's no one left to answer. */
+function about(host: PluginHost, sched: Scheduler, run: RunRecord, tz: string) {
+  const lead = host.agent(run.leadId);
+  if (!lead) return undefined;
+  const s = sched.of(run.leadId).find((x) => x.id === run.scheduleId);
+  return { lead, who: { id: run.scheduleId, leadName: lead.name, tz: s?.tz ?? tz } };
+}
+
 const scheduler: FocusPlugin = {
   id: SCHEDULER,
   start(host) {
     // the book is the record; this is the browser's copy of it, made afresh as Focus starts
     const state = host.state<SchedulerState>(freshScheduler, { saved: false });
     const book = new Book(host.dataDir());
-    const sched = new Scheduler({
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const sched: Scheduler = new Scheduler({
       book,
       now: () => Date.now(),
-      tz: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      tz,
       deliver: (s, text) => deliver(host, s, text),
       heard: (s, run) => {
         const { level, text } = heardToast(s, run);
         host.toast(level, text, s.leadId);
+      },
+      unanswered: (run, now) => {
+        const it = about(host, sched, run, tz);
+        if (it) void alertCaptain(host, { projectId: it.lead.projectId, agentId: it.lead.id, agentName: it.lead.name, ...(it.lead.lead && { goal: it.lead.lead.title }), text: unansweredText(it.who, run, now) }, now);
+      },
+      answeredLate: (run, now) => {
+        const it = about(host, sched, run, tz);
+        if (it) host.toast('info', answeredLateText(it.who, run, now), it.lead.id);
       },
       publish: (view) => state.set(view),
     });
     if (book.setAside) host.toast('error', `The scheduler’s book couldn’t be read, so every schedule was lost: it’s kept at ${book.setAside}.`);
     setTimeout(() => sched.start(), FIRST_TICK_MS).unref();
     return {
-      leadTools: leadTools(sched, () => Date.now()),
+      leadTools: [...leadTools(sched, () => Date.now()), alertTool(host, () => Date.now())],
+      // the watchdog: a lead's turn ending answers the runs sent them by then
+      turn: (agent, phase) => {
+        if (phase === 'end') sched.turnEnded(agent.id);
+      },
       // the captain stops a schedule from the panel
       routes: [{ method: 'post', path: '/unschedule', handle: ({ body }) => ({ removed: sched.remove(undefined, String(body.id)) }) }],
     };

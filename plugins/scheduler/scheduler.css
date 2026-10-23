@@ -5,4 +5,4 @@
 .scheduler-runs { display: flex; flex-wrap: wrap; gap: 4px; }
 .chip.scheduler-on-time { --tone: var(--lcars-sky); }
 .chip.scheduler-late { --tone: var(--lcars-gold); }
-.chip.scheduler-missed, .chip.scheduler-held { --tone: var(--lcars-red); }
+.chip.scheduler-missed, .chip.scheduler-held, .chip.scheduler-unanswered { --tone: var(--lcars-red); }

@@ -11,6 +11,8 @@ function aboard(start = at('2026-10-23T11:00:00Z'), book: { kept?: Kept } = {}) 
   let clock = start;
   const delivered: { id: string; text: string }[] = [];
   const heard: RunRecord[] = [];
+  const alerts: RunRecord[] = [];
+  const answeredLate: RunRecord[] = [];
   let published: SchedulerState | undefined;
   let alarm: { at: number; fire: () => void } | undefined;
   let reply: Delivery = 'sent';
@@ -23,6 +25,8 @@ function aboard(start = at('2026-10-23T11:00:00Z'), book: { kept?: Kept } = {}) 
       return reply;
     },
     heard: (_s, run) => void heard.push(run),
+    unanswered: (run) => void alerts.push(run),
+    answeredLate: (run) => void answeredLate.push(run),
     publish: (state) => void (published = state),
     wake: (when, fire) => {
       alarm = { at: when, fire };
@@ -30,7 +34,7 @@ function aboard(start = at('2026-10-23T11:00:00Z'), book: { kept?: Kept } = {}) 
     },
   });
   return {
-    sched, book, delivered, heard,
+    sched, book, delivered, heard, alerts, answeredLate,
     published: () => published,
     alarm: () => alarm?.at,
     replies: (d: Delivery) => void (reply = d),
@@ -50,6 +54,9 @@ describe('the scheduler', () => {
     expect(o.alarm()).toBe(at('2026-10-23T14:07:00Z'));
     o.fire('2026-10-23T14:07:00.003Z');
     expect(o.delivered).toEqual([{ id: s.id, text: 'Your schedule sch-1 is due (15:07).\n\nCheck the rollout.' }]);
+    // the watchdog's deadline comes first, until the lead answers
+    expect(o.alarm()).toBe(at('2026-10-23T14:27:00.003Z'));
+    o.sched.turnEnded(LEAD.leadId);
     expect(o.alarm()).toBe(at('2026-10-23T20:07:00Z'));
     // a second tick in the same slot runs nothing
     o.sched.tick();
@@ -101,6 +108,7 @@ describe('the scheduler', () => {
     o.replies('sent');
     o.fire('2026-10-23T12:30:00Z');
     expect(o.sched.of(LEAD.leadId)).toEqual([]);
+    o.sched.turnEnded(LEAD.leadId);
     expect(o.alarm()).toBeUndefined();
   });
 
@@ -111,5 +119,78 @@ describe('the scheduler', () => {
     expect(o.sched.remove('someone-else', 'sch-1')).toBe(false);
     expect(o.sched.remove(LEAD.leadId, 'sch-1')).toBe(true);
     expect(o.sched.add(LEAD, { what: 'new', cron: '0 9 * * *' }).id).toBe('sch-11');
+  });
+
+  describe('its watchdog', () => {
+    /** A lead woken at 15:07 London (14:07 UTC). */
+    const woken = () => {
+      const o = aboard();
+      o.sched.start();
+      o.sched.add(LEAD, { what: 'Check the rollout.', cron: '7 15 * * *' });
+      o.fire('2026-10-23T14:07:00Z');
+      return o;
+    };
+
+    it('alerts the captain once when the lead hasn’t answered within 20 minutes', () => {
+      const o = woken();
+      o.fire('2026-10-23T14:26:59Z');
+      expect(o.alerts).toEqual([]);
+      expect(o.alarm()).toBe(at('2026-10-23T14:27:00Z'));
+      o.fire('2026-10-23T14:27:00Z');
+      expect(o.alerts).toMatchObject([{ scheduleId: 'sch-1', slot: at('2026-10-23T14:07:00Z') }]);
+      o.sched.tick();
+      expect(o.alerts).toHaveLength(1);
+      expect(o.book.kept?.runs[0]).toMatchObject({ alertedAt: at('2026-10-23T14:27:00Z') });
+    });
+
+    it('stays quiet when the lead answers in time', () => {
+      const o = woken();
+      o.fire('2026-10-23T14:12:00Z');
+      o.sched.turnEnded(LEAD.leadId);
+      o.fire('2026-10-23T15:00:00Z');
+      expect(o.alerts).toEqual([]);
+      expect(o.book.kept?.runs[0]).toMatchObject({ answeredAt: at('2026-10-23T14:12:00Z') });
+    });
+
+    it('says so when the lead answers after the alert', () => {
+      const o = woken();
+      o.fire('2026-10-23T14:30:00Z');
+      o.sched.turnEnded(LEAD.leadId);
+      expect(o.answeredLate).toMatchObject([{ scheduleId: 'sch-1' }]);
+    });
+
+    it('takes no notice of another lead’s turn ending', () => {
+      const o = woken();
+      o.sched.turnEnded('someone-else');
+      o.fire('2026-10-23T14:27:00Z');
+      expect(o.alerts).toHaveLength(1);
+    });
+
+    it('alerts a run gone unanswered while Focus was down, once, as it starts again', () => {
+      const first = woken();
+      const again = aboard(at('2026-10-23T16:00:00Z'), first.book);
+      again.sched.start();
+      expect(again.alerts).toHaveLength(1);
+      const third = aboard(at('2026-10-23T16:00:05Z'), again.book);
+      third.sched.start();
+      expect(third.alerts).toEqual([]);
+    });
+
+    it('never alerts on a run from before the watchdog, which has no deadline to answer by', () => {
+      const first = woken();
+      const runs = first.book.kept?.runs.map(({ answerBy: _, ...r }) => r) ?? [];
+      const again = aboard(at('2026-10-23T16:00:00Z'), { kept: { ...first.book.kept!, runs } });
+      again.sched.start();
+      expect(again.alerts).toEqual([]);
+    });
+
+    it('waits on no answer for a run held on the API key, or missed', () => {
+      const o = aboard();
+      o.sched.add(LEAD, { what: 'x', at: '2026-10-23T12:30' });
+      o.replies('held');
+      o.fire('2026-10-23T11:30:00Z');
+      o.fire('2026-10-23T13:00:00Z');
+      expect(o.alerts).toEqual([]);
+    });
   });
 });
