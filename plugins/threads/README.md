@@ -7,7 +7,7 @@ A project's loose threads, kept past the goal that noticed them. A goal's lead l
 ## Where it lives
 
 - `shared.ts`: the register, in pure functions (`closedThreads`, `afterLine`, `register`), and what deciding a thread writes, or why it's refused (`decision`).
-- `server.ts`: reads the ledger as Focus starts, and each goal closing and each decision as they're written, into state it sends the browser; writes the captain's decisions (`POST /decide`).
+- `server.ts`: reads the ledger as Focus starts, and each goal closing and each decision as they're written, into state it sends the browser; writes the captain's decisions (`POST /decide`) and starts the goals they spin threads off as (`POST /spin-off`).
 - `client.ts`: the goals panel's view (`goalsView`).
 
 ## Why it's built this way
@@ -17,4 +17,5 @@ A project's loose threads, kept past the goal that noticed them. A goal's lead l
 - **Contacts only, for now.** Contacts are what a lead flagged as needing attention. A goal's ideas for next are the slices it would have done next, and many mean nothing once it's closed, so they're left out until there's a way to sort through them in bulk.
 - **Every decision is a line in the ledger** (`thread-decided`), so the register stays the ledger read in order, and a restart keeps every decision (`invariants.test.ts`). A closed goal's thread ends as next (with who takes it on: you, if no one's named), parked (until when), dropped (why) or resolved (by what), and Undo takes a decision back. The note is the reason a later look needs: parked and dropped say nothing without one, so they're refused without it. Pressing the same decision again is refused, so the same decision twice writes one line.
 - **A goal under way keeps its threads.** Its contacts are its lead's to pursue or drop, so the register shows them with a way to the lead, and refuses a decision on one. A goal reopened and closed again keeps what was decided of the threads it left open again.
-- **The captain decides; nothing else does.** Nothing in the plugin decides a thread by itself, so a thread is only ever dropped by the captain's own press. Spinning a thread off as a goal of its own comes next.
+- **A thread can become a goal of its own.** Spin off starts a goal with the thread's words and where it came from (the captain can edit them first), at the first free team station or in line for one, as the goal chart's spin-off does for a goal under way. The thread is then taken on (next) as that goal, its line saying which: a thread is spun off once, its goal and its line together (`invariants.test.ts`). A goal that's still waiting in line has no lead yet, so its line keeps only its title.
+- **The captain decides; nothing else does.** Nothing in the plugin decides a thread by itself, so a thread is only ever dropped by the captain's own press, and a spun-off goal closing doesn't resolve its thread: that's the captain's to say.

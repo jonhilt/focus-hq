@@ -8,12 +8,15 @@ import type { ThreadsState } from './shared';
 // as one after the other would. What it keeps across a restart is the ledger alone: the register it shows is read back
 // from it. It's described here (what it can do, what must survive), not told what to expect.
 //
-// Its stand-ins: the host's ledger is an array, written and heard (`ledgerRecorded`) at once, as Focus's is; and
-// nothing it does waits on the world outside, so nothing goes through `later`.
+// Its stand-ins: the host's ledger is an array, written and heard (`ledgerRecorded`) at once, as Focus's is; the goals
+// it starts are a list, kept as they start (starting a goal is Focus's, described with the manager's); and nothing it
+// does waits on the world outside, so nothing goes through `later`.
 //
 // Breaks seen caught: the decision put in the register without its ledger line fails the restart check and both
-// promises below. Two decisions at once can't interleave (a decision is checked and written in one step, with nothing
-// awaited between), so the check for two at once holds that, and no break of it could be built.
+// promises below; a spin-off that starts its goal without writing the line fails the reach test and the promise that
+// a thread is spun off once (not the restart check: nothing is awaited between the goal starting and its line, so no
+// restart falls between them). Two decisions at once can't interleave (a decision is checked and written in one
+// step, with nothing awaited between), so the check for two at once holds that, and no break of it could be built.
 
 const goal = (id: string, open: string[], closedAt: number): GoalRecord =>
   ({ id, title: `Goal ${id}`, slices: 1, prs: [], leadName: 'Lt. Reyes', openedAt: 0, closedAt, contacts: open.map((c, i) => ({ id: c, text: `thread ${id} ${c}`, slice: 1, at: i })) });
@@ -21,14 +24,15 @@ const goal = (id: string, open: string[], closedAt: number): GoalRecord =>
 const THREADS_SEEN = [['g1', 'c1'], ['g1', 'c2'], ['g2', 'c1']] as const;
 const DECISIONS = [['next', ''], ['parked', 'until the first login'], ['dropped', 'nobody needs it'], ['resolved', '#12'], ['open', '']] as const;
 
-/** What must survive: every decision line in the ledger, and the register as the plugin shows it. */
+/** What must survive: every decision line in the ledger, the register as the plugin shows it, and the goals it started. */
 interface Kept {
   lines: string[];
   register: string[];
+  goals: string[];
 }
 
-/** The plugin on a ledger of two closed goals; `ledger` is what a restart keeps. */
-function life(ledger: LedgerEvent[]): Running<Kept> {
+/** The plugin on a ledger of two closed goals; `ledger` and the goals `started` are what a restart keeps. */
+function life(ledger: LedgerEvent[], started: string[] = []): Running<Kept> {
   let shown: PluginState<ThreadsState> | undefined;
   const host: ThreadsHost = {
     // unsaved, as the plugin asks: a restart starts it afresh
@@ -46,24 +50,36 @@ function life(ledger: LedgerEvent[]): Running<Kept> {
     },
     agents: () => [],
     on: () => true,
+    goals: {
+      start: (_projectId, text) => {
+        started.push(text);
+        return { queued: { id: `q${started.length}`, text, at: 0 } };
+      },
+    },
   };
   const parts: PluginParts = threadsParts(host);
   const decide = parts.routes?.find((r) => r.path === '/decide');
+  const spinOff = parts.routes?.find((r) => r.path === '/spin-off');
   return {
     actions: () => [
       ...THREADS_SEEN.flatMap(([g, c]) => DECISIONS.map(([as, note]) => ({
         name: `${as} ${g} ${c}`,
         run: () => decide?.handle({ body: { projectId: 'shop', goal: g, contact: c, as, note }, query: {}, params: {} }),
       }))),
+      ...THREADS_SEEN.map(([g, c]) => ({
+        name: `spin off ${g} ${c}`,
+        run: () => spinOff?.handle({ body: { projectId: 'shop', goal: g, contact: c, text: `Goal from ${g} ${c}` }, query: {}, params: {} }),
+      })),
       // reopened and closed again, its c2 still open and c1 pursued: what was decided of c2 stays
       { name: 'g1 closes again', run: () => host.record('shop', { kind: 'goal-closed', goal: { ...goal('g1', ['c2'], 900) } }) },
     ],
     durable: () => ({
-      lines: ledger.flatMap((e) => (e.kind === 'thread-decided' ? [`${e.goalId} ${e.contact} ${e.as}${e.note ? ` ${e.note}` : ''}`] : [])),
-      register: (shown?.get().closed.shop ?? []).map((t) => `${t.goal} ${t.contact} ${t.decided?.as ?? 'to decide'}`),
+      lines: ledger.flatMap((e) => (e.kind === 'thread-decided' ? [`${e.goalId} ${e.contact} ${e.as}${e.note ? ` ${e.note}` : ''}${e.spunOff ? ` as “${e.spunOff.title}”` : ''}`] : [])),
+      register: (shown?.get().closed.shop ?? []).map((t) => `${t.goal} ${t.contact} ${t.decided?.spunOff ? 'spun off' : t.decided?.as ?? 'to decide'}`),
+      goals: [...started],
     }),
     settle: () => Promise.resolve(),
-    restart: () => life(ledger),
+    restart: () => life(ledger, started),
   };
 }
 
@@ -92,10 +108,21 @@ describe('the threads plugin, under Focus’s two rules', () => {
     await checkAtOnce(threads, { runs: 25 });
   });
 
-  it('reaches threads decided every way, taken back, and kept through their goal closing again', async () => {
+  it('reaches threads decided every way, spun off, taken back, and kept through their goal closing again', async () => {
     const r = await threads.start(() => Promise.reject(new Error('nothing waits')));
     for (const name of ['parked g1 c2', 'dropped g2 c1', 'next g1 c1', 'g1 closes again', 'resolved g2 c1', 'open g2 c1']) take(r, name);
     expect(r.durable().register).toEqual(['g2 c1 to decide', 'g1 c2 parked']);
+    take(r, 'spin off g1 c2');
+    expect(r.durable().register).toEqual(['g2 c1 to decide', 'g1 c2 spun off']);
+  });
+
+  // README.md: "a thread is spun off once, its goal and its line together"
+  it('spins a thread off once, its goal started and its line written together, however often it’s pressed', async () => {
+    const r = await threads.start(() => Promise.reject(new Error('nothing waits')));
+    take(r, 'spin off g2 c1');
+    take(r, 'spin off g2 c1');
+    const kept = (await r.restart(() => Promise.reject(new Error('nothing waits')))).durable();
+    expect([kept.goals, kept.lines]).toEqual([['Goal from g2 c1'], ['g2 c1 next as “Goal from g2 c1”']]);
   });
 
   // README.md: "Every decision is a line in the ledger … a restart keeps every decision"

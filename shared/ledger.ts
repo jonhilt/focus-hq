@@ -88,9 +88,10 @@ export type LedgerEntry =
    * The captain decided where a loose thread a closed goal left open ends (a plugin that keeps a project's threads
    * records it): which goal (`goalId`, titled `goal`) and which of its contacts (`contact`, saying `text`), and `as`
    * what. `note` goes with it: who takes it on (next), until when (parked), why (dropped) or what resolved it
-   * (resolved). `open` takes a decision back, to be decided again.
+   * (resolved). `open` takes a decision back, to be decided again. `spunOff` is the goal of its own it was taken on
+   * as (next), started from it: its lead's id, if it took a team station (not if it waits in line for one), and title.
    */
-  | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string }
+  | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string; spunOff?: { goal?: string; title: string } }
   /**
    * Something a plugin (`by`, its id) raised to the captain directly, not through anyone's routing: a lead not answering
    * a scheduled run, say. `agent` is who it's about, `text` what the captain was told.

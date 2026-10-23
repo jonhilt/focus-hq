@@ -81,6 +81,12 @@ describe('ledgerRow', () => {
     expect(trace([alert], { kind: 'pr', repo: REPO, pr: 236 }).steps).toEqual([]);
   });
 
+  it('says where the captain decided a loose thread ends, and the goal it was spun off as', () => {
+    const thread = (e: Record<string, unknown>) => ev({ kind: 'thread-decided', goalId: 'g1', goal: GOAL, contact: 'c2', text: 'Firm #2 gaps', ...e }, 8);
+    expect(ledgerRow(thread({ as: 'parked', note: 'until the first login' }))).toMatchObject({ group: 'goals', tag: 'Thread', title: 'Parked: Firm #2 gaps', detail: 'until the first login · Engineering deck', goal: GOAL });
+    expect(ledgerRow(thread({ as: 'next', spunOff: { goal: 'a9', title: 'Firm #2 gaps' } }))).toMatchObject({ title: 'Spun off as a goal: Firm #2 gaps', detail: '“Firm #2 gaps” · Engineering deck' });
+  });
+
   it('says a closed pull request was closed, never merged', () => {
     const closed = ev({ kind: 'closed', repo: REPO, pr: 240, by: 'officer', qa: 'passed', failedRounds: 1, triages: 2, goal: GOAL, closes: [226] }, 8);
     expect(ledgerRow(closed)).toMatchObject({ group: 'merged', tag: 'Closed', tone: 'warn', title: 'focus #240 · by the operations officer · QA passed after 1 failed round', detail: 'Engineering deck · 2 triages' });

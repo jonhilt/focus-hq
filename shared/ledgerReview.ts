@@ -160,7 +160,7 @@ function rowParts(e: LedgerEvent): RowParts {
     case 'goal-closed':
       return goalClosedRow(e);
     case 'thread-decided':
-      return { tag: 'Thread', tone: 'info', title: `${THREAD_DECIDED[e.as]}: ${e.text}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), goal: e.goal };
+      return threadRow(e);
     case 'retro-decision':
       return retroRow(e);
     case 'session-digest': {
@@ -227,6 +227,12 @@ function mergeCheckRow(e: Of<'merge-check'>): RowParts {
 
 /** A loose thread's end, as its row says it. */
 const THREAD_DECIDED: Record<ThreadDecidedAs, string> = { next: 'Taken on', parked: 'Parked', dropped: 'Dropped', resolved: 'Resolved', open: 'Back to decide' };
+
+/** Where the captain decided a loose thread ends: how, or the goal of its own it was spun off as, and why. */
+function threadRow(e: Of<'thread-decided'>): RowParts {
+  const how = e.spunOff ? 'Spun off as a goal' : THREAD_DECIDED[e.as];
+  return { tag: 'Thread', tone: 'info', title: `${how}: ${e.text}`, detail: [e.spunOff && `“${e.spunOff.title}”`, e.note, e.goal].filter(Boolean).join(' · '), goal: e.goal };
+}
 
 function goalClosedRow(e: Of<'goal-closed'>): RowParts {
   const g = e.goal;

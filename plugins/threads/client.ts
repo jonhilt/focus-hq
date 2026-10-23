@@ -1,7 +1,7 @@
 // The threads plugin in the browser: a Threads view in each project's goals panel, after Closed, listing the
 // contacts its goals' leads logged and left open, and where the captain decided each of a closed goal's ends.
-import { busy, callPlugin, type ClientPlugin, focus, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
-import { register, type RegisterThread, THREAD_ENDS, type ThreadEnd, THREADS, type ThreadsState } from './shared';
+import { type Agent, busy, callPlugin, type ClientPlugin, focus, goalStarted, goalTitle, h, pluginState, type QueuedGoal, timeAgo, type Ui } from '../../plugin-api/client';
+import { register, type RegisterThread, spinOffText, THREAD_ENDS, type ThreadEnd, THREADS, type ThreadsState } from './shared';
 import './threads.css';
 
 /** Project `projectId`'s register as the browser has it now: the server's closed goals', and its goals under way. */
@@ -24,33 +24,42 @@ const ENDS: Record<ThreadEnd, { button: string; ask: string; said: string }> = {
 /** The ends offered for a thread as it stands: every one but its own. */
 const offered = (t: RegisterThread): ThreadEnd[] => THREAD_ENDS.filter((end) => end !== t.decided?.as);
 
-/** The note being written for one thread, kept across the panel being drawn again (it is, as the ship changes). */
-let writing: { key: string; as: ThreadEnd; text: string } | null = null;
+/**
+ * What's being written for one thread, kept across the panel being drawn again (it is, as the ship changes): the note
+ * for a decision, or the first words of the goal of its own it's spun off as.
+ */
+type Draft = { key: string; as: ThreadEnd; text: string } | { key: string; as: 'goal'; text: string };
+let writing: Draft | null = null;
 const keyOf = (t: RegisterThread) => `${t.goal}:${t.contact}`;
 
 /** Asks Focus to write the captain's decision on thread `t`; the register reads it back from the ledger. */
 const decide = (projectId: string, t: RegisterThread, as: ThreadEnd | 'open', note = '') =>
   callPlugin(THREADS, '/decide', { projectId, goal: t.goal, contact: t.contact, as, note });
 
+/**
+ * Sends what's written (`text()`) with `button`. It's put away as it's sent: the register can come back changed (and
+ * the panel be drawn again) before Focus answers, and only a refusal brings it back, to be put right.
+ */
+function send(ui: Ui, button: HTMLButtonElement, draft: Draft, text: () => string, redraw: () => void, go: () => Promise<unknown>): void {
+  void busy(button, async () => {
+    writing = null;
+    try {
+      await go();
+    } catch (err) {
+      writing = { ...draft, text: text() };
+      redraw();
+      throw err;
+    }
+  }, ui.error);
+}
+
 /** The note for a decision being made on `t`, saved with Enter or the button, left with Esc or Cancel. */
-function noteForm(ui: Ui, projectId: string, t: RegisterThread, draft: NonNullable<typeof writing>, redraw: () => void): HTMLElement {
+function noteForm(ui: Ui, projectId: string, t: RegisterThread, draft: Draft & { as: ThreadEnd }, redraw: () => void): HTMLElement {
   const input = h('input', { class: 'threads-note', placeholder: ENDS[draft.as].ask, value: draft.text });
   const save = h('button', { class: 'btn small primary' }, ENDS[draft.as].button);
   const cancel = h('button', { class: 'btn small' }, 'Cancel');
   input.oninput = () => (draft.text = input.value);
-  // the note's put away as it's sent: the register can come back decided (and the panel be drawn again) before Focus
-  // answers, and only a refusal brings it back, to be put right
-  save.onclick = () =>
-    void busy(save, async () => {
-      writing = null;
-      try {
-        await decide(projectId, t, draft.as, input.value);
-      } catch (err) {
-        writing = { ...draft, text: input.value };
-        redraw();
-        throw err;
-      }
-    }, ui.error);
+  save.onclick = () => send(ui, save, draft, () => input.value, redraw, () => decide(projectId, t, draft.as, input.value));
   cancel.onclick = () => ((writing = null), redraw());
   input.onkeydown = (e) => {
     if (e.key === 'Enter') save.click();
@@ -60,30 +69,75 @@ function noteForm(ui: Ui, projectId: string, t: RegisterThread, draft: NonNullab
   return h('div', { class: 'row threads-form' }, input, save, cancel);
 }
 
-/** What was decided of a thread, in words. */
-export const decidedLine = (t: RegisterThread): string | null => {
+/** Tells the captain where a goal spun off from a thread went: to a team station, or in line for one. */
+function started(ui: Ui, s: { agent: Agent } | { queued: QueuedGoal }): void {
+  if ('agent' in s) goalStarted(ui, s.agent);
+  else ui.hud.toast('info', `Every team station has a goal: “${goalTitle(s.queued.text)}” waits in line for one`);
+}
+
+/** The first words of a goal of its own spun off from `t`, what its lead hears first: started with the button, left with Esc or Cancel. */
+function spinOffForm(ui: Ui, projectId: string, t: RegisterThread, draft: Draft, redraw: () => void): HTMLElement {
+  const text = h('textarea', { class: 'threads-goal', rows: 5, title: 'What the new goal’s lead hears first' });
+  text.value = draft.text;
+  const start = h('button', { class: 'btn small primary' }, 'Spin off as a goal');
+  const cancel = h('button', { class: 'btn small' }, 'Cancel');
+  text.oninput = () => (draft.text = text.value);
+  start.onclick = () => send(ui, start, draft, () => text.value, redraw, async () =>
+    started(ui, await callPlugin<{ agent: Agent } | { queued: QueuedGoal }>(THREADS, '/spin-off', { projectId, goal: t.goal, contact: t.contact, text: text.value })));
+  cancel.onclick = () => ((writing = null), redraw());
+  text.onkeydown = (e) => {
+    if (e.key === 'Escape') cancel.click();
+  };
+  setTimeout(() => text.focus(), 0);
+  return h('div', { class: 'threads-form' }, text,
+    h('div', { class: 'row' }, start, cancel, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
+}
+
+/** What was decided of a thread, in words: a goal it was spun off as by `title`, its title now if its lead's on the ship. */
+export const decidedLine = (t: RegisterThread, title?: string): string | null => {
   const d = t.decided;
   if (!d) return null;
+  if (d.spunOff) return `Spun off as “${title ?? d.spunOff.title}” · ${timeAgo(d.at)}`;
   const note = d.note ?? (d.as === 'next' ? 'you' : '');
   return `${note ? `${ENDS[d.as].said} ${note}` : ENDS[d.as].button} · ${timeAgo(d.at)}`;
 };
 
+/** A button that opens a lead's panel, saying why they're the one to talk to. */
+const talk = (ui: Ui, lead: Pick<Agent, 'id' | 'name'>, why: string) =>
+  h('button', { class: 'btn small', title: `Talk to ${lead.name}: ${why}`, onclick: () => ui.openAgent(lead.id) }, 'Talk');
+
+/**
+ * What can be done of a closed goal's thread: each end but its own, a goal of its own (unless it's one already: then a
+ * way to that goal's lead, while it's under way), and Undo once it's decided.
+ */
+function closedActions(ui: Ui, projectId: string, t: RegisterThread, spunLead: Agent | undefined, redraw: () => void): (HTMLElement | null)[] {
+  const write = (as: Draft['as'], text: string) => () => ((writing = { key: keyOf(t), as, text }), redraw());
+  const ends = offered(t).map((as) => h('button', { class: 'btn small', onclick: write(as, '') }, ENDS[as].button));
+  const spin = h('button', { class: 'btn small', title: 'Start a goal of its own from it, with a lead of its own', onclick: write('goal', spinOffText(t)) }, 'Spin off');
+  const undo = h('button', { class: 'btn small', title: 'Take the decision back: it goes back to be decided' }, 'Undo');
+  undo.onclick = () => void busy(undo, () => decide(projectId, t, 'open'), ui.error);
+  return [
+    spunLead ? talk(ui, spunLead, 'they lead the goal it was spun off as') : null,
+    ...ends,
+    t.decided?.spunOff ? null : spin,
+    t.decided ? undo : null,
+  ];
+}
+
 /** One thread: what it is, where it came from, and what can be decided of it (or a way to its lead, while its goal's under way). */
 function threadRow(ui: Ui, projectId: string, t: RegisterThread, redraw: () => void): HTMLElement {
   const draft = writing?.key === keyOf(t) ? writing : null;
-  const ends = offered(t).map((as) =>
-    h('button', { class: 'btn small', onclick: () => ((writing = { key: keyOf(t), as, text: '' }), redraw()) }, ENDS[as].button),
-  );
-  const undo = h('button', { class: 'btn small', title: 'Take the decision back: it goes back to be decided' }, 'Undo');
-  undo.onclick = () => void busy(undo, () => decide(projectId, t, 'open'), ui.error);
-  const actions = t.live
-    ? [h('button', { class: 'btn small', title: `Talk to ${t.leadName}: the thread is theirs while the goal’s under way`, onclick: () => ui.openAgent(t.goal) }, 'Talk')]
-    : [...ends, t.decided ? undo : null];
+  const spunTo = t.decided?.spunOff?.goal;
+  const spunLead = spunTo ? focus.leadsIn(projectId).find((a) => a.id === spunTo) : undefined;
+  const actions = t.live ? [talk(ui, { id: t.goal, name: t.leadName }, 'the thread is theirs while the goal’s under way')] : closedActions(ui, projectId, t, spunLead, redraw);
+  const decided = decidedLine(t, spunLead?.lead?.title);
+  const form = !draft ? null : draft.as === 'goal' ? spinOffForm(ui, projectId, t, draft, redraw) : noteForm(ui, projectId, t, draft, redraw);
+  // the thread reads the row's full width, what can be done of it under where it came from
   return h('div', { class: `card threads-row${t.live ? ' live' : ''}${t.decided ? ` ${t.decided.as}` : ''}` },
-    h('div', { class: 'row' }, h('span', { class: 'grow threads-text' }, t.text), ...(draft ? [] : actions)),
+    h('div', { class: 'threads-text' }, t.text),
     h('small', { class: 'muted threads-source' }, threadSource(t)),
-    decidedLine(t) ? h('small', { class: 'threads-decided' }, decidedLine(t)) : null,
-    draft ? noteForm(ui, projectId, t, draft, redraw) : null,
+    decided ? h('small', { class: 'threads-decided' }, decided) : null,
+    form ?? h('div', { class: 'row threads-actions' }, ...actions),
   );
 }
 
@@ -124,9 +178,9 @@ const threads: ClientPlugin = {
   about: {
     name: 'Threads',
     summary: 'Keeps the loose threads a goal’s lead logged and left open, after the goal closes, until you decide where each ends.',
-    adds: ['A Threads view in each project’s goals panel, after Closed: next, park, drop or resolved for each closed goal’s thread'],
+    adds: ['A Threads view in each project’s goals panel, after Closed: next, park, drop or resolved for each closed goal’s thread, or a goal of its own'],
     cost: 'free',
-    costDetail: 'No model calls: it reads the contacts Ops already keeps, and the ledger, where it writes your decisions.',
+    costDetail: 'No model calls: it reads the contacts Ops already keeps, and the ledger, where it writes your decisions. A thread you spin off is a goal like any other.',
   },
   project: { label: 'Threads', about: 'A Threads view in the goals panel: every contact its leads logged and left open, the closed goals’ included, and where you decided each ends.' },
   goalsView: {

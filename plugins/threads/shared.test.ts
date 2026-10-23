@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, Contact, GoalRecord, LedgerEvent } from '../../plugin-api/shared';
-import { closedThreads, decision, register, type Thread, withClosed } from './shared';
+import { closedThreads, decision, register, spinOffText, spunOffEntry, type Thread, toSpinOff, withClosed } from './shared';
 
 const contact = (id: string, at: number, closed?: Contact['closed']): Contact => ({ id, text: `thread ${id}`, slice: 1, at, ...(closed && { closed }) });
 const goal = (id: string, contacts: Contact[], closedAt = 100): GoalRecord => ({ id, title: `Goal ${id}`, slices: 1, prs: [], leadName: 'Lt. Reyes', openedAt: 0, closedAt, contacts });
@@ -102,5 +102,44 @@ describe('the captain deciding where a thread ends', () => {
     expect(refused({ goal: 'g1', contact: 'c1', as: 'parked', note: 'later' })).toMatch(/already parked/);
     expect(refused({ goal: 'g1', contact: 'c1', as: 'parked', note: 'until Friday' })).toBe('written');
     expect(refused({ goal: 'g1', contact: 'c1', as: 'open' })).toBe('written');
+  });
+});
+
+describe('the captain spinning a thread off as a goal of its own', () => {
+  const closed = (more: LedgerEvent[] = []) => closedThreads([closedLine('shop', goal('g1', [contact('c1', 10), contact('c2', 20)]), 1), ...more]).shop ?? [];
+  const spunOff = (seq: number, contact: string, to: { goal?: string; title: string }): LedgerEvent =>
+    ({ seq, at: 300 + seq, projectId: 'shop', kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact, text: `thread ${contact}`, as: 'next', spunOff: to });
+
+  it('starts the goal with the thread and where it came from, until it’s edited', () => {
+    const [t] = closed();
+    expect(t && spinOffText(t)).toBe('thread c1\n\n(Spun off from “Goal g1”, a closed goal: its contact c1, noticed in slice 1.)');
+  });
+
+  it('takes the thread on as the goal it started, at a station or in line for one', () => {
+    const [t] = closed();
+    const at = { agent: { id: 'shop-lead-a1', lead: { station: 1, title: 'Saved items', repos: [], slice: 1, prs: [] } } };
+    expect(t && spunOffEntry(t, 'Saved items\n\nmore', at)).toEqual({
+      kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact: 'c1', text: 'thread c1', as: 'next', spunOff: { goal: 'shop-lead-a1', title: 'Saved items' },
+    });
+    expect(t && spunOffEntry(t, 'Saved items, the rest of them\n\nmore', { queued: { id: 'q1', text: 'Saved items, the rest of them', at: 5 } }))
+      .toMatchObject({ as: 'next', spunOff: { title: 'Saved items, the rest of them' } });
+  });
+
+  it('keeps the goal it was spun off as, until the decision’s taken back', () => {
+    expect(closed([spunOff(2, 'c1', { goal: 'a1', title: 'Saved items' })])[0]?.decided).toEqual({ as: 'next', spunOff: { goal: 'a1', title: 'Saved items' }, at: 302 });
+    expect(closed([spunOff(2, 'c1', { goal: 'a1', title: 'Saved items' }), decided(3, 'g1', 'c1', 'open')])[0]?.decided).toBeUndefined();
+  });
+
+  it('refuses a thread that can’t be spun off, saying why, before any goal starts', () => {
+    const threads = closed([spunOff(2, 'c1', { title: 'Saved items' })]);
+    const refused = (input: Record<string, unknown>, underWay = new Set<string>()) => {
+      const spin = toSpinOff(threads, underWay, input);
+      return 'error' in spin ? spin.error : spin.text;
+    };
+    expect(refused({ goal: 'g1', contact: 'c9', text: 'Go' })).toMatch(/no such thread/);
+    expect(refused({ goal: 'g1', contact: 'c2', text: 'Go' }, new Set(['g1']))).toMatch(/under way again/);
+    expect(refused({ goal: 'g1', contact: 'c1', text: 'Go' })).toMatch(/a goal of its own already: “Saved items”/);
+    expect(refused({ goal: 'g1', contact: 'c2', text: '  ' })).toMatch(/Say what the goal is/);
+    expect(refused({ goal: 'g1', contact: 'c2', text: ' Saved items \n' })).toBe('Saved items');
   });
 });

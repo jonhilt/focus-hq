@@ -11,8 +11,11 @@ export { goalTags, pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
 export { confirmDialog } from '../client/src/ui/confirmDialog';
-/** Starting an idea as a goal, or handing it to one under way (the goals list's own control). */
-export { handOffControl } from '../client/src/ui/goals';
+/**
+ * Starting an idea as a goal, or handing it to one under way (the goals list's own control); and telling the captain a
+ * goal a plugin started has its lead at a team station, as every goal started in Focus does.
+ */
+export { goalStarted, handOffControl } from '../client/src/ui/goals';
 /**
  * Answering an agent as the captain, as their panel does, each asking first what their panel asks (carrying on on the
  * API key, closing a goal that would leave work behind); Ops hears each as the captain's answer (`captainAnswered`).

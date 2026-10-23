@@ -10,14 +10,19 @@ let leads: Partial<Agent>[] = [];
 let sent: ThreadsState | undefined;
 const called: { path: string; body: unknown }[] = [];
 let refuse: string | undefined;
+// what Focus answers a spin-off with: the goal at a team station, or in line for one
+let spun: unknown;
+const goalsStarted: string[] = [];
 // what happens while Focus answers: its new state reaches the browser, and the panel's drawn again, before the answer does
 let meanwhile = () => undefined as unknown;
-vi.mock('../../plugin-api/client', () => ({
+vi.mock('../../plugin-api/client', async () => ({
   callPlugin: (_id: string, path: string, body: unknown) => {
     called.push({ path, body });
     meanwhile();
-    return refuse ? Promise.reject(new Error(refuse)) : Promise.resolve({ ok: true });
+    return refuse ? Promise.reject(new Error(refuse)) : Promise.resolve(path === '/spin-off' ? spun : { ok: true });
   },
+  goalStarted: (_ui: unknown, agent: Agent) => goalsStarted.push(agent.id),
+  goalTitle: (await import('../../plugin-api/shared')).goalTitle,
   busy: (_el: unknown, fn: () => Promise<unknown>, onError: (message: string) => void) => fn().catch((err: Error) => onError(err.message)),
   focus: { leadsIn: () => leads },
   pluginState: () => sent,
@@ -38,7 +43,8 @@ const { default: threads, decidedLine, threadsView } = await import('./client');
 
 const opened: string[] = [];
 const errors: string[] = [];
-const ui = { openAgent: (id: string) => opened.push(id), error: (message: string) => errors.push(message) } as never;
+const toasts: string[] = [];
+const ui = { openAgent: (id: string) => opened.push(id), error: (message: string) => errors.push(message), hud: { toast: (_level: string, text: string) => toasts.push(text) } } as never;
 const closedThread = (contact: string, at: number, decided?: Thread['decided']): Thread =>
   ({ goal: 'g1', goalTitle: 'Quality review', leadName: 'Lt. Reyes', contact, text: `Thread ${contact}`, at, slice: 1, closedAt: 3, ...(decided && { decided }) });
 const live = { id: 'g7', name: 'Lt. Oyelaran', lead: { station: 0, title: 'SaaS', repos: [], slice: 2, prs: [], contacts: [{ id: 'c1', text: 'Firm #2 gaps', slice: 1, at: 8 }] } };
@@ -54,6 +60,10 @@ beforeEach(() => {
   meanwhile = () => undefined;
   called.length = 0;
   errors.length = 0;
+  toasts.length = 0;
+  goalsStarted.length = 0;
+  opened.length = 0;
+  spun = { agent: { id: 'shop-lead-a1', name: 'Lt. Mensah', lead: { station: 1, title: 'Thread c2', repos: [], slice: 1, prs: [] } } };
   refuse = undefined;
   leads = [live];
   sent = { closed: { shop: [closedThread('c2', 9), closedThread('c3', 12, { as: 'parked', note: 'until the first login', at: 2 }), closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
@@ -123,7 +133,7 @@ describe('a project’s threads in its goals panel', () => {
 
   it('takes a decision back with Undo, and offers every end but the one it has', async () => {
     const parked = [...threadsView(ui, 'shop').querySelectorAll('.threads-row')].find((r) => r.textContent?.includes('Thread c3'));
-    expect([...(parked?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Next', 'Drop', 'Resolved', 'Undo']);
+    expect([...(parked?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Next', 'Drop', 'Resolved', 'Spin off', 'Undo']);
     button(parked, 'Undo')?.click();
     await settle();
     expect(called).toEqual([{ path: '/decide', body: { projectId: 'shop', goal: 'g1', contact: 'c3', as: 'open', note: '' } }]);
@@ -136,6 +146,49 @@ describe('a project’s threads in its goals panel', () => {
     expect(decidedLine(closedThread('c1', 1, { as: 'resolved', note: '#1262', at: 2 }))).toBe('Resolved: #1262 · 2d ago');
     expect(decidedLine(closedThread('c1', 1, { as: 'parked', note: 'until the redesign', at: 2 }))).toBe('Parked: until the redesign · 2d ago');
     expect(decidedLine(closedThread('c1', 1))).toBeNull();
+  });
+
+  it('spins a closed goal’s thread off as a goal of its own, starting with the thread and where it came from, as edited', async () => {
+    const row = () => threadsView(ui, 'shop').querySelector('.threads-row');
+    button(row() ?? undefined, 'Spin off')?.click();
+    const text = row()?.querySelector('textarea');
+    expect(text?.value).toBe('Thread c2\n\n(Spun off from “Quality review”, a closed goal: its contact c2, noticed in slice 1.)');
+    if (text) {
+      text.value = 'Thread c2, for the second firm';
+      text.dispatchEvent(new Event('input'));
+    }
+    // drawn again as the ship changes: the words as edited are still there
+    expect(row()?.querySelector('textarea')?.value).toBe('Thread c2, for the second firm');
+    button(row() ?? undefined, 'Spin off as a goal')?.click();
+    await settle();
+    expect(called).toEqual([{ path: '/spin-off', body: { projectId: 'shop', goal: 'g1', contact: 'c2', text: 'Thread c2, for the second firm' } }]);
+    expect(goalsStarted).toEqual(['shop-lead-a1']);
+    expect(row()?.querySelector('textarea')).toBeNull();
+  });
+
+  it('says a goal spun off waits in line when every team station has one', async () => {
+    spun = { queued: { id: 'q1', text: 'Thread c2\n\nmore', at: 5 } };
+    button(threadsView(ui, 'shop').querySelector('.threads-row') ?? undefined, 'Spin off')?.click();
+    button(threadsView(ui, 'shop').querySelector('.threads-row') ?? undefined, 'Spin off as a goal')?.click();
+    await settle();
+    expect(goalsStarted).toEqual([]);
+    expect(toasts).toEqual(['Every team station has a goal: “Thread c2” waits in line for one']);
+  });
+
+  it('shows a thread spun off as the goal it went to, with a way to its lead while it’s under way', () => {
+    const spunOff = closedThread('c2', 9, { as: 'next', spunOff: { goal: 'g8', title: 'Thread c2' }, at: 2 });
+    sent = { closed: { shop: [spunOff] } };
+    leads = [{ id: 'g8', name: 'Lt. Mensah', lead: { station: 1, title: 'Second firm’s gaps', repos: [], slice: 1, prs: [] } }];
+    const row = threadsView(ui, 'shop').querySelector('.threads-row:not(.live)') ?? undefined;
+    expect(row?.querySelector('.threads-decided')?.textContent).toBe('Spun off as “Second firm’s gaps” · 2d ago');
+    expect([...(row?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Talk', 'Park', 'Drop', 'Resolved', 'Undo']);
+    button(row, 'Talk')?.click();
+    expect(opened).toEqual(['g8']);
+    // its goal closed (or still waiting in line): the title it started with, and no one to talk to
+    leads = [];
+    const after = threadsView(ui, 'shop').querySelector('.threads-row') ?? undefined;
+    expect(after?.querySelector('.threads-decided')?.textContent).toBe('Spun off as “Thread c2” · 2d ago');
+    expect(button(after, 'Talk')).toBeUndefined();
   });
 
   it('asks Focus to read the ledger afresh as the browser starts', () => {
