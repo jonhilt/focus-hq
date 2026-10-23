@@ -8,6 +8,7 @@ import { config, paths } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import { packageManagerIn, packageScriptsIn } from './packageManager';
+import { type DemoStep, demoKind, demoScript } from './previewDemoScript';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
 import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
@@ -328,74 +329,47 @@ export class Previews {
     });
   }
 
-  /**
-   * Demo mode: pretend to install and start the site(s), which Focus serves itself. Multi-repo projects get a
-   * stack CLI that prints its URLs as JSON, single-repo ones a Vite dev server.
-   */
+  /** Demo mode: plays the preview's demo script (`demoScript`), pretending to install and start the site(s). */
   private launchDemo(run: Run): Effect.Effect<void, CheckoutFailed, PreviewMachine> {
     return Effect.gen({ self: this }, function* () {
-      const { repo, number } = run.preview;
-      const focus = `http://${config.host === '0.0.0.0' ? 'localhost' : config.host}:${config.port}`;
-      const page = (site: string) => `${focus}/demo-preview/${repo}/${number}?site=${site}`;
-      const stack = run.repos.length > 1;
-      const unhealthy = stack && /api/.test(repo); // shows off a stack that's up but not happy
-      const logs = stack ? demoLogs(run.preview.projectId, unhealthy) : undefined;
-      const command = stack ? './scripts/stack up' : 'npm install && npm run dev';
-      // a stack uses every repo of the project, the dev server only the PR's
-      const checkouts = (stack ? [repo, ...run.repos.filter((r) => r !== repo)] : [repo]).map((r): PreviewCheckout => {
-        const pr = r === repo ? number : run.preview.set[r];
-        return { repo: r, ref: pr != null ? { pr } : { branch: 'main' } };
-      });
-      this.update(run, { checkouts });
+      const kind = demoKind(run.preview.repo, run.repos);
+      const logs = kind === 'dev-server' ? undefined : demoLogs(run.preview.projectId, kind === 'unhealthy-stack');
+      const script = demoScript(run.preview, run.repos, kind, config, logs);
+      this.update(run, { checkouts: script.checkouts });
       const shas = yield* Effect.forEach(
-        checkouts,
-        ({ repo: r, ref }) =>
+        script.checkouts,
+        ({ repo, ref }) =>
           'pr' in ref
             ? Effect.tryPromise({
-                try: async () => (await this.github.getPullRequest(r, ref.pr)).headSha,
-                catch: (err) => new CheckoutFailed({ repo: r, reason: errorMessage(err) }),
+                try: async () => (await this.github.getPullRequest(repo, ref.pr)).headSha,
+                catch: (err) => new CheckoutFailed({ repo, reason: errorMessage(err) }),
               })
             : Effect.succeed('demo'),
         { concurrency: 'unbounded' },
       );
-      const fetched = checkouts.map((c, i): [number, () => void] => [stack ? 300 : 400, () => {
-        this.checkedOut(run, c.repo, shas[i]);
-        this.output(run, checkoutLine(c.repo, c.ref, shas[i]));
-      }]);
-      const script: [number, string | (() => void)][] = stack
-        ? [
-            ...fetched,
-            [100, `$ ${command}`],
-            ...['install', 'database-migrate', 'api-build', 'readiness'].map((phase): [number, string] => [700, JSON.stringify({ status: 'starting', phase })]),
-            [400, JSON.stringify({ status: unhealthy ? 'unhealthy' : 'ready', urls: { api: page('api'), web: page('web') }, logs, phase: 'running' }, null, 2)],
-          ]
-        : [
-            ...fetched,
-            [200, `$ ${command}`],
-            [1400, 'added 312 packages, and audited 313 packages in 3s'],
-            [300, `> ${shortName(repo)}@0.0.0 dev`],
-            [200, '> vite'],
-            [900, '  VITE v6.3.5  ready in 412 ms'],
-            [100, `  ➜  Local:   ${page('web')}`],
-            [50, '  ➜  press h + enter to show help'],
-          ];
-      this.update(run, { command, activity: 'Starting' });
+      this.update(run, { command: script.command, activity: 'Starting' });
       this.background(run, this.waitUntilUp(run, []));
-      for (const [delay, text] of script) {
-        yield* Effect.sleep(delay);
-        if (typeof text === 'function') {
-          text();
-        } else if (text.startsWith('{')) {
-          // what a JSON-printing CLI's stdout looks like to launch()
-          run.stdout += `${text}\n`;
-          for (const line of text.split('\n')) this.output(run, line);
-          this.readResult(run);
-        } else {
-          this.output(run, text);
-        }
+      for (const step of script.steps) {
+        yield* Effect.sleep(step.wait);
+        this.playDemoStep(run, step, script.checkouts, shas);
       }
-      if (stack) this.exited(run, unhealthy ? 1 : 0, null, false);
+      if (script.exit !== undefined) this.exited(run, script.exit, null, false);
     });
+  }
+
+  private playDemoStep(run: Run, step: DemoStep, checkouts: PreviewCheckout[], shas: string[]): void {
+    if ('checkout' in step) {
+      const { repo, ref } = checkouts[step.checkout];
+      this.checkedOut(run, repo, shas[step.checkout]);
+      this.output(run, checkoutLine(repo, ref, shas[step.checkout]));
+    } else if (step.line.startsWith('{')) {
+      // what a JSON-printing CLI's stdout looks like to launch()
+      run.stdout += `${step.line}\n`;
+      for (const line of step.line.split('\n')) this.output(run, line);
+      this.readResult(run);
+    } else {
+      this.output(run, step.line);
+    }
   }
 
   /** Records the commit a repo's checkout landed on. */

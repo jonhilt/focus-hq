@@ -13,7 +13,7 @@ import { climbBrief, climbLog } from '../climb';
 import { type PastPullRequest, pluginDataDir } from '../../../plugin-api/server';
 import { direction, formatValue, render, SavedScorecards, type Scorecard, scorecardsDir } from '../../scorecard/api';
 import { CLIMB_BRANCH, CLIMBER } from '../shared';
-import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
+import { FIND_SCHEMA, findGapQuestion, followsRule, PICK_SCHEMA, pickedGap, plantRejection, rankOnly, replayVerdict, sessionAnswer, sighting, type ClimbPick } from './climbReplayRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const arg = (name: string) => (process.argv.includes(name) ? process.argv[process.argv.indexOf(name) + 1] : undefined);
@@ -48,8 +48,8 @@ async function ask<T>(prompt: string, schema: object, opts: Partial<Options> = {
   };
   for await (const msg of query({ prompt, options })) {
     if (msg.type === 'result') {
-      if (msg.subtype !== 'success' || msg.is_error) throw new Error(msg.subtype === 'success' ? msg.result : msg.subtype);
-      return { answer: msg.structured_output as T, costUsd: msg.total_cost_usd };
+      const { answer, costUsd } = sessionAnswer(msg);
+      return { answer: answer as T, costUsd };
     }
   }
   throw new Error('The session stopped without a result');

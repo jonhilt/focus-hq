@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, opsMetrics, propertyTestFiles, render, resolveImport, scanSource, typecheckErrors, type GateResults, type Scorecard,
-  type VitestReport,
+  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, gateResults, opsMetrics, propertyTestFiles, render, resolveImport, savedName, scanSource, scorecardArgs, scorecardOf,
+  typecheckErrors, type GateResults, type Measured, type Scorecard, type VitestReport,
 } from './scorecardRules';
 
 const scan = (source: string) => scanSource('a.ts', source);
@@ -149,6 +149,82 @@ describe('gateMetrics', () => {
     expect(value(gate, 'gate.pass')).toBe(1);
     expect(value(gate, 'gate.seconds')).toBe(40);
     expect(value({ ...gate, build: { pass: false, seconds: 1 } }, 'gate.pass')).toBe(0);
+  });
+});
+
+describe('gateResults', () => {
+  const steps = { typecheck: { ...step, output: 'a.ts(1,1): error TS2322: no' }, lint: step, test: { pass: false, seconds: 20 }, build: step };
+  const vitest: VitestReport = { numTotalTests: 9, numFailedTests: 2, testResults: [] };
+
+  it('counts each step from what it printed and the reports it wrote', () => {
+    expect(gateResults(steps, [{ errorCount: 1, warningCount: 2 }], vitest)).toEqual({
+      typecheck: { ...step, errors: 1 },
+      lint: { ...step, errors: 1, warnings: 2 },
+      test: { pass: false, seconds: 20, tests: 9, failed: 2 },
+      build: step,
+    });
+  });
+
+  it('counts a report that was never written as none found', () => {
+    const g = gateResults(steps, undefined, undefined);
+    expect(g.lint).toEqual({ ...step, errors: 0, warnings: 0 });
+    expect(g.test).toEqual({ pass: false, seconds: 20, tests: 0, failed: 0 });
+  });
+});
+
+describe('scorecardOf', () => {
+  const measured: Measured = {
+    head: { at: 1, commit: 'abc', branch: 'main', dirty: false },
+    gate,
+    vitest: { numTotalTests: 5, numFailedTests: 0, testResults: [] },
+    crap: { functions: 10, over: 1, total: 50 },
+    source: [],
+    server: [],
+    tests: { files: 3, propertyFiles: 1 },
+    ops: { metrics: [], frictions: [{ key: 'shell', sessions: 4 }] },
+    ledgerFile: '/ledger.jsonl',
+  };
+  const value = (card: Scorecard, key: string) => card.metrics.find((m) => m.key === key)?.value;
+
+  it('puts every part into one scorecard, with nothing to note', () => {
+    const card = scorecardOf(measured);
+    expect(card).toMatchObject({ v: 1, at: 1, commit: 'abc', branch: 'main', dirty: false, frictions: [{ key: 'shell', sessions: 4 }], notes: [] });
+    expect(value(card, 'tests.total')).toBe(5);
+    expect(value(card, 'tests.propertyFiles')).toBe(1);
+    expect(value(card, 'crap.over')).toBe(1);
+  });
+
+  it('notes each part it couldn\'t measure, in the order they ran', () => {
+    const card = scorecardOf({ ...measured, vitest: undefined, crap: undefined, ops: undefined });
+    expect(card.notes).toEqual([
+      'vitest wrote no report, so the test counts are missing',
+      'vitest wrote no coverage, so CRAP is missing',
+      "no ledger at /ledger.jsonl, so Ops' numbers are missing",
+    ]);
+    expect(card.frictions).toEqual([]);
+    expect(value(card, 'crap.over')).toBeUndefined();
+  });
+});
+
+describe('scorecardArgs', () => {
+  it('measures once, saving and printing text, when asked for nothing', () => {
+    expect(scorecardArgs([])).toEqual({ repeat: 0, save: true, json: false });
+    expect(scorecardArgs(['--no-save', '--json'])).toEqual({ repeat: 0, save: false, json: true });
+  });
+
+  it('repeats as many times as asked, or 5 when no number follows', () => {
+    expect(scorecardArgs(['--repeat', '3', '--no-save']).repeat).toBe(3);
+    expect(scorecardArgs(['--repeat']).repeat).toBe(5);
+  });
+
+  it('refuses a repeat that isn\'t a whole number of 2 or more', () => {
+    for (const n of ['1', '2.5', 'many']) expect(() => scorecardArgs(['--repeat', n])).toThrow('2 or more');
+  });
+});
+
+describe('savedName', () => {
+  it('names a saved scorecard by when it was measured, then its commit', () => {
+    expect(savedName(Date.UTC(2026, 9, 23, 11, 3, 4, 5), 'ba80f06b1234')).toBe('2026-10-23T11-03-04-005Z-ba80f06b.json');
   });
 });
 

@@ -23,6 +23,22 @@ export const followsRule = (p: ClimbPick) => {
   return !!top && !!chosen && gapScore(chosen) === gapScore(top);
 };
 
+/** A session's result message, as much of it as the replay reads (the Agent SDK's `SDKResultMessage`). */
+export interface SessionResult {
+  subtype: string;
+  is_error: boolean;
+  result?: string;
+  structured_output?: unknown;
+  total_cost_usd: number;
+}
+
+/** A session's structured answer and what it cost, or the error it ended on: an error subtype, or a success that says it failed. */
+export function sessionAnswer(msg: SessionResult): { answer: unknown; costUsd: number } {
+  if (msg.subtype !== 'success') throw new Error(msg.subtype);
+  if (msg.is_error) throw new Error(msg.result);
+  return { answer: msg.structured_output, costUsd: msg.total_cost_usd };
+}
+
 /** The structured answer each replay session gives (the Agent SDK's outputFormat). */
 export const PICK_SCHEMA = {
   type: 'object',

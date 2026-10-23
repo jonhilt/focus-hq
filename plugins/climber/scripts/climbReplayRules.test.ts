@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { climbBrief, climbLogText } from '../climb';
-import { findGapQuestion, followsRule, pickedGap, plantRejection, rankOnly, replayVerdict, sighting, type ClimbPick } from './climbReplayRules';
+import { findGapQuestion, followsRule, pickedGap, plantRejection, rankOnly, replayVerdict, sessionAnswer, sighting, type ClimbPick } from './climbReplayRules';
 
 const pick: ClimbPick = {
   shortlist: [
@@ -78,5 +78,18 @@ describe('replayVerdict', () => {
     // no other control session even listed it, so avoiding it proves nothing
     expect(replayVerdict([seen(false), seen(false)], [seen(false), seen(false)]).verdict).toBe('inconclusive');
     expect(replayVerdict([seen(true, true), seen(true, true)], [seen(true, true), seen(true), seen(true), seen(true)]).verdict).toBe('inconclusive');
+  });
+});
+
+describe('sessionAnswer', () => {
+  const ended = { subtype: 'success', is_error: false, result: 'Done', structured_output: { chosen: 1 }, total_cost_usd: 0.25 };
+
+  it('gives a successful session\'s structured answer and its cost', () => {
+    expect(sessionAnswer(ended)).toEqual({ answer: { chosen: 1 }, costUsd: 0.25 });
+  });
+
+  it('throws the error a session ended on: its subtype, or the result of a success that failed', () => {
+    expect(() => sessionAnswer({ ...ended, subtype: 'error_max_turns', result: undefined })).toThrow('error_max_turns');
+    expect(() => sessionAnswer({ ...ended, is_error: true, result: 'Credit balance is too low' })).toThrow('Credit balance is too low');
   });
 });

@@ -1,10 +1,7 @@
 {
-  "plugins/climber/scripts/climbReplay.ts": 1,
-  "plugins/flow/scripts/flowRework.ts": 1,
   "plugins/number-one/callView.ts": 1,
-  "plugins/scorecard/scripts/scorecard.ts": 3,
   "server/agents/manager/delivery.ts": 1,
   "server/agents/manager/sessions.ts": 2,
   "server/agents/shipStatus.ts": 1,
-  "server/previews.ts": 2
+  "server/previews.ts": 1
 }

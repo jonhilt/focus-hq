@@ -19,8 +19,8 @@ import { noiseOf } from '../scorecard';
 import type { ScorecardNoise } from '../types';
 import { CRAP_LINE, fromIstanbul, functionsIn, isDemo, score } from './crapScore';
 import {
-  effectMetrics, eslintCounts, failedTests, fenceMetrics, gateMetrics, opsMetrics, promiseIo, propertyTestFiles, render, renderNoise, scanSource, testMetrics, typecheckErrors,
-  type CrapResults, type GateResults, type GateStep, type Scorecard, type SourceCounts, type VitestReport,
+  failedTests, gateResults, opsMetrics, promiseIo, propertyTestFiles, render, renderNoise, savedName, scanSource, scorecardArgs, scorecardOf,
+  type CrapResults, type GateResults, type RanStep, type Scorecard, type SourceCounts, type VitestReport,
 } from './scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
@@ -29,7 +29,7 @@ const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encodi
 const bin = (name: string) => path.join(ROOT, 'node_modules/.bin', name);
 
 /** Runs one command and times it. */
-function timed(command: string, args: string[]): GateStep & { output: string } {
+function timed(command: string, args: string[]): RanStep {
   const started = performance.now();
   const result = spawnSync(command, args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024, shell: process.platform === 'win32' });
   return { pass: result.status === 0, seconds: (performance.now() - started) / 1000, output: `${result.stdout}\n${result.stderr}` };
@@ -38,7 +38,7 @@ function timed(command: string, args: string[]): GateStep & { output: string } {
 const readJson = <T>(file: string): T | undefined => (existsSync(file) ? (JSON.parse(readFileSync(file, 'utf8')) as T) : undefined);
 
 /** The gate, one step at a time, each with its own report read for counts. Tests run once, with coverage for CRAP. */
-function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: VitestReport; coverageFile?: string } {
+function runGate(tmp: string): { gate: GateResults; vitest?: VitestReport; coverageFile: string } {
   const step = (name: string) => process.stderr.write(`  ${name}…\n`);
   process.stderr.write('Running the gate:\n');
   step('typecheck');
@@ -46,7 +46,6 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
   step('lint');
   const eslintFile = path.join(tmp, 'eslint.json');
   const lint = timed(bin('eslint'), ['.', '-f', 'json', '-o', eslintFile]);
-  const lintCounts = eslintCounts(readJson<{ errorCount: number; warningCount: number }[]>(eslintFile) ?? []);
   step('tests, with coverage');
   const vitestFile = path.join(tmp, 'vitest.json');
   const coverageDir = path.join(tmp, 'coverage');
@@ -55,23 +54,13 @@ function runGate(tmp: string, notes: string[]): { gate: GateResults; vitest?: Vi
     `--coverage.reportsDirectory=${coverageDir}`, '--coverage.reportOnFailure', '--coverage.include=server/**/*.ts', '--coverage.include=shared/**/*.ts', '--coverage.include=plugins/**/*.ts',
   ]);
   const vitest = readJson<VitestReport>(vitestFile);
-  if (!vitest) notes.push('vitest wrote no report, so the test counts are missing');
   // each failure by name, with the command that runs it again on its seed (vitest.setup.ts)
   for (const failure of vitest ? failedTests(vitest, ROOT, Number(process.env.FOCUS_TEST_SEED ?? 1)) : []) process.stderr.write(`    failed: ${failure.replaceAll('\n', '\n    ')}\n`);
   step('build');
   // into a folder of its own: Focus measures its own checkout, and may be serving dist/ from it
   const build = timed(bin('vite'), ['build', '--outDir', path.join(tmp, 'dist'), '--emptyOutDir']);
-  const coverageFile = path.join(coverageDir, 'coverage-final.json');
-  return {
-    gate: {
-      typecheck: { pass: typecheck.pass, seconds: typecheck.seconds, errors: typecheckErrors(typecheck.output) },
-      lint: { pass: lint.pass, seconds: lint.seconds, ...lintCounts },
-      test: { pass: test.pass, seconds: test.seconds, tests: vitest?.numTotalTests ?? 0, failed: vitest?.numFailedTests ?? 0 },
-      build: { pass: build.pass, seconds: build.seconds },
-    },
-    vitest,
-    coverageFile: existsSync(coverageFile) ? coverageFile : undefined,
-  };
+  const eslint = readJson<{ errorCount: number; warningCount: number }[]>(eslintFile);
+  return { gate: gateResults({ typecheck, lint, test, build }, eslint, vitest), vitest, coverageFile: path.join(coverageDir, 'coverage-final.json') };
 }
 
 const tracked = (...globs: string[]) => git('ls-files', ...globs).split('\n').filter((f) => f && !f.endsWith('.d.ts'));
@@ -80,8 +69,9 @@ const isTest = (f: string) => f.endsWith('.test.ts');
 const scanned = (files: string[]): (SourceCounts & { file: string })[] =>
   files.map((file) => ({ file, ...scanSource(file, readFileSync(path.join(ROOT, file), 'utf8')) }));
 
-/** CRAP over server/ and shared/ as `pnpm run crap` scores it, from the gate's own coverage run. */
-function crapOf(coverageFile: string): CrapResults {
+/** CRAP over server/ and shared/ as `pnpm run crap` scores it, from the gate's own coverage run (none when it wrote none). */
+function crapOf(coverageFile: string): CrapResults | undefined {
+  if (!existsSync(coverageFile)) return undefined;
   const coverage = JSON.parse(readFileSync(coverageFile, 'utf8')) as Record<string, Parameters<typeof fromIstanbul>[0]>;
   const rows = tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts').filter((f) => !isTest(f) && !isDemo(f)).flatMap((f) => {
     const entry = coverage[path.join(ROOT, f)];
@@ -106,10 +96,8 @@ function latestNoise(): ScorecardNoise | undefined {
 }
 
 function measure(): Scorecard {
-  const notes: string[] = [];
   const tmp = mkdtempSync(path.join(os.tmpdir(), 'focus-scorecard-'));
-  const { gate, coverageFile } = runGate(tmp, notes);
-  if (!coverageFile) notes.push('vitest wrote no coverage, so CRAP is missing');
+  const { gate, vitest, coverageFile } = runGate(tmp);
 
   const code = scanned(tracked('server/*.ts', 'shared/*.ts', 'plugins/*.ts', 'client/src/*.ts', 'tools/*.ts'));
   const source = code.filter((f) => !isTest(f.file));
@@ -118,31 +106,25 @@ function measure(): Scorecard {
   const outside = promiseIo(server).map((f) => f.file);
   if (outside.length) process.stderr.write(`\nServer files doing I/O outside Effect (${outside.length}):\n  ${outside.join('\n  ')}\n`);
 
-  const now = Date.now();
+  const at = Date.now();
   const { file: ledgerFile, events: ledger } = focusLedger();
-  if (!ledger) notes.push(`no ledger at ${ledgerFile}, so Ops' numbers are missing`);
-  const ops = ledger ? opsMetrics(ledger, now) : undefined;
-
-  return {
-    v: 1,
-    at: now,
-    commit: git('rev-parse', 'HEAD'),
-    branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
-    // untracked files (an editor's folder, say) aren't measured, so they don't make the commit's numbers someone else's
-    dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
-    metrics: [
-      ...gateMetrics(gate),
-      ...fenceMetrics(source),
-      ...effectMetrics(server),
-      ...testMetrics(
-        { total: gate.test.tests, files: tests.length, propertyFiles: propertyTestFiles(tests, code).length },
-        coverageFile ? crapOf(coverageFile) : undefined,
-      ),
-      ...(ops?.metrics ?? []),
-    ],
-    frictions: ops?.frictions ?? [],
-    notes,
-  };
+  return scorecardOf({
+    head: {
+      at,
+      commit: git('rev-parse', 'HEAD'),
+      branch: git('rev-parse', '--abbrev-ref', 'HEAD'),
+      // untracked files (an editor's folder, say) aren't measured, so they don't make the commit's numbers someone else's
+      dirty: git('status', '--porcelain', '--untracked-files=no').length > 0,
+    },
+    gate,
+    vitest,
+    crap: crapOf(coverageFile),
+    source,
+    server,
+    tests: { files: tests.length, propertyFiles: propertyTestFiles(tests, code).length },
+    ops: ledger && opsMetrics(ledger, at),
+    ledgerFile,
+  });
 }
 
 /** `--repeat n`: n measurements of this commit, saved as its noise floor (they never join the scorecards' history). */
@@ -158,7 +140,7 @@ function repeat(times: number, save: boolean, json: boolean) {
   }
   if (save) {
     mkdirSync(noiseDir, { recursive: true });
-    const file = path.join(noiseDir, `${new Date(noise.at).toISOString().replace(/[:.]/g, '-')}-${noise.commit.slice(0, 8)}.json`);
+    const file = path.join(noiseDir, savedName(noise.at, noise.commit));
     writeFileSync(file, `${JSON.stringify(noise, null, 2)}\n`);
     process.stderr.write(`Saved ${file}\n\n`);
   }
@@ -166,21 +148,17 @@ function repeat(times: number, save: boolean, json: boolean) {
 }
 
 function main() {
-  const argv = process.argv.slice(2);
-  const times = argv.includes('--repeat') ? Number(argv[argv.indexOf('--repeat') + 1] ?? 5) : 0;
-  if (times) {
-    if (!Number.isInteger(times) || times < 2) throw new Error('--repeat needs a whole number of runs, 2 or more');
-    return repeat(times, !argv.includes('--no-save'), argv.includes('--json'));
-  }
+  const args = scorecardArgs(process.argv.slice(2));
+  if (args.repeat) return repeat(args.repeat, args.save, args.json);
   const previous = latestSaved();
   const card = measure();
-  if (!argv.includes('--no-save')) {
+  if (args.save) {
     mkdirSync(SCORECARDS_DIR, { recursive: true });
-    const file = path.join(SCORECARDS_DIR, `${new Date(card.at).toISOString().replace(/[:.]/g, '-')}-${card.commit.slice(0, 8)}.json`);
+    const file = path.join(SCORECARDS_DIR, savedName(card.at, card.commit));
     writeFileSync(file, `${JSON.stringify(card, null, 2)}\n`);
     process.stderr.write(`Saved ${file}\n\n`);
   }
-  console.log(argv.includes('--json') ? JSON.stringify(card, null, 2) : render(card, previous, latestNoise()));
+  console.log(args.json ? JSON.stringify(card, null, 2) : render(card, previous, latestNoise()));
 }
 
 main();

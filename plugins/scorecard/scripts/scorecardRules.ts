@@ -235,6 +235,26 @@ export function gateMetrics(g: GateResults): Metric[] {
   ];
 }
 
+/** A gate step as the scorecard ran it, with what it printed. */
+export interface RanStep extends GateStep {
+  output: string;
+}
+
+/** The gate's four steps, counted from what typecheck printed and the reports lint and the tests wrote (missing when they wrote none). */
+export function gateResults(
+  steps: { typecheck: RanStep; lint: GateStep; test: GateStep; build: GateStep },
+  eslint: { errorCount: number; warningCount: number }[] | undefined,
+  vitest: VitestReport | undefined,
+): GateResults {
+  const { typecheck, lint, test, build } = steps;
+  return {
+    typecheck: { pass: typecheck.pass, seconds: typecheck.seconds, errors: typecheckErrors(typecheck.output) },
+    lint: { pass: lint.pass, seconds: lint.seconds, ...eslintCounts(eslint ?? []) },
+    test: { pass: test.pass, seconds: test.seconds, tests: vitest?.numTotalTests ?? 0, failed: vitest?.numFailedTests ?? 0 },
+    build: { pass: build.pass, seconds: build.seconds },
+  };
+}
+
 const sum = (files: SourceCounts[], key: keyof SourceCounts) => files.reduce((n, f) => n + Number(f[key]), 0);
 
 /** The fence's numbers over the code outside tests. */
@@ -331,6 +351,52 @@ export function opsMetrics(events: LedgerEvent[], now: number): { metrics: Metri
   ];
   return { metrics, frictions: groups.slice(0, 5).map((g) => ({ key: g.key, sessions: g.sessions })) };
 }
+
+/** What one measurement found, each part missing when it couldn't be measured. */
+export interface Measured {
+  head: Pick<Scorecard, 'at' | 'commit' | 'branch' | 'dirty'>;
+  gate: GateResults;
+  vitest: VitestReport | undefined;
+  crap: CrapResults | undefined;
+  /** The code outside tests, the server's (demo code left out), and the tests with how many use property tests. */
+  source: SourceCounts[];
+  server: SourceCounts[];
+  tests: { files: number; propertyFiles: number };
+  ops: ReturnType<typeof opsMetrics> | undefined;
+  ledgerFile: string;
+}
+
+/** A measurement as a scorecard, with a note for each part it couldn't measure. */
+export function scorecardOf(m: Measured): Scorecard {
+  return {
+    v: 1,
+    ...m.head,
+    metrics: [
+      ...gateMetrics(m.gate),
+      ...fenceMetrics(m.source),
+      ...effectMetrics(m.server),
+      ...testMetrics({ total: m.gate.test.tests, ...m.tests }, m.crap),
+      ...(m.ops?.metrics ?? []),
+    ],
+    frictions: m.ops?.frictions ?? [],
+    notes: [
+      ...(m.vitest ? [] : ['vitest wrote no report, so the test counts are missing']),
+      ...(m.crap ? [] : ['vitest wrote no coverage, so CRAP is missing']),
+      ...(m.ops ? [] : [`no ledger at ${m.ledgerFile}, so Ops' numbers are missing`]),
+    ],
+  };
+}
+
+/** What `pnpm run scorecard` was asked for: `--repeat n` runs (0 for one scorecard; 5 when n is left out), saving, JSON. */
+export function scorecardArgs(argv: string[]): { repeat: number; save: boolean; json: boolean } {
+  const at = argv.indexOf('--repeat');
+  const repeat = at < 0 ? 0 : Number(argv[at + 1] ?? 5);
+  if (at >= 0 && !(Number.isInteger(repeat) && repeat >= 2)) throw new Error('--repeat needs a whole number of runs, 2 or more');
+  return { repeat, save: !argv.includes('--no-save'), json: argv.includes('--json') };
+}
+
+/** The file a scorecard or noise floor is saved as: when it was measured, then the commit, so they sort by time. */
+export const savedName = (at: number, commit: string) => `${new Date(at).toISOString().replace(/[:.]/g, '-')}-${commit.slice(0, 8)}.json`;
 
 /**
  * The scorecard as text, a section at a time, each number with its change since `previous` when there is one: marked

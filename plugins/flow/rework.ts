@@ -53,6 +53,22 @@ export function landedCommits(own: CommitLine[], merge: string | undefined, merg
   return new Set([...own.map((c) => c.oid), ...(merge ? [merge] : []), ...rebased.map((c) => c.oid)]);
 }
 
+/** When a merge's count is final, `REWORK_DAYS` after it, once that has passed; none while it's still counting. */
+export const settledAt = (mergedAt: number, now: number): number | undefined => (now - mergedAt >= REWORK_MS ? mergedAt + REWORK_MS : undefined);
+
+/** How many parents a commit has, from its `git rev-list --parents -n1` line: the commit, then each parent. */
+export const parentCount = (revList: string) => revList.trim().split(/\s+/).length - 1;
+
+/** `git log --format='%H %s'` as commits and the first line of each one's message. */
+export const commitLines = (log: string): CommitLine[] => log.split('\n').filter(Boolean).map((l) => ({ oid: l.slice(0, 40), subject: l.slice(41) }));
+
+/** The files whose added lines count: they gained some, and they're written by hand. */
+export const countedFiles = <F extends { path: string; additions: number }>(files: F[]): F[] => files.filter((f) => f.additions > 0 && countsFile(f.path));
+
+/** Lines added over files, and how many survived: never more of a file's than it gained. */
+export const survivalOf = (files: { additions: number; surviving: number }[]): { added: number; survived: number } =>
+  files.reduce((n, f) => ({ added: n.added + f.additions, survived: n.survived + Math.min(f.additions, f.surviving) }), { added: 0, survived: 0 });
+
 export interface ReworkTotals {
   prs: number;
   settled: number;

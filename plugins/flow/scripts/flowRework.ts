@@ -5,7 +5,7 @@
 import { execFile } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { promisify } from 'node:util';
-import { countsFile, landedCommits, type PrRework, REWORK_MS, survivingLines } from '../rework';
+import { commitLines, countedFiles, landedCommits, parentCount, type PrRework, settledAt, survivalOf, survivingLines } from '../rework';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -18,6 +18,8 @@ interface Pr {
   baseRefName: string;
 }
 
+type Git = (...args: string[]) => Promise<string>;
+
 /** One pull request's rework, or why it couldn't be measured. */
 async function measure(repo: string, pr: number, goal: string | undefined, mirrorOf: (repo: string) => string, now: number): Promise<PrRework | string> {
   const clone = mirrorOf(repo);
@@ -25,26 +27,33 @@ async function measure(repo: string, pr: number, goal: string | undefined, mirro
   const { stdout } = await run('gh', ['pr', 'view', String(pr), '-R', repo, '--json', 'commits,mergeCommit,files,mergedAt,baseRefName'], BIG);
   const info = JSON.parse(stdout) as Pr;
   if (!info.mergedAt) return `${repo}#${pr}: not merged`;
+  const git: Git = async (...a) => (await run('git', ['-C', clone, ...a], BIG)).stdout.trim();
   const mergedAt = Date.parse(info.mergedAt);
-  const settled = now - mergedAt >= REWORK_MS;
+  const settled = settledAt(mergedAt, now);
   const base = `origin/${info.baseRefName}`;
-  const rev = settled ? (await run('git', ['-C', clone, 'rev-list', '-1', `--before=${new Date(mergedAt + REWORK_MS).toISOString()}`, base])).stdout.trim() : base;
+  // a settled count reads the base as it was REWORK_DAYS on; one still counting, as it is now
+  const rev = settled ? await git('rev-list', '-1', `--before=${new Date(settled).toISOString()}`, base) : base;
+  const { added, survived } = await blamed(git, rev, countedFiles(info.files), await landed(git, info));
+  return { repo, pr, goal, mergedAt, added, survived, settled: settled !== undefined };
+}
+
+/** The commits the pull request's lines can come from on its base (`landedCommits`). */
+async function landed(git: Git, info: Pr): Promise<Set<string>> {
   const merge = info.mergeCommit?.oid;
-  const git = async (...a: string[]) => (await run('git', ['-C', clone, ...a], BIG)).stdout.trim();
-  const parents = merge ? (await git('rev-list', '--parents', '-n1', merge)).split(/\s+/).length - 1 : 0;
-  const chain = merge && parents === 1
-    ? (await git('log', '--first-parent', `--max-count=${Math.max(1, info.commits.length)}`, '--format=%H %s', merge)).split('\n').map((l) => ({ oid: l.slice(0, 40), subject: l.slice(41) }))
-    : [];
-  const commits = landedCommits(info.commits.map((c) => ({ oid: c.oid, subject: c.messageHeadline })), merge, parents, chain);
-  let added = 0;
-  let survived = 0;
-  for (const f of info.files.filter((f) => f.additions > 0 && countsFile(f.path))) {
-    added += f.additions;
+  const parents = merge ? parentCount(await git('rev-list', '--parents', '-n1', merge)) : 0;
+  const chain = merge && parents === 1 ? commitLines(await git('log', '--first-parent', `--max-count=${Math.max(1, info.commits.length)}`, '--format=%H %s', merge)) : [];
+  return landedCommits(info.commits.map((c) => ({ oid: c.oid, subject: c.messageHeadline })), merge, parents, chain);
+}
+
+/** Each file's added lines still there at `rev`, one `git blame` at a time. */
+async function blamed(git: Git, rev: string, files: Pr['files'], commits: Set<string>): Promise<{ added: number; survived: number }> {
+  const counted: { additions: number; surviving: number }[] = [];
+  for (const f of files) {
     // a file that's gone by then has had every line it gained reworked away
-    const blame = await run('git', ['-C', clone, 'blame', '-w', '--porcelain', rev, '--', f.path], BIG).then((r) => r.stdout, () => '');
-    survived += Math.min(f.additions, survivingLines(blame, commits));
+    const blame = await git('blame', '-w', '--porcelain', rev, '--', f.path).catch(() => '');
+    counted.push({ additions: f.additions, surviving: survivingLines(blame, commits) });
   }
-  return { repo, pr, goal, mergedAt, added, survived, settled };
+  return survivalOf(counted);
 }
 
 /** Each merged pull request's rework, a few at a time; those it couldn't measure, with why. */
