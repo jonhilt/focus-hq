@@ -106,7 +106,7 @@ describe('reading a climb’s pull request', () => {
   it('keeps the captain’s own words, not Ops’ reports posted from the same account, nor a bot’s', () => {
     const comments = [
       { author: 'jonhilt', body: '## 🔍 QA report: ✅ Passed\nAll good.' },
-      { author: 'jonhilt', body: '🧭 Lt. Abara, operations officer aboard the Focus, closed this pull request: stuck.' },
+      { author: 'jonhilt', body: '🧭 Focus closed this pull request: stuck.' },
       { author: 'qodo-code-review', body: '<!-- qodo:billing-blocked -->\nTrial ended.' },
       { author: 'someone-bot', body: 'Beep.' },
       { author: 'jonhilt', body: 'Not this: the fence matters less than the gate’s time right now.' },

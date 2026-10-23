@@ -10,7 +10,7 @@ import { HUNTING, HUNTING_STEPS, parseProofs, PROOFS_SCHEMA, proofsToKeep } from
 import { clock } from './recording';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
-import { PUBLIC_WORDS_RULE } from './wording';
+import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 
 // The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
 // tested (qa.test.ts).
@@ -320,12 +320,12 @@ export function proofSection(report: Pick<QaReport, 'proofs' | 'verdict' | 'advi
   };
   const seen = (p: QaProof) => {
     if (p.outcome === 'failed') return p.kind === 'screenshot' ? `holds: ${p.note ?? ''}` : `fails${p.note ? `: ${cell(truncate(p.note, 200))}` : ''}`;
-    if (p.outcome === 'passed') return 'passed when Ops ran it';
+    if (p.outcome === 'passed') return 'passed when Focus ran it';
     return `not proof: ${cell(p.note ?? 'not checked')}`;
   };
   return [
-    '', '### 🧪 Proof', '', 'QA blocks a pull request only with proof Ops checks itself: it runs each test and check in QA\'s checkout before posting.', '',
-    '| | Finding | Proof | What Ops saw |', '|---|---|---|---|',
+    '', '### 🧪 Proof', '', 'QA blocks a pull request only with proof Focus checks itself: it runs each test and check in QA\'s checkout before posting.', '',
+    '| | Finding | Proof | What Focus saw |', '|---|---|---|---|',
     ...proofs.map((p) => `| ${p.outcome ? PROOF_ICON[p.outcome] : ' '} | ${cell(p.finding)} | ${p.kind}: ${what(p)} | ${seen(p)} |`),
   ];
 }
@@ -340,7 +340,7 @@ export function qaComment(report: QaReport, by: { officer: string; sha?: string;
   const tested = attribution ? [`**Tested by** ${by.officer} (Focus QA officer)`, commit].filter(Boolean).join(' · ') : commit && `**Tested at** ${commit}`;
   const heading = report.advisory ? '✅ Passed with advice' : pass ? '✅ Passed' : '❌ Failed';
   const lines = [`## 🔍 QA report: ${heading}`, ...(tested ? [tested] : []), '', report.summary || (pass ? 'Everything checked out.' : 'Problems found, see below.')];
-  if (report.advisory) lines.push('', `> QA found problems, but none came with proof that held when Ops checked it (a test that fails, a failing check, or a screenshot of a broken page), so they don't block this pull request: they're advice, below.`);
+  if (report.advisory) lines.push('', `> QA found problems, but none came with proof that held when Focus checked it (a test that fails, a failing check, or a screenshot of a broken page), so they don't block this pull request: they're advice, below.`);
   if (report.checks.length) {
     lines.push('', '| | Check | Details |', '|---|---|---|', ...report.checks.map((c) => `| ${ICON[c.result]} | ${cell(c.name)} | ${cell(c.details)} |`));
   }

@@ -4,7 +4,7 @@
 // ship; Ops checks it covers every file the slice changes, then writes it into the pull requests (mermaid, which GitHub
 // draws) and onto the lead's station screen. Pure, so it's tested (recap.test.ts).
 
-import { LANE_SAID, type Lane, laneName, laneProblem } from '../../shared/mergeLane';
+import { LANE_SAID, LANE_SAID_PUBLIC, type Lane, laneName, laneProblem } from '../../shared/mergeLane';
 import { IMPACTS, type Impact, type RecapStep, type SliceRecap } from '../../shared/recap';
 
 export { IMPACTS, type Impact, type RecapPrimitive, type RecapStep, type SliceRecap } from '../../shared/recap';
@@ -112,7 +112,7 @@ export function flowMermaid(steps: readonly RecapStep[]): string {
 /** What the map's key says of its dashed arrows, when it has any. */
 function unbackedSaid(recap: SliceRecap): string {
   const n = (recap.map ?? []).filter((s) => s.backed === false).length;
-  return n ? `Dashed: Ops found no import behind ${n === 1 ? 'this arrow' : `these ${n} arrows`} (a runtime call, or one to check).` : '';
+  return n ? `Dashed: Focus found no import behind ${n === 1 ? 'this arrow' : `these ${n} arrows`} (a runtime call, or one to check).` : '';
 }
 
 const fence = (code: string) => `\`\`\`mermaid\n${code}\n\`\`\``;
@@ -124,7 +124,7 @@ export const RECAP_END = '<!-- system-recap:end -->';
 /** The lane line: which one, and what it does once QA passes. */
 function laneSaid(recap: SliceRecap): string {
   const lane = recapLane(recap);
-  return `**Lane:** ${laneName(lane)}, ${recap.lane ? 'the lead’s pick' : 'as the lead picked none'}: it ${LANE_SAID[lane]}.`;
+  return `**Lane:** ${laneName(lane)}, ${recap.lane ? 'the author’s pick' : 'as the author picked none'}: it ${LANE_SAID_PUBLIC[lane]}.`;
 }
 
 /**

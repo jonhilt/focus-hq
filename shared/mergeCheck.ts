@@ -74,7 +74,7 @@ export type GateStep =
  * PR's last trial. A trial that couldn't run is tried again; one of other commits is old news.
  */
 export function gateStep(heads: MergeHeads, opts: { want?: string; cached?: MergeTrial }): GateStep {
-  if (!heads.head) return { kind: 'refuse', reason: 'Ops can’t tell which commit it’s at' };
+  if (!heads.head) return { kind: 'refuse', reason: 'Focus can’t tell which commit it’s at' };
   if (opts.want && !sameCommit(opts.want, heads.head)) return { kind: 'refuse', reason: `it moved on to ${short(heads.head)} since ${short(opts.want)}` };
   const cached = opts.cached;
   if (cached && cached.kind !== 'broken' && sameCommit(cached.base, heads.base) && sameCommit(cached.head, heads.head)) return { kind: 'reuse', trial: cached };
@@ -87,7 +87,7 @@ export type MergeVerdict = { kind: 'merge'; said: string } | { kind: 'refuse'; r
 export function mergeVerdict(trial: MergeTrial): MergeVerdict {
   switch (trial.kind) {
     case 'broken':
-      return { kind: 'refuse', reason: `Ops couldn’t check the merge: ${trial.reason}` };
+      return { kind: 'refuse', reason: `Focus couldn’t check the merge: ${trial.reason}` };
     case 'conflicts':
       return { kind: 'refuse', reason: `it conflicts with its base at ${short(trial.base)}${trial.files.length ? ` (${trial.files.join(', ')})` : ''}` };
     case 'checked': {
@@ -125,7 +125,7 @@ export function refusalComment(trial: MergeTrial, reason: string): string {
   const failed = trial.kind === 'checked' ? trial.results.find((r) => !r.ok) : undefined;
   const output = failed?.output?.trim() ? `\n\n\`\`\`\n${failed.output.trim().split('\n').slice(-30).join('\n')}\n\`\`\`` : '';
   const ran = trial.kind === 'checked' ? `\n\nOn the merge commit \`${short(trial.merge)}\`: ${trial.results.map((r) => `${r.ok ? '✅' : '❌'} \`${r.command}\``).join(' · ')}` : '';
-  return `## 🚦 Merge check: refused\n\nOps didn’t merge this: ${reason}.${ran}${output}\n\nPush a fix, or merge it anyway from the board (the ledger notes an override).`;
+  return `## 🚦 Merge check: refused\n\nFocus didn’t merge this: ${reason}.${ran}${output}\n\nPush a fix, or a maintainer can merge it anyway from Focus (the override is logged).`;
 }
 
 /** The ledger's line for a merge check (`merge-check`), without the PR it's on. */

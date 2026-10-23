@@ -40,6 +40,13 @@ export const LANE_SAID: Record<Lane, string> = {
   ask: 'waits for the captain to merge it',
 };
 
+/** The same, said where anyone can read it (a pull request): in plain words, none of the ship’s (`wording.ts`). */
+export const LANE_SAID_PUBLIC: Record<Lane, string> = {
+  ship: 'merges itself once QA passes it',
+  show: 'merges itself once QA passes it, and the maintainer is told',
+  ask: 'waits for a maintainer to merge it',
+};
+
 /** What a raise does to a lead's pull requests: each still open in a lower lane goes up to `lane`, the rest as they were. */
 export function raisedPrs<P extends { lane?: Lane; outcome?: unknown }>(prs: readonly P[], lane: Lane, raised: { by: string; why: string }): { prs: P[]; from: Map<P, Lane> } {
   const from = new Map<P, Lane>();
@@ -53,7 +60,10 @@ export function raisedPrs<P extends { lane?: Lane; outcome?: unknown }>(prs: rea
   return { prs: next, from };
 }
 
-/** What Ops says on a pull request whose lane was raised. */
-export function raisedSaid(from: Lane, to: Lane, by: string, why: string): string {
-  return `⬆ The ${by.replace(/-/g, ' ')} raised this slice from ${laneName(from)} to ${laneName(to)}: it ${LANE_SAID[to]}.\n\n> ${why.trim().replace(/\n/g, '\n> ')}`;
+/**
+ * What Ops says on a pull request whose lane was raised. Not who raised it or why: the why is written for the captain,
+ * in the ship's words, and stays in Focus (the ledger and the toast have it).
+ */
+export function raisedSaid(from: Lane, to: Lane): string {
+  return `⬆ This pull request's merge lane was raised from ${laneName(from)} to ${laneName(to)}: it ${LANE_SAID_PUBLIC[to]}.`;
 }

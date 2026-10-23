@@ -25,7 +25,7 @@ export const CLIMB_SUMMARY =
   '**Problem** (what was wrong, with the evidence), **Solution** (what changed, and why this way; for a sweep, each place ' +
   'it changed), ' +
   '**Before** and **After** (the scorecard\'s numbers and anything else you measured, measured the same way both times). ' +
-  'Then, if you skipped anything that needs the captain\'s sign-off, a **Needs your sign-off** list. No preamble.';
+  'Then, if you skipped anything that needs the maintainer\'s sign-off, a **Needs your sign-off** list. No preamble.';
 
 /** An accepted retro issue still waiting for its fix: the climber can take one as their gap. */
 export interface RetroIssue {
@@ -212,7 +212,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
     'Times swing with the machine\'s load (other agents run beside you): if your target is a time, measure it interleaved, base and change taking turns on the same machine (at least 5 of each, the base in a worktree of its own), and compare medians.',
     '',
     '## 2. Rank',
-    'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to the captain and Focus, 1 to 5 (5: it breaks or misleads Focus now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
+    'Put every gap on one scale, then write a **Shortlist**: the 3 to 5 strongest, as a table, before you choose. Score each the same way: **Harm** to Focus and its users, 1 to 5 (5: it breaks or misleads Focus now; 1: cosmetic), **Distance** from the standard, 1 to 5, and **Size** S, M or L. Score = 2 × Harm + Distance; take the highest, the smaller on a tie, that fits in one reviewable pull request. A gap a closed climb took, with nothing changed since, scores Harm 0. Write it as `| # | Gap | Harm | Distance | Size | Score |`. The gaps include:',
     '- the scorecard\'s numbers: a gate that fails or is slow, type assertions and non-null assertions, the server\'s edges between Effect and Promise code, functions over CRAP 30, no property tests;',
     frictions.length
       ? `- Focus's open frictions: what got in the agents' way in 3 or more sessions in the last ${OPEN_FRICTION_DAYS} days, with no retro decision yet:\n${frictions.map((g) => `  - ${g.key} (${g.sessions} sessions)`).join('\n')}`
@@ -221,7 +221,7 @@ export function climbBrief(agent: Pick<Agent, 'repo' | 'baseBranch' | 'branch'>,
       ? `- the retro's accepted issues, still open in ${agent.repo} (if you take one, say \`Closes #n\` in the Solution):\n${issues.map((i) => `  - #${i.number} ${i.title}`).join('\n')}`
       : '- the retro\'s accepted issues: none are open.',
     `**Group before you score.** Run \`pnpm run crap --top 25\` and see where the fence's casts sit, then group the gaps that take the same fix: functions over CRAP 30 whose decisions can move into pure functions, casts one honest type would replace, untested decisions in one area. A kind of fix with 2 or more places goes on the shortlist as one row, a sweep, never a place at a time: name the kind of fix and its places, worst first, up to ${SWEEP_PLACES} places and about ${SWEEP_LINES} changed lines. Score a sweep by its worst place, with Harm one higher (up to 5) when it takes 3 or more places, since leaving the rest costs the next change; size it by the whole sweep. A row with one function over CRAP 30, while others over 30 could take the same fix, is the mistake this rule is here to stop.`,
-    'Skip anything that needs the captain\'s sign-off (a dependency version, a change to how Ops merges or deploys, anything outside this repo) and list it at the end instead.',
+    'Skip anything that needs the maintainer\'s sign-off (a dependency version, a change to how Ops merges or deploys, anything outside this repo) and list it at the end instead.',
     '',
     '## Hypothesis, before you change anything',
     'Write it down in your terminal now, and keep it as your pull request\'s **Hypothesis** section: which gap, why it\'s the top one, which scorecard number it will move, by how much, and what result would show you wrong. End it with one line, `Target: <metric key> <before> → <expected after>` (a key from `pnpm run scorecard --json`, like `Target: fence.typeAssertions 226 → 214`); Ops reads that line to check, on main, whether your gain holds. A gap the scorecard can\'t see still gets its nearest number, or `Target: none` and why.',

@@ -1,6 +1,7 @@
 import type { FailedCheck, Planner, QaReview, Settings, TriageAction } from '../../shared/types';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { fieldsOf, isOneOf } from '../../shared/records';
+import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 import { truncate } from '../util';
 import { qaFindings } from './qa';
 
@@ -75,6 +76,8 @@ Pick one action:
 - \`escalate\`: only the manager can unstick it (a product decision, credentials or secrets, a broken setup the crew can't fix). Your note is a one-line diagnosis.
 
 Choose what's most likely to unstick it for good: don't retry what will fail the same way again, and don't escalate what the crew can handle. Spend a few minutes, not an audit.
+
+On \`close\`, your note goes on the pull request as it's closed. ${PUBLIC_WORDS_RULE}
 
 Finish with the structured result: the action and your note.
 `.trim();

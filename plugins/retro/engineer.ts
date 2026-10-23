@@ -217,4 +217,4 @@ export function undecided(retro: Retro, id: string): RetroDraft {
 
 /** An accepted draft's issue as it's filed: its body, signed by the chief engineer. */
 export const filedBody = (draft: RetroDraft): string =>
-  `${draft.body}\n\n_Drafted by ${chiefEngineer().name}, the Focus's chief engineer, from frictions in ${draft.sessions} agent sessions; accepted by the captain._`;
+  `${draft.body}\n\n_Drafted by Focus's retro from frictions in ${draft.sessions} agent sessions; accepted by the maintainer._`;

@@ -561,7 +561,7 @@ describe('proof', () => {
     const body = qaComment(report({ verdict: 'pass', advisory: true, fixInstructions: 'Persist the list.', proofs: [{ ...held, outcome: 'passed', note: undefined, source: undefined }] }), { officer: 'Lt. Q' }, [], false);
     expect(body).toContain('QA report: ✅ Passed with advice');
     expect(body).toContain('none came with proof that held');
-    expect(body).toContain('passed when Ops ran it');
+    expect(body).toContain('passed when Focus ran it');
     expect(body).toContain('### 💡 Advice (not proved)\n\nPersist the list.');
     expect(body).not.toContain('What needs fixing');
   });

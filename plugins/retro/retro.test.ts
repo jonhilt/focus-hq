@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import type { FrictionGroup } from '../../plugin-api/shared';
-import { parseDrafts, renderFrictions } from './retro';
+import { type FrictionGroup, PUBLIC_WORDS_RULE, SHIP_WORDS } from '../../plugin-api/shared';
+import { filedBody } from './engineer';
+import { engineerSystemPrompt, parseDrafts, renderFrictions } from './retro';
 import { draftDecision, fileInChoices, freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -141,5 +142,12 @@ describe('a draft on its card', () => {
     expect(fileInChoices(projects, 'p3 gone/repo').picked).toMatchObject({ projectId: 'p1', repo: 'jonhilt/focus' });
     expect(fileInChoices(projects, null).picked?.value).toBe('p1 jonhilt/focus');
     expect(fileInChoices([], 'p1 jonhilt/focus')).toEqual({ options: [], picked: undefined });
+  });
+});
+
+describe('what the retro files on GitHub', () => {
+  it('tells the engineer to keep the ship’s words out, and signs the issue in plain words', () => {
+    expect(engineerSystemPrompt('Scotty')).toContain(PUBLIC_WORDS_RULE);
+    expect(filedBody({ id: 'd1', title: 'Fix it', body: 'It breaks.', kind: 'check', measure: '3 sessions', signatures: [], sessions: 3 })).not.toMatch(SHIP_WORDS);
   });
 });

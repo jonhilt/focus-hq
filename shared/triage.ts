@@ -53,3 +53,8 @@ const DID: Record<TriageAction, string> = {
 export function triageLabel(triage: Pick<Triage, 'officer' | 'action'>): string {
   return `${triage.officer} ${DID[triage.action]}`;
 }
+
+/** What Focus says on a pull request it closes as stuck: why, and that its issues stay open to be built again. */
+export function stuckClosedComment(note: string, issues: number[]): string {
+  return `🧭 Focus closed this pull request: ${note}\n\n${issues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
+}

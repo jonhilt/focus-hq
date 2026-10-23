@@ -4,7 +4,7 @@ import { truncate } from '../util';
 import type { BriefSpec } from '../plugins/contract';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
-import { PUBLIC_WORDS_RULE } from './wording';
+import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 
 const PULL_REQUEST_SUMMARY = 'Your final message becomes the pull request description. Write it in Markdown with a short "Summary" and "Testing" section. No preamble.';
 

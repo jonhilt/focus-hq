@@ -201,7 +201,7 @@ describe('what the lead writes and hears', () => {
     expect(leadPrBody('Adds saving', { name: 'Lt. Okafor' }, ['acme/api'], true)).toBe(
       'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, a lead aboard the USS Focus, with Claude Code._',
     );
-    expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work from one of the project’s leads.');
+    expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work toward a larger goal.');
   });
 
   it('works in slices across every repo, ships through Ops, and never pushes', () => {

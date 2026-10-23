@@ -443,7 +443,7 @@ export class Leads extends Part {
     this.update(lead, { lead: { ...lead.lead, prs } });
     for (const [pr, was] of from) {
       this.core.ledger.record(lead.projectId, { kind: 'lane-raised', repo: pr.repo, pr: pr.number, goal: lead.lead.title, from: was, to: lane, by, why });
-      this.background(GitHub.use((gh) => gh.commentOnPullRequest(pr.repo, pr.number, raisedSaid(was, lane, by, why))).pipe(Effect.ignore));
+      this.background(GitHub.use((gh) => gh.commentOnPullRequest(pr.repo, pr.number, raisedSaid(was, lane))).pipe(Effect.ignore));
     }
     const where = [...from.keys()].map((p) => `${p.repo.split('/')[1]}#${p.number}`);
     this.hub.toast('info', `⬆ ${where.join(', ')} raised to ${lane[0].toUpperCase()}${lane.slice(1)}: ${why}`, lead.id);

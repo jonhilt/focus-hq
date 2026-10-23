@@ -5,7 +5,7 @@ import { IMPACTS } from './recap';
 // The ship tool's recap, as the lead sends it (recap.ts says what each part is for).
 
 const step = z.object({
-  from: z.string().describe('A primitive’s id, or anything else the slice talks to (“captain”, “github”).'),
+  from: z.string().describe('A primitive’s id, or anything else the slice talks to (“user”, “github”).'),
   to: z.string(),
   label: z.string().describe('What the slice sends or does along it, in a few words.'),
 });
@@ -18,7 +18,7 @@ export const RECAP_SCHEMA = z.object({
     change: z.string().describe('What the slice does to it, in a line.'),
     paths: z.array(z.string()).describe('Where it is, as your workspace has it, repo folder first: files, or folders ending in / (“focus/shared/mergeGate.ts”, “focus/plugins/chief-of-staff/”). Every file the slice changes must be under one, tests and docs too.'),
   })).describe('Each building block the slice touches, riskiest first.'),
-  invariants: z.array(z.string()).optional().describe('The promises the slice could break, in plain words (“A card the captain owes never leaves their queue unanswered”).'),
+  invariants: z.array(z.string()).optional().describe('The promises the slice could break, in plain words (“A card the user owes never leaves their queue unanswered”). They go in the pull request, as the rest does.'),
   map: z.array(step).optional().describe('How the touched primitives connect: each an arrow on the system map.'),
   flow: z.array(step).optional().describe('What happens, in order: each a message in the change flow’s sequence diagram.'),
   lane: z.enum(LANES).optional().describe('How it merges once QA passes it. ship: by itself; show: by itself, and the captain is told; ask: the captain merges it. Pick by how much the captain would want to see it first. The rollup sets the lowest you may pick: composes allows ship, extends show, adds only ask. Left out, it’s ask.'),

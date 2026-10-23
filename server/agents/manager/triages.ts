@@ -1,7 +1,7 @@
 import { Effect, Exit, Fiber, FiberMap, PartitionedSemaphore, Scope } from 'effect';
 import { plannerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import { afterTriage, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../../shared/triage';
+import { afterTriage, stuckClosedComment, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../../shared/triage';
 import type { FailedCheck, QaReview } from '../../../shared/types';
 import type { PullRequestDetail } from '../../github/provider';
 import { GitHub, type GitHubError } from '../../github/service';
@@ -149,8 +149,7 @@ export class Triages extends Part {
       const github = yield* GitHub;
       const officer = plannerFor(review.projectId).name;
       const pr = yield* github.getPullRequest(review.repo, review.number);
-      const comment = `🧭 ${officer}, operations officer aboard the Focus, closed this pull request: ${note}\n\n${pr.linkedIssues.map((n) => `#${n}`).join(', ')} stays open, so it gets built again.`;
-      yield* github.closePullRequest(review.repo, review.number, comment);
+      yield* github.closePullRequest(review.repo, review.number, stuckClosedComment(note, pr.linkedIssues));
       for (const issue of pr.linkedIssues) this.store.putClosedPr({ repo: review.repo, issue, pr: review.number, officer, note, at: Date.now() });
       this.core.seating.prClosed(review.repo, review.number, false, 'officer');
       this.boardChanged(review.projectId);

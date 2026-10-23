@@ -1,5 +1,6 @@
 import { plannerFor } from '../../shared/crew';
 import type { IssueDraft, Planner, Settings } from '../../shared/types';
+import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, truncate } from '../util';
@@ -204,6 +205,7 @@ How to work:
 - Size it for one agent in one sitting. If the idea is much bigger, write up the first useful slice and list the rest under Out of scope.
 - If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered to start it as a goal, where a lead of its own builds toward it one small slice at a time. Leave tooBig out for an ordinary, well-defined change.
 - Pick the repository the work belongs in. If it spans several, pick the one with most of the work and mention the others under Context.
+- ${PUBLIC_WORDS_RULE}
 
 ${ISSUE_FORMAT}
 

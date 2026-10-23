@@ -38,6 +38,6 @@ describe('raising the lane of a lead’s pull requests', () => {
   });
 
   it('says so on the pull request', () => {
-    expect(raisedSaid('ship', 'ask', 'chief-of-staff', 'It changes a card.')).toBe('⬆ The chief of staff raised this slice from Ship to Ask: it waits for the captain to merge it.\n\n> It changes a card.');
+    expect(raisedSaid('ship', 'ask')).toBe('⬆ This pull request\'s merge lane was raised from Ship to Ask: it waits for a maintainer to merge it.');
   });
 });

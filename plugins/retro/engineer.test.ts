@@ -81,7 +81,7 @@ describe('ChiefEngineer', () => {
     const done = await eng.decide(draft.id, true, project.id, 'demo/webshop-api');
     expect(done.decision).toMatchObject({ accepted: true, issue: { repo: 'demo/webshop-api', number: 42 } });
     expect(filed).toHaveLength(1);
-    expect(filed[0].body).toMatch(/_Drafted by .+, the Focus's chief engineer, from frictions in 3 agent sessions; accepted by the captain._$/);
+    expect(filed[0].body).toMatch(/_Drafted by Focus's retro from frictions in 3 agent sessions; accepted by the maintainer._$/);
     expect(store.ledger.at(-1)).toMatchObject({ kind: 'retro-decision', projectId: project.id, accepted: true, signatures: ['demo-env: demo port in use'], issue: { repo: 'demo/webshop-api', number: 42 } });
     await expect(eng.decide(draft.id, false)).rejects.toThrow('already accepted');
     expect(eng.current().drafts[0].decision?.accepted).toBe(true);

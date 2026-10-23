@@ -1,4 +1,4 @@
-import { fieldsOf, FRICTION_KINDS, type FrictionGroup, type GoalRecord, isRecord, type LedgerEvent, reportCard, reportLines } from '../../plugin-api/shared';
+import { fieldsOf, FRICTION_KINDS, type FrictionGroup, type GoalRecord, isRecord, type LedgerEvent, PUBLIC_WORDS_RULE, reportCard, reportLines } from '../../plugin-api/shared';
 import { FIX_KINDS, type RetroDraft } from './shared';
 
 // The chief engineer's retro, the pure half. The retro reads the ledger's session digests, not transcripts: code
@@ -76,6 +76,7 @@ How to work:
 - Each issue is for an agent who knows the Focus codebase but not this retro. Its body says what keeps happening and what it costs, then has "## What to build" (the cheapest fix that would work, preferring a check or automation Ops runs over a rule in a prompt; a pointer in CLAUDE.md or the docs only for what a machine can't check; or deleting something that isn't earning its keep) and "## Done when". Don't paste the quotes: Ops adds them under "## Evidence".
 - Give each its kind of fix (check, qa-rule, pointer, delete) and the number the next retro should watch, with today's value (the sessions it came up in).
 - Most worth doing first; a few sharp drafts beat many. You change nothing and file nothing: the captain decides.
+- The ones the captain accepts are filed on GitHub as you wrote them. ${PUBLIC_WORDS_RULE}
 
 Finish with the structured result.
 `.trim();

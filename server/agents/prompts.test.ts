@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../shared/types';
 import { carryOnPrompt, conflictsPrompt, pullRequestBody, pushNudge, systemAppend } from './prompts';
-import { PUBLIC_WORDS_RULE } from './wording';
+import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 
 const agent = (a: Partial<Agent> = {}): Agent => ({
   id: 'agent_ab12',

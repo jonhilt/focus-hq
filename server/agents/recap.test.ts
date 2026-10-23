@@ -66,8 +66,8 @@ describe('the recap in a pull request', () => {
   });
 
   it('says its lane, Ask when the lead picked none', () => {
-    expect(recapMarkdown(recap({ lane: 'show' }))).toContain('**Lane:** Show, the lead’s pick: it merges itself once QA passes it, and tells the captain.');
-    expect(md).toContain('**Lane:** Ask, as the lead picked none: it waits for the captain to merge it.');
+    expect(recapMarkdown(recap({ lane: 'show' }))).toContain('**Lane:** Show, the author’s pick: it merges itself once QA passes it, and the maintainer is told.');
+    expect(md).toContain('**Lane:** Ask, as the author picked none: it waits for a maintainer to merge it.');
     expect(recapPage(recap({ lane: 'ship' }), 't')).toContain('Lane: <b>Ship</b>');
   });
 
@@ -118,8 +118,8 @@ describe('an arrow no import backs', () => {
 
   it('is dashed on the map, and the key says how many', () => {
     expect(mapMermaid(r)).toContain('  n_cos_verdict -.->|"replies"| n_comms_card\n  n_comms_card -->|"reads"| n_cos_verdict');
-    expect(recapMarkdown(r)).toContain('_Dashed: Ops found no import behind this arrow (a runtime call, or one to check)._');
-    expect(recapPage(r, 't')).toContain('<p class="key">Dashed: Ops found no import behind this arrow');
+    expect(recapMarkdown(r)).toContain('_Dashed: Focus found no import behind this arrow (a runtime call, or one to check)._');
+    expect(recapPage(r, 't')).toContain('<p class="key">Dashed: Focus found no import behind this arrow');
     expect(recapMarkdown(recap())).not.toContain('Dashed');
   });
 });
