@@ -39,7 +39,7 @@ vi.mock('../../plugin-api/client', async () => ({
 }));
 vi.mock('./threads.css', () => ({}));
 
-const { default: threads, decidedLine, threadsView } = await import('./client');
+const { default: threads, decidedLine, sortSaid, threadsView } = await import('./client');
 
 const opened: string[] = [];
 const errors: string[] = [];
@@ -66,13 +66,13 @@ beforeEach(() => {
   spun = { agent: { id: 'shop-lead-a1', name: 'Lt. Mensah', lead: { station: 1, title: 'Thread c2', repos: [], slice: 1, prs: [] } } };
   refuse = undefined;
   leads = [live];
-  sent = { closed: { shop: [closedThread('c2', 9), closedThread('c3', 12, { as: 'parked', note: 'until the first login', at: 2 }), closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
+  sent = { sorts: {}, sorting: {}, closed: { shop: [closedThread('c2', 9), closedThread('c3', 12, { as: 'parked', note: 'until the first login', at: 2 }), closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
 });
 
 describe('a project’s threads in its goals panel', () => {
   it('counts the threads still asking something of someone, 0 once none is, and nothing with none at all', () => {
     expect(threads.goalsView?.readout?.('shop')).toBe('3');
-    sent = { closed: { shop: [closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
+    sent = { sorts: {}, sorting: {}, closed: { shop: [closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
     leads = [];
     expect(threads.goalsView?.readout?.('shop')).toBe('0');
     sent = undefined;
@@ -177,7 +177,7 @@ describe('a project’s threads in its goals panel', () => {
 
   it('shows a thread spun off as the goal it went to, with a way to its lead while it’s under way', () => {
     const spunOff = closedThread('c2', 9, { as: 'next', spunOff: { goal: 'g8', title: 'Thread c2' }, at: 2 });
-    sent = { closed: { shop: [spunOff] } };
+    sent = { sorts: {}, sorting: {}, closed: { shop: [spunOff] } };
     leads = [{ id: 'g8', name: 'Lt. Mensah', lead: { station: 1, title: 'Second firm’s gaps', repos: [], slice: 1, prs: [] } }];
     const row = threadsView(ui, 'shop').querySelector('.threads-row:not(.live)') ?? undefined;
     expect(row?.querySelector('.threads-decided')?.textContent).toBe('Spun off as “Second firm’s gaps” · 2d ago');
@@ -191,13 +191,52 @@ describe('a project’s threads in its goals panel', () => {
     expect(button(after, 'Talk')).toBeUndefined();
   });
 
+  it('lists a closed goal’s ideas for next to decide after its contacts, saying they’re ideas', () => {
+    const idea: Thread = { ...closedThread('next-abc', 3), text: 'Prefill from the card', idea: true };
+    sent = { sorts: {}, sorting: {}, closed: { shop: [closedThread('c2', 9), idea] } };
+    const view = threadsView(ui, 'shop');
+    expect(sections(view).slice(0, 2)).toEqual([['To decide (1)', ['Thread c2']], ['Ideas left for next (1)', ['Prefill from the card']]]);
+    expect(view.querySelectorAll('.threads-source')[1]?.textContent).toBe('Quality review · an idea for next · goal closed 3d ago');
+  });
+
+  it('shows what a model proposed of a thread to decide, with Accept first, which accepts it as proposed', async () => {
+    sent = { sorts: {}, sorting: {}, closed: { shop: [{ ...closedThread('c2', 9), proposed: { as: 'dropped', note: 'Covered by #1236', at: 4 } }] } };
+    const row = threadsView(ui, 'shop').querySelector('.threads-row:not(.live)') ?? undefined;
+    expect(row?.querySelector('.threads-proposed')?.textContent).toBe('Proposed · Dropped: Covered by #1236');
+    expect([...(row?.querySelectorAll('button') ?? [])].map((b) => b.textContent)[0]).toBe('Accept');
+    button(row, 'Accept')?.click();
+    await settle();
+    expect(called).toEqual([{ path: '/accept', body: { projectId: 'shop', goal: 'g1', contact: 'c2' } }]);
+  });
+
+  it('asks for a sort, says while one’s out, and accepts every proposal of an end at once', async () => {
+    const drop = (contact: string): Thread => ({ ...closedThread(contact, 9), proposed: { as: 'dropped', note: 'stale', at: 4 } });
+    sent = { sorting: {}, sorts: { shop: { at: 5, asked: 3, proposed: 2, model: 'sonnet', costUsd: 0.04 } }, closed: { shop: [drop('c1'), drop('c2'), { ...closedThread('c3', 9), proposed: { as: 'parked', note: 'until May', at: 4 } }] } };
+    const bar = () => threadsView(ui, 'shop').querySelector('.threads-sort') ?? undefined;
+    expect([...(bar()?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Sort for me', 'Accept 1 park', 'Accept 2 drops']);
+    expect(bar()?.querySelector('small')?.textContent).toBe('Sorted 5d ago: ends proposed for 2 of 3 · $0.04');
+    button(bar(), 'Sort for me')?.click();
+    button(bar(), 'Accept 2 drops')?.click();
+    await settle();
+    expect(called).toEqual([{ path: '/sort', body: { projectId: 'shop' } }, { path: '/accept', body: { projectId: 'shop', as: 'dropped' } }]);
+    sent = { ...sent, sorting: { shop: { at: 6, asked: 3 } } };
+    expect(bar()?.querySelector('button')?.textContent).toBe('Sorting 3…');
+    expect(bar()?.querySelector('button')?.disabled).toBe(true);
+  });
+
+  it('offers no sort with nothing to decide, and says why a sort failed', () => {
+    sent = { sorts: {}, sorting: {}, closed: { shop: [closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
+    expect(threadsView(ui, 'shop').querySelector('.threads-sort')).toBeNull();
+    expect(sortSaid({ at: 2, asked: 4, proposed: 0, model: 'sonnet', failed: 'timed out' })).toBe('The last sort failed 2d ago: timed out');
+  });
+
   it('asks Focus to read the ledger afresh as the browser starts', () => {
     threads.start?.({ ui });
     expect(called.map((c) => c.path)).toEqual(['/read']);
   });
 
   it('says there are none when every contact was pursued or dropped', () => {
-    sent = { closed: {} };
+    sent = { sorts: {}, sorting: {}, closed: {} };
     leads = [];
     expect(threadsView(ui, 'shop').textContent).toMatch(/No loose threads/);
   });

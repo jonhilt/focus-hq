@@ -85,6 +85,17 @@ describe('ledgerRow', () => {
     const thread = (e: Record<string, unknown>) => ev({ kind: 'thread-decided', goalId: 'g1', goal: GOAL, contact: 'c2', text: 'Firm #2 gaps', ...e }, 8);
     expect(ledgerRow(thread({ as: 'parked', note: 'until the first login' }))).toMatchObject({ group: 'goals', tag: 'Thread', title: 'Parked: Firm #2 gaps', detail: 'until the first login · Engineering deck', goal: GOAL });
     expect(ledgerRow(thread({ as: 'next', spunOff: { goal: 'a9', title: 'Firm #2 gaps' } }))).toMatchObject({ title: 'Spun off as a goal: Firm #2 gaps', detail: '“Firm #2 gaps” · Engineering deck' });
+    expect(ledgerRow(thread({ as: 'dropped', note: 'stale', proposed: true })).detail).toBe('stale · as proposed · Engineering deck');
+  });
+
+  it('says what a sort of a project’s threads proposed, of how many, on what and at what cost, or why it failed', () => {
+    const sorted = (e: Record<string, unknown>) => ev({ kind: 'thread-proposals', asked: 5, model: 'sonnet', ...e }, 9);
+    const p = (as: string) => ({ goalId: 'g1', contact: 'c1', as, note: 'why' });
+    expect(ledgerRow(sorted({ proposals: [p('dropped'), p('dropped'), p('next')], costUsd: 0.042 }))).toMatchObject({
+      group: 'goals', tag: 'Threads', tone: 'info', title: 'Proposed ends for 3 of 5 threads', detail: '1 taken on, 2 dropped · sonnet · $0.04',
+    });
+    expect(ledgerRow(sorted({ proposals: [], failed: 'timed out' }))).toMatchObject({ tone: 'warn', title: 'Sorting 5 threads failed: timed out', detail: 'sonnet' });
+    expect(trace([sorted({ proposals: [] })], { kind: 'goal', title: GOAL }).steps).toEqual([]);
   });
 
   it('says a closed pull request was closed, never merged', () => {

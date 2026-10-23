@@ -12,3 +12,6 @@
 .threads-actions { flex-wrap: wrap; }
 .threads-note { flex: 1; min-width: 0; }
 .threads-goal { display: block; width: 100%; box-sizing: border-box; margin-bottom: 6px; resize: vertical; }
+.threads-proposed { display: block; margin-top: 2px; color: var(--lcars-sky); }
+.threads-sort { margin: 0 0 8px; }
+.threads-sort > small { display: block; margin-top: 4px; }

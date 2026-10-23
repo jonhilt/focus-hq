@@ -1,16 +1,17 @@
 // The threads plugin in the browser: a Threads view in each project's goals panel, after Closed, listing the
-// contacts its goals' leads logged and left open, and where the captain decided each of a closed goal's ends.
+// contacts its goals' leads logged and left open and the ideas for next its goals closed with, what a model proposed
+// of them (Sort for me), and where the captain decided each of a closed goal's ends.
 import { type Agent, busy, callPlugin, type ClientPlugin, focus, goalStarted, goalTitle, h, pluginState, type QueuedGoal, timeAgo, type Ui } from '../../plugin-api/client';
-import { register, type RegisterThread, spinOffText, THREAD_ENDS, type ThreadEnd, THREADS, type ThreadsState } from './shared';
+import { type LastSort, register, type RegisterThread, spinOffText, THREAD_ENDS, type ThreadEnd, THREADS, type ThreadsState } from './shared';
 import './threads.css';
 
 /** Project `projectId`'s register as the browser has it now: the server's closed goals', and its goals under way. */
 const threadsOf = (projectId: string): RegisterThread[] => register(pluginState<ThreadsState>(THREADS)?.closed[projectId], focus.leadsIn(projectId));
 
-/** Where a thread came from and how old it is: its goal, the contact's id on it, and whether that goal's still under way. */
+/** Where a thread came from and how old it is: its goal, the contact's id on it (or that it's an idea), and whether that goal's still under way. */
 export function threadSource(t: RegisterThread): string {
   const goal = t.live ? 'goal under way' : t.closedAt === undefined ? 'goal closed' : `goal closed ${timeAgo(t.closedAt)}`;
-  return [t.goalTitle, t.contact, `noticed ${timeAgo(t.at)}`, goal].join(' · ');
+  return [t.goalTitle, ...(t.idea ? ['an idea for next'] : [t.contact, `noticed ${timeAgo(t.at)}`]), goal].join(' · ');
 }
 
 /** Each end's button, what its note asks for, and how it's said with the note (as typed: "until…", "#1262"). */
@@ -102,6 +103,10 @@ export const decidedLine = (t: RegisterThread, title?: string): string | null =>
   return `${note ? `${ENDS[d.as].said} ${note}` : ENDS[d.as].button} · ${timeAgo(d.at)}`;
 };
 
+/** What a model proposed of a thread still to decide, in words, as a decision of it would say it. */
+export const proposedLine = (t: RegisterThread): string | null =>
+  t.proposed && !t.decided ? `Proposed · ${ENDS[t.proposed.as].said} ${t.proposed.note}` : null;
+
 /** A button that opens a lead's panel, saying why they're the one to talk to. */
 const talk = (ui: Ui, lead: Pick<Agent, 'id' | 'name'>, why: string) =>
   h('button', { class: 'btn small', title: `Talk to ${lead.name}: ${why}`, onclick: () => ui.openAgent(lead.id) }, 'Talk');
@@ -116,7 +121,10 @@ function closedActions(ui: Ui, projectId: string, t: RegisterThread, spunLead: A
   const spin = h('button', { class: 'btn small', title: 'Start a goal of its own from it, with a lead of its own', onclick: write('goal', spinOffText(t)) }, 'Spin off');
   const undo = h('button', { class: 'btn small', title: 'Take the decision back: it goes back to be decided' }, 'Undo');
   undo.onclick = () => void busy(undo, () => decide(projectId, t, 'open'), ui.error);
+  const accept = h('button', { class: 'btn small primary', title: 'Decide it as proposed' }, 'Accept');
+  accept.onclick = () => void busy(accept, () => callPlugin(THREADS, '/accept', { projectId, goal: t.goal, contact: t.contact }), ui.error);
   return [
+    proposedLine(t) ? accept : null,
     spunLead ? talk(ui, spunLead, 'they lead the goal it was spun off as') : null,
     ...ends,
     t.decided?.spunOff ? null : spin,
@@ -131,19 +139,22 @@ function threadRow(ui: Ui, projectId: string, t: RegisterThread, redraw: () => v
   const spunLead = spunTo ? focus.leadsIn(projectId).find((a) => a.id === spunTo) : undefined;
   const actions = t.live ? [talk(ui, { id: t.goal, name: t.leadName }, 'the thread is theirs while the goal’s under way')] : closedActions(ui, projectId, t, spunLead, redraw);
   const decided = decidedLine(t, spunLead?.lead?.title);
+  const proposed = proposedLine(t);
   const form = !draft ? null : draft.as === 'goal' ? spinOffForm(ui, projectId, t, draft, redraw) : noteForm(ui, projectId, t, draft, redraw);
   // the thread reads the row's full width, what can be done of it under where it came from
   return h('div', { class: `card threads-row${t.live ? ' live' : ''}${t.decided ? ` ${t.decided.as}` : ''}` },
     h('div', { class: 'threads-text' }, t.text),
     h('small', { class: 'muted threads-source' }, threadSource(t)),
     decided ? h('small', { class: 'threads-decided' }, decided) : null,
+    proposed ? h('small', { class: 'threads-proposed' }, proposed) : null,
     form ?? h('div', { class: 'row threads-actions' }, ...actions),
   );
 }
 
 /** The register's sections, in the order they're shown: what's left to decide first, what's been let go last. */
 const SECTIONS: { title: string; holds: (t: RegisterThread) => boolean; folded?: true }[] = [
-  { title: 'To decide', holds: (t) => !t.live && !t.decided },
+  { title: 'To decide', holds: (t) => !t.live && !t.decided && !t.idea },
+  { title: 'Ideas left for next', holds: (t) => !t.live && !t.decided && !!t.idea },
   { title: 'Under way', holds: (t) => !!t.live },
   { title: 'Next', holds: (t) => t.decided?.as === 'next' },
   { title: 'Parked', holds: (t) => t.decided?.as === 'parked' },
@@ -153,10 +164,40 @@ const SECTIONS: { title: string; holds: (t: RegisterThread) => boolean; folded?:
 /** Whether a thread still asks something of someone: not dropped or resolved. */
 const stillOpen = (t: RegisterThread) => t.decided?.as !== 'dropped' && t.decided?.as !== 'resolved';
 
+/** Each end's bulk accept, one and many: "Accept 1 park", "Accept 4 drops". */
+const BULK: Record<ThreadEnd, [string, string]> = { next: ['next', 'next'], parked: ['park', 'parks'], dropped: ['drop', 'drops'], resolved: ['resolved', 'resolved'] };
+
+/** A project's last Sort for me, in words: when, how many it proposed ends for and what it cost, or why it failed. */
+export const sortSaid = (last: LastSort): string =>
+  last.failed
+    ? `The last sort failed ${timeAgo(last.at)}: ${last.failed}`
+    : `Sorted ${timeAgo(last.at)}: ends proposed for ${last.proposed} of ${last.asked}${last.costUsd ? ` · $${last.costUsd.toFixed(2)}` : ''}`;
+
+/** Sort for me, and accepting every proposal of one end at once, while there are threads to decide. */
+function sortBar(ui: Ui, projectId: string, threads: readonly RegisterThread[]): HTMLElement | null {
+  const toDecide = threads.filter((t) => !t.live && !t.decided);
+  if (!toDecide.length) return null;
+  const sent = pluginState<ThreadsState>(THREADS);
+  const running = sent?.sorting[projectId];
+  const last = sent?.sorts[projectId];
+  const sort = h('button', { class: 'btn small primary', title: 'A model proposes where each thread to decide ends, and which say the same: none ends until you accept it' },
+    running ? `Sorting ${running.asked}…` : 'Sort for me');
+  sort.disabled = !!running;
+  sort.onclick = () => void busy(sort, () => callPlugin(THREADS, '/sort', { projectId }), ui.error);
+  const bulk = THREAD_ENDS.flatMap((as) => {
+    const n = toDecide.filter((t) => t.proposed?.as === as).length;
+    if (!n) return [];
+    const b = h('button', { class: 'btn small', title: `Decide every thread with it proposed, as proposed` }, `Accept ${n} ${BULK[as][n === 1 ? 0 : 1]}`);
+    b.onclick = () => void busy(b, () => callPlugin(THREADS, '/accept', { projectId, as }), ui.error);
+    return [b];
+  });
+  return h('div', { class: 'threads-sort' }, h('div', { class: 'row threads-actions' }, sort, ...bulk), last ? h('small', { class: 'muted' }, sortSaid(last)) : null);
+}
+
 /** Project `projectId`'s threads, by where they stand, oldest first in each. */
 export function threadsView(ui: Ui, projectId: string): HTMLElement {
   const threads = threadsOf(projectId);
-  if (!threads.length) return h('p', { class: 'muted' }, 'No loose threads: every contact this project’s leads logged was pursued or dropped.');
+  if (!threads.length) return h('p', { class: 'muted' }, 'No loose threads: every contact this project’s leads logged was pursued or dropped, and no goal closed with ideas left.');
   const view = h('div', { class: 'threads-view' });
   const redraw = () => view.replaceChildren(...sections());
   const sections = () => SECTIONS.flatMap((s) => {
@@ -168,7 +209,8 @@ export function threadsView(ui: Ui, projectId: string): HTMLElement {
   });
   redraw();
   return h('div', null,
-    h('p', { class: 'muted threads-intro' }, 'Contacts this project’s leads logged and never pursued or dropped, kept after their goal closed. Decide where each ends: you’re the one who drops a thread.'),
+    h('p', { class: 'muted threads-intro' }, 'Contacts this project’s leads logged and never pursued or dropped, and the ideas for next its goals closed with, kept after their goal closed. Decide where each ends, or have them sorted for you to accept: you’re the one who drops a thread.'),
+    sortBar(ui, projectId, threads),
     view,
   );
 }
@@ -177,12 +219,15 @@ const threads: ClientPlugin = {
   id: THREADS,
   about: {
     name: 'Threads',
-    summary: 'Keeps the loose threads a goal’s lead logged and left open, after the goal closes, until you decide where each ends.',
-    adds: ['A Threads view in each project’s goals panel, after Closed: next, park, drop or resolved for each closed goal’s thread, or a goal of its own'],
-    cost: 'free',
-    costDetail: 'No model calls: it reads the contacts Ops already keeps, and the ledger, where it writes your decisions. A thread you spin off is a goal like any other.',
+    summary: 'Keeps the loose threads a goal’s lead logged and left open, and the ideas for next it closed with, after the goal closes, until you decide where each ends.',
+    adds: [
+      'A Threads view in each project’s goals panel, after Closed: next, park, drop or resolved for each closed goal’s thread, or a goal of its own',
+      'Sort for me: a model proposes where each thread ends, and which say the same, for you to accept one by one or all of an end at once',
+    ],
+    cost: 'on-demand',
+    costDetail: 'Sort for me asks Sonnet once a press, about a batch of a project’s threads, and shows what it cost. Nothing else makes model calls: it reads the contacts and ideas Ops already keeps, and the ledger, where it writes your decisions. A thread you spin off is a goal like any other.',
   },
-  project: { label: 'Threads', about: 'A Threads view in the goals panel: every contact its leads logged and left open, the closed goals’ included, and where you decided each ends.' },
+  project: { label: 'Threads', about: 'A Threads view in the goals panel: every contact its leads logged and left open and every idea for next its goals closed with, what a model proposed of them, and where you decided each ends.' },
   goalsView: {
     label: 'Threads',
     // the threads still asking something of someone; 0 while every one's dropped or resolved, so they can be looked back at

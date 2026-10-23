@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, Contact, GoalRecord, LedgerEvent } from '../../plugin-api/shared';
-import { closedThreads, decision, register, spinOffText, spunOffEntry, type Thread, toSpinOff, withClosed } from './shared';
+import { acceptances, closedThreads, decision, ideaKey, lastSorts, register, spinOffText, spunOffEntry, type Thread, toSpinOff, withClosed } from './shared';
 
 const contact = (id: string, at: number, closed?: Contact['closed']): Contact => ({ id, text: `thread ${id}`, slice: 1, at, ...(closed && { closed }) });
 const goal = (id: string, contacts: Contact[], closedAt = 100): GoalRecord => ({ id, title: `Goal ${id}`, slices: 1, prs: [], leadName: 'Lt. Reyes', openedAt: 0, closedAt, contacts });
@@ -141,5 +141,85 @@ describe('the captain spinning a thread off as a goal of its own', () => {
     expect(refused({ goal: 'g1', contact: 'c1', text: 'Go' })).toMatch(/a goal of its own already: “Saved items”/);
     expect(refused({ goal: 'g1', contact: 'c2', text: '  ' })).toMatch(/Say what the goal is/);
     expect(refused({ goal: 'g1', contact: 'c2', text: ' Saved items \n' })).toBe('Saved items');
+  });
+});
+
+describe('the ideas for next a closed goal left', () => {
+  const withIdeas = (next: string[], closedAt = 100): GoalRecord => ({ ...goal('g1', [contact('c1', 10)], closedAt), slice: 2, note: { done: '', learned: [], next } });
+
+  it('keeps each as a thread of its goal after its contacts, once, keyed by its words, as of the goal closing', () => {
+    const threads = closedThreads([closedLine('shop', withIdeas(['Remember more addresses', ' remember   more addresses', 'Remember more addresses ', '', 'Prefill from the card']), 1)]).shop ?? [];
+    expect(threads.map((t) => [t.contact, t.text, t.idea, t.at, t.slice])).toEqual([
+      ['c1', 'thread c1', undefined, 10, 1],
+      [ideaKey('Remember more addresses'), 'Remember more addresses', true, 100, 2],
+      [ideaKey('remember more addresses'), 'remember more addresses', true, 100, 2],
+      [ideaKey('Prefill from the card'), 'Prefill from the card', true, 100, 2],
+    ]);
+    expect(ideaKey('Prefill  from the card ')).toBe(ideaKey('Prefill from the card'));
+    expect(ideaKey('Prefill from the card')).toMatch(/^next-[0-9a-z]+$/);
+  });
+
+  it('keeps what was decided of an idea its goal closed with again, reopened, however its list was ordered', () => {
+    const key = ideaKey('Prefill from the card');
+    const decidedIdea: LedgerEvent = { seq: 2, at: 302, projectId: 'shop', kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact: key, text: 'Prefill from the card', as: 'dropped', note: 'no card data' };
+    const threads = closedThreads([closedLine('shop', withIdeas(['A', 'Prefill from the card']), 1), decidedIdea, closedLine('shop', withIdeas(['Prefill from the card', 'B'], 200), 3)]).shop ?? [];
+    expect(threads.filter((t) => t.idea).map((t) => [t.text, t.decided?.as])).toEqual([['Prefill from the card', 'dropped'], ['B', undefined]]);
+  });
+
+  it('starts a goal spun off from an idea saying it was one', () => {
+    const [, idea] = closedThreads([closedLine('shop', withIdeas(['Prefill from the card']), 1)]).shop ?? [];
+    expect(idea && spinOffText(idea)).toBe('Prefill from the card\n\n(Spun off from “Goal g1”, a closed goal: one of the ideas for next it closed with.)');
+  });
+});
+
+describe('what a model proposed of a project’s threads', () => {
+  type Proposal = { contact: string; as: 'next' | 'parked' | 'dropped' | 'resolved'; note: string };
+  const proposed = (seq: number, proposals: Proposal[], failed?: string): LedgerEvent =>
+    ({ seq, at: 400 + seq, projectId: 'shop', kind: 'thread-proposals', asked: 2, proposals: proposals.map((p) => ({ goalId: 'g1', ...p })), model: 'sonnet', costUsd: 0.04, ...(failed && { failed }) });
+  const closed = (more: LedgerEvent[] = []) => closedThreads([closedLine('shop', goal('g1', [contact('c1', 10), contact('c2', 20)]), 1), ...more]).shop ?? [];
+  const shown = (threads: Thread[]) => threads.map((t) => [t.contact, t.proposed?.as, t.proposed?.note, t.decided?.as]);
+
+  it('puts each proposal on its thread still to decide, the latest winning, and none on one decided', () => {
+    expect(shown(closed([decided(2, 'g1', 'c2', 'parked', 'later'), proposed(3, [{ contact: 'c1', as: 'dropped', note: 'stale' }, { contact: 'c2', as: 'next', note: 'you' }]), proposed(4, [{ contact: 'c1', as: 'resolved', note: 'by #12' }])])))
+      .toEqual([['c1', 'resolved', 'by #12', undefined], ['c2', undefined, undefined, 'parked']]);
+  });
+
+  it('takes a proposal off once its thread’s decided, and doesn’t bring it back when the decision is', () => {
+    const threads = closed([proposed(2, [{ contact: 'c1', as: 'dropped', note: 'stale' }]), decided(3, 'g1', 'c1', 'next'), decided(4, 'g1', 'c1', 'open')]);
+    expect(shown(threads)[0]).toEqual(['c1', undefined, undefined, undefined]);
+  });
+
+  it('keeps a proposal through its goal closing again, and nothing of a sort that failed', () => {
+    expect(shown(closed([proposed(2, [{ contact: 'c2', as: 'dropped', note: 'stale' }]), closedLine('shop', goal('g1', [contact('c2', 20)], 200), 3)])))
+      .toEqual([['c2', 'dropped', 'stale', undefined]]);
+    expect(shown(closed([proposed(2, [], 'timed out')]))).toEqual([['c1', undefined, undefined, undefined], ['c2', undefined, undefined, undefined]]);
+  });
+
+  it('keeps each project’s last sort: when, how many it proposed ends for of how many asked, and its cost or why it failed', () => {
+    expect(lastSorts([proposed(2, [{ contact: 'c1', as: 'dropped', note: 'stale' }]), otherLine, proposed(3, [], 'timed out')])).toEqual({
+      shop: { at: 403, asked: 2, proposed: 0, model: 'sonnet', costUsd: 0.04, failed: 'timed out' },
+    });
+  });
+
+  it('accepts one thread’s proposal, or every one of an end, each a decision as proposed, saying so', () => {
+    const threads = closed([proposed(2, [{ contact: 'c1', as: 'dropped', note: 'stale' }, { contact: 'c2', as: 'dropped', note: 'covered by #12' }])]);
+    expect(acceptances(threads, new Set(), { goal: 'g1', contact: 'c2' })).toEqual({
+      entries: [{ kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact: 'c2', text: 'thread c2', as: 'dropped', note: 'covered by #12', proposed: true }],
+    });
+    const all = acceptances(threads, new Set(), { as: 'dropped' });
+    expect('entries' in all && all.entries.map((e) => e.kind === 'thread-decided' && e.contact)).toEqual(['c1', 'c2']);
+  });
+
+  it('refuses what can’t be accepted, saying why', () => {
+    const threads = closed([proposed(2, [{ contact: 'c1', as: 'dropped', note: 'stale' }]), decided(3, 'g1', 'c2', 'parked', 'later')]);
+    const refused = (input: Record<string, unknown>, underWay = new Set<string>()) => {
+      const made = acceptances(threads, underWay, input);
+      return 'error' in made ? made.error : `${made.entries.length} written`;
+    };
+    expect(refused({ goal: 'g1', contact: 'c2' })).toMatch(/no proposal for that thread/);
+    expect(refused({ goal: 'g1', contact: 'c1' }, new Set(['g1']))).toMatch(/no proposal for that thread/);
+    expect(refused({ as: 'shelved' })).toMatch(/Say which proposals to accept/);
+    expect(refused({ as: 'next' })).toMatch(/No thread to decide has next proposed/);
+    expect(refused({ as: 'dropped' })).toBe('1 written');
   });
 });

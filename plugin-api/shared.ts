@@ -37,7 +37,7 @@ export { type CrewVoice, forSpeech, linesToSpeak, sentences, spokenLine } from '
 export { leadVoice } from '../shared/crew';
 /** Where a captain's decision came from, said after it (nothing for the captain in Focus). */
 export { viaNote } from '../shared/ledger';
-export type { DecidedVia, VerdictRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts, ThreadDecidedAs } from '../shared/ledger';
+export type { DecidedVia, VerdictRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts, ThreadDecidedAs, ThreadProposal } from '../shared/ledger';
 /** The ledger read as Focus reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
 /** The ship's permanent crew a plugin speaks for (the chief engineer), and a crew member of its own, always the same person. */

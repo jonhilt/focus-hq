@@ -46,6 +46,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     // an alert (raised to the user directly) shows from the start, beside the goals it's about
     case 'goal-closed':
     case 'thread-decided':
+    case 'thread-proposals':
     case 'alert':
       return 'goals';
     case 'retro-decision':
@@ -161,6 +162,8 @@ function rowParts(e: LedgerEvent): RowParts {
       return goalClosedRow(e);
     case 'thread-decided':
       return threadRow(e);
+    case 'thread-proposals':
+      return proposalsRow(e);
     case 'retro-decision':
       return retroRow(e);
     case 'session-digest': {
@@ -231,7 +234,18 @@ const THREAD_DECIDED: Record<ThreadDecidedAs, string> = { next: 'Taken on', park
 /** Where the captain decided a loose thread ends: how, or the goal of its own it was spun off as, and why. */
 function threadRow(e: Of<'thread-decided'>): RowParts {
   const how = e.spunOff ? 'Spun off as a goal' : THREAD_DECIDED[e.as];
-  return { tag: 'Thread', tone: 'info', title: `${how}: ${e.text}`, detail: [e.spunOff && `“${e.spunOff.title}”`, e.note, e.goal].filter(Boolean).join(' · '), goal: e.goal };
+  return { tag: 'Thread', tone: 'info', title: `${how}: ${e.text}`, detail: [e.spunOff && `“${e.spunOff.title}”`, e.note, e.proposed && 'as proposed', e.goal].filter(Boolean).join(' · '), goal: e.goal };
+}
+
+/** A model's proposals for where a project's threads end: how many of each, or why none came back, and what it cost. */
+function proposalsRow(e: Of<'thread-proposals'>): RowParts {
+  const cost = e.costUsd === undefined ? undefined : `$${e.costUsd.toFixed(2)}`;
+  if (e.failed) return { tag: 'Threads', tone: 'warn', title: `Sorting ${plural(e.asked, 'thread')} failed: ${e.failed}`, detail: [e.model, cost].filter(Boolean).join(' · ') };
+  const ends = (['next', 'parked', 'dropped', 'resolved'] as const).flatMap((as) => {
+    const n = e.proposals.filter((p) => p.as === as).length;
+    return n ? [`${n} ${THREAD_DECIDED[as].toLowerCase()}`] : [];
+  });
+  return { tag: 'Threads', tone: 'info', title: `Proposed ends for ${e.proposals.length} of ${plural(e.asked, 'thread')}`, detail: [ends.join(', '), e.model, cost].filter(Boolean).join(' · ') };
 }
 
 function goalClosedRow(e: Of<'goal-closed'>): RowParts {
@@ -342,6 +356,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
         return subject.kind === 'pr' ? e.prs.some(samePr) : e.goal === subject.title || e.prs.some(ofGoal);
       case 'session-frictions':
       case 'retro-decision':
+      case 'thread-proposals':
         return false;
       default:
         return subject.kind === 'pr' ? samePr(e) : e.goal === subject.title || ofGoal(e);
@@ -357,7 +372,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
   const steps = mine.map((e) => {
     const row = ledgerRow(e);
     if ('repo' in e && 'pr' in e) prs.add(`${e.repo}#${e.pr}`);
-    if (e.kind !== 'goal-closed' && e.kind !== 'session-frictions' && e.kind !== 'retro-decision' && e.goal) goal ??= e.goal;
+    if (e.kind !== 'goal-closed' && e.kind !== 'session-frictions' && e.kind !== 'retro-decision' && e.kind !== 'thread-proposals' && e.goal) goal ??= e.goal;
     if (e.kind === 'qa-verdict') {
       totals.verdicts++;
       if (e.verdict === 'fail') totals.fails++;

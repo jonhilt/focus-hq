@@ -86,12 +86,19 @@ export type LedgerEntry =
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /**
    * The captain decided where a loose thread a closed goal left open ends (a plugin that keeps a project's threads
-   * records it): which goal (`goalId`, titled `goal`) and which of its contacts (`contact`, saying `text`), and `as`
-   * what. `note` goes with it: who takes it on (next), until when (parked), why (dropped) or what resolved it
-   * (resolved). `open` takes a decision back, to be decided again. `spunOff` is the goal of its own it was taken on
-   * as (next), started from it: its lead's id, if it took a team station (not if it waits in line for one), and title.
+   * records it): which goal (`goalId`, titled `goal`) and which of its threads (`contact`: a contact's id, or an idea
+   * for next's key, saying `text`), and `as` what. `note` goes with it: who takes it on (next), until when (parked),
+   * why (dropped) or what resolved it (resolved). `open` takes a decision back, to be decided again. `spunOff` is the
+   * goal of its own it was taken on as (next), started from it: its lead's id, if it took a team station (not if it
+   * waits in line for one), and title. `proposed`: the captain accepted it as a model proposed it (`thread-proposals`).
    */
-  | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string; spunOff?: { goal?: string; title: string } }
+  | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string; spunOff?: { goal?: string; title: string }; proposed?: true }
+  /**
+   * Where a model proposed a project's loose threads end, asked by the captain, for them to accept or not (the same
+   * plugin records it): each thread (`goalId`, `contact`) and its end (`as`) with why (`note`), on `model`, at
+   * `costUsd`. `asked` is how many threads it was asked about; `failed` says why no proposals came back.
+   */
+  | { kind: 'thread-proposals'; asked: number; proposals: ThreadProposal[]; model: string; costUsd?: number; failed?: string }
   /**
    * Something a plugin (`by`, its id) raised to the captain directly, not through anyone's routing: a lead not answering
    * a scheduled run, say. `agent` is who it's about, `text` what the captain was told.
@@ -109,6 +116,14 @@ export type DecidedVia = string;
 
 /** Where a loose thread ends, as the captain decides it, or `open`: the decision taken back. */
 export type ThreadDecidedAs = 'next' | 'parked' | 'dropped' | 'resolved' | 'open';
+
+/** Where a model proposed one loose thread ends, and why. */
+export interface ThreadProposal {
+  goalId: string;
+  contact: string;
+  as: Exclude<ThreadDecidedAs, 'open'>;
+  note: string;
+}
 
 /** Where a decision came from, said after it: nothing for the captain in Focus, and a plugin by its id in words. */
 export const viaNote = (via: DecidedVia): string => (via === 'office' ? '' : via === 'api' ? 'via the API' : `sent by the ${via.replace(/-/g, ' ')}`);

@@ -33,7 +33,10 @@ export function demoLedger(shopId: string, gameId: string, now: number): LedgerE
     [70.4, shopId, { kind: 'merged', ...api, by: 'office', qa: 'passed', failedRounds: 1, triages: 0 }],
     [50, shopId, { kind: 'qa-verdict', ...web, verdict: 'pass', reviewer: 'Lt. Castellanos', checks: { pass: 6, fail: 0, skip: 1 }, failedRounds: 0 }],
     [49, shopId, { kind: 'merged', ...web, by: 'captain', qa: 'passed', failedRounds: 0, triages: 0 }],
-    [48, shopId, { kind: 'goal-closed', goal: { id: 'demo_goal_checkout', title: checkout, slices: 2, prs: [], leadName: 'Lt. Nakamura', openedAt: now - 80 * HOUR, closedAt: now - 48 * HOUR, contacts: [
+    [48, shopId, { kind: 'goal-closed', goal: { id: 'demo_goal_checkout', title: checkout, slices: 2, prs: [], leadName: 'Lt. Nakamura', openedAt: now - 80 * HOUR, closedAt: now - 48 * HOUR,
+      // and the ideas for next it closed with, for the threads plugin to sort
+      note: { done: 'A returning shopper checks out without typing their address again', learned: [], next: ['Remember more than one address per shopper', 'Prefill the address from the payment card', 'Let shoppers save items for later'] },
+      contacts: [
       // two loose threads it left open, and one it dropped, for the threads plugin's view
       { id: 'c1', text: 'Saved addresses aren’t checked against the postcode lookup: a typo ships to nowhere', slice: 1, at: now - 76 * HOUR },
       { id: 'c2', text: 'Guest checkout still asks for an address twice on mobile', slice: 2, at: now - 60 * HOUR },
