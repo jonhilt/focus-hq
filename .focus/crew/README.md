@@ -21,5 +21,8 @@ A plugin keeps its crew beside its code, in a folder of the same files (`crewFol
 the core never names it. Each file's digest, a short hash of its prompt and texts, can stand for its version: the same
 words always give the same one.
 
+A benchmark (`.focus/benchmarks/`) can tell a role its file as another branch has it, beside this checkout's, to see
+whether a change to it does better before it merges.
+
 The prompts are pinned word for word (`server/agents/crewGolden.test.ts`). Changing one on purpose, run
 `pnpm test -- -u` and the snapshot's diff shows what the agent will now be told.

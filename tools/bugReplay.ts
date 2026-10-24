@@ -5,9 +5,12 @@
 // that fails everything can't look like one that catches everything. Nothing goes to GitHub. It saves each run in
 // ~/.focus/bug-replay/. Each review costs what a QA review does (about $0.60 and a few minutes).
 //
-//   pnpm run bug-replay                 every commit a traced bug came from, two reviews at a time
+// What a run takes by default, its judge, and the configurations of QA it compares are in .focus/benchmarks/bug-replay.yaml.
+//
+//   pnpm run bug-replay                 the benchmark file's commits and configurations
 //   pnpm run bug-replay --commits 3     the first few of them
 //   pnpm run bug-replay --only <sha>    one commit a bug came from
+//   pnpm run bug-replay --config a,b    only those configurations, the first as the run's own
 //   pnpm run bug-replay --control       as many code-changing commits no listed bug came from, reviewed the same way
 //   pnpm run bug-replay --dry           say what it would review, without running any review
 //
@@ -31,18 +34,19 @@ import {
   pointsAt,
   type ReplayControl,
   replayLines,
+  type ReplayPart,
   type ReplayResult,
   type ReplayRun,
   scoreReplay,
   sitesOf,
 } from '../server/agents/bugReplay';
+import { judgeFor, loadBenchmark, pickConfigurations } from '../server/agents/benchmarkFiles';
 import { runReadOnly } from '../server/agents/claudeCrew';
-import { qaAgentModel } from '../server/agents/qa';
 import { config, paths } from '../server/config';
 import type { PullRequestDetail } from '../server/github/provider';
 import { errorMessage, run } from '../server/util';
 import type { Project, Settings } from '../shared/types';
-import { replayStamp, review } from './qaReview';
+import { orStop, review, type Seat, seatLine, seats } from './qaReview';
 
 const ROOT = process.cwd();
 const REPO = 'jonhilt/focus';
@@ -51,11 +55,13 @@ const BASE = 'main';
 
 const args = process.argv.slice(2);
 const opt = (name: string) => (args.includes(`--${name}`) ? args[args.indexOf(`--${name}`) + 1] : undefined);
+const benchmark = await orStop(() => loadBenchmark('bug-replay'));
 const dry = args.includes('--dry');
-const control = args.includes('--control');
+const control = args.includes('--control') || benchmark.controls;
+const configurations = await orStop(() => pickConfigurations(benchmark, opt('config')));
 const arm = 'proof';
 /** The judge: a different model from QA's, so it isn't grading its own kind of answer. */
-const JUDGE_MODEL = 'claude-opus-5-5';
+const judgedBy = await orStop(() => judgeFor(benchmark));
 
 const git = (...a: string[]) => run('git', a, { cwd: ROOT });
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
@@ -72,7 +78,7 @@ const only = opt('only');
 const commits = rootless
   .flat()
   .filter(([sha]) => !only || sha.startsWith(only))
-  .slice(0, Number(opt('commits') ?? Infinity));
+  .slice(0, Number(opt('commits') ?? benchmark.sample ?? Infinity));
 const cases = commits.flatMap(([, bugs]) => bugs);
 
 /** A clone of this repo at `sha`, with origin/main at the commit before it, so QA's diff is exactly what `sha` changed. */
@@ -103,10 +109,10 @@ async function asPullRequest(sha: string): Promise<PullRequestDetail> {
   };
 }
 
-async function reviewAt(sha: string, root: string) {
+async function reviewAt(sha: string, root: string, seat: Seat) {
   const dir = await cloneAt(sha, root);
   try {
-    const r = await review(REPO, dir, await asPullRequest(sha), state);
+    const r = await review(REPO, dir, await asPullRequest(sha), state, seat);
     // the report's verdict is already the checked one: a fail stands only with proof that held
     return { ...r, blocked: r.report?.verdict === 'fail' };
   } finally {
@@ -127,17 +133,17 @@ async function judge(bug: BugCase, report: NonNullable<Awaited<ReturnType<typeof
     activity: () => undefined,
     builtins: [],
     schema: JUDGE_SCHEMA,
-    model: JUDGE_MODEL,
-    maxTurns: 2,
-    timeoutMs: 3 * 60_000,
+    model: judgedBy.model,
+    maxTurns: judgedBy.maxTurns,
+    timeoutMs: judgedBy.timeoutMs,
   });
   const j = result.structured as Partial<Judged> | undefined;
   return { judged: { sameBug: j?.sameBug === true, finding: String(j?.finding ?? ''), why: String(j?.why ?? '') }, costUsd: result.costUsd ?? 0 };
 }
 
 /** One review of a commit that brought bugs in, scored against each of them: a review can catch one and miss another. */
-async function replay(sha: string, bugs: BugCase[], root: string): Promise<ReplayResult[]> {
-  const r = await reviewAt(sha, root);
+async function replay(sha: string, bugs: BugCase[], root: string, seat: Seat): Promise<ReplayResult[]> {
+  const r = await reviewAt(sha, root, seat);
   const results: ReplayResult[] = [];
   for (const bug of bugs) {
     const by = bug.introducedBy;
@@ -162,8 +168,8 @@ async function replay(sha: string, bugs: BugCase[], root: string): Promise<Repla
   return results;
 }
 
-async function controlled(c: { sha: string; subject: string }, root: string): Promise<ReplayControl> {
-  const r = await reviewAt(c.sha, root);
+async function controlled(c: { sha: string; subject: string }, root: string, seat: Seat): Promise<ReplayControl> {
+  const r = await reviewAt(c.sha, root, seat);
   const base = { sha: c.sha, ...(prNumber(c.subject) && { pr: prNumber(c.subject) }), costUsd: r.costUsd, minutes: r.minutes };
   return r.report
     ? { ...base, outcome: r.blocked ? 'false-alarm' : 'clean', summary: r.report.summary, report: r.report }
@@ -192,37 +198,54 @@ async function main() {
   console.log(`${cases.length} real bugs to replay in ${commits.length} commits that brought them in (of ${corpus.cases.length} cases, ${traced.length} traced, ${roots} to the repo's first commit)${picked.length ? `, ${picked.length} controls` : ''}`);
   for (const [sha, bugs] of commits) console.log(`  ${bugs.map((b) => b.kind).join(',').padEnd(24)} ${sha.slice(0, 7)} ${bugs[0]?.introducedBy?.subject.slice(0, 80)}`);
   for (const c of picked) console.log(`  control   ${c.sha.slice(0, 7)} ${c.subject.slice(0, 80)}`);
-  if (dry) return;
-
   const root = mkdtempSync(path.join(os.tmpdir(), 'focus-bug-replay-'));
-  const results: ReplayResult[] = [];
-  const controls: ReplayControl[] = [];
-  const jobs: (() => Promise<void>)[] = [
-    ...commits.map(([sha, bugs]) => async () => {
-      const rs = await replay(sha, bugs, root).catch((err: unknown) => bugs.map((bug): ReplayResult => ({ fix: bug.fix, kind: bug.kind, introducedBy: sha, outcome: 'error', summary: errorMessage(err) })));
-      results.push(...rs);
-      for (const r of rs) console.log(`  ${r.outcome.padEnd(16)} ${sha.slice(0, 7)} → ${r.fix.slice(0, 7)} (${r.minutes ?? '?'} min)`);
-    }),
-    ...picked.map((c) => async () => {
-      const r = await controlled(c, root).catch((err: unknown): ReplayControl => ({ sha: c.sha, outcome: 'error', summary: errorMessage(err) }));
-      controls.push(r);
-      console.log(`  control ${r.outcome.padEnd(11)} ${r.sha.slice(0, 7)} (${r.minutes ?? '?'} min, $${(r.costUsd ?? 0).toFixed(2)})`);
-    }),
-  ];
   try {
-    await Promise.all(
-      Array.from({ length: 2 }, async () => {
-        for (let job = jobs.shift(); job; job = jobs.shift()) await job();
-      }),
-    );
+    const seated = await orStop(() => seats(configurations, state.settings, root));
+    if (seated.length > 1 || seated[0]?.name !== 'main') for (const seat of seated) console.log(`configuration ${seatLine(seat)}`);
+    if (!dry) await replayAll(seated, picked, root);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+}
 
-  console.log(`\n${replayLines(arm, results, controls).join('\n')}`);
+/** Every configuration's reviews of the commits, and of the controls, a few at a time; then each one's results, saved. */
+async function replayAll(seated: Seat[], picked: { sha: string; subject: string }[], root: string) {
+  const parts = new Map<string, { results: ReplayResult[]; controls: ReplayControl[] }>(seated.map((seat) => [seat.name, { results: [], controls: [] }]));
+  const partOf = (seat: Seat) => parts.get(seat.name) ?? { results: [], controls: [] };
+  const tag = (seat: Seat) => (seated.length > 1 ? ` [${seat.name}]` : '');
+  // each commit's reviews side by side, so a run stopped part way has every configuration's on the same commits
+  const jobs: (() => Promise<void>)[] = [
+    ...commits.flatMap(([sha, bugs]) =>
+      seated.map((seat) => async () => {
+        const rs = await replay(sha, bugs, root, seat).catch((err: unknown) => bugs.map((bug): ReplayResult => ({ fix: bug.fix, kind: bug.kind, introducedBy: sha, outcome: 'error', summary: errorMessage(err) })));
+        partOf(seat).results.push(...rs);
+        for (const r of rs) console.log(`  ${r.outcome.padEnd(16)} ${sha.slice(0, 7)} → ${r.fix.slice(0, 7)}${tag(seat)} (${r.minutes ?? '?'} min)`);
+      }),
+    ),
+    ...picked.flatMap((c) =>
+      seated.map((seat) => async () => {
+        const r = await controlled(c, root, seat).catch((err: unknown): ReplayControl => ({ sha: c.sha, outcome: 'error', summary: errorMessage(err) }));
+        partOf(seat).controls.push(r);
+        console.log(`  control ${r.outcome.padEnd(11)} ${r.sha.slice(0, 7)}${tag(seat)} (${r.minutes ?? '?'} min, $${(r.costUsd ?? 0).toFixed(2)})`);
+      }),
+    ),
+  ];
+  await Promise.all(
+    Array.from({ length: benchmark.concurrency }, async () => {
+      for (let job = jobs.shift(); job; job = jobs.shift()) await job();
+    }),
+  );
+
+  for (const seat of seated) console.log(`\n${seated.length > 1 ? `${seatLine(seat)}\n` : ''}${replayLines(arm, partOf(seat).results, partOf(seat).controls).join('\n')}`);
+  const part = (seat: Seat): ReplayPart => {
+    const { results, controls } = partOf(seat);
+    return { model: seat.model ?? 'default', crew: seat.stamp, results, ...(controls.length && { controls }) };
+  };
+  const [own, ...others] = seated;
+  if (!own) return;
   mkdirSync(OUT, { recursive: true });
   const file = path.join(OUT, `${new Date().toISOString().replace(/[:.]/g, '-')}-${arm}.json`);
-  const saved: ReplayRun = { at: Date.now(), arm, model: qaAgentModel(state.settings) ?? 'default', crew: await replayStamp(state.settings), judge: JUDGE_MODEL, results, ...(controls.length && { controls }) };
+  const saved: ReplayRun = { at: Date.now(), arm, judge: judgedBy.model, config: own.name, ...part(own), ...(others.length && { compared: others.map((seat) => ({ config: seat.name, ...part(seat) })) }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }

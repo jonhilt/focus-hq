@@ -197,12 +197,32 @@ export function crewFolder<Roles extends Record<string, CrewRole>>(dir: string, 
 /** The rules more than one prompt shares, for the crew files that say `{{scratchRule}}` and so on. */
 export const CREW_RULES = { publicWordsRule: PUBLIC_WORDS_RULE, scratchRule: SCRATCH_RULE, waitRule: WAIT_RULE };
 
+/** A folder of the core's crew files: Focus's own (`coreCrew`), or a copy with one role's file swapped (`crewWith`). */
+export type CoreCrew = CrewFolder<typeof CREW_ROLES>;
+
 /** The core's crew, in .focus/crew/. */
-const CREW = crewFolder(CREW_DIR, CREW_ROLES);
+export const coreCrew: CoreCrew = crewFolder(CREW_DIR, CREW_ROLES);
 
 /** Reads and checks the core's crew files now, as Focus starts: throws a `CrewFileError` on the first that's wrong. */
-export const readCrew = (): void => CREW.check();
+export const readCrew = (): void => coreCrew.check();
 
-export const crewFile = (role: CrewRoleName): CrewFile => CREW.file(role);
-export const crewPrompt: CrewFolder<typeof CREW_ROLES>['prompt'] = (role, values) => CREW.prompt(role, values);
-export const crewText: CrewFolder<typeof CREW_ROLES>['text'] = (role, name, values) => CREW.text(role, name, values);
+export const crewFile = (role: CrewRoleName): CrewFile => coreCrew.file(role);
+export const crewPrompt: CoreCrew['prompt'] = (role, values) => coreCrew.prompt(role, values);
+export const crewText: CoreCrew['text'] = (role, name, values) => coreCrew.text(role, name, values);
+
+/**
+ * The core's crew with `role`'s file as `source` says (a candidate's, say, from another branch), in `dir`: the rest are
+ * copied from .focus/crew/. Read and checked now, its errors naming the file as `shown`.
+ */
+export function crewWith(dir: string, role: CrewRoleName, source: string, shown: string): CoreCrew {
+  for (const name of fs.readdirSync(CREW_DIR)) fs.copyFileSync(path.join(CREW_DIR, name), path.join(dir, name));
+  fs.writeFileSync(path.join(dir, `${role}.md`), source);
+  const crew = crewFolder(dir, CREW_ROLES);
+  try {
+    crew.check();
+  } catch (err) {
+    if (err instanceof CrewFileError) throw new CrewFileError(err.message.replace(/^[^:]*:/, `${shown}:`));
+    throw err;
+  }
+  return crew;
+}

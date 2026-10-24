@@ -117,16 +117,26 @@ export interface ReplayControl {
   minutes?: number;
 }
 
-/** A saved run of `pnpm run bug-replay`, as ~/.focus/bug-replay/ keeps it. */
-export interface ReplayRun {
-  at: number;
-  arm: Arm;
+/** One configuration's part of a run (.focus/benchmarks/bug-replay.yaml). */
+export interface ReplayPart {
   model: string;
-  /** What QA worked to, and the model that judged whether a block was the same bug. Runs before them have neither. */
+  /** What QA worked to. Runs before it have none. */
   crew?: CrewStamp;
-  judge?: string;
   results: ReplayResult[];
   controls?: ReplayControl[];
+}
+
+/**
+ * A saved run of `pnpm run bug-replay`, as ~/.focus/bug-replay/ keeps it: its own configuration's part, and any
+ * others' (`compared`), each on the same commits. `judge`: the model that judged whether a block was the same bug.
+ * Runs before them have no configuration or judge.
+ */
+export interface ReplayRun extends ReplayPart {
+  at: number;
+  arm: Arm;
+  judge?: string;
+  config?: string;
+  compared?: (ReplayPart & { config: string })[];
 }
 
 /**

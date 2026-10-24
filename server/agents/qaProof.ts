@@ -2,7 +2,7 @@ import { Effect } from 'effect';
 import type { QaProof, QaReport, QaStep } from '../../shared/types';
 import { truncate } from '../util';
 import { isRecord } from './transcript';
-import { CREW_RULES, crewText } from './crewFiles';
+import { type CoreCrew, coreCrew, CREW_RULES } from './crewFiles';
 
 // QA blocks a pull request only with proof (docs/qa.md#proof): the hunting guidance QA is given, the proofs its report
 // names, and the rules for whether one holds and whether the verdict blocks. Pure, and tested beside it
@@ -22,10 +22,10 @@ const ANY_PR = { baseBranch: '', run: '', checks: '', maxScreenshots: '', record
  * How QA hunts the bugs that get past review, and the rule it works to: fail only with proof. From the bug replay's
  * hunting arm (docs/bug-corpus.md#replaying-qa), kept general: QA reviews other projects' repos, with other test runners.
  * Three steps, each a headline for the QA station's Playbook and the exact text QA gets, in .focus/crew/qa.md
- * (`hunting:`), in the order QA gets them after "How to test".
+ * (`hunting:`), in the order QA gets them after "How to test". `crew`: another qa.md's, for a benchmark to compare.
  */
-export const huntingSteps = (): QaStep[] =>
-  (['hunt', 'probe', 'proof'] as const).map((step) => ({ title: crewText('qa', `hunting.${step}.title`, ANY_PR), text: crewText('qa', `hunting.${step}.text`, ANY_PR) }));
+export const huntingSteps = (crew: CoreCrew = coreCrew): QaStep[] =>
+  (['hunt', 'probe', 'proof'] as const).map((step) => ({ title: crew.text('qa', `hunting.${step}.title`, ANY_PR), text: crew.text('qa', `hunting.${step}.text`, ANY_PR) }));
 
 
 /** The `proofs` property of QA's report schema (QA_SCHEMA in qa.ts). */

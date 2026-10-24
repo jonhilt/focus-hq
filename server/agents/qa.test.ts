@@ -1,10 +1,13 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
 import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, qaStamp, repoChecks, siblingList, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
 import { huntingSteps } from './qaProof';
-import { crewFile } from './crewFiles';
+import { CREW_DIR, crewFile, crewWith } from './crewFiles';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
@@ -429,6 +432,32 @@ describe('what a QA verdict is stamped with', () => {
     expect(qaStamp({ model: 'claude-opus-5-5', effort: 'high' }, 'abc1234')).toEqual({ digest: crewFile('qa').digest, model: 'claude-opus-5-5', effort: 'high', commit: 'abc1234' });
     // the session's defaults leave them out
     expect(qaStamp({}, 'abc1234')).toEqual({ digest: crewFile('qa').digest, commit: 'abc1234' });
+  });
+});
+
+describe('QA told by a candidate’s qa.md, for a benchmark to compare', () => {
+  const qa = fs.readFileSync(path.join(CREW_DIR, 'qa.md'), 'utf8');
+  const candidate = () => crewWith(fs.mkdtempSync(path.join(os.tmpdir(), 'qa-candidate-')), 'qa', qa.replace('QA officer for {{project}}', 'reviewer for {{project}}').replace('Hunts the bugs that get past review', 'Hunts the bugs review misses'), 'qa.md at candidate');
+
+  it('gets the candidate’s words in its instructions, steps and hunting steps, and Focus’s own QA keeps its own', () => {
+    const crew = candidate();
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha, [], [], crew)).toContain('# You are Lt. Varga, reviewer for Shop');
+    expect(qaSystemAppend({ name: 'Lt. Varga' }, { name: 'Shop' }, pr, pr.headSha)).toContain('# You are Lt. Varga, QA officer for Shop');
+    expect(huntingSteps(crew)[0]?.title).toBe('Hunts the bugs review misses');
+    expect(huntingSteps()[0]?.title).toBe('Hunts the bugs that get past review');
+    expect(qaSteps('main', [], false, crew)).toEqual(qaSteps('main'));
+  });
+
+  it('is stamped with the candidate’s digest', () => {
+    const crew = candidate();
+    expect(qaStamp({}, 'abc1234', crew).digest).toBe(crew.file('qa').digest);
+    expect(qaStamp({}, 'abc1234', crew).digest).not.toBe(crewFile('qa').digest);
+  });
+
+  it('names the candidate when its qa.md doesn’t load', () => {
+    expect(() => crewWith(fs.mkdtempSync(path.join(os.tmpdir(), 'qa-candidate-')), 'qa', qa.replace('{{project}} aboard', '{{projcet}} aboard'), 'qa.md at focus/typo')).toThrow(
+      /^qa\.md at focus\/typo:65: \{\{projcet\}\} isn't something this role's prompt can refer to/,
+    );
   });
 });
 

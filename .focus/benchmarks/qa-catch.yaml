@@ -1,0 +1,10 @@
+description: QA's catch rate, one known bug planted in each recently merged goal pull request (docs/qa-catch.md).
+role: qa
+# pull requests a run takes: --prs overrides it
+sample: 10
+# also review each one with no bug planted, for false alarms: --control turns it on for a run
+controls: false
+concurrency: 2
+# the first is the run's own; any after it review the same pull requests, with the same bugs, to compare
+configurations:
+  - name: main

@@ -12,8 +12,11 @@ A script of Focus's own (it runs in the terminal, never in Focus): it measures Q
 | `pnpm run qa-catch --dry` | plants the bugs and says where, without running any review (free, a few seconds) |
 | `pnpm run qa-catch --again` | the same pull requests as the last run, so the same bugs: to compare QA before and after a change to it |
 | `pnpm run qa-catch --control` | also reviews each pull request with no bug planted, and counts the clean ones QA fails (false alarms): twice the reviews |
+| `pnpm run qa-catch --config a,b` | only those of the benchmark file's configurations, the first as the run's own |
 
-Each review costs what a QA review in Focus does: as of 2026-10, about $0.60 and a few minutes on Focus's QA model, so a default run is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/`, with what QA worked to: its crew file's digest, model and Focus's commit.
+What a run takes by default (how many pull requests, controls, how many reviews at once) and the configurations of QA it compares are in [`.focus/benchmarks/qa-catch.yaml`](../.focus/benchmarks/README.md). Each configuration reviews the same pull requests with the same bugs planted, so a candidate `qa.md` from another branch, or another model or effort, is measured beside main's in one run, each costing a full run's reviews. The first configuration is the run's own: `--again` and `pnpm run flow` read its results.
+
+Each review costs what a QA review in Focus does: as of 2026-10, about $0.60 and a few minutes on Focus's QA model, so a default run is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/`, each configuration's part with what QA worked to: its crew file's digest, model, effort and Focus's commit.
 
 ## How a run goes
 
@@ -29,7 +32,7 @@ For each of the goals' merged pull requests, newest first, in repos Focus has a 
 - **Missed** is the number to watch: a bug that would have reached `main`. Read each missed one's planted line, printed with the result.
 - **Failed for something else** can mean QA found a different real problem in the pull request, or failed it for a reason that isn't one. It isn't counted as caught.
 - **False alarms** (with `--control`): clean pull requests QA failed. Read why before counting one: QA can find a real bug the pull request merged with (the first one here was #368's gantry railings, whose colliders stood in the walkway). A change that raises the catch rate by failing everything shows here, so judge a change to QA by both.
-- Run it again after changing QA (its prompt, its model, its checks) with `--again --control`, and compare. Run the same thing twice before trusting a difference of one or two: the same review can go either way from run to run.
+- To judge a change to QA (its prompt, its model, its effort), add it as a configuration and run both at once with `--control`; a change to its checks, run again after it with `--again --control`, and compare. Run the same thing twice before trusting a difference of one or two: the same review can go either way from run to run.
 
 ## What it can't tell
 

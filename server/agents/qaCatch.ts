@@ -168,13 +168,22 @@ export function controlLine(controls: ControlResult[]): string {
   return `Controls: QA failed ${alarms.length} of ${finished.length} pull requests with no bug planted (false alarms)${alarms.length ? `: ${alarms.map((c) => `${c.repo.split('/')[1] ?? c.repo}#${c.pr}`).join(', ')}` : ''} · $${cost.toFixed(2)}`;
 }
 
-/** A saved run of `pnpm run qa-catch`, as ~/.focus/qa-catch/ keeps it: the planted bugs' results, and the controls' if it ran them. */
-export interface CatchRun {
-  at: number;
+/** One configuration's part of a run (.focus/benchmarks/qa-catch.yaml): the planted bugs' results, and the controls' if it ran them. */
+export interface CatchPart {
   model: string;
   /** What QA worked to. Runs before it have none. */
   crew?: CrewStamp;
   results: CatchResult[];
   controls?: ControlResult[];
+}
+
+/**
+ * A saved run of `pnpm run qa-catch`, as ~/.focus/qa-catch/ keeps it: its own configuration's part, and any others'
+ * (`compared`), each on the same pull requests with the same bugs. Runs before configurations name none.
+ */
+export interface CatchRun extends CatchPart {
+  at: number;
+  config?: string;
+  compared?: (CatchPart & { config: string })[];
 }
 

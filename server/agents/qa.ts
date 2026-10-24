@@ -8,7 +8,7 @@ import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
 import { huntingSteps, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { clock } from './recording';
-import { CREW_RULES, crewFile, crewPrompt, crewText } from './crewFiles';
+import { type CoreCrew, coreCrew, CREW_RULES } from './crewFiles';
 import type { CrewStamp } from '../../shared/ledger';
 
 // The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
@@ -400,19 +400,22 @@ const STEPS = ['criteria', 'diff', 'checks', 'unread', 'browser', 'scripts'] as 
  * QA's "How to test" steps for a pull request into `baseBranch`, numbered in this order in its instructions
  * (`qaSystemAppend`) and listed by title at the QA station's Playbook. `checks` are the commands of the repo's own checks
  * when Ops knows them (`repoChecks`); without them QA works out which there are. `recorded`: QA's browser is recorded
- * for the pull request (the project's `qaVideo`).
+ * for the pull request (the project's `qaVideo`). `crew`: another qa.md's, for a benchmark to compare.
  */
-export function qaSteps(baseBranch: string, checks: readonly string[] = [], recorded = false): QaStep[] {
+export function qaSteps(baseBranch: string, checks: readonly string[] = [], recorded = false, crew: CoreCrew = coreCrew): QaStep[] {
   const at = { baseBranch, checks: checks.map((c) => `\`${c}\``).join(', '), maxScreenshots: String(MAX_SCREENSHOTS), recorded, run: '', ...CREW_RULES };
-  const values = { ...at, run: crewText('qa', checks.length ? 'run.listed' : 'run.unknown', at) };
-  return STEPS.map((step) => ({ title: crewText('qa', `steps.${step}.title`, values), text: crewText('qa', `steps.${step}.text`, values) }));
+  const values = { ...at, run: crew.text('qa', checks.length ? 'run.listed' : 'run.unknown', at) };
+  return STEPS.map((step) => ({ title: crew.text('qa', `steps.${step}.title`, values), text: crew.text('qa', `steps.${step}.text`, values) }));
 }
 
-/** QA's instructions for reviewing `pr` at `sha`: `checks` are the commands of its repo's checks, for step 3 (`qaSteps`). */
-export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean; qaVideo?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = [], checks: readonly string[] = []): string {
+/**
+ * QA's instructions for reviewing `pr` at `sha`: `checks` are the commands of its repo's checks, for step 3 (`qaSteps`).
+ * `crew`: another qa.md's, for a benchmark to compare (tools/qaReview.ts).
+ */
+export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: string; qaBrief?: string; qaProof?: boolean; qaVideo?: boolean }, pr: PullRequestDetail, sha: string, siblings: QaSibling[] = [], checks: readonly string[] = [], crew: CoreCrew = coreCrew): string {
   const brief = project.qaBrief?.trim() ?? '';
-  const [hunt, probe, proofStep] = huntingSteps().map((step) => step.text);
-  return crewPrompt('qa', {
+  const [hunt, probe, proofStep] = huntingSteps(crew).map((step) => step.text);
+  return crew.prompt('qa', {
     name: agent.name,
     project: project.name,
     number: String(pr.number),
@@ -425,7 +428,7 @@ export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: stri
     siblingList: siblingList(siblings),
     brief: !!brief,
     briefText: brief,
-    steps: qaSteps(pr.baseBranch, checks, qaVideoFor(project)).map((step, i) => `${i + 1}. ${step.text}`).join('\n'),
+    steps: qaSteps(pr.baseBranch, checks, qaVideoFor(project), crew).map((step, i) => `${i + 1}. ${step.text}`).join('\n'),
     proof: qaProofFor(project),
     hunt,
     probe,
@@ -435,9 +438,12 @@ export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: stri
   }).trim();
 }
 
-/** What a QA officer works to, for their verdict: QA's crew file's digest, the model and effort they were seated on, and Focus's commit. */
-export const qaStamp = (agent: Pick<Agent, 'model' | 'effort'>, commit: string): CrewStamp => ({
-  digest: crewFile('qa').digest,
+/**
+ * What a QA officer works to, for their verdict: QA's crew file's digest, the model and effort they were seated on, and
+ * Focus's commit. `crew`: another qa.md's, for a benchmark's configuration.
+ */
+export const qaStamp = (agent: Pick<Agent, 'model' | 'effort'>, commit: string, crew: CoreCrew = coreCrew): CrewStamp => ({
+  digest: crew.file('qa').digest,
   ...(agent.model && { model: agent.model }),
   ...(agent.effort && { effort: agent.effort }),
   commit,

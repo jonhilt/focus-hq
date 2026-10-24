@@ -4,10 +4,12 @@
 // Nothing goes to GitHub and no real pull request is touched: each clone is made from Focus's copy of the repo
 // (~/.focus/repos), reviewed where it is and deleted. It saves each run in ~/.focus/qa-catch/, which `pnpm run flow`
 // shows among its quality guards. Each review costs what a QA review does (about $0.60 and a few minutes).
+// What a run takes by default, and the configurations of QA it compares, are in .focus/benchmarks/qa-catch.yaml.
 //
-//   pnpm run qa-catch                 10 pull requests, two reviews at a time
+//   pnpm run qa-catch                 the benchmark file's pull requests and configurations
 //   pnpm run qa-catch --prs 4         fewer (or more)
 //   pnpm run qa-catch --repo o/r      only one repo's
+//   pnpm run qa-catch --config a,b    only those configurations, the first as the run's own
 //   pnpm run qa-catch --dry           plant the bugs and say where, without running any review
 //   pnpm run qa-catch --again         the same pull requests as the last run (so the same bugs), to compare
 //   pnpm run qa-catch --control       each pull request reviewed again with no bug planted: does QA fail clean code?
@@ -17,14 +19,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
-import { qaAgentModel } from '../server/agents/qa';
 import { paths } from '../server/config';
 import type { PullRequestDetail } from '../server/github/provider';
 import { checkLedger, closedGoals } from '../shared/ledger';
 import type { Project, Settings } from '../shared/types';
-import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
+import { loadBenchmark, pickConfigurations } from '../server/agents/benchmarkFiles';
+import { addedLines, type CatchPart, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import { latestRun, QA_CATCH_DIR } from '../server/agents/qaCatchRuns';
-import { replayStamp, review } from './qaReview';
+import { orStop, review, type Seat, seatLine, seats } from './qaReview';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -34,11 +36,13 @@ const opt = (name: string) => {
   const i = args.indexOf(`--${name}`);
   return i >= 0 ? args[i + 1] : undefined;
 };
-const wanted = Number(opt('prs') ?? 10);
+const benchmark = await orStop(() => loadBenchmark('qa-catch'));
+const wanted = Number(opt('prs') ?? benchmark.sample ?? Infinity);
 const onlyRepo = opt('repo');
 const dry = args.includes('--dry');
 const again = args.includes('--again');
-const control = args.includes('--control');
+const control = args.includes('--control') || benchmark.controls;
+const configurations = await orStop(() => pickConfigurations(benchmark, opt('config')));
 
 const state = JSON.parse(readFileSync(paths.state, 'utf8')) as { settings: Settings; projects: Project[] };
 const ledger = checkLedger(readFileSync(paths.ledger, 'utf8')).events;
@@ -63,8 +67,18 @@ interface Pr {
   author: { login: string } | null;
 }
 
-/** A clone of the pull request's head with one bug planted and committed on top, and a clean one for a control, or why there's none. */
-async function prepare(repo: string, number: number, root: string): Promise<{ dir: string; pr: PullRequestDetail; planted: Planted; clean?: string } | string> {
+/** A pull request ready to review: its head with one bug planted and committed on top, in a clone nobody reviews (each review gets its own of it). */
+interface Prepared {
+  dir: string;
+  pr: PullRequestDetail;
+  planted: Planted;
+  /** The pull request's own head, for a control. */
+  head: string;
+  base: { branch: string; oid: string };
+}
+
+/** A clone of the pull request's head with one bug planted and committed on top, or why there's none. */
+async function prepare(repo: string, number: number, root: string): Promise<Prepared | string> {
   const { stdout } = await run('gh', ['pr', 'view', String(number), '-R', repo, '--json', 'number,title,body,url,headRefName,baseRefName,headRefOid,baseRefOid,author'], BIG);
   const info = JSON.parse(stdout) as Pr;
   const dir = path.join(root, `${repo.replace('/', '__')}-${number}`);
@@ -76,17 +90,8 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
     await git('fetch', '--quiet', `https://github.com/${repo}`, `pull/${number}/head`, info.baseRefName);
   }
   await git('checkout', '--quiet', '--detach', info.headRefOid);
-  // QA diffs against origin/<base>: the base as the pull request was opened against
-  await git('update-ref', `refs/remotes/origin/${info.baseRefName}`, info.baseRefOid);
   const planted = plant(addedLines(await git('diff', '-U0', `${info.baseRefOid}...${info.headRefOid}`)), number);
   if (!planted) return `${repo}#${number}: nothing it added could take a bug`;
-  // the control: the same code as the pull request merged it, in a clone of its own
-  const clean = control && !dry ? `${dir}-control` : undefined;
-  if (clean) {
-    await run('git', ['clone', '--quiet', '--shared', '--no-checkout', dir, clean], BIG);
-    await run('git', ['-C', clean, 'checkout', '--quiet', '--detach', info.headRefOid], BIG);
-    await run('git', ['-C', clean, 'update-ref', `refs/remotes/origin/${info.baseRefName}`, info.baseRefOid], BIG);
-  }
   const file = path.join(dir, planted.file);
   const lines = readFileSync(file, 'utf8').split('\n');
   if (lines[planted.line - 1] !== planted.before) return `${repo}#${number}: ${planted.file}:${planted.line} isn't the line the diff said`;
@@ -97,64 +102,98 @@ async function prepare(repo: string, number: number, root: string): Promise<{ di
     number, title: info.title, body: info.body, url: info.url, branch: info.headRefName, baseBranch: info.baseRefName,
     headSha: (await git('rev-parse', 'HEAD')).trim(), author: info.author?.login, linkedIssues: [],
   };
-  return { dir, pr, planted, clean };
+  return { dir, pr, planted, head: info.headRefOid, base: { branch: info.baseRefName, oid: info.baseRefOid } };
+}
+
+/** A clone of the prepared one at `sha`, for one review to dirty: QA diffs against origin/<base>, the base as the pull request was opened against. */
+async function cloneFor(ready: Prepared, sha: string, name: string): Promise<string> {
+  const dir = `${ready.dir}-${name}`;
+  await run('git', ['clone', '--quiet', '--shared', '--no-checkout', ready.dir, dir], BIG);
+  await run('git', ['-C', dir, 'checkout', '--quiet', '--detach', sha], BIG);
+  await run('git', ['-C', dir, 'update-ref', `refs/remotes/origin/${ready.base.branch}`, ready.base.oid], BIG);
+  return dir;
 }
 
 /** The planted clone's review, scored against its bug. */
-async function planted(repo: string, dir: string, pr: PullRequestDetail, bug: Planted): Promise<CatchResult> {
-  const r = await review(repo, dir, pr, state);
-  const base = { repo, pr: pr.number, planted: bug, costUsd: r.costUsd, minutes: r.minutes };
+async function planted(repo: string, dir: string, pr: PullRequestDetail, bug: Planted, seat: Seat): Promise<Omit<CatchResult, 'planted'>> {
+  const r = await review(repo, dir, pr, state, seat);
+  const base = { repo, pr: pr.number, costUsd: r.costUsd, minutes: r.minutes };
   return r.report ? { ...base, outcome: scoreReport(r.report, bug), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }
 
 /** The clean clone's review: QA failing it is a false alarm. */
-async function controlled(repo: string, dir: string, pr: PullRequestDetail): Promise<ControlResult> {
-  const r = await review(repo, dir, { ...pr, headSha: (await run('git', ['-C', dir, 'rev-parse', 'HEAD'])).stdout.trim() }, state);
+async function controlled(repo: string, dir: string, pr: PullRequestDetail, seat: Seat): Promise<ControlResult> {
+  const r = await review(repo, dir, pr, state, seat);
   const base = { repo, pr: pr.number, costUsd: r.costUsd, minutes: r.minutes };
   return r.report ? { ...base, outcome: scoreControl(r.report), summary: r.report.summary } : { ...base, outcome: 'error', summary: r.error ?? 'QA finished without a report' };
 }
 
 const root = mkdtempSync(path.join(os.tmpdir(), 'focus-qa-catch-'));
-const results: CatchResult[] = [];
-const controls: ControlResult[] = [];
+const seated = await orStop(() => seats(configurations, state.settings, root));
+// each configuration's results, in the order the pull requests were prepared
+const parts = new Map<string, { results: CatchResult[]; controls: ControlResult[] }>(seated.map((seat) => [seat.name, { results: [], controls: [] }]));
+const partOf = (seat: Seat) => parts.get(seat.name) ?? { results: [], controls: [] };
+const tag = (seat: Seat) => (seated.length > 1 ? ` [${seat.name}]` : '');
+let prepared = 0;
 const skipped: string[] = [];
+
+/** Each configuration's reviews of a prepared pull request: the planted bug, and the clean code for a control. */
+async function reviewed(next: { repo: string; pr: number }, ready: Prepared, seat: Seat, placeholder: CatchResult): Promise<void> {
+  const dir = await cloneFor(ready, ready.pr.headSha, seat.name);
+  Object.assign(placeholder, await planted(next.repo, dir, ready.pr, ready.planted, seat));
+  console.log(`  ${next.repo}#${next.pr}${tag(seat)} ${placeholder.outcome} (${placeholder.minutes ?? '?'} min, $${(placeholder.costUsd ?? 0).toFixed(2)})`);
+  rmSync(dir, { recursive: true, force: true });
+  if (!control) return;
+  // the control: the same code as the pull request merged it
+  const clean = await cloneFor(ready, ready.head, `${seat.name}-control`);
+  const c = await controlled(next.repo, clean, { ...ready.pr, headSha: ready.head }, seat);
+  partOf(seat).controls.push(c);
+  console.log(`  ${next.repo}#${next.pr}${tag(seat)} control: ${c.outcome} (${c.minutes ?? '?'} min, $${(c.costUsd ?? 0).toFixed(2)})`);
+  rmSync(clean, { recursive: true, force: true });
+}
+
 try {
+  if (seated.length > 1 || seated[0]?.name !== 'main') for (const seat of seated) console.log(`configuration ${seatLine(seat)}`);
   const queue = [...candidates];
   const worker = async () => {
-    for (let next = queue.shift(); next && results.length < wanted; next = queue.shift()) {
+    for (let next = queue.shift(); next && prepared < wanted; next = queue.shift()) {
       const ready = await prepare(next.repo, next.pr, root).catch((err: Error) => `${next.repo}#${next.pr}: ${err.message.split('\n')[0]}`);
       if (typeof ready === 'string') {
         skipped.push(ready);
         continue;
       }
-      if (results.length >= wanted) break;
-      const placeholder: CatchResult = { repo: next.repo, pr: next.pr, planted: ready.planted, outcome: 'error', summary: dry ? 'not reviewed (--dry)' : 'under review' };
-      results.push(placeholder);
+      if (prepared >= wanted) break;
+      prepared++;
       console.log(`planted in ${next.repo}#${next.pr}: ${ready.planted.file}:${ready.planted.line} ${ready.planted.bug}`);
       if (dry) continue;
-      Object.assign(placeholder, await planted(next.repo, ready.dir, ready.pr, ready.planted));
-      console.log(`  ${next.repo}#${next.pr} ${placeholder.outcome} (${placeholder.minutes ?? '?'} min, $${(placeholder.costUsd ?? 0).toFixed(2)})`);
-      if (ready.clean) {
-        const c = await controlled(next.repo, ready.clean, ready.pr);
-        controls.push(c);
-        console.log(`  ${next.repo}#${next.pr} control: ${c.outcome} (${c.minutes ?? '?'} min, $${(c.costUsd ?? 0).toFixed(2)})`);
-        rmSync(ready.clean, { recursive: true, force: true });
+      for (const seat of seated) {
+        const placeholder: CatchResult = { repo: next.repo, pr: next.pr, planted: ready.planted, outcome: 'error', summary: 'under review' };
+        partOf(seat).results.push(placeholder);
+        await reviewed(next, ready, seat, placeholder);
       }
-      // after the control's review: its clone borrows this one's objects
+      // after every configuration's reviews: their clones borrow this one's objects
       rmSync(ready.dir, { recursive: true, force: true });
     }
   };
-  await Promise.all(Array.from({ length: dry ? 1 : 2 }, worker));
+  await Promise.all(Array.from({ length: dry ? 1 : benchmark.concurrency }, worker));
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
 
-if (!dry) console.log(`\n${catchLines(results).join('\n')}${controls.length ? `\n\n${controlLine(controls)}` : ''}`);
+if (!dry) for (const seat of seated) {
+  const { results, controls } = partOf(seat);
+  console.log(`\n${seated.length > 1 ? `${seatLine(seat)}\n` : ''}${catchLines(results).join('\n')}${controls.length ? `\n\n${controlLine(controls)}` : ''}`);
+}
 if (skipped.length) console.log(`\n${skipped.length} pull request${skipped.length === 1 ? '' : 's'} passed over: ${skipped.slice(0, 5).join('; ')}${skipped.length > 5 ? '; …' : ''}`);
-if (!dry && results.length) {
+const [own, ...others] = seated;
+if (!dry && own && partOf(own).results.length) {
   mkdirSync(QA_CATCH_DIR, { recursive: true });
   const file = path.join(QA_CATCH_DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  const saved: CatchRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', crew: await replayStamp(state.settings), results, ...(controls.length && { controls }) };
+  const part = (seat: Seat): CatchPart => {
+    const { results, controls } = partOf(seat);
+    return { model: seat.model ?? 'default', crew: seat.stamp, results, ...(controls.length && { controls }) };
+  };
+  const saved: CatchRun = { at: Date.now(), config: own.name, ...part(own), ...(others.length && { compared: others.map((seat) => ({ config: seat.name, ...part(seat) })) }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }

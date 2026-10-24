@@ -1,0 +1,15 @@
+description: QA replayed on every commit a real bug in the bug corpus came in with (docs/bug-corpus.md#replaying-qa).
+role: qa
+# commits a run takes, left out for all of them: --commits overrides it
+# also review as many commits no listed bug came from, for false alarms: --control turns it on for a run
+controls: false
+concurrency: 2
+# decides whether a review's finding is the very bug the fix fixed: a different model from QA's, so it isn't grading
+# its own kind of answer
+judge:
+  model: claude-opus-5-5
+  maxTurns: 2
+  timeout: 3m
+# the first is the run's own; any after it review the same commits, to compare
+configurations:
+  - name: main

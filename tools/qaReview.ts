@@ -3,19 +3,22 @@
 // (tools/qaCatch.ts, planted bugs) and the bug replay (tools/bugReplay.ts, real ones). The clone is the caller's.
 
 import { execFile } from 'node:child_process';
-import { existsSync, realpathSync, symlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, symlinkSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Effect } from 'effect';
+import { BenchmarkFileError, type Configuration } from '../server/agents/benchmarkFiles';
 import { claudeConfig } from '../server/agents/claudeRunner';
+import { type CoreCrew, coreCrew, CrewFileError, crewWith } from '../server/agents/crewFiles';
 import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaStamp, qaSystemAppend, type ToolCall } from '../server/agents/qa';
+import { config } from '../server/config';
 import { currentVersion } from '../server/updater';
 import type { CrewStamp } from '../shared/ledger';
 import type { PullRequestDetail } from '../server/github/provider';
 import { qaProofFor } from '../shared/qa';
-import type { Project, QaReport, Settings } from '../shared/types';
+import type { Effort, Project, QaReport, Settings } from '../shared/types';
 import { PROOF_MS, prove, type ProofRig } from '../server/agents/qaProof';
 import { readIn, runIn } from '../server/agents/workspace';
 import { freePort } from './demoShip';
@@ -36,13 +39,55 @@ const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
 const REVIEW_MS = 25 * 60 * 1000;
 
-/** Stops what QA left running in the clone (an old build's demo ship, a dev server): asked first, then made to. */
-/** What a replayed review works to (`qaStamp`), for the run's saved results: QA's model as `settings` give it, on its default effort. */
-export async function replayStamp(settings: Pick<Settings, 'model' | 'qaModel'>): Promise<CrewStamp> {
-  const model = qaAgentModel(settings);
-  return qaStamp(model ? { model } : {}, await currentVersion());
+/** One of a benchmark's configurations, ready to review with: the qa.md QA is told, its model and effort, and what that all comes to. */
+export interface Seat {
+  name: string;
+  crew: CoreCrew;
+  model?: string;
+  effort?: Effort;
+  stamp: CrewStamp;
 }
 
+/**
+ * The benchmark's configurations ready to review with: each one's qa.md as Focus's repo has it at its `crew` ref (beside
+ * this checkout's other crew files, in a folder of its own under `dir`) or this checkout's, and its model, or QA's as
+ * `settings` give it.
+ */
+export async function seats(configurations: Configuration[], settings: Pick<Settings, 'model' | 'qaModel'>, dir: string): Promise<Seat[]> {
+  const commit = await currentVersion();
+  return Promise.all(
+    configurations.map(async (c): Promise<Seat> => {
+      const crew = c.crew ? await crewAt(c.crew, path.join(dir, `crew-${c.name}`)) : coreCrew;
+      const model = c.model ?? qaAgentModel(settings);
+      const seated = { ...(model && { model }), ...(c.effort && { effort: c.effort }) };
+      return { name: c.name, crew, ...seated, stamp: qaStamp(seated, commit, crew) };
+    }),
+  );
+}
+
+/** QA's crew file as Focus's repo has it at `ref`, with this checkout's other crew files, in `dir`. */
+async function crewAt(ref: string, dir: string): Promise<CoreCrew> {
+  const source = await run('git', ['-C', config.root, 'show', `${ref}:.focus/crew/qa.md`], BIG).then((o) => o.stdout, () => undefined);
+  if (source === undefined) throw new BenchmarkFileError(`crew: ${ref}: Focus's repo has no .focus/crew/qa.md at ${ref}`);
+  mkdirSync(dir, { recursive: true });
+  return crewWith(dir, 'qa', source, `.focus/crew/qa.md at ${ref}`);
+}
+
+/** What `make` gives; or, when a benchmark's file or a crew file is wrong, the script stopped with what's wrong, its file and line saying where. */
+export async function orStop<T>(make: () => T | Promise<T>): Promise<T> {
+  try {
+    return await make();
+  } catch (err) {
+    if (!(err instanceof BenchmarkFileError || err instanceof CrewFileError)) throw err;
+    console.error(err.message);
+    process.exit(1);
+  }
+}
+
+/** A seat in a line, for a run's output: its name, its qa.md's digest, its model and effort. */
+export const seatLine = (seat: Seat): string => [seat.name, `qa.md ${seat.stamp.digest}`, seat.model ?? 'default model', seat.effort].filter(Boolean).join(' · ');
+
+/** Stops what QA left running in the clone (an old build's demo ship, a dev server): asked first, then made to. */
 export async function stopLeftovers(dir: string): Promise<void> {
   // a clone already gone has nothing left running in it
   if (!existsSync(dir)) return;
@@ -65,9 +110,9 @@ export interface Reviewed {
   error?: string;
 }
 
-/** The QA officer's review of a clone, as Ops runs one: a report that leaves changed files out goes back once, naming
- *  them, and a fail stands only with proof that holds when it's checked in the clone. */
-export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }): Promise<Reviewed> {
+/** The QA officer's review of a clone, as Ops runs one, seated as `seat` says: a report that leaves changed files out
+ *  goes back once, naming them, and a fail stands only with proof that holds when it's checked in the clone. */
+export async function review(repo: string, dir: string, pr: PullRequestDetail, state: { settings: Settings; projects: Project[] }, seat: Seat): Promise<Reviewed> {
   const project: Pick<Project, 'name' | 'qaBrief' | 'qaProof'> = state.projects.find((p) => p.repos.includes(repo)) ?? { name: repo };
   const abort = new AbortController();
   const timer = setTimeout(() => abort.abort(), REVIEW_MS);
@@ -89,9 +134,10 @@ export async function review(repo: string, dir: string, pr: PullRequestDetail, s
         env,
         abortController: abort,
         resume: sessionId,
-        model: qaAgentModel(state.settings),
+        model: seat.model,
+        effort: seat.effort,
         ...claudeConfig(state.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude')),
-        systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha) },
+        systemPrompt: { type: 'preset', preset: 'claude_code', append: qaSystemAppend({ name: 'Lt. Replay' }, project, pr, pr.headSha, [], [], seat.crew) },
         outputFormat: { type: 'json_schema', schema: QA_SCHEMA },
         disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
         // a throwaway clone, deleted after: nobody is there to answer a permission prompt
