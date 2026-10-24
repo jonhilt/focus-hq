@@ -1,3 +1,4 @@
+import { type DecisionStatus, lineProblem } from './decisions';
 import type { Lane } from './mergeLane';
 import type { QaBadgeState } from './qa';
 import { isRecord } from './records';
@@ -115,6 +116,16 @@ export type LedgerEntry =
    * a scheduled run, say. `agent` is who it's about, `text` what the captain was told.
    */
   | { kind: 'alert'; by: string; agent: string; goal?: string; text: string }
+  /**
+   * Something a goal (`goalId`, titled `goal`) is after, and the constraints on it, as whoever wrote it (`by`: a lead,
+   * the captain, or a plugin by its id) put it; with no goal, one of the project's own, of which it may have several,
+   * each by its `id` (a slug). The latest line for a goal, or for a project's `id`, is that intent
+   * (`shared/decisions.ts`): one format for both, so there's one place to read either from. `why` says why it changed;
+   * `retired` that it's no longer one; `serves`, on a goal's, the ids of the project's intents it serves.
+   */
+  | { kind: 'intent'; goalId?: string; goal?: string; id?: string; by: string; what: string; constraints: string[]; why?: string; serves?: string[]; retired?: true }
+  /** A decision as it stands after this line: see `DecisionRecord`. */
+  | ({ kind: 'decision' } & DecisionRecord)
   /** A span of an agent's session, digested when it ends (or a lead's slice lands): see `SessionFacts`. */
   | SessionDigest;
 
@@ -124,6 +135,29 @@ export type LedgerEntry =
  * plugin acting on its own where the captain let it (the plugin's id).
  */
 export type DecidedVia = string;
+
+/**
+ * A decision on a goal (`goalId`, titled `goal`), whole as it stands: each change to it is a new `decision` line with
+ * the same `id` and every field again, never an edit, so the latest line is the record and the ones before are its
+ * history. `owner` is the lead whose goal it's on, who acts on it; `by` who wrote this line (the lead's name, the
+ * captain, or a plugin by its id). A lead may `propose` an option while it's open; `chosen` is set once decided, with
+ * the `rationale` for it and the options `rejected` and why. `supersedes` is the decision this one replaces.
+ */
+export interface DecisionRecord {
+  id: string;
+  status: DecisionStatus;
+  goalId: string;
+  goal: string;
+  owner: string;
+  by: string;
+  question: string;
+  options: string[];
+  proposed?: string;
+  chosen?: string;
+  rationale?: string;
+  rejected?: { option: string; why: string }[];
+  supersedes?: string;
+}
 
 /** Where a loose thread ends, as the captain decides it, or `open`: the decision taken back. */
 export type ThreadDecidedAs = 'next' | 'parked' | 'dropped' | 'resolved' | 'open';
@@ -303,8 +337,11 @@ export function checkLedger(text: string): LedgerCheck {
     sawV2 = true;
     if (raw.seq > check.nextSeq) check.problems.push(raw.seq === check.nextSeq + 1 ? `line ${check.nextSeq} is missing` : `lines ${check.nextSeq}–${raw.seq - 1} are missing`);
     else if (raw.seq < check.nextSeq) check.problems.push(`line ${i + 1} repeats or goes back to number ${raw.seq}`);
-    check.events.push(event as LedgerEvent);
     check.nextSeq = Math.max(check.nextSeq, raw.seq + 1);
+    // a record kept for what it says (a decision) is left out whole when it's broken, its number still taken
+    const broken = lineProblem(raw);
+    if (broken) check.problems.push(`line ${i + 1} (${raw.kind}) ${broken}`);
+    else check.events.push(event as LedgerEvent);
   }
   return check;
 }

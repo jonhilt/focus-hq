@@ -28,6 +28,15 @@ When an agent's session ends, Ops digests what's new in its Claude Code transcri
 - **Why Opus, not Haiku per session:** digests were first read by Haiku as each session ended. A bake-off on 9 Oct over the same 76 sessions found both cost about the same per session (Haiku's calls carry Claude Code's overhead each time) and found about as many frictions, but Haiku gave the same trouble different words (86 signatures to Opus's 36: merge conflicts split three ways, so the groups a retro counts fell apart), and missed some Opus found. Digests Haiku read keep their frictions, and count like the rest.
 - **Older sessions:** transcripts from before digests began can be digested from code alone, so it costs no Claude usage; each is dated when its session ended and marked `backfilled`.
 
+## Intent and decisions
+
+A project's or a goal's intent (what it's after, and its constraints) and a goal's decisions are ledger lines of their own (`intent`, `decision`; read back in `shared/decisions.ts`), not prose in a lead's note or the inbox. The inbox is built from live state, so an unanswered question could go quiet there, and nothing settled was on record to point to when a lead asked again. Typed records are also overwritten less than markdown when models keep them.
+
+- **Whole lines, never edits.** Each change to a decision (raised, proposed, decided, replaced) is a new line with every field again, so the latest line for its id is the record and the earlier ones are how it got there.
+- **One intent format.** A project's intents are `intent` lines with no goal, several to a project, each by its `id`; a goal's names the goal, and the project intents it `serves`. A change says `why`, and an intent is ended by a `retired` line, not by deleting it. Anything that keeps intents (a lead, the threads plugin) writes this line, never a format of its own.
+- **Superseded, not reopened.** A decided decision isn't taken back: a new one `supersedes` it, and it reads as superseded only once the new one is decided.
+- **Checked on load.** A decision or intent line that's missing a field, has a status other than open, decided or superseded, is decided with nothing chosen (or open with something chosen), or supersedes itself is reported as damage like any other and left out, so nothing reads a broken record as standing (`shared/decisions.test.ts`).
+
 ## Did the retro's fixes work?
 
 Each retro draft the captain accepts goes in the ledger with its frictions' signatures and the issue it was filed as. When a pull request merges, Ops notes the issues it closed, so the report card can tell when a fix landed, and for each accepted fix (`fixEffects` in `shared/ledger.ts`) compares how often its frictions came up before the captain accepted it and since it landed. The fixes are read from the ledger, so the report card keeps counting them with the retro plugin off.

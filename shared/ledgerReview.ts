@@ -48,6 +48,8 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'thread-decided':
     case 'thread-proposals':
     case 'alert':
+    case 'intent':
+    case 'decision':
       return 'goals';
     case 'retro-decision':
       return 'retro';
@@ -158,12 +160,6 @@ function rowParts(e: LedgerEvent): RowParts {
       return { tag: 'Sent back', tone: 'warn', title: `${short(e.repo)} #${e.pr} · failing checks sent back: ${e.checks.join(', ')}`, detail: e.goal, pr: e, goal: e.goal };
     case 'triage':
       return { tag: 'Triage', tone: e.action === 'escalate' ? 'bad' : 'warn', title: `${short(e.repo)} #${e.pr} · ${e.officer} ${TRIAGE[e.action] ?? e.action}`, detail: [e.note, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
-    case 'goal-closed':
-      return goalClosedRow(e);
-    case 'thread-decided':
-      return threadRow(e);
-    case 'thread-proposals':
-      return proposalsRow(e);
     case 'retro-decision':
       return retroRow(e);
     case 'session-digest': {
@@ -184,7 +180,32 @@ function rowParts(e: LedgerEvent): RowParts {
       return { tag: 'Lane', tone: e.failed ? 'bad' : 'info', title: `${e.to === e.from ? `Kept ${e.agent}’s ship in ${e.from}` : `Raised ${e.agent}’s ship from ${e.from} to ${e.to}`}`, detail: [e.failed ?? e.why, e.goal].filter(Boolean).join(' · '), ...(e.prs[0] && { pr: e.prs[0] }), goal: e.goal };
     case 'session-frictions':
       return frictionsRow(e);
+    default:
+      return goalRow(e);
   }
+}
+
+/** A line about a goal itself: it closing, its threads, its intent and decisions. */
+function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'decision'>): RowParts {
+  switch (e.kind) {
+    case 'goal-closed':
+      return goalClosedRow(e);
+    case 'thread-decided':
+      return threadRow(e);
+    case 'thread-proposals':
+      return proposalsRow(e);
+    case 'intent':
+    case 'decision':
+      return decisionRow(e);
+  }
+}
+
+/** A goal's intent, or a decision's line: the question, and what was chosen or proposed for it. */
+function decisionRow(e: Of<'intent' | 'decision'>): RowParts {
+  if (e.kind === 'intent') return { tag: 'Intent', tone: 'info', title: e.what, detail: [...e.constraints, e.by, e.goal ?? 'the project'].join(' · '), goal: e.goal };
+  const title = e.status === 'decided' ? `Decided: ${e.question} → ${e.chosen}` : e.status === 'superseded' ? `Superseded: ${e.question}` : `Open: ${e.question}${e.proposed ? ` (proposed: ${e.proposed})` : ''}`;
+  const detail = [e.rationale, e.supersedes && `replaces ${e.supersedes}`, e.by, e.goal].filter(Boolean).join(' · ');
+  return { tag: 'Decision', tone: e.status === 'open' ? 'warn' : 'info', title, detail, goal: e.goal };
 }
 
 function verdictRow(e: Of<'qa-verdict'>): RowParts {
@@ -351,6 +372,8 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
       case 'cos-verdict':
       case 'thread-decided':
       case 'alert':
+      case 'intent':
+      case 'decision':
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'cos-lane':
         return subject.kind === 'pr' ? e.prs.some(samePr) : e.goal === subject.title || e.prs.some(ofGoal);
