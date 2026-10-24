@@ -86,6 +86,21 @@ function splitAt(frames: readonly RecordedFrame[], cuts: readonly number[]): Rec
   return split;
 }
 
+/**
+ * How `edit` cut a recording of `recorded` frames in which the officer acted at `actions`, in a line for their
+ * terminal: the frames, when each action came (from the first frame, in seconds) and each fast-forward (in the
+ * clip's seconds), so a clip that looks wrong (a wait with no badge, say) can be told apart from an edit that was.
+ */
+export function editSummary(edit: Edit, recorded: readonly RecordedFrame[], actions: readonly number[]): string {
+  const start = recorded[0]?.at ?? 0;
+  const s = (seconds: number) => `${seconds.toFixed(1)}s`;
+  const acted = actions.map((a) => s((a - start) / 1000)).join(', ');
+  const fastForwarded = edit.fastForwards.length
+    ? `fast-forwarded ${edit.fastForwards.map((f) => `${s(f.from)}–${s(f.to)} at ×${f.speed}`).join(', ')}`
+    : 'nothing fast-forwarded';
+  return `${recorded.length} frames over ${s(edit.realSeconds)}; acted at ${acted || 'no time'}; ${fastForwarded}`;
+}
+
 /** How long the last frame stays up at the end of the clip, in seconds. */
 const HOLD = 1;
 

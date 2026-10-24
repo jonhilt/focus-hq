@@ -43,7 +43,7 @@ const recordings = (later: Later) => {
   const started = new Set<string>();
   return Layer.succeed(Recordings, Recordings.of({
     start: (agentId) => Effect.sync(() => void started.add(agentId)),
-    finish: (agentId) => Effect.promise(() => later('edit recording', () => Promise.resolve(started.delete(agentId) ? { mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9 } : null))),
+    finish: (agentId) => Effect.promise(() => later('edit recording', () => Promise.resolve(started.delete(agentId) ? { mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9, summary: '400 frames over 300.0s; acted at 0.0s; fast-forwarded 3.5s–4.7s at ×9' } : null))),
   }));
 };
 const [first, second] = await Effect.runPromise(Effect.gen(function* () {

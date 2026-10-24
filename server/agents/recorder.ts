@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { run } from '../util';
-import { badgeSpeeds, badgeText, concatList, editPlan, gifArgs, mp4Args, type RecordedFrame } from './recording';
+import { badgeSpeeds, badgeText, concatList, editPlan, editSummary, gifArgs, mp4Args, type RecordedFrame } from './recording';
 
 /** Frames a second the screencast keeps at most: enough to follow a click, few enough for a long review's disk. */
 const KEEP_FPS = 12;
@@ -75,6 +75,8 @@ export interface EditedRecording {
   realSeconds: number;
   shownSeconds: number;
   actions: number;
+  /** How it was cut, in a line (`editSummary`). */
+  summary: string;
 }
 
 /**
@@ -102,6 +104,7 @@ export async function editRecording(recording: Recording, badge: (text: string) 
       realSeconds: edit.realSeconds,
       shownSeconds: edit.shownSeconds,
       actions: recording.actions.length,
+      summary: editSummary(edit, recording.frames, recording.actions),
     };
   } finally {
     await recording.discard();

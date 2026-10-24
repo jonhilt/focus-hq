@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { badgeSpeeds, clock, concatList, editPlan, type EditRules, gifArgs, mp4Args, type RecordedFrame } from './recording';
+import { badgeSpeeds, clock, concatList, editPlan, type EditRules, editSummary, gifArgs, mp4Args, type RecordedFrame } from './recording';
 
 const RULES: EditRules = { before: 500, after: 3000, waitShown: 1000, tail: 1000 };
 
@@ -60,6 +60,20 @@ describe('editPlan', () => {
   it('has nothing to edit without two frames', () => {
     expect(editPlan([], [0], RULES)).toBeNull();
     expect(editPlan(frames(0, 100), [0], RULES)).toBeNull();
+  });
+});
+
+describe('editSummary', () => {
+  it('says the frames, when the officer acted from the first frame, and each fast-forward in the clip', () => {
+    const recorded = frames(1000, 31_000);
+    const edit = editPlan(recorded, [1000, 21_000], RULES)!;
+    expect(editSummary(edit, recorded, [1000, 21_000])).toBe('300 frames over 29.9s; acted at 0.0s, 20.0s; fast-forwarded 3.0s–4.0s at ×17, 7.5s–8.5s at ×6');
+  });
+
+  it('says when nothing was fast-forwarded, and an action before the first frame as such', () => {
+    const recorded = frames(1000, 4000);
+    const edit = editPlan(recorded, [500], RULES)!;
+    expect(editSummary(edit, recorded, [500])).toBe('30 frames over 2.9s; acted at -0.5s; nothing fast-forwarded');
   });
 });
 

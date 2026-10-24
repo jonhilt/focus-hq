@@ -539,7 +539,7 @@ export class Reviews extends Part {
       const gifUrl = edited.gif ? yield* upload('gif', edited.gif) : undefined;
       const mp4File = keep('mp4', edited.mp4);
       const gifFile = edited.gif && keep('gif', edited.gif);
-      this.print(agent, [{ kind: 'system', text: `✻ Uploaded the recording of the browser (${clock(edited.realSeconds)} shown in ${clock(edited.shownSeconds)}) to the QA evidence branch` }]);
+      this.print(agent, [{ kind: 'system', text: `✻ Uploaded the recording of the browser (${clock(edited.realSeconds)} shown in ${clock(edited.shownSeconds)}) to the QA evidence branch. Its edit: ${edited.summary}` }]);
       return { mp4Url, ...(gifUrl && { gifUrl }), realSeconds: edited.realSeconds, shownSeconds: edited.shownSeconds, actions: edited.actions, mp4File, ...(gifFile && { gifFile }) };
     });
   }

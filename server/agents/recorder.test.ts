@@ -45,6 +45,8 @@ it('records an agent’s browser across a closed tab and edits it into an MP4 an
   expect(edited).not.toBeNull();
   if (!edited) return;
   expect(edited.actions).toBe(2);
+  // the terminal's line says the wait was fast-forwarded, and at what speed
+  expect(edited.summary).toMatch(/; fast-forwarded \d+\.\ds–\d+\.\ds at ×\d+/);
   expect(edited.realSeconds).toBeGreaterThan(8);
   expect(edited.shownSeconds).toBeLessThan(edited.realSeconds - 2);
   expect(edited.mp4.subarray(4, 8).toString()).toBe('ftyp');

@@ -232,7 +232,7 @@ describe('AgentManager', () => {
     const started: string[] = [];
     const recordings = Layer.succeed(Recordings, Recordings.of({
       start: (agentId) => Effect.sync(() => void started.push(agentId)),
-      finish: () => Effect.succeed({ mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9 }),
+      finish: () => Effect.succeed({ mp4: Buffer.from('mp4'), gif: Buffer.from('gif'), realSeconds: 300, shownSeconds: 45, actions: 9, summary: '400 frames over 300.0s; acted at 0.0s; fast-forwarded 3.5s–4.7s at ×9' }),
     }));
     const { agents, claude, store, project } = focus(demoWorkspace, github, undefined, undefined, recordings);
     project.qaVideo = true;
