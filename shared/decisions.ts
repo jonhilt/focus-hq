@@ -1,5 +1,5 @@
 import type { DecisionRecord, LedgerEntry, LedgerEvent } from './ledger';
-import { isOneOf, isRecord } from './records';
+import { fieldsOf, isOneOf, isRecord } from './records';
 
 // A project's or goal's intent and a goal's decisions, read back from the ledger's `intent` and `decision` lines: kept as typed records,
 // not prose, so an open question can't go quiet and a settled one has a record to point to. Each line is whole (every
@@ -125,8 +125,88 @@ function decisionProblem(line: Record<string, unknown>): string | undefined {
  * What's wrong with a ledger line of a kind with a shape to keep (`intent`, `decision`), or nothing: checked as the
  * ledger loads, so a broken one is reported and left out rather than read as a record, and by whoever writes one.
  */
-export function lineProblem(line: Record<string, unknown>): string | undefined {
+export function lineProblem(value: unknown): string | undefined {
+  const line = fieldsOf(value);
   if (line.kind === 'intent') return intentProblem(line);
   if (line.kind === 'decision') return decisionProblem(line);
   return undefined;
+}
+
+type DecisionEntry = Extract<LedgerEntry, { kind: 'decision' }>;
+
+/** What a lead sends to raise a decision on their goal, or change one still open (`id`): never to decide it. */
+export interface RaiseInput {
+  question: string;
+  options: string[];
+  /** The option the lead would pick, for whoever decides it. */
+  proposed?: string;
+  id?: string;
+}
+
+/** The most options a decision is raised with. */
+export const MAX_OPTIONS = 6;
+
+/**
+ * A lead raising a decision on their goal, or changing one of its open ones (its question, options, or what they'd
+ * propose): the line to write, or why not. Only the captain or the chief of staff decides it (`settleDecision`), and
+ * a decided one isn't raised again: a new one supersedes it. A new decision's id is the goal's and its number in it.
+ */
+export function raiseDecision(events: LedgerEvent[], goal: { id: string; title: string }, lead: string, input: RaiseInput): { entry: DecisionEntry } | { problem: string } {
+  const register = decisionRegister(events);
+  const options = input.options.map((o) => o.trim()).filter(Boolean);
+  const proposed = input.proposed?.trim() || undefined;
+  if (options.length < 2 || options.length > MAX_OPTIONS) return { problem: `A decision needs 2 to ${MAX_OPTIONS} options` };
+  if (proposed && !options.includes(proposed)) return { problem: 'What you propose has to be one of the options, word for word' };
+  const was = input.id ? register.get(input.id) : undefined;
+  if (input.id && was?.goalId !== goal.id) return { problem: `There’s no decision ${input.id} on your goal` };
+  if (was && was.status !== 'open') return { problem: `${was.id} is ${was.status} already: it isn’t raised again` };
+  const ofGoal = [...register.values()].filter((d) => d.goalId === goal.id).length;
+  const entry: DecisionEntry = {
+    kind: 'decision', id: was?.id ?? `${goal.id}.d${ofGoal + 1}`, status: 'open', goalId: goal.id, goal: goal.title, owner: was?.owner ?? lead, by: lead,
+    question: input.question.trim(), options, ...(proposed && { proposed }),
+  };
+  const problem = lineProblem(entry);
+  return problem ? { problem: `The decision ${problem}` } : { entry };
+}
+
+/**
+ * An open decision decided (by the captain, or a plugin by its id where the captain lets it): the line to write, or why
+ * not. `chosen` is one of its options; the others go down as rejected, with `why` (or that `by` chose otherwise).
+ */
+export function settleDecision(events: LedgerEvent[], id: string, by: string, chosen: string, rationale?: string, why?: string): { entry: DecisionEntry } | { problem: string } {
+  const was = decisionRegister(events).get(id);
+  if (!was) return { problem: `There’s no decision ${id}` };
+  if (was.status !== 'open') return { problem: `${id} is ${was.status} already` };
+  const { raisedAt: _r, at: _a, projectId: _p, supersededBy: _s, ...record } = was;
+  const rejected = was.options.filter((o) => o !== chosen).map((option) => ({ option, why: why?.trim() || `${by} chose ${chosen}` }));
+  const entry: DecisionEntry = { ...record, kind: 'decision', status: 'decided', by, chosen, ...(rationale?.trim() && { rationale: rationale.trim() }), ...(rejected.length && { rejected }) };
+  const problem = lineProblem(entry);
+  return problem ? { problem: `The decision ${problem}` } : { entry };
+}
+
+/**
+ * Whether a decision line may follow the ones before it, as Ops writes it, or why not: it stays on its goal, a decided
+ * one changes no further (it's superseded by another, never reopened or decided again), and one that supersedes
+ * another names one that was decided, on the same goal.
+ */
+export function decisionChangeProblem(events: LedgerEvent[], entry: DecisionEntry): string | undefined {
+  const register = decisionRegister(events);
+  const was = register.get(entry.id);
+  if (was && was.goalId !== entry.goalId) return `${entry.id} is another goal’s`;
+  if (was && was.status !== 'open') return `${entry.id} is ${was.status} already: a new decision supersedes it instead`;
+  const old = entry.supersedes ? register.get(entry.supersedes) : undefined;
+  if (entry.supersedes && (old?.status !== 'decided' || old.goalId !== entry.goalId)) return `${entry.supersedes} isn’t a decision of this goal’s that stands`;
+  return undefined;
+}
+
+/**
+ * Why the lead can't ask the captain to decide `id` with these options' labels, or nothing: it's an open decision of
+ * their goal, and each label is one of its options word for word, so the pick says which was chosen.
+ */
+export function askProblem(events: LedgerEvent[], goalId: string, id: string, labels: string[]): string | undefined {
+  const d = decisionRegister(events).get(id);
+  if (d?.goalId !== goalId) return `There’s no decision ${id} on your goal`;
+  if (d.status !== 'open') return `${id} is ${d.status} already`;
+  const odd = labels.filter((l) => !d.options.includes(l.trim()));
+  return odd.length ? `Label each option as one of ${id}’s options, word for word (${odd.map((l) => `“${l}”`).join(', ')} isn’t)` : undefined;
 }

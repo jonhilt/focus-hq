@@ -93,9 +93,10 @@ export type LedgerEntry =
   /**
    * The captain answered something waiting on them (in a plugin's inbox, or an agent's panel, as that plugin records
    * it): `item` is what it was (its inbox id, kind and line), `answer` what they decided in a few words, `via` where
-   * (`DecidedVia`). `agent` is who it was for.
+   * (`DecidedVia`). `agent` is who it was for. `decision` is the decision it settled (`shared/decisions.ts`), when it
+   * answered a question that asked for one.
    */
-  | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
+  | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia; decision?: string }
   /**
    * The captain decided where a loose thread a closed goal left open ends (a plugin that keeps a project's threads
    * records it): which goal (`goalId`, titled `goal`) and which of its threads (`contact`: a contact's id, or an idea

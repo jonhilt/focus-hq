@@ -269,6 +269,8 @@ export interface GoalQuestion {
   /** a, b, c, d in the order the lead gave them, each with what it means and trades off (`detail`). */
   options: { id: string; label: string; detail?: string; image?: boolean }[];
   at: number;
+  /** The open decision it asks the captain to make (`shared/decisions.ts`): their pick decides it. */
+  decision?: string;
   /** How the captain answered: the `option` they picked on screen (with what they added), or no `option` when they replied in chat (`note` is what they said). */
   answer?: { option?: string; note?: string; at: number };
 }

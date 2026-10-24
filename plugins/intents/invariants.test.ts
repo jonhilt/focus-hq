@@ -41,6 +41,7 @@ function life(ledger: LedgerEvent[]): Running<Kept> {
       const line = { ...entry, projectId, at: 1000 + ledger.length, seq: ledger.length + 1 } as LedgerEvent;
       ledger.push(line);
       parts.ledgerRecorded?.(line);
+      return undefined;
     },
     on: () => true,
   };

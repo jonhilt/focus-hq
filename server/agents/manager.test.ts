@@ -6,6 +6,7 @@ import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
 import { openQuestion } from '../../shared/artifacts';
+import { decisionRegister, goalDecisions } from '../../shared/decisions';
 import { demoLayer } from '../github/demo';
 import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
@@ -848,6 +849,28 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead!.questions![0].answer).toMatchObject({ option: 'b', note: 'Keep the header' });
     expect(claude.turns[0].sent).toEqual(['I picked B, “List”, for your question “Which layout, really?”.\n\nKeep the header']);
     expect(() => agents.answer(lead.id, 'q5', 'a')).toThrow(/already picked B/);
+  });
+
+  it('keeps the lead’s decision on record: raised open, put to the captain, decided by their pick, never decided by the lead', async () => {
+    const { agents, claude, store, project } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const tools = claude.turns[0].req.tools!;
+    const id = `${lead.id}.d1`;
+    expect(await tools.decision({ question: 'Cards or a list?', options: ['Cards', 'List'], proposed: 'List' })).toContain(`Raised ${id}`);
+    expect(goalDecisions(store.ledger, lead.id).open).toMatchObject([{ id, status: 'open', proposed: 'List', by: store.agent(lead.id).name }]);
+
+    // its options are the question's labels, word for word
+    await expect(tools.ask({ question: 'Which layout?', decision: id, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'Grid', html: '<p>B</p>' }] })).rejects.toThrow(/word for word/);
+    await tools.ask({ question: 'Which layout?', decision: id, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>B</p>' }] });
+    agents.answer(lead.id, 'q1', 'a', 'Easier to scan');
+    expect(decisionRegister(store.ledger).get(id)).toMatchObject({ status: 'decided', chosen: 'Cards', by: 'captain', rationale: 'Easier to scan', rejected: [{ option: 'List', why: 'captain chose Cards' }] });
+
+    // decided, it stands: the lead can't raise it again, and Ops writes no line that would reopen it
+    await expect(tools.decision({ id, question: 'Cards or a list?', options: ['Cards', 'List'] })).rejects.toThrow(/decided already/);
+    const lines = store.ledger.length;
+    expect(agents.record(project.id, { ...decisionRegister(store.ledger).get(id)!, kind: 'decision', status: 'open', chosen: undefined })).toMatch(/decided already/);
+    expect(store.ledger).toHaveLength(lines);
   });
 
   it('settles the lead’s open question when the captain replies in chat instead of picking', async () => {

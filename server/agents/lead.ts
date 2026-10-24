@@ -324,6 +324,8 @@ export interface QuestionInput {
   context?: string;
   /** `detail`: what the option means and what it trades off, beside its page. */
   options: { label: string; html: string; detail?: string }[];
+  /** An open decision of the goal's that the pick decides. */
+  decision?: string;
 }
 
 /**
@@ -354,6 +356,7 @@ export function askQuestion(questions: readonly GoalQuestion[], input: QuestionI
     question,
     ...(context ? { context } : {}),
     options: input.options.map((o, i) => ({ id: 'abcd'[i], label: clean(o.label), ...(o.detail?.trim() ? { detail: o.detail.trim() } : {}) })),
+    ...(input.decision && { decision: input.decision }),
     at,
   };
   const kept = questions.filter((q) => q.answer);

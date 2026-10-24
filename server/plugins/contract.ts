@@ -287,9 +287,10 @@ export interface PluginHost {
   journals(since: number): LentJournals;
   /**
    * Writes a line in the ship's log for `projectId` (at `at`, or now), and sends the new report card. Every plugin
-   * hears it on `ledgerRecorded`, the one writing it too.
+   * hears it on `ledgerRecorded`, the one writing it too. An intent or decision line that's broken, or a decision change
+   * that can't follow the ones before it (`decisionChangeProblem`), isn't written: why is returned.
    */
-  record(projectId: string, entry: LedgerEntry, at?: number): void;
+  record(projectId: string, entry: LedgerEntry, at?: number): string | undefined;
   /** The captain's settings (the model read-only sessions run on, say), as they are now. */
   settings(): Readonly<Settings>;
   /**

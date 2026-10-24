@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { decisionRegister, goalDecisions, goalIntent, intentEntry, lineProblem, projectIntents } from './decisions';
+import { askProblem, decisionChangeProblem, decisionRegister, goalDecisions, goalIntent, intentEntry, lineProblem, projectIntents, raiseDecision, settleDecision } from './decisions';
 import { checkLedger, type DecisionRecord, type LedgerEvent, ledgerLine } from './ledger';
 import { fieldsOf } from './records';
 
@@ -113,5 +113,74 @@ describe('lineProblem', () => {
     expect(check.problems).toEqual(['line 2 (decision) has a status that isn’t open, decided, superseded']);
     expect(check.events.map((e) => e.seq)).toEqual([1, 3]);
     expect(check.nextSeq).toBe(4);
+  });
+});
+
+describe('raiseDecision', () => {
+  const goal = { id: 'g1', title: 'Typed decisions' };
+
+  it('raises a decision on the lead’s goal, numbered in it, owned and written by the lead and open', () => {
+    const first = raiseDecision([], goal, 'Lt. A', { question: ' JSON or markdown? ', options: ['JSON', ' markdown '], proposed: 'JSON' });
+    expect(first).toEqual({ entry: { kind: 'decision', id: 'g1.d1', status: 'open', goalId: 'g1', goal: 'Typed decisions', owner: 'Lt. A', by: 'Lt. A', question: 'JSON or markdown?', options: ['JSON', 'markdown'], proposed: 'JSON' } });
+    expect(raiseDecision([open('g1.d1', 1)], goal, 'Lt. A', { question: 'q', options: ['a', 'b'] })).toMatchObject({ entry: { id: 'g1.d2' } });
+  });
+
+  it('changes one still open, keeping who owns it', () => {
+    expect(raiseDecision([open('g1.d1', 1, { owner: 'Lt. B' })], goal, 'Lt. A', { id: 'g1.d1', question: 'q?', options: ['a', 'c'] })).toMatchObject({ entry: { id: 'g1.d1', owner: 'Lt. B', by: 'Lt. A', options: ['a', 'c'] } });
+  });
+
+  it('refuses to raise a decided one again, another goal’s, odd options or a proposal not among them', () => {
+    expect(raiseDecision([decided('g1.d1', 1)], goal, 'Lt. A', { id: 'g1.d1', question: 'q', options: ['a', 'b'] })).toEqual({ problem: 'g1.d1 is decided already: it isn’t raised again' });
+    expect(raiseDecision([open('g2.d1', 1, { goalId: 'g2' })], goal, 'Lt. A', { id: 'g2.d1', question: 'q', options: ['a', 'b'] })).toEqual({ problem: 'There’s no decision g2.d1 on your goal' });
+    expect(raiseDecision([], goal, 'Lt. A', { question: 'q', options: ['a'] })).toEqual({ problem: 'A decision needs 2 to 6 options' });
+    expect(raiseDecision([], goal, 'Lt. A', { question: 'q', options: ['a', 'b'], proposed: 'c' })).toEqual({ problem: 'What you propose has to be one of the options, word for word' });
+    expect(raiseDecision([], goal, 'Lt. A', { question: ' ', options: ['a', 'b'] })).toEqual({ problem: 'The decision has no question' });
+  });
+});
+
+describe('settleDecision', () => {
+  it('decides an open one as chosen, the other options rejected', () => {
+    const settled = settleDecision([open('d1', 1, { proposed: 'a' })], 'd1', 'captain', 'b', ' less churn ');
+    expect(settled).toEqual({ entry: expect.objectContaining({ kind: 'decision', id: 'd1', status: 'decided', by: 'captain', chosen: 'b', rationale: 'less churn', proposed: 'a', rejected: [{ option: 'a', why: 'captain chose b' }] }) });
+    expect(lineProblem('entry' in settled ? settled.entry : {})).toBeUndefined();
+  });
+
+  it('refuses one that isn’t there or isn’t open', () => {
+    expect(settleDecision([], 'd1', 'captain', 'a')).toEqual({ problem: 'There’s no decision d1' });
+    expect(settleDecision([decided('d1', 1)], 'd1', 'captain', 'b')).toEqual({ problem: 'd1 is decided already' });
+  });
+});
+
+describe('decisionChangeProblem', () => {
+  const entry = (e: LedgerEvent) => {
+    if (e.kind !== 'decision') throw new Error('not a decision');
+    const { at: _a, projectId: _p, seq: _s, ...rest } = e;
+    return rest;
+  };
+
+  it('lets an open decision change, or be decided', () => {
+    expect(decisionChangeProblem([open('d1', 1)], entry(decided('d1', 2)))).toBeUndefined();
+    expect(decisionChangeProblem([], entry(open('d1', 1)))).toBeUndefined();
+  });
+
+  it('never reopens or re-decides a decided one, and keeps a decision on its goal', () => {
+    expect(decisionChangeProblem([decided('d1', 1)], entry(open('d1', 2)))).toBe('d1 is decided already: a new decision supersedes it instead');
+    expect(decisionChangeProblem([decided('d1', 1)], entry(decided('d1', 2, { chosen: 'b' })))).toBe('d1 is decided already: a new decision supersedes it instead');
+    expect(decisionChangeProblem([open('d1', 1)], entry(open('d1', 2, { goalId: 'g2' })))).toBe('d1 is another goal’s');
+  });
+
+  it('supersedes only a standing decision of the same goal', () => {
+    expect(decisionChangeProblem([decided('d1', 1)], entry(open('d2', 2, { supersedes: 'd1' })))).toBeUndefined();
+    expect(decisionChangeProblem([open('d1', 1)], entry(open('d2', 2, { supersedes: 'd1' })))).toBe('d1 isn’t a decision of this goal’s that stands');
+    expect(decisionChangeProblem([decided('d1', 1, { goalId: 'g2' })], entry(open('d2', 2, { supersedes: 'd1' })))).toBe('d1 isn’t a decision of this goal’s that stands');
+  });
+});
+
+describe('askProblem', () => {
+  it('lets the lead put an open decision of their goal to the captain, its options as the labels', () => {
+    expect(askProblem([open('d1', 1)], 'g1', 'd1', ['a', ' b'])).toBeUndefined();
+    expect(askProblem([open('d1', 1)], 'g1', 'd1', ['a', 'c'])).toBe('Label each option as one of d1’s options, word for word (“c” isn’t)');
+    expect(askProblem([decided('d1', 1)], 'g1', 'd1', ['a', 'b'])).toBe('d1 is decided already');
+    expect(askProblem([open('d1', 1)], 'g2', 'd1', ['a', 'b'])).toBe('There’s no decision d1 on your goal');
   });
 });

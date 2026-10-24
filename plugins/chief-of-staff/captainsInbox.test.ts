@@ -57,6 +57,18 @@ describe('the captain’s inbox, as the API serves it', () => {
     expect(inbox.view().open[0].id).toBe(item.id);
   });
 
+  it('links the captain’s pick to the decision it settles, decided as they picked', async () => {
+    const { inbox, id, store, claude, decisions } = await waitingLead();
+    const tools = claude.turns[0].req.tools!;
+    await tools.decision({ question: 'Cards or a list?', options: ['Cards', 'List'] });
+    await tools.ask({ question: 'Which layout?', decision: `${id}.d1`, options: [{ label: 'Cards', html: '<p>A</p>' }, { label: 'List', html: '<p>B</p>' }] });
+    const question = inbox.view().open.find((i) => i.kind === 'question');
+    if (!question) throw new Error('the question isn’t waiting');
+    await inbox.decide(question.id, { option: 'b' }, 'api');
+    expect(decisions().at(-1)).toMatchObject({ item: { kind: 'question' }, answer: expect.stringContaining('B'), via: 'api', decision: `${id}.d1` });
+    expect(store.ledger.findLast((e) => e.kind === 'decision')).toMatchObject({ id: `${id}.d1`, status: 'decided', chosen: 'List', by: 'captain' });
+  });
+
   it('answers an item by its id: the lead hears it, the item goes, and the decision is in the ledger', async () => {
     const { inbox, claude, decisions } = await waitingLead();
     const [item] = inbox.view().open;

@@ -227,6 +227,14 @@ describe('trace', () => {
     expect(trace([...events, decided(GOAL)], { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Captain')).toBe(false);
   });
 
+  it('includes the goal’s intent and decisions, and not another goal’s or a pull request’s', () => {
+    const intent = (goal: string) => ev({ kind: 'intent', goalId: goal, goal, by: 'Lt. A', what: 'Typed decisions', constraints: [] }, 8);
+    const decision = (goal: string) => ev({ kind: 'decision', id: `${goal}.d1`, status: 'open', goalId: goal, goal, owner: 'Lt. A', by: 'Lt. A', question: 'JSON?', options: ['yes', 'no'] }, 8);
+    const all = [...events, intent(GOAL), decision(GOAL), intent('Another goal'), decision('Another goal')];
+    expect(trace(all, { kind: 'goal', title: GOAL }).steps.filter((s) => s.tag === 'Intent' || s.tag === 'Decision').map((s) => s.tag)).toEqual(['Intent', 'Decision']);
+    expect(trace(all, { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Intent' || s.tag === 'Decision')).toBe(false);
+  });
+
   it('includes the goal closing when it has', () => {
     const closed = ev({ kind: 'goal-closed', goal: { id: 'g', title: GOAL, slices: 2, prs: [], leadName: 'Lt. Halloran', openedAt: at(0), closedAt: at(10) } }, 10);
     const t = trace([...events, closed], { kind: 'goal', title: GOAL });

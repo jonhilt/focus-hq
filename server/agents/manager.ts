@@ -308,8 +308,8 @@ export class AgentManager {
     return this.core.ledger.backfillReplies();
   }
 
-  record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
-    this.core.ledger.record(projectId, entry, at);
+  record(projectId: string, entry: LedgerEntry, at = Date.now()): string | undefined {
+    return this.core.ledger.record(projectId, entry, at);
   }
 
   /** Starts the plugins switched on (docs/plugins.md), lending each the manager's seating and terminals, and what Focus lends. */

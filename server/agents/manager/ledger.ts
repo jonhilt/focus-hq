@@ -1,4 +1,5 @@
 import { type Closer, type LedgerEntry, type LedgerEvent, reportCard, type ReportCard, type SessionDigest } from '../../../shared/ledger';
+import { decisionChangeProblem, lineProblem } from '../../../shared/decisions';
 import type { Transcript } from '../transcript';
 import { backfillWho, captainReplies, digestEntry, lastDigest, transcriptSpan } from '../sessionDigest';
 import { prKey, qaBadge } from '../../../shared/qa';
@@ -172,11 +173,20 @@ export class Ledger extends Part {
     return agent.pr ? [{ repo: agent.repo, pr: agent.pr.number }] : [];
   }
 
-  /** Writes an entry in the ledger, shows the chief engineer the new report card, and tells the plugins. */
-  record(projectId: string, entry: LedgerEntry, at = Date.now()): void {
+  /**
+   * Writes an entry in the ledger, shows the chief engineer the new report card, and tells the plugins. An intent or
+   * decision that's broken, or a decision change that can't follow the ones before it, isn't written: why is returned.
+   */
+  record(projectId: string, entry: LedgerEntry, at = Date.now()): string | undefined {
+    const refused = lineProblem(entry) ?? (entry.kind === 'decision' ? decisionChangeProblem(this.store.ledger, entry) : undefined);
+    if (refused) {
+      console.warn(`[ledger] not writing a ${entry.kind} line: it ${refused}`);
+      return refused;
+    }
     const event = this.store.record({ ...entry, at, projectId });
     this.hub.send({ type: 'report', report: this.report() });
     this.core.plugins.ledgerRecorded(event);
+    return undefined;
   }
 
   /** The ledger's last 30 days, summed up. */
