@@ -42,6 +42,10 @@ export function demoLedger(shopId: string, gameId: string, now: number): LedgerE
       { id: 'c2', text: 'Guest checkout still asks for an address twice on mobile', slice: 2, at: now - 60 * HOUR },
       { id: 'c3', text: 'Try a map picker for the address', slice: 2, at: now - 58 * HOUR, closed: { as: 'dropped', why: 'Nobody asked for it', slice: 2, at: now - 50 * HOUR } },
     ] } }],
+    // the shop's compass, for the intents plugin's view and Sort for me to judge its threads against
+    [47, shopId, { kind: 'intent', by: 'the user', what: 'A webshop returning shoppers trust with their orders', constraints: ['Never break checkout for a live order', 'Build only what shoppers ask for'] }],
+    [47, shopId, { kind: 'intent', id: 'checkout-in-seconds', by: 'the user', what: 'Checkout in seconds: a returning shopper pays without typing anything twice', constraints: [] }],
+    [47, shopId, { kind: 'intent', id: 'orders-arrive', by: 'the user', what: 'Orders arrive: every order reaches the right address, first time', constraints: [], why: 'Saved addresses can ship to a typo' }],
     [30, gameId, session('demo-s4', 'Lt. Okafor', 'lead', split, facts(30, 1.9))],
     [28, gameId, { kind: 'conflicts', ...split, resolved: 'agent', files: ['src/game.ts', 'src/asteroid.ts'] }],
     [27.5, gameId, session('demo-s5', 'Ensign Moreau', 'conflicts', split, facts(9, 0.7, { wastedCalls: 3 }))],

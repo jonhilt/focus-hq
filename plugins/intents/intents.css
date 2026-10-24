@@ -1,0 +1,12 @@
+/* the intents plugin's view in a project's goals panel: what the project is for, then one card per intent */
+.intents-intro { margin-top: 0; }
+.intents-about, .intents-row { padding: 8px 12px; }
+.intents-about { border-left: 3px solid var(--lcars-gold); }
+.intents-what { overflow-wrap: anywhere; }
+.intents-what b { color: var(--lcars-peach); }
+.intents-guardrails { margin: 4px 0 0; padding-left: 18px; }
+.intents-agreed { display: block; margin-top: 2px; }
+.intents-view h3 { margin: 12px 0 6px; font-size: 15px; color: var(--lcars-peach); }
+.intents-form { margin-top: 6px; }
+.intents-field { display: block; width: 100%; box-sizing: border-box; margin-bottom: 6px; resize: vertical; }
+.intents-actions { margin-top: 6px; gap: 6px; flex-wrap: wrap; }

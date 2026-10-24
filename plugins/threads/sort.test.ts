@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalRecord, LedgerEvent } from '../../plugin-api/shared';
 import type { Thread } from './shared';
-import { closedGoals, demoAnswer, proposalsFrom, SORT_LIMIT, sortPrompt, toSort } from './sort';
+import { closedGoals, demoAnswer, proposalsFrom, SORT_LIMIT, sortPrompt, sortRecord, toSort } from './sort';
 
 const at = (d: number) => Date.UTC(2026, 9, d);
 const thread = (contact: string, more: Partial<Thread> = {}): Thread =>
@@ -36,19 +36,57 @@ describe('what the model is told', () => {
   });
 
   it('lists the goals under way and closed, then each thread by an id of its own, saying where it came from', () => {
-    const prompt = sortPrompt(
-      [thread('c1'), thread('next-abc', { idea: true, text: 'Remember more than one address' })],
-      [record('g2', at(15), { title: 'Saved addresses', note: { done: 'A shopper keeps three addresses', learned: ['The lookup needs a key'], next: [] } })],
-      [{ lead: { station: 0, title: 'Save for later', repos: [], slice: 1, prs: [], note: { done: 'Items saved across devices', learned: [], next: ['Share a list'] } } }],
-      at(24),
-    );
+    const prompt = sortPrompt([thread('c1'), thread('next-abc', { idea: true, text: 'Remember more than one address' })], {
+      now: at(24),
+      closed: [record('g2', at(15), { title: 'Saved addresses', note: { done: 'A shopper keeps three addresses', learned: ['The lookup needs a key'], next: [] } })],
+      leads: [{ lead: { station: 0, title: 'Save for later', repos: [], slice: 1, prs: [], note: { done: 'Items saved across devices', learned: [], next: ['Share a list'] } } }],
+    });
     expect(prompt).toBe([
       'Today is 2026-10-24.',
+      'The project’s intents: none agreed yet.',
       'Goals under way:\n- “Save for later”: done looks like: Items saved across devices; next: Share a list',
       'Goals closed, the latest first:\n- “Saved addresses” (closed 2026-10-15): done looked like: A shopper keeps three addresses; learned: The lookup needs a key',
+      'The user’s latest decisions on this project, oldest first:\n- none',
       'Threads to decide:\nt1 · from “Checkout” (closed 2026-10-12) · contact, noticed 2026-10-10 · thread c1\nt2 · from “Checkout” (closed 2026-10-12) · idea for next · Remember more than one address',
     ].join('\n\n'));
-    expect(sortPrompt([thread('c1')], [], [], at(24))).toMatch(/^Today is 2026-10-24\.\n\nGoals under way:\n- none\n\nGoals closed, the latest first:\n- none/);
+    expect(sortPrompt([thread('c1')], { now: at(24), closed: [], leads: [] })).toMatch(/^Today is 2026-10-24\.\n\nThe project’s intents: none agreed yet\.\n\nGoals under way:\n- none\n\nGoals closed, the latest first:\n- none/);
+  });
+
+  it('starts with the project’s compass, when it has one: what it’s for, its guardrails, and each intent', () => {
+    const line = (seq: number, more: { id?: string; what: string; constraints?: string[] }): Extract<LedgerEvent, { kind: 'intent' }> =>
+      ({ seq, at: seq, projectId: 'shop', kind: 'intent', by: 'the user', constraints: [], ...more });
+    const compass = [line(1, { what: 'A shop people trust', constraints: ['Never break checkout', 'Build only what shoppers ask for'] }), line(2, { id: 'value', what: 'Deliver value: orders arrive' }), line(3, { id: 'reach', what: 'More shoppers' })];
+    expect(sortPrompt([thread('c1')], { now: at(24), closed: [], leads: [], intents: compass }).split('\n\n')[1]).toBe([
+      'What the project is for: A shop people trust',
+      'Its guardrails, how the work is done: Never break checkout; Build only what shoppers ask for',
+      'Its intents, what the work is for:\n- Deliver value: orders arrive\n- More shoppers',
+    ].join('\n'));
+    expect(sortPrompt([thread('c1')], { now: at(24), closed: [], leads: [], intents: compass.slice(1) }).split('\n\n')[1]).toMatch(/^What the project is for: not said\nIts intents/);
+  });
+});
+
+describe('the record a sort reads', () => {
+  it('reads a project’s goals with their pull requests, merged at the close or since, and the user’s decisions that say something', () => {
+    const ev = (seq: number, entry: Record<string, unknown>, projectId = 'shop') => ({ seq, at: at(seq), projectId, ...entry }) as LedgerEvent;
+    const pr = (number: number, outcome?: 'merged') => ({ repo: 'acme/api', number, url: '', ...(outcome && { outcome }) });
+    const decided = (seq: number, answer: string, projectId = 'shop') => ev(seq, { kind: 'captain-decision', agent: 'Lt. Reyes', goal: 'Saved addresses', item: { id: 'q', kind: 'turn', what: 'Keep the toggle?' }, answer, via: 'api' }, projectId);
+    const events = [
+      ev(1, { kind: 'goal-closed', goal: record('g2', at(1), { title: 'Saved addresses', prs: [pr(12, 'merged'), pr(13), pr(14)] }) }),
+      ev(2, { kind: 'merged', repo: 'acme/api', pr: 13, by: 'github', qa: 'passed', failedRounds: 0, triages: 0 }),
+      ev(3, { kind: 'merged', repo: 'acme/api', pr: 14, by: 'github', qa: 'passed', failedRounds: 0, triages: 0 }, 'blog'),
+      decided(4, 'Keep the toggle and log the cleanup as a loose thread.'),
+      decided(5, 'Sent the chief of staff’s words'),
+      decided(6, 'continue'),
+      decided(7, 'Drop the map picker, nobody asked for it', 'blog'),
+      ev(8, { kind: 'intent', by: 'the user', what: 'A shop people trust', constraints: [] }),
+    ];
+    const r = sortRecord(events, 'shop', [], at(24));
+    expect(r.decisions).toEqual([{ at: at(4), goal: 'Saved addresses', asked: 'Keep the toggle?', said: 'Keep the toggle and log the cleanup as a loose thread.' }]);
+    expect(r.intents?.map((i) => i.what)).toEqual(['A shop people trust']);
+    expect(sortPrompt([thread('c1')], r).split('\n\n').slice(3, 5)).toEqual([
+      'Goals closed, the latest first:\n- “Saved addresses” (closed 2026-10-01): pull requests: api#12 merged, api#13 merged, api#14 open',
+      'The user’s latest decisions on this project, oldest first:\n- 2026-10-04 · “Saved addresses” · asked: Keep the toggle? · said: Keep the toggle and log the cleanup as a loose thread.',
+    ]);
   });
 });
 

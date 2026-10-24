@@ -4,7 +4,7 @@
 import os from 'node:os';
 import { demoPace, errorMessage, type FocusPlugin, type PluginGoals, type PluginHost, type PluginParts, sleep } from '../../plugin-api/server';
 import { acceptances, afterLine, closedThreads, decision, freshThreads, lastSort, lastSorts, spunOffEntry, type Thread, THREADS, type ThreadsState, toSpinOff } from './shared';
-import { closedGoals, demoAnswer, proposalsFrom, SORT_MODEL, SORT_SCHEMA, SORT_SYSTEM, sortPrompt, toSort } from './sort';
+import { demoAnswer, proposalsFrom, SORT_MODEL, SORT_SCHEMA, SORT_SYSTEM, sortPrompt, sortRecord, toSort } from './sort';
 
 /** What the threads plugin asks of Focus: starting a goal is all it does with the ship's goals, and Sort for me asks a model. */
 export type ThreadsHost = Pick<PluginHost, 'state' | 'ledger' | 'record' | 'agents' | 'on' | 'demo' | 'settings' | 'readOnlySession' | 'toast'> & {
@@ -45,7 +45,7 @@ export function threadsParts(host: ThreadsHost): PluginParts {
       cwd: os.tmpdir(),
       system: SORT_SYSTEM,
       systemAppend: '',
-      prompt: sortPrompt(listed, closedGoals(host.ledger(), projectId), leadsIn(projectId), Date.now()),
+      prompt: sortPrompt(listed, sortRecord(host.ledger(), projectId, leadsIn(projectId), Date.now())),
       settings: host.settings(),
       signal: new AbortController().signal,
       activity: () => undefined,
