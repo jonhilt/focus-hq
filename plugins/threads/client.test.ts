@@ -39,7 +39,7 @@ vi.mock('../../plugin-api/client', async () => ({
 }));
 vi.mock('./threads.css', () => ({}));
 
-const { default: threads, decidedLine, sortSaid, threadsView } = await import('./client');
+const { default: threads, decidedLine, proposedLine, sortSaid, threadsView } = await import('./client');
 
 const opened: string[] = [];
 const errors: string[] = [];
@@ -145,6 +145,7 @@ describe('a project’s threads in its goals panel', () => {
     expect(decidedLine(closedThread('c1', 1, { as: 'resolved', at: 2 }))).toBe('Resolved · 2d ago');
     expect(decidedLine(closedThread('c1', 1, { as: 'resolved', note: '#1262', at: 2 }))).toBe('Resolved: #1262 · 2d ago');
     expect(decidedLine(closedThread('c1', 1, { as: 'parked', note: 'until the redesign', at: 2 }))).toBe('Parked: until the redesign · 2d ago');
+    expect(decidedLine(closedThread('c1', 1, { as: 'next', note: 'Serves Exactly right: the audit takes it', proposed: true, at: 2 }))).toBe('Next: Serves Exactly right: the audit takes it · 2d ago');
     expect(decidedLine(closedThread('c1', 1))).toBeNull();
   });
 
@@ -203,6 +204,7 @@ describe('a project’s threads in its goals panel', () => {
     sent = { sorts: {}, sorting: {}, closed: { shop: [{ ...closedThread('c2', 9), proposed: { as: 'dropped', note: 'Covered by #1236', at: 4 } }] } };
     const row = threadsView(ui, 'shop').querySelector('.threads-row:not(.live)') ?? undefined;
     expect(row?.querySelector('.threads-proposed')?.textContent).toBe('Proposed · Dropped: Covered by #1236');
+    expect(proposedLine({ ...closedThread('c3', 9), proposed: { as: 'next', note: 'Exactly right: the audit takes it', at: 4 } })).toBe('Proposed · Next: Exactly right: the audit takes it');
     expect([...(row?.querySelectorAll('button') ?? [])].map((b) => b.textContent)[0]).toBe('Accept');
     button(row, 'Accept')?.click();
     await settle();

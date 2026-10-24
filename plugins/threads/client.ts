@@ -22,6 +22,9 @@ const ENDS: Record<ThreadEnd, { button: string; ask: string; said: string }> = {
   resolved: { button: 'Resolved', ask: 'What resolved it? (a pull request, a goal)', said: 'Resolved:' },
 };
 
+/** How an end is said before its note: a next a model proposed says why it's next rather than who takes it on. */
+const said = (as: ThreadEnd, proposed?: true) => (proposed && as === 'next' ? 'Next:' : ENDS[as].said);
+
 /** The ends offered for a thread as it stands: every one but its own. */
 const offered = (t: RegisterThread): ThreadEnd[] => THREAD_ENDS.filter((end) => end !== t.decided?.as);
 
@@ -100,12 +103,12 @@ export const decidedLine = (t: RegisterThread, title?: string): string | null =>
   if (!d) return null;
   if (d.spunOff) return `Spun off as “${title ?? d.spunOff.title}” · ${timeAgo(d.at)}`;
   const note = d.note ?? (d.as === 'next' ? 'you' : '');
-  return `${note ? `${ENDS[d.as].said} ${note}` : ENDS[d.as].button} · ${timeAgo(d.at)}`;
+  return `${note ? `${said(d.as, d.proposed)} ${note}` : ENDS[d.as].button} · ${timeAgo(d.at)}`;
 };
 
 /** What a model proposed of a thread still to decide, in words, as a decision of it would say it. */
 export const proposedLine = (t: RegisterThread): string | null =>
-  t.proposed && !t.decided ? `Proposed · ${ENDS[t.proposed.as].said} ${t.proposed.note}` : null;
+  t.proposed && !t.decided ? `Proposed · ${said(t.proposed.as, true)} ${t.proposed.note}` : null;
 
 /** A button that opens a lead's panel, saying why they're the one to talk to. */
 const talk = (ui: Ui, lead: Pick<Agent, 'id' | 'name'>, why: string) =>

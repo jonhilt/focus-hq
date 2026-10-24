@@ -69,9 +69,21 @@ const unlisted = (line: string) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/, ''
 /** The lines of `text`, one item each, empty ones left out. */
 export const itemsOf = (text: unknown): string[] => (typeof text === 'string' ? text.split('\n').map(unlisted).filter(Boolean) : []);
 
+/** Up to 40 characters of `words` as an id, cut at a whole word (a first word longer than that is cut short). */
+function slug(words: string): string {
+  const all = words.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  let id = '';
+  for (const w of all) {
+    const longer = id ? `${id}-${w}` : w;
+    if (longer.length > 40) break;
+    id = longer;
+  }
+  return id || all[0]?.slice(0, 40) || 'intent';
+}
+
 /** An id for a new intent from its words (its name, or its first words), not one of `taken`. */
 export function newId(what: string, taken: ReadonlySet<string>): string {
-  const base = (intentName(what) ?? what.split(' ').slice(0, 5).join(' ')).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/, '') || 'intent';
+  const base = slug(intentName(what) ?? what.split(' ').slice(0, 5).join(' '));
   let id = base;
   for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
   return id;

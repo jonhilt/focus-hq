@@ -59,6 +59,8 @@ describe('the words of an intent', () => {
     expect(newId('Deliver value, reliably: each goal lands', new Set())).toBe('deliver-value-reliably');
     expect(newId('Only what needs me reaches me, nothing lost', new Set(['only-what-needs-me-reaches']))).toBe('only-what-needs-me-reaches-2');
     expect(newId('¡¿?!', new Set())).toBe('intent');
+    expect(newId('Every client on the new proposal flow, the legacy one gone: the whole lifecycle', new Set())).toBe('every-client-on-the-new-proposal-flow');
+    expect(newId(`${'x'.repeat(50)}: what it’s for`, new Set())).toBe('x'.repeat(40));
   });
 });
 

@@ -208,6 +208,8 @@ describe('what a model proposed of a project’s threads', () => {
     });
     const all = acceptances(threads, new Set(), { as: 'dropped' });
     expect('entries' in all && all.entries.map((e) => e.kind === 'thread-decided' && e.contact)).toEqual(['c1', 'c2']);
+    const line: LedgerEvent = { seq: 4, at: 404, projectId: 'shop', kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact: 'c1', text: 'thread c1', as: 'dropped', note: 'stale', proposed: true };
+    expect(closed([proposed(2, [{ contact: 'c1', as: 'dropped', note: 'stale' }]), line])[0]?.decided).toEqual({ as: 'dropped', note: 'stale', proposed: true, at: 404 });
   });
 
   it('refuses what can’t be accepted, saying why', () => {

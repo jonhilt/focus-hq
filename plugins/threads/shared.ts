@@ -33,9 +33,9 @@ export interface Thread {
   closedAt?: number;
   /**
    * Where the captain decided it ends, and when; missing until they have (and while its goal's under way: it's its
-   * lead's). `spunOff`: the goal of its own it was taken on as (next).
+   * lead's). `spunOff`: the goal of its own it was taken on as (next); `proposed`: accepted as a model proposed it.
    */
-  decided?: { as: ThreadEnd; note?: string; spunOff?: SpunOff; at: number };
+  decided?: { as: ThreadEnd; note?: string; spunOff?: SpunOff; proposed?: true; at: number };
   /** Where a model proposed it ends (Sort for me), and why, while it's still to decide. */
   proposed?: { as: ThreadEnd; note: string; at: number };
 }
@@ -110,7 +110,7 @@ function withDecided(closed: ThreadsState['closed'], e: ThreadDecided): ThreadsS
   const same = (t: Thread) => t.goal === e.goalId && t.contact === e.contact;
   if (!threads.some(same)) return closed;
   const decide = ({ decided, proposed, ...t }: Thread): Thread =>
-    (e.as === 'open' ? t : { ...t, decided: { as: e.as, ...(e.note && { note: e.note }), ...(e.spunOff && { spunOff: e.spunOff }), at: e.at } });
+    (e.as === 'open' ? t : { ...t, decided: { as: e.as, ...(e.note && { note: e.note }), ...(e.spunOff && { spunOff: e.spunOff }), ...(e.proposed && { proposed: e.proposed }), at: e.at } });
   return { ...closed, [e.projectId]: threads.map((t) => (same(t) ? decide(t) : t)) };
 }
 
