@@ -4,6 +4,7 @@ import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 import type { Hub } from '../hub';
 import type { Store } from '../store';
 import { errorMessage, truncate } from '../util';
+import { crewPrompt } from './crewFiles';
 
 export interface DraftRequest {
   projectId: string;
@@ -176,41 +177,12 @@ export function repoFolders(repos: string[]): Map<string, string> {
 /** Where the project's repos are, for a planner's system prompt. */
 export function repoList(repos: string[]): string {
   const folders = repoFolders(repos);
-  return `The project's repositories are checked out read-only, at their default branch, in your current directory:
-${repos.map((r) => `- \`${folders.get(r)}/\`: ${r}`).join('\n')}`;
+  return repos.map((r) => `- \`${folders.get(r)}/\`: ${r}`).join('\n');
 }
 
-/** The issue a planner writes at the Ops station. */
-export const ISSUE_FORMAT = `The issue:
-- title: imperative and specific, under 70 characters ("Show stock levels on the product page").
-- body, in Markdown, with these sections:
-  - \`## Context\`: why this is wanted and how things work today, naming the files involved.
-  - \`## What to build\`: the change, concretely.
-  - \`## Acceptance criteria\`: a checklist (\`- [ ]\`) of observable, testable outcomes, including edge cases and anything that must keep working.
-  - \`## Out of scope\`: what to leave alone (skip it if nothing needs saying).
-  - \`## Assumptions\`: only if you made any.`;
-
+/** The planner's instructions (.focus/crew/planner.md), the issue's format among them. */
 export function plannerSystemPrompt(req: Pick<DraftRequest, 'planner' | 'projectName' | 'repos'>): string {
-  return `
-# You are ${req.planner.name}, operations officer for ${req.projectName} aboard the Focus
-
-The manager hands you a rough idea. You write it up as a GitHub issue that a Claude Code agent will build on its own, with nobody to ask, and that a reviewer will later check the pull request against. The issue is all they get, so make it specific to this codebase.
-
-${repoList(req.repos)}
-
-How to work:
-- You can only read (Read, Glob, Grep). Start with the relevant repo's CLAUDE.md or README, then look at the code the change touches, so the issue names real files, modules and conventions.
-- Spend a few minutes, not an audit: you're scoping the work, not doing it. Describe the outcome and point at where it lives; don't write the implementation into the issue.
-- Don't add requirements the manager didn't ask for. Where the idea is ambiguous, pick the sensible reading and note it under Assumptions so the manager can correct it.
-- Size it for one agent in one sitting. If the idea is much bigger, write up the first useful slice and list the rest under Out of scope.
-- If the idea is much bigger than one agent can build in one sitting, or too vague to write testable acceptance criteria for, also fill in tooBig with a one-line reason. The manager is then offered to start it as a goal, where a lead of its own builds toward it one small slice at a time. Leave tooBig out for an ordinary, well-defined change.
-- Pick the repository the work belongs in. If it spans several, pick the one with most of the work and mention the others under Context.
-- ${PUBLIC_WORDS_RULE}
-
-${ISSUE_FORMAT}
-
-Finish with the structured result: repo, title and body (and tooBig, only when it applies).
-`.trim();
+  return crewPrompt('planner', { name: req.planner.name, project: req.projectName, repoList: repoList(req.repos), publicWordsRule: PUBLIC_WORDS_RULE }).trim();
 }
 
 export function plannerPrompt(req: Pick<DraftRequest, 'idea' | 'revise'>): string {

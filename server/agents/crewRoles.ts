@@ -45,6 +45,17 @@ export const CREW_ROLES = {
     ],
     textVars: { baseBranch: 'text', run: 'text', checks: 'text', maxScreenshots: 'text', recorded: 'flag', scratchRule: 'text', waitRule: 'text' },
   },
+  /** The operations officer writing up an idea as an issue at the Ops station: `plannerSystemPrompt` (planner.ts). */
+  planner: { vars: { name: 'text', project: 'text', repoList: 'text', publicWordsRule: 'text' }, settings: ['maxTurns', 'timeout'] },
+  /** The operations officer looking into a stuck pull request: `triageSystemPrompt` (triage.ts). */
+  triage: { vars: { name: 'text', project: 'text', number: 'text', publicWordsRule: 'text' }, settings: ['maxTurns', 'timeout'] },
+  /**
+   * The QA officer answering the captain at the Playbook: `qaChatSystemPrompt` (qaChat.ts). Its model is QA's, from the
+   * captain's Settings, so the file doesn't give one.
+   */
+  'qa-chat': { vars: { name: 'text', project: 'text', autoQa: 'text', autoSendBack: 'text', qaProof: 'text', autoMerge: 'text' }, settings: ['maxTurns', 'timeout'] },
+  /** Titling a new goal from the captain's first words: `goalTitleSystemPrompt` (goalTitles.ts). */
+  'goal-title': { vars: {}, settings: ['model', 'maxTurns', 'timeout'] },
 } as const satisfies Record<string, CrewRole>;
 
 export type CrewRoleName = keyof typeof CREW_ROLES;

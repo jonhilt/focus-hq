@@ -3,6 +3,11 @@ import type { Agent } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
 import { leadSystemAppend } from './lead';
 import { qaPlaybook, qaSystemAppend } from './qa';
+import { crewSession } from './claudeCrew';
+import { goalTitleSystemPrompt } from './goalTitles';
+import { plannerSystemPrompt } from './planner';
+import { qaChatSystemPrompt } from './qaChat';
+import { triageSystemPrompt } from './triage';
 import { systemAppend } from './prompts';
 
 // The crew's system prompts, word for word, as they were before they moved out of the code into .focus/crew/: a
@@ -90,5 +95,31 @@ describe('the QA officer’s system prompt', () => {
     const steps = (proof: boolean) => qaPlaybook('Lt. Nakamura', { ...shop, repos: ['acme/shop'], qaProof: proof, qaVideo: true }, repos).steps.map((s) => `## ${s.title}\n\n${s.text}`).join('\n\n');
     await expect(steps(true)).toMatchFileSnapshot(golden('qa-playbook-steps'));
     await expect(steps(false)).toMatchFileSnapshot(golden('qa-playbook-steps-no-proof'));
+  });
+});
+
+describe('the read-only crew’s system prompts', () => {
+  const officer = { name: 'Lt. Varga', avatar: agent().avatar };
+
+  it('are word for word what they were: the planner, with one repo or several', async () => {
+    await expect(plannerSystemPrompt({ planner: officer, projectName: 'Acme Shop', repos: ['acme/shop'] })).toMatchFileSnapshot(golden('planner'));
+    await expect(plannerSystemPrompt({ planner: officer, projectName: 'Acme Shop', repos: ['acme/shop', 'acme/api', 'other/shop'] })).toMatchFileSnapshot(golden('planner-repos'));
+  });
+
+  it('are word for word what they were: triage, the QA chat and the goal titler', async () => {
+    const pr = { number: 42, title: 'Save items for later', body: '', url: '', branch: 'b', baseBranch: 'main', headSha: '0123456', linkedIssues: [] };
+    await expect(triageSystemPrompt({ officer, projectName: 'Acme Shop', pr })).toMatchFileSnapshot(golden('triage'));
+    await expect(qaChatSystemPrompt({ officer: 'Lt. Nakamura', projectName: 'Acme Shop' })).toMatchFileSnapshot(golden('qa-chat'));
+    await expect(goalTitleSystemPrompt()).toMatchFileSnapshot(golden('goal-title'));
+  });
+});
+
+describe('the read-only crew’s sessions', () => {
+  // what claudeCrew.ts gave each before they moved: TITLE_MODEL, maxTurns and timeoutMs by hand, or runReadOnly's defaults
+  it('run on the same model, for as many turns and as long as they did', () => {
+    expect(crewSession('goal-title')).toEqual({ model: 'claude-haiku-4-5-20251001', maxTurns: 2, timeoutMs: 60_000 });
+    expect(crewSession('qa-chat')).toEqual({ maxTurns: 3, timeoutMs: 3 * 60_000 });
+    expect(crewSession('planner')).toEqual({ maxTurns: 40, timeoutMs: 8 * 60_000 });
+    expect(crewSession('triage')).toEqual({ maxTurns: 40, timeoutMs: 8 * 60_000 });
   });
 });

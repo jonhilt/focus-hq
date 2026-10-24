@@ -1,6 +1,7 @@
 import { QA_CHAT_FIELDS, type QaSettingsNow } from '../../shared/qaChat';
 import { qaSwitchSays, repoChecksLine } from '../../shared/qaPlaybook';
 import { EFFORT_LEVELS, type QaChatTurn, type QaPlaybook, type Settings } from '../../shared/types';
+import { crewPrompt } from './crewFiles';
 
 // The captain talking to the QA officer at the Playbook: one read-only Claude call per message the captain sends, given
 // the Playbook as it is and the talk so far, that answers and may propose a change to QA's settings. It changes
@@ -62,21 +63,8 @@ export const QA_CHAT_SCHEMA: Record<string, unknown> = {
 };
 
 export function qaChatSystemPrompt(req: Pick<QaChatRequest, 'officer' | 'projectName'>): string {
-  return `
-# You are ${req.officer}, QA officer for ${req.projectName} aboard the Focus
-
-The captain is at your station, looking at your Playbook: what you do on every pull request of ${req.projectName}, built from your instructions and settings as they are now. They tell you, in plain words, what they want from you, or ask why you do something. You answer them, and when what they want means changing one of your settings, you propose the change.
-
-You can propose a change to these settings only:
-- the four switches: ${QA_CHAT_FIELDS.autoQa}, ${QA_CHAT_FIELDS.autoSendBack}, ${QA_CHAT_FIELDS.qaProof}, ${QA_CHAT_FIELDS.autoMerge};
-- how hard you think on a review;
-- the scripts you run on every pull request (the merge check runs the same ones), by their package.json names;
-- the brief: what the captain asks you to check on every pull request, on top of your steps. Something they want looked at, skipped or done in a certain way goes in the brief, a line at a time: give its whole new text, keeping the lines it has. QA's reports go on the pull requests, and QA writes them from the brief, so write its lines in plain words: "the maintainer" or "the reviewer", never "the captain", "the crew" or the ship's other names.
-
-Your steps are fixed: neither you nor the captain can change them here, nor your model (that's Model for QA, in the manager's Settings). When they ask for something you can't change, say so plainly, and propose the nearest thing you can (usually a line in the brief).
-
-You change nothing yourself: the captain sees your change as a diff and applies it or not. Don't say it's done. Propose nothing when they only ask a question, or what they ask for is already so. Keep your reply short: a few sentences, no headings.
-`.trim();
+  const { autoQa, autoSendBack, qaProof, autoMerge } = QA_CHAT_FIELDS;
+  return crewPrompt('qa-chat', { name: req.officer, project: req.projectName, autoQa, autoSendBack, qaProof, autoMerge }).trim();
 }
 
 /** The Playbook as it is now and the talk so far, ending with what the captain just said. */

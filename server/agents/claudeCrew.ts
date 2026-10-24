@@ -12,6 +12,8 @@ import type { ChatProject, ShipStatus } from './shipStatus';
 import { renderToolUse } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
+import { crewFile } from './crewFiles';
+import type { CrewRoleName } from './crewRoles';
 import { tidyGoalTitle } from '../../shared/goalTitle';
 import { fieldsOf } from '../../shared/records';
 import { GOAL_TITLE_SCHEMA, goalTitlePrompt, goalTitleSystemPrompt } from './goalTitles';
@@ -27,6 +29,15 @@ export type ReadOnlyTool = 'Read' | 'Glob' | 'Grep' | 'WebSearch' | 'WebFetch';
 export const CODE_TOOLS: ReadOnlyTool[] = ['Read', 'Glob', 'Grep'];
 export const WEB_TOOLS: ReadOnlyTool[] = ['WebSearch', 'WebFetch'];
 const TURN_TIMEOUT_MS = 8 * 60_000;
+
+/**
+ * A crew session's model, turns and time, from its role's crew file (.focus/crew/): what the file leaves out is a
+ * read-only session's default (the captain's model, 40 turns, `TURN_TIMEOUT_MS`).
+ */
+export function crewSession(role: CrewRoleName): Pick<ReadOnlyRun, 'model' | 'maxTurns' | 'timeoutMs'> {
+  const { model, maxTurns, timeoutMs } = crewFile(role).settings;
+  return { ...(model && { model }), ...(maxTurns && { maxTurns }), ...(timeoutMs && { timeoutMs }) };
+}
 
 /** planning/<project>/<repo>: one folder per repo under the session's cwd, so Glob and Grep reach all of them. */
 const planningDir = (projectId: string) => path.join(paths.planning, projectId);
@@ -204,6 +215,7 @@ export class ClaudeDrafter implements Drafter {
       builtins: CODE_TOOLS,
       resume: req.resumeSessionId,
       schema: draftSchema(req.repos),
+      ...crewSession('planner'),
     }).catch((err: Error) => {
       throw req.signal.aborted ? new Error('Discarded') : err;
     });
@@ -223,6 +235,7 @@ export class ClaudeTriager implements Triager {
       activity,
       builtins: CODE_TOOLS,
       schema: TRIAGE_SCHEMA,
+      ...crewSession('triage'),
     });
     const decision = parseTriage(result.structured);
     if (!decision) throw new Error('Finished without choosing what to do');
@@ -246,9 +259,8 @@ export class ClaudeQaChat implements QaChatter {
       activity: () => undefined,
       builtins: [],
       schema: QA_CHAT_SCHEMA,
+      ...crewSession('qa-chat'),
       model: qaAgentModel(req.settings),
-      maxTurns: 3,
-      timeoutMs: 3 * 60_000,
     });
     const answer = parseQaChat(result.structured);
     if (!answer) throw new Error('The QA officer finished without answering');
@@ -314,10 +326,7 @@ export function shipTools(req: { projects: ChatProject[]; shipStatus: () => Prom
   ];
 }
 
-/** The model that titles a new goal: a quick, cheap job. */
-export const TITLE_MODEL = 'claude-haiku-4-5-20251001';
-
-/** A short title for a goal from the captain's first words, by Haiku; undefined when it doesn't give a usable one. */
+/** A short title for a goal from the captain's first words, on its crew file's model (Haiku); undefined when it doesn't give a usable one. */
 export async function titleGoal(brief: string, settings: Settings): Promise<string | undefined> {
   const result = await runReadOnly({
     cwd: os.tmpdir(),
@@ -329,9 +338,7 @@ export async function titleGoal(brief: string, settings: Settings): Promise<stri
     activity: () => undefined,
     builtins: [],
     schema: GOAL_TITLE_SCHEMA,
-    model: TITLE_MODEL,
-    maxTurns: 2,
-    timeoutMs: 60_000,
+    ...crewSession('goal-title'),
   });
   return tidyGoalTitle(fieldsOf(result.structured).title);
 }
