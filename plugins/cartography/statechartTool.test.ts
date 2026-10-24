@@ -16,6 +16,7 @@ function lead(): { context: LeadToolContext; shown: { id: string; title: string;
       return Promise.resolve(`“${page.title}” is on your station's screen.`);
     },
     showFrames: () => Promise.reject(new Error('The statechart tool takes no frames')),
+    takeFrames: () => Promise.reject(new Error('The statechart tool takes no frames')),
   };
   return { context, shown };
 }

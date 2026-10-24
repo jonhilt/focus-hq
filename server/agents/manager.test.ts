@@ -1839,6 +1839,34 @@ describe('AgentManager', () => {
       expect(reply.images.map(String)).toEqual(['beat at 1', 'beat at 2.5']);
       expect(store.agent(lead.id).lead!.artifacts).toEqual([{ id: 'film', title: 'A film', at: expect.any(Number), image: true, slice: 1 }]);
     });
+
+    it('takes the pictures of a draft off the screen, and none when Ops can’t', async () => {
+      const { agents, claude, store, project } = focus();
+      project.plugins = ['framer'];
+      agents.startPlugins([{
+        id: 'framer',
+        start: () => ({
+          leadTools: [{
+            name: 'draft',
+            description: 'Checks a draft',
+            input: {},
+            run: async (lead) => {
+              const clip = { x: 0, y: 0, width: 100, height: 50 };
+              const [taken, failed] = await Promise.all([lead.takeFrames('<p>draft</p>', { at: [1, 2.5], clip }), lead.takeFrames('<p>unrenderable</p>', { at: [1], clip })]);
+              return { text: `Saw ${taken.map((f) => JSON.stringify(f.seen)).join(', ')}; ${failed.length} of the other`, images: taken.map((f) => f.image) };
+            },
+          }],
+        }),
+      }], { demo: false, ownRepo: () => undefined });
+      const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => claude.turns.length === 1);
+      const [draft] = claude.turns[0].req.tools!.extra!;
+      const reply = await draft.run({});
+      if (typeof reply === 'string') throw new Error(`No pictures came back: ${reply}`);
+      expect(reply.text).toBe('Saw {"flat":0.7,"labels":[]}, {"flat":0.7,"labels":[]}; 0 of the other');
+      expect(reply.images.map(String)).toEqual(['beat at 1', 'beat at 2.5']);
+      expect(store.agent(lead.id).lead!.artifacts ?? []).toEqual([]);
+    });
   });
 
   describe('a plugin’s brief', () => {

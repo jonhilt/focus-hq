@@ -1,5 +1,6 @@
 import { isRecord } from '../../plugin-api/shared';
 import type { Receipt, Ref } from './receipts';
+import { STAGE_TEXT_SCRIPT } from './stageText';
 
 /** A page for the lead's screen, as show takes it. */
 export interface ExplainerPage {
@@ -20,6 +21,34 @@ export const EXPLAINER_LIMITS = { minBeats: 2, maxBeats: 8, label: 16, beatTitle
 export const STAGE_SIZE = { w: 1050, h: 500 } as const;
 /** Where the stage sits on the player's 1280 × 800 page. */
 export const STAGE_AT = { x: 200, y: 58 } as const;
+
+/**
+ * What the stage's styles are scoped to: the box the player holds #stage in, so a rule of the lead's for `#stage` itself
+ * still matches. A rule in it matches only the stage and what's in it, and keeps its own specificity.
+ */
+export const STAGE_SCOPE = '@scope (#kit-stage)';
+
+/**
+ * The lead's css as the page has it: in the stage's scope, so none of it reaches the player, whatever it names (their
+ * `button` or `.hd` styles theirs alone). @import, @charset and @namespace only work at the top of a sheet, so those it
+ * starts with go before the scope (what an @import brings, a web font most likely, isn't scoped); Chromium keeps the
+ * rest (@keyframes, @font-face, @media) working inside it.
+ */
+export function stageSheet(css: string): string {
+  const top = /^(?:\s|\/\*[\s\S]*?\*\/|@(?:charset|import|namespace)\b(?:"[^"]*"|'[^']*'|[^;"'])*;)*/.exec(css)?.[0] ?? '';
+  return `${top}${STAGE_SCOPE} {\n${css.slice(top.length)}\n}`;
+}
+
+/** Whether css closes a block it never opened: that would end the stage's scope early and let the rest out onto the player. */
+export function closesUnopened(css: string): boolean {
+  let depth = 0;
+  // a brace in a comment, a string or an escape isn't one of the sheet's
+  for (const c of css.replace(/\/\*[\s\S]*?(?:\*\/|$)|"(?:[^"\\\n]|\\[\s\S])*"|'(?:[^'\\\n]|\\[\s\S])*'|\\[\s\S]/g, '')) {
+    if (c === '{') depth++;
+    else if (c === '}' && --depth < 0) return true;
+  }
+  return false;
+}
 
 export interface ExplainerBeat {
   title: string;
@@ -50,17 +79,22 @@ const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
 /** JSON that can sit inside a script element: no `</script>` or `<!--` in it can close or confuse the element. */
 const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, '\\u003c');
 
+/** As many of `text`'s first words as fit in `most` characters: nothing when the first doesn't. */
+function wordsUpTo(text: string, most: number): string {
+  let fit = '';
+  for (const word of text.split(' ')) {
+    const next = fit ? `${fit} ${word}` : word;
+    if (next.length > most) break;
+    fit = next;
+  }
+  return fit;
+}
+
 /** The label for a beat's block: the lead's, or as many of the title's words as fit. */
 export function beatLabel(beat: ExplainerBeat): string {
   const own = beat.label && clean(beat.label);
   if (own) return own;
-  let label = '';
-  for (const word of clean(beat.title).replace(/[,.:;!?].*$/, '').split(' ')) {
-    const next = label ? `${label} ${word}` : word;
-    if (next.length > EXPLAINER_LIMITS.label) break;
-    label = next;
-  }
-  return label || clean(beat.title).slice(0, EXPLAINER_LIMITS.label);
+  return wordsUpTo(clean(beat.title).replace(/[,.:;!?].*$/, ''), EXPLAINER_LIMITS.label) || clean(beat.title).slice(0, EXPLAINER_LIMITS.label);
 }
 
 /** What the voice says over a beat: the lead's narration, or failing that its title and caption read out. */
@@ -81,34 +115,62 @@ export function beatMoments(beats: readonly Pick<ExplainerBeat, 'seconds'>[]): n
   });
 }
 
-/** What Ops saw on the stage at one moment: how much of it is one flat colour. */
+/** What Ops saw on the stage at one moment: how much of it is one flat colour, and its text drawn over other text or cut off. */
 export interface StageMoment {
   at: number;
   /** The share (0 to 1) of the stage's pixels that are its commonest colour. */
   flat: number;
+  /** Text drawn over other text: each pair's words, the smaller first; a few at most (stageText.ts). */
+  over: [string, string][];
+  /** Text cut off by the box it's in, or by the stage's edge; a few at most. */
+  cut: string[];
 }
 
 /** The stage's box on the player's page, for a picture of the stage alone. */
 export const STAGE_CLIP = { x: STAGE_AT.x, y: STAGE_AT.y, width: STAGE_SIZE.w, height: STAGE_SIZE.h } as const;
 
+/** The strings in what the page said: none when it isn't a list. */
+const strings = (value: unknown): string[] => (Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : []);
+
 /** What the player said it saw on its stage at a moment (its `kitSeen`), read back from the page; null when it said nothing it should. */
 export function stageSeen(at: number, seen: unknown): StageMoment | null {
   if (!isRecord(seen) || typeof seen.flat !== 'number') return null;
-  return { at, flat: seen.flat };
+  const over = Array.isArray(seen.over) ? seen.over.flatMap((pair): [string, string][] => {
+    const words = strings(pair);
+    return words.length === 2 ? [[words[0], words[1]]] : [];
+  }) : [];
+  return { at, flat: seen.flat, over, cut: strings(seen.cut) };
 }
 
 /** A stage this close to one colour all over has nothing on it (a lone small label is about 0.997). */
 const EMPTY = 0.999;
 
-/** What looks wrong at each moment, a line per beat, for the lead to fix: nothing when all looks well. */
+/** The most characters of the stage's text a note quotes. */
+const SNIPPET = 24;
+
+/** How a note quotes a run of the stage's text: its first few words, without quote marks of its own. */
+export function snippet(text: string): string {
+  const all = clean(text.replace(/^\s*[“"]+|[”"]+\s*$/g, ''));
+  const fit = wordsUpTo(all, SNIPPET);
+  return fit === all ? all : `${fit || all.slice(0, SNIPPET)}…`;
+}
+
+/** What looks wrong at each moment, a line for each thing in each beat, for the lead (or Ops' writer) to fix: nothing when all looks well. */
 export function momentNotes(moments: readonly StageMoment[]): string[] {
-  return moments.flatMap((m, i) => (m.flat >= EMPTY ? [`Beat ${i + 1} looks empty (one flat colour across the stage): check that render(t) draws it.`] : []));
+  return moments.flatMap((m, i) => {
+    const which = `Beat ${i + 1}`;
+    return [
+      ...(m.flat >= EMPTY ? [`${which} looks empty (one flat colour across the stage): check that render(t) draws it.`] : []),
+      ...m.over.map(([a, b]) => `${which}: “${snippet(a)}” is drawn over “${snippet(b)}”: move one so they don't overlap.`),
+      ...m.cut.map((text) => `${which}: “${snippet(text)}” is cut off: give it room, or let it wrap.`),
+    ];
+  });
 }
 
 /** What the lead hears with the pictures of their explainer's beats: what Ops' checks found, and to look. */
 export function explainerCheck(notes: readonly string[]): string {
   const look = "Here's the stage at the middle of each beat, in order: look at each, and if one doesn't show what its caption says, fix it and explain it again under the same id.";
-  return notes.length ? `${look} Ops' checks found: ${notes.join(' ')}` : `${look} Ops' check for an empty stage found nothing.`;
+  return notes.length ? `${look} Ops' checks found: ${notes.join(' ')}` : `${look} Ops' checks (an empty stage, text drawn over other text or cut off) found nothing.`;
 }
 
 /**
@@ -133,6 +195,7 @@ export function explainerPage(input: ExplainerInput, receipts: readonly (readonl
   if (!script.trim()) return { error: 'The stage needs a script that defines render(t)' };
   if (/<\/script/i.test(script)) return { error: 'The stage script can’t contain </script>: build that string in pieces' };
   if (/<\/style/i.test(css)) return { error: 'The stage CSS can’t contain </style>' };
+  if (closesUnopened(css)) return { error: 'The stage CSS has a } that closes nothing: check its braces' };
   if (Buffer.byteLength(html + css + script) > L.stageBytes) return { error: `The stage is over ${L.stageBytes / 1_000_000} MB: keep it small` };
 
   let at = 0;
@@ -156,36 +219,36 @@ function page(title: string, beats: { at: number; title: string; text: string; l
 <html><head><meta charset="utf-8"><title>${escape(title)}</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap">
 <style>${KIT_CSS}
-  .beat { height:${beatH}px; }
-  .title { font-size:${titlePx}px; }
+  .kit-beat { height:${beatH}px; }
+  .kit-title { font-size:${titlePx}px; }
 </style>
-<style>${stageCss}</style>
+<style>${stageSheet(stageCss)}</style>
 </head>
-<body class="rest">
+<body class="kit-rest">
 ${FRAME}
-<div class="bar" style="left:566px;right:0;top:0">
-  ${long ? '' : '<div class="blk" style="width:90px;background:var(--lilac)"></div>'}
-  <div class="blk" style="flex:1;min-width:20px;background:var(--peach);height:20px"></div>
-  <div class="title">${escape(title)}</div>
-  <div class="endcap" style="background:var(--orange)"></div>
+<div class="kit-bar" style="left:566px;right:0;top:0">
+  ${long ? '' : '<div class="kit-blk" style="width:90px;background:var(--lilac)"></div>'}
+  <div class="kit-blk" style="flex:1;min-width:20px;background:var(--peach);height:20px"></div>
+  <div class="kit-title">${escape(title)}</div>
+  <div class="kit-endcap" style="background:var(--orange)"></div>
 </div>
-<div class="beats" id="kit-beats"></div>
-<div class="stage" id="stage">
+<div class="kit-beats" id="kit-beats"></div>
+<div class="kit-stage" id="kit-stage"><div id="stage">
 ${stageHtml}
-</div>
-<div class="fault" id="kit-fault"><div class="hd">Stage fault</div><div class="bd" id="kit-fault-text"></div></div>
-<button class="run" id="kit-run">▶ Run briefing</button>
-<div class="caption"><div class="bt" id="kit-bt"></div><div class="bx" id="kit-bx"></div></div>
-<div class="receipts" id="kit-rc"></div>
-<div class="quoted" id="kit-quote" hidden><div class="hd" id="kit-quote-from"></div><div class="bd" id="kit-quote-text"></div></div>
-<div class="bar" style="left:306px;right:0;top:766px">
-  <button class="btn" id="kit-prev" style="background:var(--lilac)">◀ Step</button>
-  <button class="btn" id="kit-pp" style="background:var(--gold);width:118px">▶ Play</button>
-  <button class="btn" id="kit-next" style="background:var(--lilac)">Step ▶</button>
-  <button class="btn voice" id="kit-voice" title="A voice talks you through each beat">Voice</button>
+</div></div>
+<div class="kit-fault" id="kit-fault"><div class="kit-hd">Stage fault</div><div class="kit-bd" id="kit-fault-text"></div></div>
+<button class="kit-run" id="kit-run">▶ Run briefing</button>
+<div class="kit-caption"><div class="kit-bt" id="kit-bt"></div><div class="kit-bx" id="kit-bx"></div></div>
+<div class="kit-receipts" id="kit-rc"></div>
+<div class="kit-quoted" id="kit-quote" hidden><div class="kit-hd" id="kit-quote-from"></div><div class="kit-bd" id="kit-quote-text"></div></div>
+<div class="kit-bar" style="left:306px;right:0;top:766px">
+  <button class="kit-btn" id="kit-prev" style="background:var(--lilac)">◀ Step</button>
+  <button class="kit-btn" id="kit-pp" style="background:var(--gold);width:118px">▶ Play</button>
+  <button class="kit-btn" id="kit-next" style="background:var(--lilac)">Step ▶</button>
+  <button class="kit-btn kit-voice" id="kit-voice" title="A voice talks you through each beat">Voice</button>
   <div id="kit-segs" style="flex:1;display:flex;gap:4px"></div>
-  <div class="clock" id="kit-clock"></div>
-  <div class="endcap" style="background:var(--peri)"></div>
+  <div class="kit-clock" id="kit-clock"></div>
+  <div class="kit-endcap" style="background:var(--peri)"></div>
 </div>
 <script>window.KIT_BEATS = ${scriptJson(beats)}; window.KIT_DUR = ${dur};</script>
 <script>${KIT_HELPERS}</script>
@@ -197,65 +260,76 @@ ${stageScript}
 `;
 }
 
-// The ship's palette and font, as in client/src/styles.css and world/starship.ts.
+// The ship's palette and font, as in client/src/styles.css and world/starship.ts, which the stage shares on purpose
+// (with the box sizing). Otherwise the player's own classes and ids all start kit-, and each of its rules styles only an
+// element that has one, so none reaches into the lead's stage whatever its elements are called (explainer.test.ts holds
+// each rule to it). The stage kit is scoped to the stage's box, as the lead's css is (stageSheet), so it reaches nothing
+// of the player's, and the lead's css, coming after it, overrides it.
 const KIT_CSS = String.raw`
   :root { --orange:#ff9966; --lilac:#cc99cc; --peri:#9999ff; --peach:#ffcc99; --red:#cc6666; --gold:#ff9900; --sky:#99ccff; --green:#99cc66;
     --text:#f1eaff; --muted:#a49db4; --line:#3a3352; --ui:'Antonio','Arial Narrow',sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; }
   * { box-sizing:border-box; }
   html, body { margin:0; width:1280px; height:800px; position:relative; overflow:hidden; background:#000; color:var(--text); font-family:var(--ui); }
-  svg.frame { position:absolute; left:0; top:0; }
-  .bar { position:absolute; display:flex; gap:6px; align-items:stretch; height:34px; }
-  .bar > * { flex:none; }
-  .blk { height:34px; }
-  .bar > .title { flex:0 1 auto; min-width:0; padding:0 14px; color:var(--orange); font-weight:600; line-height:34px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .endcap { width:46px; border-radius:0 17px 17px 0; }
-  .beats { position:absolute; left:0; top:246px; width:160px; display:flex; flex-direction:column; gap:6px; }
-  .beat { width:160px; display:flex; align-items:flex-end; justify-content:flex-end; padding:0 10px 4px; color:#000; font:500 17px/1 var(--ui); text-transform:uppercase; letter-spacing:.04em; cursor:pointer; text-align:right; overflow:hidden; }
-  .beat b { font-weight:700; margin-right:6px; }
-  .beat.on { width:184px; border-radius:0 29px 29px 0; padding-right:22px; }
-  .stage { position:absolute; left:200px; top:58px; width:1050px; height:500px; }
-  .caption { position:absolute; left:200px; top:584px; width:1050px; }
-  .caption .bt { font:600 30px/1.1 var(--ui); color:var(--gold); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
-  .caption .bx { font:400 19px/1.45 var(--mono); color:var(--text); letter-spacing:0; max-width:1020px; }
-  .btn { height:34px; border-radius:17px; border:0; padding:0 20px; color:#000; font:600 19px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
-  .btn:hover { filter:brightness(1.15); }
-  .seg { position:relative; height:34px; background:#241e38; cursor:pointer; overflow:hidden; }
-  .seg i { position:absolute; left:0; top:0; bottom:0; background:var(--gold); }
-  .seg span { position:absolute; right:8px; top:0; font:500 15px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
-  .btn.voice { display:none; background:var(--muted); }
-  .btn.voice.on { background:var(--green); }
-  .voiced .btn.voice { display:block; }
-  .clock { width:64px; color:var(--peach); font:500 19px/34px var(--ui); text-align:right; }
-  .rest .stage, .rest .caption { opacity:.35; }
-  .run { position:absolute; left:575px; top:272px; width:300px; height:72px; border-radius:36px; border:0; background:var(--gold); color:#000; font:700 32px/72px var(--ui); letter-spacing:.08em; text-transform:uppercase; cursor:pointer; display:none; }
-  .rest .run { display:block; }
-  .fault { position:absolute; left:400px; top:200px; width:650px; border:3px solid var(--red); border-radius:22px; background:#000; overflow:hidden; display:none; z-index:5; }
-  .fault .hd { background:var(--red); color:#000; font:600 21px/34px var(--ui); padding:0 16px; text-transform:uppercase; letter-spacing:.04em; }
-  .fault .bd { padding:12px 16px; font:400 14px/1.5 var(--mono); color:var(--text); white-space:pre-wrap; }
-  .faulted .fault { display:block; }
-  .faulted .run { display:none; }
-  .receipts { position:absolute; left:200px; top:726px; width:1050px; height:28px; display:flex; gap:8px; overflow:hidden; }
-  .rc { height:26px; border-radius:13px; border:2px solid var(--sky); background:#000; color:var(--sky); padding:0 12px; font:500 14px/22px var(--mono); white-space:nowrap; cursor:pointer; max-width:340px; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
-  .rc.on { background:var(--sky); color:#000; }
-  .rc.interp { border-style:dashed; border-color:var(--muted); color:var(--muted); cursor:default; font-family:var(--ui); text-transform:uppercase; letter-spacing:.06em; }
-  .rest .receipts { opacity:.35; }
-  .quoted { position:absolute; left:200px; top:398px; width:1050px; border:3px solid var(--sky); border-radius:22px; background:#000; overflow:hidden; z-index:4; }
-  .quoted .hd { background:var(--sky); color:#000; font:600 17px/30px var(--mono); padding:0 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .quoted .bd { padding:10px 16px; font:400 16px/1.45 var(--mono); color:var(--text); white-space:pre-wrap; max-height:110px; overflow:auto; }
+  .kit-frame { position:absolute; left:0; top:0; }
+  .kit-bar { position:absolute; display:flex; gap:6px; align-items:stretch; height:34px; }
+  .kit-blk { flex:none; height:34px; }
+  .kit-title { flex:0 1 auto; min-width:0; padding:0 14px; color:var(--orange); font-weight:600; line-height:34px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kit-endcap { flex:none; width:46px; border-radius:0 17px 17px 0; }
+  .kit-beats { position:absolute; left:0; top:246px; width:160px; display:flex; flex-direction:column; gap:6px; }
+  .kit-beat { width:160px; display:flex; align-items:flex-end; justify-content:flex-end; padding:0 10px 4px; color:#000; font:500 17px/1 var(--ui); text-transform:uppercase; letter-spacing:.04em; cursor:pointer; text-align:right; overflow:hidden; }
+  .kit-beat-n { font-weight:700; margin-right:6px; }
+  .kit-beat.kit-on { width:184px; border-radius:0 29px 29px 0; padding-right:22px; }
+  .kit-stage { position:absolute; left:200px; top:58px; width:1050px; height:500px; }
+  .kit-caption { position:absolute; left:200px; top:584px; width:1050px; }
+  .kit-bt { font:600 30px/1.1 var(--ui); color:var(--gold); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
+  .kit-bx { font:400 19px/1.45 var(--mono); color:var(--text); letter-spacing:0; max-width:1020px; }
+  .kit-btn { flex:none; height:34px; border-radius:17px; border:0; padding:0 20px; color:#000; font:600 19px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
+  .kit-btn:hover { filter:brightness(1.15); }
+  .kit-seg { position:relative; height:34px; background:#241e38; cursor:pointer; overflow:hidden; }
+  .kit-seg-fill { position:absolute; left:0; top:0; bottom:0; background:var(--gold); }
+  .kit-seg-label { position:absolute; right:8px; top:0; font:500 15px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+  .kit-btn.kit-voice { display:none; background:var(--muted); }
+  .kit-btn.kit-voice.kit-on { background:var(--green); }
+  .kit-voiced .kit-btn.kit-voice { display:block; }
+  .kit-clock { flex:none; width:64px; color:var(--peach); font:500 19px/34px var(--ui); text-align:right; }
+  .kit-rest .kit-stage, .kit-rest .kit-caption { opacity:.35; }
+  .kit-run { position:absolute; left:575px; top:272px; width:300px; height:72px; border-radius:36px; border:0; background:var(--gold); color:#000; font:700 32px/72px var(--ui); letter-spacing:.08em; text-transform:uppercase; cursor:pointer; display:none; }
+  .kit-rest .kit-run { display:block; }
+  .kit-fault { position:absolute; left:400px; top:200px; width:650px; border:3px solid var(--red); border-radius:22px; background:#000; overflow:hidden; display:none; z-index:5; }
+  .kit-fault .kit-hd { background:var(--red); color:#000; font:600 21px/34px var(--ui); padding:0 16px; text-transform:uppercase; letter-spacing:.04em; }
+  .kit-fault .kit-bd { padding:12px 16px; font:400 14px/1.5 var(--mono); color:var(--text); white-space:pre-wrap; }
+  .kit-faulted .kit-fault { display:block; }
+  .kit-faulted .kit-run { display:none; }
+  .kit-receipts { position:absolute; left:200px; top:726px; width:1050px; height:28px; display:flex; gap:8px; overflow:hidden; }
+  .kit-rc { height:26px; border-radius:13px; border:2px solid var(--sky); background:#000; color:var(--sky); padding:0 12px; font:500 14px/22px var(--mono); white-space:nowrap; cursor:pointer; max-width:340px; flex:0 1 auto; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+  .kit-rc.kit-on { background:var(--sky); color:#000; }
+  .kit-rc.kit-interp { border-style:dashed; border-color:var(--muted); color:var(--muted); cursor:default; font-family:var(--ui); text-transform:uppercase; letter-spacing:.06em; }
+  .kit-rest .kit-receipts { opacity:.35; }
+  .kit-quoted { position:absolute; left:200px; top:398px; width:1050px; border:3px solid var(--sky); border-radius:22px; background:#000; overflow:hidden; z-index:4; }
+  .kit-quoted .kit-hd { background:var(--sky); color:#000; font:600 17px/30px var(--mono); padding:0 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .kit-quoted .kit-bd { padding:10px 16px; font:400 16px/1.45 var(--mono); color:var(--text); white-space:pre-wrap; max-height:110px; overflow:auto; }
 
-  /* for the lead's stage */
-  .panel { position:absolute; border:3px solid var(--c, var(--sky)); border-radius:22px; background:#000; overflow:hidden; }
-  .panel > .hd { background:var(--c, var(--sky)); color:#000; font:600 21px/34px var(--ui); padding:0 16px; text-transform:uppercase; letter-spacing:.04em; display:flex; justify-content:space-between; gap:10px; white-space:nowrap; }
-  .panel > .hd > :first-child { overflow:hidden; text-overflow:ellipsis; }
-  .panel > .bd { padding:10px 16px; font:400 18px/1.35 var(--ui); color:var(--muted); letter-spacing:.02em; }
-  .pill { position:absolute; height:40px; border-radius:20px; background:var(--c, var(--lilac)); color:#000; font:500 19px/40px var(--ui); padding:0 18px; text-transform:uppercase; white-space:nowrap; letter-spacing:.03em; }
-  .lbl { position:absolute; color:var(--peach); font:500 17px var(--ui); text-transform:uppercase; letter-spacing:.12em; display:flex; align-items:center; gap:8px; }
-  .lbl::before { content:""; width:22px; height:14px; border-radius:7px 0 0 7px; background:var(--peach); }
-  .tag { display:inline-block; height:26px; padding:0 14px; border-radius:13px; color:#000; font:600 16px/26px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
-  .mono { font-family:var(--mono); font-size:13px; }
+  /* the stage kit, for the lead's stage and only there */
+  ${STAGE_SCOPE} {
+    #stage { position:absolute; left:0; top:0; width:100%; height:100%; }
+    .panel { position:absolute; border:3px solid var(--c, var(--sky)); border-radius:22px; background:#000; overflow:hidden; }
+    .panel > .hd { background:var(--c, var(--sky)); color:#000; font:600 21px/34px var(--ui); padding:0 16px; text-transform:uppercase; letter-spacing:.04em; display:flex; justify-content:space-between; gap:10px; white-space:nowrap; }
+    .panel > .hd > :first-child { overflow:hidden; text-overflow:ellipsis; }
+    .panel > .bd { padding:10px 16px; font:400 18px/1.35 var(--ui); color:var(--muted); letter-spacing:.02em; }
+    .pill { position:absolute; height:40px; border-radius:20px; background:var(--c, var(--lilac)); color:#000; font:500 19px/40px var(--ui); padding:0 18px; text-transform:uppercase; white-space:nowrap; letter-spacing:.03em; }
+    .lbl { position:absolute; color:var(--peach); font:500 17px var(--ui); text-transform:uppercase; letter-spacing:.12em; display:flex; align-items:center; gap:8px; }
+    .lbl::before { content:""; width:22px; height:14px; border-radius:7px 0 0 7px; background:var(--peach); }
+    .tag { display:inline-block; height:26px; padding:0 14px; border-radius:13px; color:#000; font:600 16px/26px var(--ui); text-transform:uppercase; letter-spacing:.06em; white-space:nowrap; }
+    .mono { font-family:var(--mono); font-size:13px; }
+    /* flows for a scene's contents, with gaps: side by side (wrapping), or one under another; panels, capsules and labels flow in them too */
+    .across { display:flex; flex-wrap:wrap; gap:12px; align-items:flex-start; }
+    .down { display:flex; flex-direction:column; gap:10px; }
+    :is(.across, .down) > :is(.panel, .pill, .lbl) { position:relative; flex:none; }
+    .down > .pill { align-self:flex-start; }
+  }
 `;
 
-const FRAME = `<svg class="frame" width="1280" height="800">
+const FRAME = `<svg class="kit-frame" width="1280" height="800">
   <path d="M0,238 L0,110 A110,110 0 0 1 110,0 L560,0 L560,34 L196,34 A36,36 0 0 0 160,70 L160,238 Z" fill="var(--orange)"/>
   <path d="M0,572 L160,572 L160,730 A36,36 0 0 0 196,766 L300,766 L300,800 L110,800 A110,110 0 0 1 0,690 Z" fill="var(--peri)"/>
   <text x="150" y="226" text-anchor="end" font-family="Antonio, Arial Narrow, sans-serif" font-weight="600" font-size="19" fill="#000">EXPLAINER</text>
@@ -282,7 +356,7 @@ const KIT_HELPERS = String.raw`
   window.kitFault = function (message) {
     window.kitReady = true;
     console.error('Stage fault: ' + message);
-    document.body.classList.add('faulted');
+    document.body.classList.add('kit-faulted');
     document.getElementById('kit-fault-text').textContent = message;
   };
 })();
@@ -314,15 +388,15 @@ const KIT_PLAYER = String.raw`
   function say(i) { talk = { beat: i, done: false, paused: false }; tell({ kit: 'say', beat: i }); }
   function hush() { if (!talk.done) tell({ kit: 'hush' }); talk = { beat: -1, done: true, paused: false }; }
   var beatEls = BEATS.map(function (b, i) {
-    var d = document.createElement('div'); d.className = 'beat'; d.style.background = 'var(--' + b.colour + ')';
-    d.innerHTML = '<span><b>0' + (i + 1) + '</b></span>'; d.firstChild.appendChild(document.createTextNode(b.label));
+    var d = document.createElement('div'); d.className = 'kit-beat'; d.style.background = 'var(--' + b.colour + ')';
+    d.innerHTML = '<span><b class="kit-beat-n">0' + (i + 1) + '</b></span>'; d.firstChild.appendChild(document.createTextNode(b.label));
     d.onclick = function () { run(b.at, end(i)); };
     el('kit-beats').appendChild(d); return d;
   });
   var segEls = BEATS.map(function (b, i) {
-    var d = document.createElement('div'); d.className = 'seg'; d.style.flex = String(end(i) - b.at);
-    d.innerHTML = '<i></i><span></span>'; d.lastChild.textContent = b.label;
-    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
+    var d = document.createElement('div'); d.className = 'kit-seg'; d.style.flex = String(end(i) - b.at);
+    d.innerHTML = '<i class="kit-seg-fill"></i><span class="kit-seg-label"></span>'; d.lastChild.textContent = b.label;
+    d.onclick = function (e) { var r = d.getBoundingClientRect(); stop(); hush(); hold = -1; document.body.classList.remove('kit-rest'); t = b.at + Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * (end(i) - b.at); frame(); stop(); };
     el('kit-segs').appendChild(d); return d;
   });
   // the receipts for the beat on screen: a chip per source, which opens to its quote; never said aloud
@@ -331,17 +405,17 @@ const KIT_PLAYER = String.raw`
     chipsFor = bi; el('kit-quote').hidden = true;
     var row = el('kit-rc'); row.textContent = '';
     if (!BEATS[bi].receipts.length) {
-      var none = document.createElement('span'); none.className = 'rc interp'; none.textContent = 'Interpretation';
+      var none = document.createElement('span'); none.className = 'kit-rc kit-interp'; none.textContent = 'Interpretation';
       none.title = 'No source cited: this beat is the lead’s reading'; row.appendChild(none); return;
     }
     BEATS[bi].receipts.forEach(function (r) {
-      var chip = document.createElement('button'); chip.className = 'rc'; chip.textContent = r.label; chip.title = r.quote;
+      var chip = document.createElement('button'); chip.className = 'kit-rc'; chip.textContent = r.label; chip.title = r.quote;
       chip.onclick = function () {
-        var open = chip.classList.contains('on');
-        Array.prototype.forEach.call(row.children, function (c) { c.classList.remove('on'); });
+        var open = chip.classList.contains('kit-on');
+        Array.prototype.forEach.call(row.children, function (c) { c.classList.remove('kit-on'); });
         el('kit-quote').hidden = open;
         if (open) return;
-        chip.classList.add('on'); el('kit-quote-from').textContent = r.label; el('kit-quote-text').textContent = r.quote;
+        chip.classList.add('kit-on'); el('kit-quote-from').textContent = r.label; el('kit-quote-text').textContent = r.quote;
       };
       row.appendChild(chip);
     });
@@ -357,7 +431,7 @@ const KIT_PLAYER = String.raw`
     var bi = held ? hold : beatAt(t);
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
     if (bi !== chipsFor) receipts(bi);
-    beatEls.forEach(function (d, i) { d.classList.toggle('on', i === bi); });
+    beatEls.forEach(function (d, i) { d.classList.toggle('kit-on', i === bi); });
     segEls.forEach(function (d, i) {
       var k = Math.min(1, Math.max(0, (t - BEATS[i].at) / (end(i) - BEATS[i].at)));
       d.firstChild.style.width = (k * 100) + '%';
@@ -367,7 +441,7 @@ const KIT_PLAYER = String.raw`
   }
   // carryOn: Play picks up where it paused, its beat's line too; anything else starts afresh, cutting the voice short
   function run(from, to, carryOn) {
-    document.body.classList.remove('rest');
+    document.body.classList.remove('kit-rest');
     var playingBeat = beatIndexAt(from);
     var midLine = talk.beat >= 0 && from > BEATS[talk.beat].at + .01 && from <= end(talk.beat) + .001;
     if (!carryOn || !midLine) hush();
@@ -420,19 +494,19 @@ const KIT_PLAYER = String.raw`
     if (!screen || e.source !== screen || !m || typeof m.kit !== 'string') return;
     if (m.kit === 'voice') {
       voice = !!m.on;
-      document.body.classList.add('voiced');
-      el('kit-voice').classList.toggle('on', voice);
+      document.body.classList.add('kit-voiced');
+      el('kit-voice').classList.toggle('kit-on', voice);
       el('kit-voice').textContent = voice ? 'Voice on' : 'Voice off';
       if (!voice) hush();
     } else if (m.kit === 'said' && m.beat === talk.beat) talk.done = true;
     // a new version that changed this beat: it waits at the beat's start, to play from there
-    else if (m.kit === 'show' && BEATS[m.beat]) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = BEATS[m.beat].at; frame(); stop(); }
+    else if (m.kit === 'show' && BEATS[m.beat]) { stop(); hush(); hold = -1; document.body.classList.remove('kit-rest'); t = BEATS[m.beat].at; frame(); stop(); }
   });
   tell({ kit: 'lines', lines: BEATS.map(function (b) { return b.say; }), titles: BEATS.map(function (b) { return b.title; }) });
   addEventListener('keydown', function (e) {
     if (e.key === 'ArrowRight') el('kit-next').click();
     else if (e.key === 'ArrowLeft') el('kit-prev').click();
-    else if (e.key === ' ') { e.preventDefault(); (document.body.classList.contains('rest') ? el('kit-run') : el('kit-pp')).click(); }
+    else if (e.key === ' ') { e.preventDefault(); (document.body.classList.contains('kit-rest') ? el('kit-run') : el('kit-pp')).click(); }
   });
   // how much of the stage shows at a moment: each element on it that paints something (its own text, a shape or a
   // picture, a background or a border) counts its area on the stage times its opacity, all the way down. One with no
@@ -477,11 +551,14 @@ const KIT_PLAYER = String.raw`
   // (called with nothing: a promise's value or an event mustn't stand in for the moment to draw)
   window.kitRedraw = function () { frame(); };
   // Ops' pictures of each beat jump straight to a moment, lit as when playing
-  window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = at; frame(); };
+  window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('kit-rest'); t = at; frame(); };
   // and what Ops' checks see in each: how much of the stage is its commonest colour (counted in coarse steps,
-  // so a JPEG's noise doesn't split one colour into many)
+  // so a JPEG's noise doesn't split one colour into many), and its text drawn over other text or cut off
+  // (stageText.ts, carried here as its source); a stage the text check can't read says nothing of its text
+  ${STAGE_TEXT_SCRIPT}
+  function textSeen() { try { return textClashes(readStageText(el('stage'))); } catch (e) { return {}; } }
   window.kitSeen = function (jpeg) {
-    var img = new Image();
+    var text = textSeen(), img = new Image();
     img.src = 'data:image/jpeg;base64,' + jpeg;
     return img.decode().then(function () {
       var canvas = document.createElement('canvas');
@@ -493,7 +570,7 @@ const KIT_PLAYER = String.raw`
         var key = ((px[i] >> 4) << 8) | ((px[i + 1] >> 4) << 4) | (px[i + 2] >> 4), c = (counts.get(key) || 0) + 1;
         counts.set(key, c); if (c > most) most = c; n++;
       }
-      return { flat: most / n };
+      return { flat: most / n, over: text.over, cut: text.cut };
     });
   };
   window.kitReady = true;

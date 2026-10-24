@@ -32,16 +32,40 @@ export function normalise(text: string): string {
     .trim();
 }
 
-/** The line (from 1) of `source` a quote starts on, word for word give or take spacing and case; 0 when it isn't there. */
-export function quoteLine(source: string, quote: string): number {
-  const q = normalise(quote);
+/**
+ * Markdown as it reads: its bold, italic and code marks (`**`, `__`, `*`, `_`, backticks) taken out where they open
+ * or close a word. One inside a word (snake_case_names, 2*3), on its own (a * b, a list's `* `) or by a slash
+ * (__tests__ in a path) stays. Both sides of a match go through it, so code and a quote of it still agree.
+ */
+export function unmarked(text: string): string {
+  return text.replace(/[*_`]+/g, (marks: string, at: number) => {
+    const before = text[at - 1] ?? ' ';
+    const after = text[at + marks.length] ?? ' ';
+    const opens = /[\s([{"'‘“–—]/.test(before) && /\S/.test(after);
+    const closes = /\S/.test(before) && /[\s)\]}.,:;!?"'’”…\-–—]/.test(after);
+    return opens || closes ? '' : marks;
+  });
+}
+
+/**
+ * The line (from 1) of `source` a quote starts on, word for word give or take spacing and case; 0 when it isn't there.
+ * A `markdown` source (the lead's words, a pull request, a docs page) is matched as it reads too, so a quote can
+ * leave its bold and code marks out; one quoted with them, as written, is still found.
+ */
+export function quoteLine(source: string, quote: string, markdown = false): number {
+  return lineOf(source, quote, normalise) || (markdown ? lineOf(source, quote, (text) => normalise(unmarked(text))) : 0);
+}
+
+/** `quoteLine` with the source's lines and the quote both made plain by `plain`. */
+function lineOf(source: string, quote: string, plain: (text: string) => string): number {
+  const q = plain(quote);
   if (!q) return 0;
-  // the source as one normalised text, with where each line starts in it, so a quote across lines is found too
+  // the source as one plain text, with where each line starts in it, so a quote across lines is found too
   let text = '';
   const starts: number[] = [];
   for (const line of source.split('\n')) {
     starts.push(text.length);
-    const n = normalise(line);
+    const n = plain(line);
     if (n) text += `${text ? ' ' : ''}${n}`;
   }
   const at = text.indexOf(q);
@@ -80,21 +104,29 @@ export function wordsToNumber(words: readonly string[]): number {
 
 /**
  * The numbers a line says, written in figures or in words. Words below eleven are left out ("one key", "two
- * questions" are how people talk, not figures to check); figures are always in. "N cents" counts as N/100 too.
+ * questions" are how people talk, not figures to check) unless `every`, as for a quote, whose "four" backs a "4".
+ * Figures are always in. "N cents" counts as N/100 too.
  */
-export function numbersIn(text: string): number[] {
+export function numbersIn(text: string, every = false): number[] {
   const found: number[] = [];
   for (const m of text.matchAll(/\d[\d,]*(?:\.\d+)?/g)) found.push(Number(m[0].replace(/,/g, '')));
-  const words = text.toLowerCase().replace(/-/g, ' ').match(/[a-z]+/g) ?? [];
+  // the words, and the punctuation between them, which ends a number ("eleven, twelve" is two)
+  const words = text.toLowerCase().replace(/-/g, ' ').match(/[a-z]+|[^a-z\s]+/g) ?? [];
   for (let i = 0; i < words.length; i++) {
-    if (!isNumberWord(words[i])) continue;
-    let j = i;
-    while (j < words.length && (isNumberWord(words[j]) || (words[j] === 'and' && j + 1 < words.length && isNumberWord(words[j + 1])))) j++;
+    const j = numberEnd(words, i);
+    if (j === i) continue;
     const n = wordsToNumber(words.slice(i, j));
-    if (n > 10 || j - i > 1) found.push(words[j] === 'cents' ? n / 100 : n);
+    if (every || n > 10 || j - i > 1) found.push(words[j] === 'cents' ? n / 100 : n);
     i = j - 1;
   }
   return found;
+}
+
+/** Where the number words from `i` end (`i` when there are none): "and" goes on with one only after a hundred, thousand or million ("a hundred and five", but "one and two" are two). */
+function numberEnd(words: readonly string[], i: number): number {
+  let j = i;
+  while (j < words.length && (isNumberWord(words[j]) || (words[j] === 'and' && words[j - 1] in SCALES && isNumberWord(words[j + 1] ?? '')))) j++;
+  return j;
 }
 
 /** Words that start a sentence without being a name: it's only a name check for a first word not among them. */
@@ -112,12 +144,22 @@ const COMMON = new Set(
   what's let's we're you're they're don't doesn't isn't wasn't can't won't`.split(/\s+/),
 );
 
+/** Counts and ordinals, which start a sentence ("Four steps", "Seventeen of them", "Second") without being names. */
+const COUNTS = new Set([
+  ...Object.keys(SMALL), ...Object.keys(TENS), ...Object.keys(SCALES),
+  ...`first second third fourth fifth sixth seventh eighth ninth tenth eleventh twelfth thirteenth fourteenth fifteenth
+  sixteenth seventeenth eighteenth nineteenth twentieth half twice several dozen dozens hundreds thousands millions`.split(/\s+/),
+]);
+
+/** A sentence's first word that's no name: a common word, or a count, hyphenated too ("Twenty-six", "Twenty-first"). */
+const opensSentence = (lower: string) => COMMON.has(lower) || lower.split('-').every((part) => COUNTS.has(part));
+
 /** Capitalised words that aren't names to check: the start of speech, and Ops' own words. */
 const NOT_NAMES = new Set(['i', 'ok', 'okay', 'captain', 'lieutenant', 'lt', 'commander', 'cmdr', 'ensign', 'chief', 'focus', 'qa']);
 
 /**
  * The names a line says: capitalised words (Haiku, Castellanos, PostgreSQL), a sentence's first too unless it's a
- * common word ("So", "Every"), and anything in code style. Titles and Ops' own words are left out.
+ * common word or a count ("So", "Every", "Four"), and anything in code style. Titles and Ops' own words are left out.
  */
 export function namesIn(text: string): string[] {
   const names = new Set<string>();
@@ -130,7 +172,7 @@ export function namesIn(text: string): string[] {
       const lower = word.toLowerCase();
       // a contraction (You'd, We'll) is never a name
       if (/['’](d|ll|ve|re|m|t)$/i.test(word)) return;
-      if (/^\p{Lu}/u.test(word) && !NOT_NAMES.has(lower) && (i > 0 || !COMMON.has(lower))) names.add(word);
+      if (/^\p{Lu}/u.test(word) && !NOT_NAMES.has(lower) && (i > 0 || !opensSentence(lower))) names.add(word);
     });
   }
   for (const m of text.matchAll(/`([^`]+)`/g)) names.add(m[1]);
@@ -140,7 +182,7 @@ export function namesIn(text: string): string[] {
 /** The numbers and names a beat's narration says that none of its quotes do: nothing when every one is backed. */
 export function unbacked(narration: string, quotes: readonly string[]): string[] {
   const said = quotes.join('\n');
-  const numbers = new Set(numbersIn(said));
+  const numbers = new Set(numbersIn(said, true));
   const text = normalise(said);
   const missing = numbersIn(narration).filter((n) => !numbers.has(n)).map(String);
   const names = namesIn(narration).filter((name) => !text.includes(normalise(name)));

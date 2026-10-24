@@ -24,6 +24,7 @@ function lead(checkouts = [{ repo: 'jonhilt/focus', dir: FOCUS_DIR }]): { contex
       return Promise.resolve(`“${page.title}” is on your station's screen.`);
     },
     showFrames: () => Promise.reject(new Error('The map tool takes no frames')),
+    takeFrames: () => Promise.reject(new Error('The map tool takes no frames')),
   };
   return { context, shown };
 }

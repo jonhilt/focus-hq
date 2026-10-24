@@ -36,6 +36,17 @@ export class GoalTools extends Part {
     return Effect.map(this.showPage(agent, input, frames), (shown) => ({ text: shown.text, frames: shown.picture?.frames ?? [] }));
   }
 
+  /**
+   * The pictures showFrames takes, and what the page saw in each, with the page kept off the screen (a plugin's draft,
+   * checked before it goes up: `LeadToolContext.takeFrames`). None when Ops couldn't take them.
+   */
+  takeFrames(html: string, frames: Frames): Effect.Effect<Frame[], never, Renderer> {
+    return Effect.gen(function* () {
+      const picture = Option.getOrUndefined(yield* (yield* Renderer).render(html, frames).pipe(Effect.option));
+      return picture?.frames ?? [];
+    });
+  }
+
   /** show's work, with the picture it took (and the page at each of `frames`). */
   private showPage(agent: Agent, input: ArtifactInput, frames?: Frames): Effect.Effect<{ text: string; picture?: Picture }, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {

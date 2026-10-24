@@ -6,12 +6,16 @@ import { explainShape, explainTool as tool, WRITTEN } from './explainTool';
 import type { Sources } from './sources';
 import type { Write } from './writer';
 
-// Ops' sources, stood in for: one file in the checkout, one thing the lead said, one ledger line
+// Ops' sources, stood in for: a code file and a docs page in the checkout, two things the lead said, one ledger line
+const files: Record<string, string> = {
+  'server/ledger.ts': 'const a = 1;\nappendFileSync(path, line); // never rewrites\nconst b = 2 ** 3; // **not** markdown\n',
+  'docs/briefings.md': '# Briefings\nEvery beat’s **receipts** are checked first.\n',
+};
 const sources: Sources = {
-  file: (_lead, where) => Promise.resolve(where === 'server/ledger.ts' ? { text: 'const a = 1;\nappendFileSync(path, line); // never rewrites\n', cite: 'server/ledger.ts:{line} @abc1234' } : { error: `there's no file ${where} in your checkout.` }),
-  said: () => Promise.resolve([{ text: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns.', at: '20 Oct, 09:44' }]),
+  file: (_lead, where) => Promise.resolve(where in files ? { text: files[where], cite: `${where}:{line} @abc1234` } : { error: `there's no file ${where} in your checkout.` }),
+  said: () => Promise.resolve([{ text: 'Haiku judged as well as Sonnet, at about $0.35 for all 555 turns.', at: '20 Oct, 09:44' }, { text: 'Backtested:\n- **Thomas & Co:** you ended 26 of its 27 threads.', at: '24 Oct, 10:02' }]),
   ledger: (seq) => (seq === 7 ? { text: 'qa-verdict\nfail', cite: 'ledger #7 · qa-verdict' } : undefined),
-  pr: (repo, number) => Promise.resolve(number === 572 ? { text: 'Briefings carry receipts\n## QA report: Passed\nI found no bug I could prove.', cite: `${repo}#572 · Briefings carry receipts` } : { error: `couldn't read ${repo}#${number} on GitHub: is the number right?` }),
+  pr: (repo, number) => Promise.resolve(number === 572 ? { text: 'Briefings carry receipts\n## QA report: **Passed**\nI found no bug I could prove.', cite: `${repo}#572 · Briefings carry receipts` } : { error: `couldn't read ${repo}#${number} on GitHub: is the number right?` }),
 };
 // Ops' writer, stood in for: it writes each brief up as the next explainer it's given, and keeps what it was asked
 function writer(...explainers: { beats: unknown[]; stage: unknown }[]) {
@@ -26,6 +30,7 @@ function writer(...explainers: { beats: unknown[]; stage: unknown }[]) {
 const explainTool = tool(sources, writer().write);
 
 const text = (n: number) => 'x'.repeat(n);
+const said = (reply: Awaited<ReturnType<typeof explainTool.run>>) => (typeof reply === 'string' ? reply : reply.text);
 
 describe('the explain tool schema', () => {
   const E = EXPLAINER_LIMITS;
@@ -56,22 +61,32 @@ describe('the explain tool schema', () => {
 });
 
 describe('the explain tool', () => {
-  /** A lead whose screen takes the page, and pictures its stage at each moment; a page with "blank" in it draws nothing. */
+  /**
+   * A lead whose screen takes the page, and pictures its stage at each moment, on the screen or off it: a page with
+   * "blank" in it draws nothing, and one with "crowded" a label over its card's text.
+   */
   function lead(errors = '') {
     const shown: { page: { id: string; html: string }; frames: PageFrames }[] = [];
+    const taken: string[] = [];
+    const pictures = (html: string, frames: PageFrames) => frames.at.map((at) => ({
+      at,
+      image: new TextEncoder().encode(`beat at ${at}`),
+      seen: { flat: html.includes('blank') ? 1 : 0.7, ...(html.includes('crowded') && { over: [['1 · MEMORY', 'Loose threads kept across sessions']] }) },
+    }));
     const context: LeadToolContext = {
       agent: { id: 'lead1', name: 'Lt. Castellanos' } as Agent,
       checkouts: [{ repo: 'jonhilt/focus', dir: '/nowhere' }],
       show: () => Promise.reject(new Error('explain shows its page with frames')),
       showFrames: (page, frames) => {
         shown.push({ page, frames });
-        return Promise.resolve({
-          text: `“${page.title}” is on your station's screen.${errors}`,
-          frames: frames.at.map((at) => ({ at, image: new TextEncoder().encode(`beat at ${at}`), seen: { flat: page.html.includes('blank') ? 1 : 0.7 } })),
-        });
+        return Promise.resolve({ text: `“${page.title}” is on your station's screen.${errors}`, frames: pictures(page.html, frames) });
+      },
+      takeFrames: (html, frames) => {
+        taken.push(html);
+        return Promise.resolve(pictures(html, frames));
       },
     };
-    return { context, shown };
+    return { context, shown, taken };
   }
   const input = (script: string, seconds = 3) => ({
     id: 'ledger',
@@ -93,7 +108,14 @@ describe('the explain tool', () => {
 
   it('says what the checks found on the stage', async () => {
     const reply = await explainTool.run(lead().context, input('function render(t) { /* blank */ }'));
-    expect(typeof reply === 'string' ? reply : reply.text).toMatch(/found: Beat 1 looks empty.* Beat 2 looks empty/);
+    expect(said(reply)).toMatch(/found: Beat 1 looks empty.* Beat 2 looks empty/);
+  });
+
+  it('tells the lead of text drawn over other text on their own stage, looking only once it’s up', async () => {
+    const { context, taken } = lead();
+    const reply = await explainTool.run(context, input('function render(t) { /* crowded */ }'));
+    expect(said(reply)).toMatch(/found: Beat 1: “1 · MEMORY” is drawn over “Loose threads kept…”: move one so they don't overlap\. Beat 2: “1 · MEMORY”/);
+    expect(taken).toEqual([]);
   });
 
   it('refuses what the player can’t play', async () => {
@@ -137,6 +159,20 @@ describe('the explain tool', () => {
       await expect(explainTool.run(context, withRefs([{ kind: 'pr', where: '#9', quote: 'x' }]))).rejects.toThrow(/couldn't read jonhilt\/focus#9/);
     });
 
+    it('reads the lead’s words, a pull request and a docs page as markdown, and a code file as written', async () => {
+      const { context, shown } = lead();
+      const refs = [
+        { kind: 'said', quote: 'Thomas & Co: you ended 26 of its 27 threads' },
+        { kind: 'pr', where: '#572', quote: 'QA report: Passed' },
+        { kind: 'file', where: 'docs/briefings.md', quote: 'Every beat’s receipts are checked' },
+      ];
+      await explainTool.run(context, withRefs(refs, 'Thomas & Co: you ended 26 of its 27 threads, and QA passed it.'));
+      expect(shown[0].page.html).toContain('"label":"Lt. Castellanos, 24 Oct, 10:02: “Thomas & Co: you ended 26 of it…”"');
+      expect(shown[0].page.html).toContain('"label":"jonhilt/focus#572 · Briefings carry receipts","quote":"QA report: Passed"');
+      expect(shown[0].page.html).toContain('"label":"docs/briefings.md:2 @abc1234"');
+      await expect(explainTool.run(context, withRefs([{ kind: 'file', where: 'server/ledger.ts', quote: 'not markdown' }]))).rejects.toThrow(/"not markdown" isn't in server\/ledger\.ts/);
+    });
+
     it('sends it back, unshown, when a quote isn’t in its source or the caption or narration says what no quote does', async () => {
       const { context, shown } = lead();
       const badQuote = withRefs([{ kind: 'file', where: 'server/ledger.ts', quote: 'rewrites the whole file' }]);
@@ -177,6 +213,29 @@ describe('the explain tool', () => {
       await expect(tool(sources, stuck.write).run(context, brief)).rejects.toThrow(/writer's explainer still don't hold up after 2 goes[\s\S]*"Opus"/);
       expect(stuck.asked).toHaveLength(3);
       expect(shown).toHaveLength(1);
+    });
+
+    it('sends the writer back with what Ops’ checks found on its stage, looked at off the screen, before the lead sees it', async () => {
+      const { context, shown, taken } = lead();
+      const fixed = writer({ beats: [backed, backed], stage: { ...stage, html: '<div id="a" class="crowded"></div>' } }, { beats: [backed, backed], stage });
+      const reply = await tool(sources, fixed.write).run(context, brief);
+      const over = (beat: number) => `Beat ${beat}: “1 · MEMORY” is drawn over “Loose threads kept…”: move one so they don't overlap.`;
+      expect(fixed.asked[1].fix).toEqual({ sessionId: 's1', problems: [over(1), over(2)] });
+      expect(taken).toHaveLength(2);
+      expect(shown).toHaveLength(1);
+      expect(shown[0].page.html).not.toContain('crowded');
+      expect(said(reply)).toMatch(/found nothing\.$/);
+    });
+
+    it('puts the writer’s explainer up once its stage has had two goes, and the lead hears what’s still wrong', async () => {
+      const { context, shown, taken } = lead();
+      const stuck = writer({ beats: [backed, backed], stage: { ...stage, html: '<div id="a" class="crowded"></div>' } });
+      const reply = await tool(sources, stuck.write).run(context, brief);
+      expect(stuck.asked).toHaveLength(3);
+      // the last go isn't looked at off the screen: it goes up, and is looked at there
+      expect(taken).toHaveLength(2);
+      expect(shown).toHaveLength(1);
+      expect(said(reply)).toMatch(/found: Beat 1: “1 · MEMORY” is drawn over/);
     });
 
     it('is needed when there are no beats and stage', async () => {

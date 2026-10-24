@@ -2,9 +2,10 @@
 // station's screen, in Ops' LCARS player, with a picture of its stage at the middle of each beat for the lead
 // to look at and what the checks found there. Each beat's receipts are looked up in their sources first: an explainer
 // whose quotes aren't there, or whose caption or narration says what its quotes don't, goes back to the lead to fix.
+// An explainer Ops' writer wrote goes back to the writer instead: for its receipts, and for what the checks find on its stage.
 import { z } from 'zod';
-import type { LeadTool, LeadToolContext } from '../../plugin-api/server';
-import { beatMoments, EXPLAINER_LIMITS as E, explainerCheck, type ExplainerInput, explainerPage, momentNotes, STAGE_CLIP, STAGE_SIZE, stageSeen } from './explainer';
+import type { LeadTool, LeadToolContext, PageFrames } from '../../plugin-api/server';
+import { beatMoments, EXPLAINER_LIMITS as E, explainerCheck, type ExplainerInput, type ExplainerPage, explainerPage, momentNotes, STAGE_CLIP, STAGE_SIZE, stageSeen } from './explainer';
 import { demoExplainer } from './demo';
 import { RECEIPT_LIMITS as R, type Receipt, receiptProblems, unbacked } from './receipts';
 import { writtenHow } from './shared';
@@ -26,7 +27,7 @@ const beats = z.array(z.object({
   narration: z.string().max(E.narration).optional().describe(`What a voice says over this beat when the captain plays it with the voice on (at most ${E.narration} characters): talk them through what they're looking at, as if sitting beside them pointing at the stage ("on the left is the queue; watch what happens when the worker goes down"), in plain spoken words with no code or file paths. The beat holds on its last frame until it's said. Its title and caption are read out if left out.`),
 })).min(E.minBeats).max(E.maxBeats).describe(`The beats in order (${E.minBeats} to ${E.maxBeats}), each one step of the explanation: they play one after another, and the captain can step through them one at a time.`);
 const stage = z.object({
-  html: z.string().describe(`The scene's elements, laid out in a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (absolutely positioned).`),
+  html: z.string().describe(`The scene's elements, in a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage) that positions them: each scene a container placed by left and top, its contents flowing.`),
   css: z.string().optional().describe('Styles for them.'),
   script: z.string().describe('Defines render(t), which sets the whole scene for t seconds from the start, and can build elements first.'),
 }).describe('What plays above the captions.');
@@ -59,7 +60,9 @@ async function beatReceipts(input: ExplainerInput, lead: LeadToolContext, source
 }
 
 /** How to write an explainer's stage, beats and receipts: the lead reads it in the tool's description, and the writer in its prompt. */
-export const EXPLAIN_CRAFT = `The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your elements in html, style them in css, and in script define render(t): it sets the whole scene for t seconds from the start (0 to the beats' seconds added up), and is called every frame and for jumps back and forth, so work everything out from t, never from the frame before. With the voice on, a beat holds on its last frame until its line is said, so don't fade a beat's scene out as it ends: the next beat brings its own in. Build repeated elements once in the script, before render. Helpers: p(t, a, b) eases from 0 to 1 between a and b seconds; clamp(x, lo, hi); B[i] is when beat i starts (B[0] = 0) and DUR when it ends; $(selector) and $$(selector) find things in the stage; tag(text, colour) is the HTML for a status capsule. Colours are CSS variables: --orange, --gold, --peach, --lilac, --peri, --sky, --green, --red (for alerts), --text, --muted, --line. Classes: .panel (style="--c:var(--sky)") with a .hd header and a .bd body, .pill (a capsule, coloured by --c), .lbl (a column label), .mono (code). The font is Antonio; JetBrains Mono for code.
+export const EXPLAIN_CRAFT = `The stage is a ${STAGE_SIZE.w} × ${STAGE_SIZE.h} box (#stage). Put your elements in html, style them in css, and in script define render(t): it sets the whole scene for t seconds from the start (0 to the beats' seconds added up), and is called every frame and for jumps back and forth, so work everything out from t, never from the frame before. With the voice on, a beat holds on its last frame until its line is said, so don't fade a beat's scene out as it ends: the next beat brings its own in. Build repeated elements once in the script, before render. Helpers: p(t, a, b) eases from 0 to 1 between a and b seconds; clamp(x, lo, hi); B[i] is when beat i starts (B[0] = 0) and DUR when it ends; $(selector) and $$(selector) find things in the stage; tag(text, colour) is the HTML for a status capsule. Colours are CSS variables: --orange, --gold, --peach, --lilac, --peri, --sky, --green, --red (for alerts), --text, --muted, --line. Classes: .panel (style="--c:var(--sky)") with a .hd header and a .bd body, .pill (a capsule, coloured by --c), .lbl (a column label), .mono (code). Your css styles the stage alone, and class names starting kit- are the player's. The font is Antonio; JetBrains Mono for code.
+
+Lay each scene out as one positioned container whose contents flow, rather than placing every label absolutely: .across sets things side by side with gaps (wrapping), .down one under another, and .panel, .pill and .lbl flow inside them (anywhere else they're placed absolutely, by left and top). A label sits on its own line above its text, never over it; capsules sit side by side with a gap; text wraps rather than being cut off, so don't fix the size of a box of words. Have everything a beat shows in place and fully visible by the middle of the beat: that's when Ops looks, for an empty stage and for text drawn over other text or cut off.
 
 Plan the beats first: one change per beat. Give each beat its receipts (refs): where its facts come from, quoted exactly. They show as chips under the caption, never read aloud, and Ops checks them before the captain sees it.`;
 
@@ -70,24 +73,63 @@ async function receiptsOrRefuse(input: ExplainerInput, lead: LeadToolContext, so
   return receipts;
 }
 
+/** An explainer ready to go up: what it was made from, its player page, and a word on who wrote it. */
+interface Explained {
+  input: ExplainerInput;
+  page: ExplainerPage;
+  note: string;
+}
+
+/** The player page for an explainer, or the refusal of it. */
+function pageOf(input: ExplainerInput, receipts: readonly Receipt[][]): ExplainerPage {
+  const built = explainerPage(input, receipts);
+  if ('error' in built) throw new Error(built.error);
+  return built;
+}
+
+/** Where Ops takes an explainer's pictures: its stage, at the middle of each beat. */
+const stageFrames = (input: ExplainerInput): PageFrames => ({ at: beatMoments(input.beats), clip: STAGE_CLIP });
+
+/** What Ops' checks found in an explainer's pictures (an empty stage, text drawn over other text or cut off), a line each. */
+const stageNotes = (frames: readonly { at: number; seen: unknown }[]) => momentNotes(frames.flatMap((f) => stageSeen(f.at, f.seen) ?? []));
+
 /** How many times the writer is sent back with what didn't hold up, before the lead hears of it. */
 const FIXES = 2;
 
-/** A brief written up by Ops' writer, its receipts checked; sent back to the writer with what didn't hold up, up to `FIXES` times. */
-async function writeUp(brief: Brief, lead: LeadToolContext, sources: Sources, write: Write): Promise<{ input: ExplainerInput; receipts: Receipt[][]; note: string }> {
+/**
+ * The writer's explainer, checked: its page, ready to go up, or what to send the writer back with. First its receipts;
+ * once they hold up, and when `look`, its stage, in pictures taken off the screen so a draft never goes up.
+ */
+async function checkWritten(input: ExplainerInput, lead: LeadToolContext, sources: Sources, look: boolean): Promise<{ page: ExplainerPage } | { problems: string[] }> {
+  const { receipts, problems } = await beatReceipts(input, lead, sources);
+  if (problems.length) return { problems };
+  const page = pageOf(input, receipts);
+  const notes = look ? stageNotes(await lead.takeFrames(page.html, stageFrames(input))) : [];
+  return notes.length ? { problems: notes } : { page };
+}
+
+/**
+ * A brief written up by Ops' writer, its receipts and stage checked; sent back to the writer with what didn't hold up,
+ * up to `FIXES` times. Receipts that still don't hold up refuse it; what's still wrong on its stage, the lead hears.
+ */
+async function writeUp(brief: Brief, lead: LeadToolContext, sources: Sources, write: Write): Promise<Explained> {
   let written = await write(lead, brief);
   for (let fixes = 0; ; fixes++) {
-    const { receipts, problems } = await beatReceipts(written.input, lead, sources);
-    if (!problems.length) return { input: written.input, receipts, note: `Written from your brief by ${writtenHow(written)}.` };
-    if (fixes === FIXES) throw new Error(`The receipts in the writer's explainer still don't hold up after ${FIXES} goes, so it isn't on the screen:\n${problems.join('\n')}`);
-    written = await write(lead, brief, { sessionId: written.sessionId, problems, spent: written });
+    // the last go isn't looked at here: it goes up whatever its stage shows, and the lead hears what's wrong with it
+    const checked = await checkWritten(written.input, lead, sources, fixes < FIXES);
+    if ('page' in checked) return { input: written.input, page: checked.page, note: `Written from your brief by ${writtenHow(written)}.` };
+    if (fixes === FIXES) throw new Error(`The receipts in the writer's explainer still don't hold up after ${FIXES} goes, so it isn't on the screen:\n${checked.problems.join('\n')}`);
+    written = await write(lead, brief, { sessionId: written.sessionId, problems: checked.problems, spent: written });
   }
 }
 
 /** The explainer a lead asked for, its receipts checked: the one they wrote, or the writer's from their brief. */
-async function explainerOf(ask: z.infer<z.ZodObject<typeof explainShape>>, lead: LeadToolContext, sources: Sources, write: Write) {
+async function explainerOf(ask: z.infer<z.ZodObject<typeof explainShape>>, lead: LeadToolContext, sources: Sources, write: Write): Promise<Explained> {
   const { id, title, beats, stage, brief } = ask;
-  if (beats && stage) return { input: { id, title, beats, stage }, receipts: await receiptsOrRefuse({ id, title, beats, stage }, lead, sources, ''), note: '' };
+  if (beats && stage) {
+    const input = { id, title, beats, stage };
+    return { input, page: pageOf(input, await receiptsOrRefuse(input, lead, sources, '')), note: '' };
+  }
   if (brief) return writeUp({ id, title, brief }, lead, sources, write);
   throw new Error('Send a brief, or the beats and the stage.');
 }
@@ -99,18 +141,15 @@ export const explainTool = (sources: Sources, write: Write): LeadTool => ({
 
 Send a brief and Ops' writer writes it for you (on the model the captain picked for briefings), or write the beats and stage yourself:
 
-${EXPLAIN_CRAFT} Ops replies with a picture of the stage at the middle of each beat and what its check found (an empty stage): look at them, and fix what doesn't read.`,
+${EXPLAIN_CRAFT} Ops replies with a picture of the stage at the middle of each beat and what its checks found there: look at them, and fix what doesn't read.`,
   input: explainShape,
   async run(lead, raw) {
-    const { input, receipts, note } = await explainerOf(z.object(explainShape).parse(raw), lead, sources, write);
-    const built = explainerPage(input, receipts);
-    if ('error' in built) throw new Error(built.error);
-    const shown = await lead.showFrames(built, { at: beatMoments(input.beats), clip: STAGE_CLIP });
+    const { input, page, note } = await explainerOf(z.object(explainShape).parse(raw), lead, sources, write);
+    const shown = await lead.showFrames(page, stageFrames(input));
     const seconds = input.beats.reduce((sum, b) => sum + b.seconds, 0);
     const text = `${shown.text} It's an explainer of ${input.beats.length} beats, ${Math.round(seconds)} seconds in all.${note ? ` ${note}` : ''}`;
     if (!shown.frames.length) return { text, images: [] };
-    const moments = shown.frames.flatMap((f) => stageSeen(f.at, f.seen) ?? []);
-    return { text: `${text} ${explainerCheck(momentNotes(moments))}`, images: shown.frames.map((f) => f.image) };
+    return { text: `${text} ${explainerCheck(stageNotes(shown.frames))}`, images: shown.frames.map((f) => f.image) };
   },
   demo: ({ folders, again }) => ({ ...demoExplainer(folders, again) }),
 });

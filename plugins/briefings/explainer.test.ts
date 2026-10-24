@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { beatLabel, beatMoments, beatNarration, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, type StageMoment, stageSeen } from './explainer';
+import { beatLabel, beatMoments, beatNarration, closesUnopened, EXPLAINER_LIMITS, explainerCheck, type ExplainerInput, explainerPage, momentNotes, snippet, STAGE_SCOPE, type StageMoment, stageSeen, stageSheet } from './explainer';
+import { EXPLAIN_CRAFT } from './explainTool';
+import { STAGE_TEXT_SCRIPT } from './stageText';
 
 const L = EXPLAINER_LIMITS;
 const input = (over: Partial<ExplainerInput> = {}): ExplainerInput => ({
@@ -31,7 +33,11 @@ describe('explainerPage', () => {
     expect(built.html).toContain('<div id="file" class="panel"></div>');
     expect(built.html).toContain('#file { left: 0 }');
     expect(built.html).toContain('function render(t)');
-    expect(built.html).toContain('<body class="rest">');
+    expect(built.html).toContain('<body class="kit-rest">');
+  });
+
+  it('carries Ops’ check of the stage’s text into the page', () => {
+    expect(page().html).toContain(STAGE_TEXT_SCRIPT);
   });
 
   it('starts each beat where the last one ended, and plays to the end of the last', () => {
@@ -105,8 +111,59 @@ describe('explainerPage', () => {
   });
 });
 
+describe("the player's styles", () => {
+  /** Each style rule's selectors in a sheet, with the @scope it's in, if any: enough for the player's, which nests nothing more. */
+  function selectorsIn(css: string): { scope?: string; selector: string }[] {
+    const found: { scope?: string; selector: string }[] = [];
+    const open: string[] = [];
+    for (const [, before, brace] of css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]*)([{}])/g)) {
+      if (brace === '}') {
+        open.pop();
+        continue;
+      }
+      const prelude = before.trim();
+      const scope = open.find((o) => o.startsWith('@scope'));
+      if (!prelude.startsWith('@')) found.push(...prelude.split(',').map((selector) => ({ scope, selector: selector.trim() })));
+      open.push(prelude);
+    }
+    return found;
+  }
+  const sheets = [...page().html.matchAll(/<style>([\s\S]*?)<\/style>/g)].map((m) => m[1]);
+  const player = selectorsIn(sheets[0]);
+  // the rules for the whole page: the colours, the font and the box sizing the stage shares on purpose
+  const WHOLE_PAGE = [':root', '*', 'html', 'body'];
+
+  it('style only elements with a kit- class or id, so none reach into the stage', () => {
+    const own = player.filter((s) => !s.scope && !WHOLE_PAGE.includes(s.selector));
+    expect(own.length).toBeGreaterThan(30);
+    // the element a selector styles is its last compound
+    for (const { selector } of own) expect([selector, /[.#]kit-[\w-]+/.test(selector.split(/\s*[\s>+~]\s*/).at(-1)!)]).toEqual([selector, true]);
+  });
+
+  it('keep the stage kit to the stage, and to what the explain tool tells the lead of', () => {
+    const kit = player.filter((s) => s.scope);
+    expect(new Set(kit.map((s) => s.scope))).toEqual(new Set([STAGE_SCOPE]));
+    for (const { selector } of kit) {
+      for (const [name] of selector.matchAll(/[.#][\w-]+/g)) expect([name, EXPLAIN_CRAFT.includes(name) || EXPLAIN_CRAFT.includes(`${name.slice(1)}(`)]).toEqual([name, true]);
+    }
+  });
+
+  it("scope the lead's css to the stage, after the imports that only work at the top of a sheet", () => {
+    expect(sheets[1]).toBe(`${STAGE_SCOPE} {\n#file { left: 0 }\n}`);
+    const css = '@charset "utf-8";\n@import url("https://fonts.example/a;b.css");\n/* the stage */\n.rc { height: 9px }\n@keyframes k { to { opacity: 0 } }';
+    expect(stageSheet(css)).toBe(`@charset "utf-8";\n@import url("https://fonts.example/a;b.css");\n/* the stage */\n${STAGE_SCOPE} {\n.rc { height: 9px }\n@keyframes k { to { opacity: 0 } }\n}`);
+  });
+
+  it("refuse the lead's css when it closes a brace it never opened, which would end its scope and reach the player", () => {
+    expect(refusal({ stage: { ...input().stage, css: '.a { color: red } } .kit-rc { display: none }' } })).toMatch(/closes nothing/);
+    expect(closesUnopened('.a { color: red }}')).toBe(true);
+    expect(closesUnopened('@media (width > 1px) { .a { color: red } } .b { content: "}" } /* } */ .c\\} { color: red }')).toBe(false);
+    expect(closesUnopened('.a { color: red } /* never closed }')).toBe(false);
+  });
+});
+
 describe('checking an explainer', () => {
-  const moment = (over: Partial<StageMoment> = {}): StageMoment => ({ at: 1, flat: 0.8, ...over });
+  const moment = (seen: Partial<StageMoment> = {}): StageMoment => ({ at: 1, flat: 0.8, over: [], cut: [], ...seen });
 
   it('looks at the middle of each beat', () => {
     expect(beatMoments([{ seconds: 4 }, { seconds: 6 }, { seconds: 2 }])).toEqual([2, 7, 11]);
@@ -117,14 +174,32 @@ describe('checking an explainer', () => {
     expect(momentNotes([moment(), moment({ flat: 0.999 })])).toEqual([expect.stringMatching(/^Beat 2 looks empty/)]);
   });
 
+  it('calls out text drawn over other text, or cut off, naming each by its first words', () => {
+    const notes = momentNotes([moment(), moment({ over: [['1 · MEMORY', 'Loose threads kept across sessions']], cut: ['Each event becomes one line, appended'] })]);
+    expect(notes).toEqual([
+      'Beat 2: “1 · MEMORY” is drawn over “Loose threads kept…”: move one so they don\'t overlap.',
+      'Beat 2: “Each event becomes one…” is cut off: give it room, or let it wrap.',
+    ]);
+  });
+
+  it('quotes the stage’s text by as many of its first words as fit', () => {
+    expect(snippet('  Steers by   agreed intents ')).toBe('Steers by agreed intents');
+    expect(snippet('Drop what no longer matters')).toBe('Drop what no longer…');
+    expect(snippet('Supercalifragilisticexpialidocious')).toBe('Supercalifragilisticexpi…');
+    expect(snippet('“Each event becomes one line”')).toBe('Each event becomes one…');
+    expect(snippet('"Append"')).toBe('Append');
+  });
+
   it('reads what the player says it saw on its stage, and nothing it shouldn’t', () => {
-    expect(stageSeen(2, { flat: 0.8 })).toEqual({ at: 2, flat: 0.8 });
+    expect(stageSeen(2, { flat: 0.8 })).toEqual({ at: 2, flat: 0.8, over: [], cut: [] });
+    expect(stageSeen(2, { flat: 0.8, over: [['A', 'B']], cut: ['C'] })).toEqual({ at: 2, flat: 0.8, over: [['A', 'B']], cut: ['C'] });
+    expect(stageSeen(2, { flat: 0.8, over: [['A'], ['A', 'B', 'C'], ['A', 2], 'AB'], cut: 'C' })).toEqual({ at: 2, flat: 0.8, over: [], cut: [] });
     expect(stageSeen(2, null)).toBeNull();
     expect(stageSeen(2, { flat: '0.8' })).toBeNull();
   });
 
   it('asks the lead to look either way', () => {
-    expect(explainerCheck([])).toMatch(/look at each.*found nothing/);
+    expect(explainerCheck([])).toMatch(/look at each.*checks \(an empty stage, text drawn over other text or cut off\) found nothing/);
     expect(explainerCheck(['Beat 2 looks empty.'])).toMatch(/look at each.*found: Beat 2 looks empty\.$/);
   });
 });

@@ -30,6 +30,9 @@ export function prOf(where: string, repos: readonly string[]): { repo: string; n
   return repo ? { repo, number } : `${m[1] ?? ''}${m[2]} isn't one of your repos (${repos.join(', ')}).`;
 }
 
+/** A docs page (with or without the line it's cited at), which is markdown like the lead's words and a pull request's. */
+const MARKDOWN_FILE = /\.(md|markdown)(:\d+(-\d+)?)?$/i;
+
 const short = (quote: string, most = 60) => (quote.length > most ? `${quote.slice(0, most - 1).trimEnd()}…` : quote);
 
 /** A ref found in its source, as a receipt; or what's wrong with it, for the lead. */
@@ -40,11 +43,11 @@ export async function receiptFor(ref: Ref, lead: LeadToolContext, sources: Sourc
     if (!ref.where) return `a file ref needs where: the file's path.`;
     const file = await sources.file(lead, ref.where);
     if ('error' in file) return file.error;
-    const line = quoteLine(file.text, quote);
+    const line = quoteLine(file.text, quote, MARKDOWN_FILE.test(ref.where));
     return line ? { label: file.cite.replace('{line}', String(line)), quote } : `"${short(quote)}" isn't in ${ref.where}: quote it exactly as the file has it.`;
   }
   if (ref.kind === 'said') {
-    const turn = (await sources.said(lead)).find((t) => quoteLine(t.text, quote));
+    const turn = (await sources.said(lead)).find((t) => quoteLine(t.text, quote, true));
     return turn ? { label: `${lead.agent.name ?? 'Lead'}, ${turn.at}: “${short(quote, 32)}”`, quote } : `"${short(quote)}" isn't anything you've said in this session: quote your own words exactly.`;
   }
   if (ref.kind === 'pr') {
@@ -52,7 +55,7 @@ export async function receiptFor(ref: Ref, lead: LeadToolContext, sources: Sourc
     if (typeof which === 'string') return which;
     const pr = await sources.pr(which.repo, which.number);
     if ('error' in pr) return pr.error;
-    return quoteLine(pr.text, quote) ? { label: pr.cite, quote } : `"${short(quote)}" isn't in ${which.repo}#${which.number}: quote its title, description or a comment exactly.`;
+    return quoteLine(pr.text, quote, true) ? { label: pr.cite, quote } : `"${short(quote)}" isn't in ${which.repo}#${which.number}: quote its title, description or a comment exactly.`;
   }
   const seq = Number(ref.where);
   const event = Number.isInteger(seq) ? sources.ledger(seq) : undefined;

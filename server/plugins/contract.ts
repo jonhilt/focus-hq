@@ -176,6 +176,11 @@ export interface LeadToolContext {
    * `kitSeen` returned, to narrow; null without one). No frames when Ops couldn't take its picture.
    */
   showFrames(page: { id: string; title: string; html: string }, frames: PageFrames): Promise<{ text: string; frames: { at: number; image: Uint8Array; seen: unknown }[] }>;
+  /**
+   * The pictures `showFrames` takes, and what the page saw in each, without putting the page on the screen: for a
+   * draft to be checked before it goes up. None when Ops couldn't take them.
+   */
+  takeFrames(html: string, frames: PageFrames): Promise<{ at: number; image: Uint8Array; seen: unknown }[]>;
 }
 
 /**
