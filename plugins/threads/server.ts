@@ -45,7 +45,7 @@ export function threadsParts(host: ThreadsHost): PluginParts {
       cwd: os.tmpdir(),
       system: SORT_SYSTEM,
       systemAppend: '',
-      prompt: sortPrompt(listed, closedGoals(host.ledger(), projectId), leadsIn(projectId)),
+      prompt: sortPrompt(listed, closedGoals(host.ledger(), projectId), leadsIn(projectId), Date.now()),
       settings: host.settings(),
       signal: new AbortController().signal,
       activity: () => undefined,
@@ -53,7 +53,8 @@ export function threadsParts(host: ThreadsHost): PluginParts {
       schema: SORT_SCHEMA,
       model: SORT_MODEL,
       maxTurns: 2,
-      timeoutMs: 5 * 60_000,
+      // a whole project in one answer, a few hundred proposals at most: minutes, not seconds
+      timeoutMs: 10 * 60_000,
     });
     return { structured: result.structured, model: result.model ?? SORT_MODEL, ...(result.costUsd !== undefined && { costUsd: result.costUsd }) };
   }

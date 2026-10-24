@@ -6,11 +6,14 @@ import { NOTE_LIMIT, THREAD_ENDS, type Thread } from './shared';
 /** The model that sorts: Claude Code's alias for the latest Sonnet. A judgement over the project's record, a few cents a sort. */
 export const SORT_MODEL = 'sonnet';
 
-/** At most this many threads a sort: a project with more is sorted a batch at a time, the ones never proposed first. */
-export const SORT_LIMIT = 100;
+/**
+ * At most this many threads a sort: every one a project has to decide, in one call, so a thread said twice is seen
+ * twice and a press doesn't ask about the same oldest ones again (Focus's own had about 200 at the first press).
+ */
+export const SORT_LIMIT = 300;
 
-/** How many of a project's closed goals, the latest, the model reads of. */
-const GOALS_READ = 30;
+/** How many of a project's closed goals, the latest, the model reads of: every one since the oldest thread, so it can say which did it. */
+const GOALS_READ = 200;
 
 /** The threads a sort asks about: a closed goal's (not one under way, of `underWay`), still to decide; never proposed first, then oldest first. */
 export function toSort(threads: readonly Thread[] | undefined, underWay: ReadonlySet<string>): Thread[] {
@@ -27,13 +30,17 @@ export function closedGoals(events: readonly LedgerEvent[], projectId: string): 
   return [...last.values()].sort((a, b) => b.closedAt - a.closedAt);
 }
 
+/** An idea for next nothing has picked up this many days after its goal closed is proposed dropped, unless the record says it still matters. */
+export const STALE_DAYS = 7;
+
 export const SORT_SYSTEM = `You help the user clear a software project's loose threads: contacts a goal's lead logged as needing real attention (a risk, a question, something off the course), and ideas for next a goal still had when it closed. For each thread, propose where it ends, from what the project's record shows:
 - resolved: a later goal did it. Say which, by its title.
 - dropped: it no longer matters (overtaken, done another way, or it went nowhere for a good reason). Say why, in a few words.
 - parked: worth keeping, but not now. Say until when, or until what.
 - next: it still matters and should be done. Say who takes it on: "you", or the title of a goal under way that should.
 When a thread says the same as another listed thread, give that thread's id as sameAs, and propose resolved or dropped for the one that adds nothing.
-Leave out any thread the record doesn't let you judge: no proposal is better than a guess, and the user decides every one. Never say something happened unless the record says so. Keep each why under 140 characters, in plain words.`;
+An idea for next whose goal closed more than ${STALE_DAYS} days before today, that no goal since has taken up and that nothing in the record says still matters, went nowhere: propose dropped, saying nothing has picked it up since its goal closed (and when). The user keeps the ones they still want.
+Leave out any other thread the record doesn't let you judge, a contact especially: no proposal is better than a guess, and the user decides every one. Never say something happened unless the record says so. Keep each why under 140 characters, in plain words.`;
 
 /** What the model may answer: a proposal per thread it can judge, by the id the prompt gave it. */
 export const SORT_SCHEMA = {
@@ -74,12 +81,13 @@ function underWayLine(lead: Pick<Agent, 'lead'>): string[] {
   return [`- “${work.title}”${parts.length ? `: ${parts.join('; ')}` : ''}`];
 }
 
-/** What the model's asked: the project's goals under way and closed, then the threads to decide, each by an id of its own. */
-export function sortPrompt(listed: readonly Thread[], closed: readonly GoalRecord[], leads: readonly Pick<Agent, 'lead'>[]): string {
+/** What the model's asked on day `now`: the project's goals under way and closed, then the threads to decide, each by an id of its own. */
+export function sortPrompt(listed: readonly Thread[], closed: readonly GoalRecord[], leads: readonly Pick<Agent, 'lead'>[], now: number): string {
   const threads = listed.map((t, i) =>
     `t${i + 1} · from “${t.goalTitle}” (closed ${t.closedAt === undefined ? 'earlier' : day(t.closedAt)}) · ${t.idea ? 'idea for next' : `contact, noticed ${day(t.at)}`} · ${cut(t.text, 400)}`);
   const under = leads.flatMap(underWayLine);
   return [
+    `Today is ${day(now)}.`,
     `Goals under way:\n${under.length ? under.join('\n') : '- none'}`,
     `Goals closed, the latest first:\n${closed.slice(0, GOALS_READ).map(goalLine).join('\n') || '- none'}`,
     `Threads to decide:\n${threads.join('\n')}`,

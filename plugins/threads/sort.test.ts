@@ -21,7 +21,7 @@ describe('which threads a sort asks about', () => {
     expect(toSort(threads, new Set(['g9'])).map((t) => t.contact)).toEqual(['c3', 'c2', 'c1']);
   });
 
-  it('asks about a batch at a time', () => {
+  it('asks about every thread to decide in one call, up to a limit', () => {
     const many = Array.from({ length: SORT_LIMIT + 5 }, (_, i) => thread(`c${i}`, { at: i }));
     expect(toSort(many, new Set())).toHaveLength(SORT_LIMIT);
     expect(toSort(undefined, new Set())).toEqual([]);
@@ -40,13 +40,15 @@ describe('what the model is told', () => {
       [thread('c1'), thread('next-abc', { idea: true, text: 'Remember more than one address' })],
       [record('g2', at(15), { title: 'Saved addresses', note: { done: 'A shopper keeps three addresses', learned: ['The lookup needs a key'], next: [] } })],
       [{ lead: { station: 0, title: 'Save for later', repos: [], slice: 1, prs: [], note: { done: 'Items saved across devices', learned: [], next: ['Share a list'] } } }],
+      at(24),
     );
     expect(prompt).toBe([
+      'Today is 2026-10-24.',
       'Goals under way:\n- “Save for later”: done looks like: Items saved across devices; next: Share a list',
       'Goals closed, the latest first:\n- “Saved addresses” (closed 2026-10-15): done looked like: A shopper keeps three addresses; learned: The lookup needs a key',
       'Threads to decide:\nt1 · from “Checkout” (closed 2026-10-12) · contact, noticed 2026-10-10 · thread c1\nt2 · from “Checkout” (closed 2026-10-12) · idea for next · Remember more than one address',
     ].join('\n\n'));
-    expect(sortPrompt([thread('c1')], [], [])).toMatch(/^Goals under way:\n- none\n\nGoals closed, the latest first:\n- none/);
+    expect(sortPrompt([thread('c1')], [], [], at(24))).toMatch(/^Today is 2026-10-24\.\n\nGoals under way:\n- none\n\nGoals closed, the latest first:\n- none/);
   });
 });
 

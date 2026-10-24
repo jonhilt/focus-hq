@@ -225,7 +225,7 @@ const threads: ClientPlugin = {
       'Sort for me: a model proposes where each thread ends, and which say the same, for you to accept one by one or all of an end at once',
     ],
     cost: 'on-demand',
-    costDetail: 'Sort for me asks Sonnet once a press, about a batch of a project’s threads, and shows what it cost. Nothing else makes model calls: it reads the contacts and ideas Ops already keeps, and the ledger, where it writes your decisions. A thread you spin off is a goal like any other.',
+    costDetail: 'Sort for me asks Sonnet once a press, about every thread a project has to decide, and shows what it cost. Nothing else makes model calls: it reads the contacts and ideas Ops already keeps, and the ledger, where it writes your decisions. A thread you spin off is a goal like any other.',
   },
   project: { label: 'Threads', about: 'A Threads view in the goals panel: every contact its leads logged and left open and every idea for next its goals closed with, what a model proposed of them, and where you decided each ends.' },
   goalsView: {
