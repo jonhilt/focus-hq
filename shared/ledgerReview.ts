@@ -33,6 +33,7 @@ export const SHOWN_AT_FIRST: readonly ReviewGroup[] = ['qa', 'merged', 'conflict
 export function groupOf(e: LedgerEvent): ReviewGroup {
   switch (e.kind) {
     case 'qa-verdict':
+    case 'qa-score':
     case 'checks-sent-back':
     case 'triage':
       return 'qa';
@@ -156,6 +157,8 @@ function rowParts(e: LedgerEvent): RowParts {
       return conflictsRow(e);
     case 'merge-check':
       return mergeCheckRow(e);
+    case 'qa-score':
+      return scoreRow(e);
     case 'checks-sent-back':
       return { tag: 'Sent back', tone: 'warn', title: `${short(e.repo)} #${e.pr} · failing checks sent back: ${e.checks.join(', ')}`, detail: e.goal, pr: e, goal: e.goal };
     case 'triage':
@@ -183,6 +186,11 @@ function rowParts(e: LedgerEvent): RowParts {
     default:
       return goalRow(e);
   }
+}
+
+/** A scorer's grade of one of QA's reports: passing, part way, or none of it. */
+function scoreRow(e: Of<'qa-score'>): RowParts {
+  return { tag: 'Scored', tone: e.passed ? 'ok' : e.score > 0 ? 'warn' : 'bad', title: `${short(e.repo)} #${e.pr} · QA's report graded ${e.label} (${e.score})`, detail: [e.why, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
 }
 
 /** A line about a goal itself: it closing, its threads, its intent and decisions. */

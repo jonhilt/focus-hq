@@ -23,6 +23,12 @@ describe('ledgerRow', () => {
     expect(ledgerRow(verdict(236, 'pass', 0, 1))).toMatchObject({ tag: 'QA pass', tone: 'ok', title: 'focus #236 · 7 checks passed · first time', pr: { repo: REPO, pr: 236 } });
   });
 
+  it('says how a scorer graded one of QA’s reports, under QA', () => {
+    const graded = (label: string, score: number) => ev({ kind: 'qa-score', repo: REPO, pr: 236, goal: 'Shop', sha: 'abc', label, score, passed: score === 1, why: 'Leans on the suite.', scorer: 'qa-report-1a2b3c4d', model: 'haiku' }, 3);
+    expect(ledgerRow(graded('shallow', 0.5))).toMatchObject({ group: 'qa', tag: 'Scored', tone: 'warn', title: "focus #236 · QA's report graded shallow (0.5)", detail: 'Leans on the suite. · Shop', pr: { repo: REPO, pr: 236 } });
+    expect([ledgerRow(graded('thorough', 1)).tone, ledgerRow(graded('wrong', 0)).tone]).toEqual(['ok', 'bad']);
+  });
+
   it('says who merged a pull request and whether QA had passed it', () => {
     const merged = ev({ kind: 'merged', repo: REPO, pr: 199, by: 'captain', qa: 'stale', failedRounds: 0, triages: 0 }, 2);
     expect(ledgerRow(merged)).toMatchObject({ tag: 'Merged', tone: 'warn', title: 'focus #199 · by the captain · without a QA pass (QA stale)' });

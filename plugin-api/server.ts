@@ -30,6 +30,11 @@ export type { PastPullRequest } from '../server/github/provider';
  */
 export { crewFolder, type CrewFolder, CrewFileError } from '../server/agents/crewFiles';
 export type { CrewRole } from '../server/agents/crewRoles';
+/**
+ * A scorer's file, as .focus/scorers/ keeps them (its README.md): how a model grades a crew role's real work, its rubric
+ * and the scale it grades on, checked as it's read, with a digest of both for a version.
+ */
+export { loadScorer, type Scorer, ScorerFileError, scoreOf } from '../server/agents/scorerFiles';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** Focus on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */

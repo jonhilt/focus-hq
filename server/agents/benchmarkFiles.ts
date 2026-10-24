@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { isNode, LineCounter, parseDocument, type Document } from 'yaml';
 import { isOneOf, isRecord } from '../../shared/records';
 import { EFFORT_LEVELS, type Effort } from '../../shared/types';
 import { config } from '../config';
 import { durationMs } from './crewFiles';
 import type { CrewRoleName } from './crewRoles';
+import { type Fail, yamlFields } from './yamlFields';
 
 // The benchmarks' files, .focus/benchmarks/<name>.yaml in Focus's own checkout (.focus/benchmarks/README.md): what
 // each script that measures a role runs by default, and the configurations of that role it compares in one run (its
@@ -71,15 +71,7 @@ const text = (v: unknown): v is string => typeof v === 'string' && v.trim() !== 
 
 /** A benchmark's file, read and checked: `file` is how errors name it. */
 export function parseBenchmark(name: BenchmarkName, source: string, file: string): Benchmark {
-  const lines = new LineCounter();
-  const doc = parseDocument(source, { lineCounter: lines });
-  const fail = (message: string, at: (string | number)[] = []): never => {
-    const line = lineOf(doc, lines, at);
-    throw new BenchmarkFileError(`${file}${line ? `:${line}` : ''}: ${message}`);
-  };
-  const [wrong] = doc.errors;
-  if (wrong) fail(`isn't YAML: ${wrong.message.split('\n')[0]}`);
-  const fields: unknown = doc.toJS();
+  const { fields, fail } = yamlFields(source, file, (message) => new BenchmarkFileError(message));
   if (!isRecord(fields)) return fail('is a map of fields: description, role, configurations and its settings');
   const spec = BENCHMARKS[name];
   const allowed: readonly string[] = spec.fields;
@@ -105,15 +97,6 @@ export function parseBenchmark(name: BenchmarkName, source: string, file: string
     configurations,
   };
 }
-
-/** The line a field's value (or the file's first) is on, 1-based. */
-function lineOf(doc: Document, lines: LineCounter, at: (string | number)[]): number | undefined {
-  const node = at.length ? doc.getIn(at, true) : doc.contents;
-  const start = isNode(node) ? node.range?.[0] : undefined;
-  return start === undefined ? undefined : lines.linePos(start).line;
-}
-
-type Fail = (message: string, at?: (string | number)[]) => never;
 
 function configurationsOf(value: unknown, fail: Fail): Configuration[] {
   if (!Array.isArray(value) || !value.length) return fail("configurations lists at least one: the run's own first", ['configurations']);

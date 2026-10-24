@@ -33,6 +33,7 @@ What each part caught and found goes in the sections below, with every live bug 
 | a goal's lead (held for the plan's limit, its run, its inbox and notes, the turn the captain read, plugins' marks on its turn) | `server/agents/managerInvariants.test.ts` | restart |
 | a goal lead's slices | `server/agents/sliceInvariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
+| the QA scores plugin's grades of QA's reports | `plugins/qa-scores/invariants.test.ts` | both |
 | QA reviews | `server/agents/reviewInvariants.test.ts` | both |
 | a Claude Code session (`ClaudeRunner`, on a stand-in held to the [Claude Code contract](contracts.md#claude-code-the-sdks-stream)) | `server/agents/claudeRunnerInvariants.test.ts` | at once |
 | a goal's life to its close | `server/agents/goalInvariants.test.ts` | both |

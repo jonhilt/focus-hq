@@ -36,6 +36,11 @@ export interface CrewStamp {
 
 export type LedgerEntry =
   | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number; /** Lines before QA's stamp have none. */ crew?: CrewStamp })
+  /**
+   * A scorer's grade of one of QA's reports (.focus/scorers/): the label it gave, the score that's worth and whether
+   * it passes, why, what QA worked to (its verdict's stamp) and the scorer (its file's name and digest) and model.
+   */
+  | (PrRef & { kind: 'qa-score'; sha: string; label: string; score: number; passed: boolean; why: string; crew?: CrewStamp; scorer: string; model: string; costUsd?: number })
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
   | (PrRef & {
     kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when Ops knew. */ closes?: number[];
