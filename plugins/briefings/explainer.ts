@@ -292,8 +292,8 @@ const KIT_HELPERS = String.raw`
 // It rests, dimmed, on the last frame until the captain presses play, so the screen's picture sums it up.
 // Up close, the ship's screen offers a voice-over: the page can't reach Focus itself (it runs in a sandbox of its
 // own), so it asks the screen around it to say each beat's line, and the screen says when the line is done. While the
-// voice is on it sets the pace: a beat holds on its last frame until its line is finished. When a new version changed a
-// beat, the screen has it show that beat, waiting at its start.
+// voice is on it sets the pace: a beat holds on its last frame that still shows it until its line is finished. When a new
+// version changed a beat, the screen has it show that beat, waiting at its start.
 const KIT_PLAYER = String.raw`
 (function () {
   var BEATS = window.KIT_BEATS, DUR = window.KIT_DUR, el = function (id) { return document.getElementById(id); };
@@ -302,6 +302,9 @@ const KIT_PLAYER = String.raw`
   var end = function (i) { return i + 1 < BEATS.length ? BEATS[i + 1].at : DUR; };
   // how far short of the next beat's start a held beat's last frame is drawn
   var HELD = .001;
+  // the moment each beat is held at: its last frame, or earlier for a stage that fades the beat's scene out before it
+  // ends (lastShowing, once the dry run's done)
+  var holdAt = BEATS.map(function (b, i) { return end(i) - HELD; });
   // hold: the beat a step just finished, whose caption stays up while its last frame does (t is then the next one's start)
   var t = DUR, raf = 0, stopAt = DUR, playing = false, hold = -1;
   // the voice-over: whether it's on, and the beat whose line is being said (-1 for none), finished or paused
@@ -344,10 +347,13 @@ const KIT_PLAYER = String.raw`
     });
   }
   var describe = function (err, at) { return (at === undefined ? '' : 'at t = ' + at.toFixed(2) + 's: ') + (err && err.stack ? err.stack.split('\n').slice(0, 3).join('\n') : String(err)); };
-  function frame() {
+  // at: the moment to draw, when the caller knows better than t
+  function frame(at) {
     var held = hold >= 0 && Math.abs(t - end(hold)) < .001;
-    // a held beat draws its own last frame: at t itself, a stage that switches scene at a beat's start shows the next one's
-    if (draw) try { draw(held ? t - HELD : t); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
+    // a held beat draws its own last frame that shows it: at t itself, a stage that switches scene at a beat's start
+    // shows the next one's, and one that fades its scene out before then shows nothing
+    if (at === undefined) at = held ? holdAt[hold] : t;
+    if (draw) try { draw(at); } catch (err) { draw = null; window.kitFault(describe(err)); stop(); }
     var bi = held ? hold : beatAt(t);
     el('kit-bt').textContent = BEATS[bi].title; el('kit-bx').textContent = BEATS[bi].text;
     if (bi !== chipsFor) receipts(bi);
@@ -378,7 +384,9 @@ const KIT_PLAYER = String.raw`
       else if (t >= stopAt && stopAt < DUR) hold = playingBeat;
       else hold = -1;
       if (voice && !waiting && t < stopAt && beatAt(t) !== talk.beat) say(beatAt(t));
-      frame();
+      // heading for a beat's end it may be held at (its line still being said, or a step ending there), it stays on the
+      // frame it would hold rather than play out a fade first
+      frame(until < DUR ? Math.min(t, holdAt[beatAt(until - HELD)]) : t);
       if (t < stopAt && playing) raf = requestAnimationFrame(step); else stop();
     };
     raf = requestAnimationFrame(step);
@@ -426,11 +434,48 @@ const KIT_PLAYER = String.raw`
     else if (e.key === 'ArrowLeft') el('kit-prev').click();
     else if (e.key === ' ') { e.preventDefault(); (document.body.classList.contains('rest') ? el('kit-run') : el('kit-pp')).click(); }
   });
+  // how much of the stage shows at a moment: each element on it that paints something (its own text, a shape or a
+  // picture, a background or a border) counts its area on the stage times its opacity, all the way down. One with no
+  // area (a straight line, or a page with no layout to measure) counts as a pixel, so it's still counted.
+  var SHAPES = /^(path|rect|circle|ellipse|line|polyline|polygon|image|use|img|canvas|video)$/;
+  var clear = function (colour) { var a = /^rgba\(.*,\s*([\d.]+)\)$/.exec(colour); return !colour || colour === 'transparent' || (!!a && +a[1] === 0); };
+  function paints(e, cs) {
+    var border = function (side) { var b = function (of) { return cs.getPropertyValue('border-' + side + '-' + of); }; return parseFloat(b('width')) > 0 && !/none|hidden/.test(b('style')) && !clear(b('color')); };
+    return SHAPES.test(e.localName) || Array.prototype.some.call(e.childNodes, function (n) { return n.nodeType === 3 && /\S/.test(n.nodeValue); })
+      || !clear(cs.backgroundColor) || /url\(|gradient\(/.test(cs.backgroundImage) || ['top', 'right', 'bottom', 'left'].some(border);
+  }
+  function shown(at) {
+    draw(at);
+    var box = el('stage').getBoundingClientRect();
+    return (function sum(node, opacity) {
+      var total = 0;
+      Array.prototype.forEach.call(node.children, function (e) {
+        var cs = getComputedStyle(e), own = parseFloat(cs.opacity), o = opacity * (isNaN(own) ? 1 : own);
+        if (cs.display === 'none' || !(o > 0)) return;
+        if (!/hidden|collapse/.test(cs.visibility) && paints(e, cs)) {
+          var r = e.getBoundingClientRect(), w = Math.min(r.right, box.right) - Math.max(r.left, box.left), h = Math.min(r.bottom, box.bottom) - Math.max(r.top, box.top);
+          total += o * Math.max(1, Math.max(0, w) * Math.max(0, h));
+        }
+        total += sum(e, o);
+      });
+      return total;
+    })(el('stage'), 1);
+  }
+  // a beat whose last frame shows under 60% of what its middle does has faded its scene out before it ends: it's held
+  // instead on the latest frame, back towards its middle a tenth of a second at a time, that shows at least 90% of it
+  function lastShowing(i) {
+    var middle = (BEATS[i].at + end(i)) / 2, full = shown(middle), at = end(i) - HELD;
+    if (shown(at) >= .6 * full) return at;
+    do at = Math.max(middle, at - .1); while (at > middle && shown(at) < .9 * full);
+    return at;
+  }
   // a dry run through every moment before resting on the last, so a stage that breaks partway through says so up front
   if (draw) for (var s = 0; s <= DUR; s += .25) try { draw(s); } catch (err) { draw = null; window.kitFault(describe(err, s)); break; }
+  if (draw) try { holdAt = BEATS.map(function (b, i) { return lastShowing(i); }); } catch (err) { draw = null; window.kitFault(describe(err)); }
   frame(); stop();
   // for a stage whose things arrive later (a texture, a font): draw the frame it's on again
-  window.kitRedraw = frame;
+  // (called with nothing: a promise's value or an event mustn't stand in for the moment to draw)
+  window.kitRedraw = function () { frame(); };
   // Ops' pictures of each beat jump straight to a moment, lit as when playing
   window.kitSeek = function (at) { stop(); hush(); hold = -1; document.body.classList.remove('rest'); t = at; frame(); };
   // and what Ops' checks see in each: how much of the stage is its commonest colour (counted in coarse steps,
