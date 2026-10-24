@@ -1,4 +1,5 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
+import type { CrewStamp } from '../../shared/ledger';
 import type { AgentStatus, FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
 import type { Recovery } from './runJournal';
 
@@ -75,6 +76,8 @@ export interface Reported {
   files?: FileAccount;
   /** The commit tested. */
   sha?: string;
+  /** What QA worked to: its crew file's digest, model and effort, and Focus's commit. Verdicts journaled before it have none. */
+  crew?: CrewStamp;
 }
 
 /** A fact as journaled: numbered from 1 in its review's journal, and when (`t`). */

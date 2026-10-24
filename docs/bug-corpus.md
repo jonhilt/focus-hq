@@ -80,7 +80,7 @@ It replays Focus's QA as it is, which since the results below blocks a change on
 | `pnpm run bug-replay --dry` | what it would review, without reviewing |
 | `pnpm run bug-replay --only <sha>` | one commit a bug came from |
 
-A review costs what one in Focus does (as of 2026-10, about $0.60 and a few minutes): a full run with controls was about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `tools/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `tools/qaReview.ts`.
+A review costs what one in Focus does (as of 2026-10, about $0.60 and a few minutes): a full run with controls was about $30 and a few hours. Runs are saved in `~/.focus/bug-replay/`, each with what QA worked to (its crew file's digest, model and Focus's commit) and the judge's model, so two runs can be told apart by the prompt that made them. The rules are in `server/agents/bugReplay.ts`, the clones and sessions in `tools/bugReplay.ts`, and QA's review session, shared with `qa-catch`, in `tools/qaReview.ts`.
 
 The clones are old builds, whose instructions say to run Focus (`npm run demo`, `pnpm dev`) on the live Focus's port and data folder, 4477 and `~/.focus`. So each review's session runs with a free port and a data folder inside its clone (`PORT`, `FOCUS_DATA_DIR`, `reviewEnv` in `tools/replayRules.ts`), and when it ends, whatever is still running in the clone is stopped (`stopLeftovers`): a demo QA started in the background outlives the session otherwise. Both apply to `qa-catch` too.
 

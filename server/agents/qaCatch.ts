@@ -1,3 +1,4 @@
+import type { CrewStamp } from '../../shared/ledger';
 import type { QaReport } from '../../shared/types';
 
 // QA's catch rate (docs/qa-catch.md): plant one known bug in a line a merged pull request added, run the QA officer's
@@ -171,6 +172,8 @@ export function controlLine(controls: ControlResult[]): string {
 export interface CatchRun {
   at: number;
   model: string;
+  /** What QA worked to. Runs before it have none. */
+  crew?: CrewStamp;
   results: CatchResult[];
   controls?: ControlResult[];
 }

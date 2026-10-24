@@ -10,7 +10,7 @@ import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
 import { goalOf, goalReviewerId, reviewsToStart, sliceSiblings } from '../lead';
 import { repoFolders } from '../planner';
-import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaPlaybook, qaPrompt, type QaSibling, qaSystemAppend, recordingPath, repoChecks, verdictMark } from '../qa';
+import { checksFixPrompt, evidencePath, filesPrompt, filesToRevisit, fixPrompt, openedFiles, postedAlready, type Revisit, toolCalls, keptCaptions, parseQaReport, qaAgentModel, qaComment, qaStamp, qaPlaybook, qaPrompt, type QaSibling, qaSystemAppend, recordingPath, repoChecks, verdictMark } from '../qa';
 import { clock } from '../recording';
 import type { QaLoopEvent } from '../qaLoop';
 import { qaNextStep } from '../qaLoop';
@@ -398,7 +398,8 @@ export class Reviews extends Part {
       const body = `${qaComment(report, { officer: agent.name, sha: review?.sha, pr: pullUrl(agent.repo, number) }, screenshots, this.store.settings.attribution, account, recording)}${verdictMark(newId('verdict'))}`;
       const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
       // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
-      this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha });
+      const crew = qaStamp(agent, this.core.version);
+      this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha, crew });
       yield* this.deliverVerdict(agent.projectId, agent.repo, number);
     });
   }
@@ -447,13 +448,13 @@ export class Reviews extends Part {
   /** Tells everyone who hears of a verdict: the board and ledger, the reviewer's station, whoever fixes a failed PR, and its lead. */
   private announceVerdict(projectId: string, repo: string, number: number, verdict: Reported & { url?: string }, agent: Agent | undefined): Effect.Effect<void, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
-      const { officer, report, screenshots, failedRounds, sha } = verdict;
+      const { officer, report, screenshots, failedRounds, sha, crew } = verdict;
       const pass = verdict.verdict === 'pass';
       // the board's review has the verdict since it was posted (the journal's `posted`)
       const done = this.store.reviews.get(prKey(repo, number));
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
-      this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds });
+      this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds, ...(crew && { crew }) });
       if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
       this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${report.advisory ? 'passed, with advice,' : pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
       this.boardChanged(projectId);

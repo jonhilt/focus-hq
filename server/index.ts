@@ -142,10 +142,11 @@ async function main() {
     const prStates = await lookUpPrStates(closedGoalPrs(snapshot), (repo, number) => github.pullRequestState(repo, number));
     return summariseShip(snapshot, (id) => parts.workspace.dir(id), prStates);
   };
-  const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo, () => settingsInForce(store.settings)), await currentVersion());
+  const version = await currentVersion();
+  const focus = new Focus(store, hub, github, previews, planner, new Voice(hub, config.demo, () => settingsInForce(store.settings)), version);
   focus.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(parts.workspace), Sessions.fromRunner(parts.runner), Triage.fromTriager(parts.triager), Renderer.fromBrowser(browsers), Recordings.fromBrowser(browsers), QaChat.fromChatter(parts.qaChat));
-  focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id));
+  focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id), version);
   focus.ownRepo = await parts.ownRepo();
   parts.readTranscripts(focus.agents);
   await startPlugins(focus, store, parts.demoRunner, shipStatus);

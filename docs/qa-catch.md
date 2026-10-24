@@ -13,7 +13,7 @@ A script of Focus's own (it runs in the terminal, never in Focus): it measures Q
 | `pnpm run qa-catch --again` | the same pull requests as the last run, so the same bugs: to compare QA before and after a change to it |
 | `pnpm run qa-catch --control` | also reviews each pull request with no bug planted, and counts the clean ones QA fails (false alarms): twice the reviews |
 
-Each review costs what a QA review in Focus does: as of 2026-10, about $0.60 and a few minutes on Focus's QA model, so a default run is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/`.
+Each review costs what a QA review in Focus does: as of 2026-10, about $0.60 and a few minutes on Focus's QA model, so a default run is about $6–10 and half an hour or so. Each run is saved in `~/.focus/qa-catch/`, with what QA worked to: its crew file's digest, model and Focus's commit.
 
 ## How a run goes
 

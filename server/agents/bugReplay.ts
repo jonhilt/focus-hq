@@ -1,3 +1,4 @@
+import type { CrewStamp } from '../../shared/ledger';
 import type { QaReport } from '../../shared/types';
 import type { BuggyLine } from './bugCorpus';
 
@@ -121,6 +122,9 @@ export interface ReplayRun {
   at: number;
   arm: Arm;
   model: string;
+  /** What QA worked to, and the model that judged whether a block was the same bug. Runs before them have neither. */
+  crew?: CrewStamp;
+  judge?: string;
   results: ReplayResult[];
   controls?: ReplayControl[];
 }

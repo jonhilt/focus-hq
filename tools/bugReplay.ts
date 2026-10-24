@@ -42,7 +42,7 @@ import { config, paths } from '../server/config';
 import type { PullRequestDetail } from '../server/github/provider';
 import { errorMessage, run } from '../server/util';
 import type { Project, Settings } from '../shared/types';
-import { review } from './qaReview';
+import { replayStamp, review } from './qaReview';
 
 const ROOT = process.cwd();
 const REPO = 'jonhilt/focus';
@@ -222,7 +222,7 @@ async function main() {
   console.log(`\n${replayLines(arm, results, controls).join('\n')}`);
   mkdirSync(OUT, { recursive: true });
   const file = path.join(OUT, `${new Date().toISOString().replace(/[:.]/g, '-')}-${arm}.json`);
-  const saved: ReplayRun = { at: Date.now(), arm, model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
+  const saved: ReplayRun = { at: Date.now(), arm, model: qaAgentModel(state.settings) ?? 'default', crew: await replayStamp(state.settings), judge: JUDGE_MODEL, results, ...(controls.length && { controls }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }

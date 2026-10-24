@@ -24,7 +24,7 @@ import { checkLedger, closedGoals } from '../shared/ledger';
 import type { Project, Settings } from '../shared/types';
 import { addedLines, type CatchResult, type CatchRun, catchLines, controlLine, type ControlResult, plant, type Planted, scoreControl, scoreReport } from '../server/agents/qaCatch';
 import { latestRun, QA_CATCH_DIR } from '../server/agents/qaCatchRuns';
-import { review } from './qaReview';
+import { replayStamp, review } from './qaReview';
 
 const run = promisify(execFile);
 const BIG = { maxBuffer: 64 * 1024 * 1024 };
@@ -154,7 +154,7 @@ if (skipped.length) console.log(`\n${skipped.length} pull request${skipped.lengt
 if (!dry && results.length) {
   mkdirSync(QA_CATCH_DIR, { recursive: true });
   const file = path.join(QA_CATCH_DIR, `${new Date().toISOString().replace(/[:.]/g, '-')}.json`);
-  const saved: CatchRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', results, ...(controls.length && { controls }) };
+  const saved: CatchRun = { at: Date.now(), model: qaAgentModel(state.settings) ?? 'default', crew: await replayStamp(state.settings), results, ...(controls.length && { controls }) };
   writeFileSync(file, JSON.stringify(saved, null, 2));
   console.log(`\nSaved in ${file}`);
 }

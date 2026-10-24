@@ -8,7 +8,8 @@ import { truncate } from '../util';
 import { blocks, transcriptLines } from './transcript';
 import { huntingSteps, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { clock } from './recording';
-import { CREW_RULES, crewPrompt, crewText } from './crewFiles';
+import { CREW_RULES, crewFile, crewPrompt, crewText } from './crewFiles';
+import type { CrewStamp } from '../../shared/ledger';
 
 // The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
 // tested (qa.test.ts).
@@ -433,6 +434,14 @@ export function qaSystemAppend(agent: Pick<Agent, 'name'>, project: { name: stri
     publicWordsRule: CREW_RULES.publicWordsRule,
   }).trim();
 }
+
+/** What a QA officer works to, for their verdict: QA's crew file's digest, the model and effort they were seated on, and Focus's commit. */
+export const qaStamp = (agent: Pick<Agent, 'model' | 'effort'>, commit: string): CrewStamp => ({
+  digest: crewFile('qa').digest,
+  ...(agent.model && { model: agent.model }),
+  ...(agent.effort && { effort: agent.effort }),
+  commit,
+});
 
 /** What QA runs on `repo`, from what its clone's root says (`facts`; none when there's no clone) and the project's merge checks. */
 export function repoChecks(repo: string, facts: PackageFacts | undefined, chosen?: readonly string[]): QaRepoChecks {

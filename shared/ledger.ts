@@ -1,7 +1,7 @@
 import type { Lane } from './mergeLane';
 import type { QaBadgeState } from './qa';
 import { isRecord } from './records';
-import type { AgentTask, ArchivedGoal, GoalRecord, TriageAction } from './types';
+import type { AgentTask, ArchivedGoal, Effort, GoalRecord, TriageAction } from './types';
 
 // The ship's log of how work went: what QA said, who merged what and whether QA had passed it, conflicts, triage,
 // closed goals, and a digest of each agent session as it ends. Ops appends to it as things happen and never
@@ -22,8 +22,19 @@ interface PrRef {
   goal?: string;
 }
 
+/**
+ * What a crew member worked to, so a result can be set against the prompt that gave it: its crew file's digest
+ * (.focus/crew/, `crewFiles.ts`), the model and effort it ran on (none: the session's default), and Focus's commit.
+ */
+export interface CrewStamp {
+  digest: string;
+  model?: string;
+  effort?: Effort;
+  commit?: string;
+}
+
 export type LedgerEntry =
-  | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number })
+  | (PrRef & { kind: 'qa-verdict'; verdict: 'pass' | 'fail'; sha?: string; reviewer: string; checks: { pass: number; fail: number; skip: number }; failedRounds: number; /** Lines before QA's stamp have none. */ crew?: CrewStamp })
   /** `qa` is the PR's QA badge as it merged: anything but `passed` merged without QA passing its head commit. */
   | (PrRef & {
     kind: 'merged'; by: Closer; qa: QaBadgeState; failedRounds: number; triages: number; /** Issues it closed, when Ops knew. */ closes?: number[];

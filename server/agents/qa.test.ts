@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, repoChecks, siblingList, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, qaStamp, repoChecks, siblingList, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
 import { huntingSteps } from './qaProof';
+import { crewFile } from './crewFiles';
 import { SCRATCH_RULE } from './scratch';
 import { WAIT_RULE } from './wait';
 
@@ -420,6 +421,14 @@ describe('spot-checks', () => {
     const body = qaComment(report({ spotChecks: [{ file: 'server/merge.ts', line: 41, why: 'New merge path' }, { file: 'b.ts', why: 'Gate changed' }] }), { officer: 'Lt. Moreau' }, [], false);
     expect(body).toContain('### 🔦 Worth a human look\n\n- `server/merge.ts:41`: New merge path\n- `b.ts`: Gate changed');
     expect(qaComment(report(), { officer: 'Lt. Moreau' }, [], false)).not.toContain('Worth a human look');
+  });
+});
+
+describe('what a QA verdict is stamped with', () => {
+  it('is QA’s crew file’s digest, the model and effort QA was seated on, and Focus’s commit', () => {
+    expect(qaStamp({ model: 'claude-opus-5-5', effort: 'high' }, 'abc1234')).toEqual({ digest: crewFile('qa').digest, model: 'claude-opus-5-5', effort: 'high', commit: 'abc1234' });
+    // the session's defaults leave them out
+    expect(qaStamp({}, 'abc1234')).toEqual({ digest: crewFile('qa').digest, commit: 'abc1234' });
   });
 });
 

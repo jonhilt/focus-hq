@@ -10,7 +10,9 @@ import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Effect } from 'effect';
 import { claudeConfig } from '../server/agents/claudeRunner';
-import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaSystemAppend, type ToolCall } from '../server/agents/qa';
+import { filesPrompt, filesToRevisit, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaStamp, qaSystemAppend, type ToolCall } from '../server/agents/qa';
+import { currentVersion } from '../server/updater';
+import type { CrewStamp } from '../shared/ledger';
 import type { PullRequestDetail } from '../server/github/provider';
 import { qaProofFor } from '../shared/qa';
 import type { Project, QaReport, Settings } from '../shared/types';
@@ -35,6 +37,12 @@ const BIG = { maxBuffer: 64 * 1024 * 1024 };
 const REVIEW_MS = 25 * 60 * 1000;
 
 /** Stops what QA left running in the clone (an old build's demo ship, a dev server): asked first, then made to. */
+/** What a replayed review works to (`qaStamp`), for the run's saved results: QA's model as `settings` give it, on its default effort. */
+export async function replayStamp(settings: Pick<Settings, 'model' | 'qaModel'>): Promise<CrewStamp> {
+  const model = qaAgentModel(settings);
+  return qaStamp(model ? { model } : {}, await currentVersion());
+}
+
 export async function stopLeftovers(dir: string): Promise<void> {
   // a clone already gone has nothing left running in it
   if (!existsSync(dir)) return;

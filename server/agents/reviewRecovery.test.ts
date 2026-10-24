@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
 import { GitHub, GitHubRejected } from '../github/service';
+import { crewFile } from './crewFiles';
 import { demoWorkspace } from './demoRunner';
 import { focus, restarted, until } from './fakeFocus';
 import { RESUMED_NOTE } from './runJournal';
@@ -70,7 +71,10 @@ describe('a QA review after Focus restarts', () => {
     expect(after.claude.turns).toHaveLength(0);
     expect(posted).toHaveLength(1);
     expect(before.store.reviews.get(key)).toMatchObject({ commentUrl: 'https://github.com/c/1', report: { verdict: 'pass' } });
-    expect(before.store.ledger.filter((e) => e.kind === 'qa-verdict')).toHaveLength(1);
+    const verdicts = before.store.ledger.filter((e) => e.kind === 'qa-verdict');
+    expect(verdicts).toHaveLength(1);
+    // stamped with what QA worked to as it reported, before the restart
+    expect(verdicts[0]).toMatchObject({ crew: { digest: crewFile('qa').digest, commit: 'unknown' } });
     expect(before.store.review(key).phase).toBe('passed');
   });
 

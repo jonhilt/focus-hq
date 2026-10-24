@@ -37,8 +37,8 @@ import { Core, type ManagerServices } from './manager/core';
 export class AgentManager {
   private readonly core: Core;
 
-  constructor(store: Store, hub: Hub, services: Layer.Layer<ManagerServices>, boardChanged: (projectId: string) => void) {
-    this.core = new Core(store, hub, services, boardChanged);
+  constructor(store: Store, hub: Hub, services: Layer.Layer<ManagerServices>, boardChanged: (projectId: string) => void, version?: string) {
+    this.core = new Core(store, hub, services, boardChanged, version);
     this.core.cloud = new CloudMoves(this.core);
     this.core.comms = new Comms(this.core);
     this.core.conflicts = new Conflicts(this.core);

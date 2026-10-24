@@ -130,6 +130,8 @@ export class Core {
     readonly hub: Hub,
     services: Layer.Layer<ManagerServices>,
     readonly boardChanged: (projectId: string) => void,
+    /** The commit this Focus is running (`currentVersion`), for what the crew's results are stamped with. */
+    readonly version = 'unknown',
   ) {
     this.plugins = new Plugins(() => store.plugins);
     store.journaled = (agent) => this.hub.send({ type: 'agent', agent });
