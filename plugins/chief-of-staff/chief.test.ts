@@ -3,7 +3,8 @@ import type { Agent, FocusPlugin } from '../../plugin-api/server';
 import { demoWorkspace, focus, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
 import type { Router } from './jevRouter';
-import { JUDGE_VERSION } from './judge';
+import { judgeVersion } from './judge';
+import { laneJudgeVersion } from './laneJudge';
 import { UNATTENDED_ROUNDS } from './rounds';
 import { CHIEF_OF_STAFF, readOf } from './shared';
 
@@ -62,7 +63,7 @@ describe('routing with Jev', () => {
     expect(o.asked[0].system).toContain('The route is decided already: 3 (interrupt)');
     expect(o.asked[0].schema).toMatchObject({ properties: { route: { enum: [3] } } });
     expect(o.verdicts()[0]).toMatchObject({
-      route: 3, model: 'claude-haiku-4-5', version: `${JUDGE_VERSION}+jev-v1`,
+      route: 3, model: 'claude-haiku-4-5', version: `${judgeVersion()}+jev-v1`,
       router: { by: 'jev', model: 'jev-1.14.0', version: 'jev-v1', interrupt: 0.6, costUsd: 0.0001 },
     });
     expect(o.read()?.judged).toMatchObject({ route: 3 });
@@ -74,7 +75,7 @@ describe('routing with Jev', () => {
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
     await until(() => o.verdicts().length === 1);
     expect(o.asked[0].system).not.toContain('decided already');
-    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: JUDGE_VERSION, routerFailed: 'Jev answered HTTP 529' });
+    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: judgeVersion(), routerFailed: 'Jev answered HTTP 529' });
     expect(o.verdicts()[0]).not.toHaveProperty('router');
   });
 
@@ -84,7 +85,7 @@ describe('routing with Jev', () => {
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
     await until(() => o.verdicts().length === 1);
     expect(jev.asked).toEqual([]);
-    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: JUDGE_VERSION });
+    expect(o.verdicts()[0]).toMatchObject({ route: 4, version: judgeVersion() });
     expect(o.verdicts()[0]).not.toHaveProperty('routerFailed');
   });
 });
@@ -96,7 +97,7 @@ describe('the chief of staff', () => {
     await until(() => o.verdicts().length === 1);
     expect(o.verdicts()[0]).toMatchObject({
       kind: 'cos-verdict', projectId: o.project.id, sessionId: 'session-1', agent: o.lead().name, goal: o.lead().lead?.title, turnUuid: 'b',
-      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: 'v9', costUsd: 0.001,
+      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: judgeVersion(), costUsd: 0.001,
     });
     expect(o.asked[0].prompt).toBe(`Goal: ${o.lead().lead?.title}\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2?\n>>>`);
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');
@@ -344,7 +345,7 @@ describe('the chief of staff reading a ship’s lane', () => {
     await o.read();
     expect(o.asked).toHaveLength(1);
     expect(o.lanes()).toEqual(['ship', 'ship']);
-    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ship', why: 'It only wires in parts as they are.', version: 'lane-v1', model: 'claude-haiku-4-5' }]);
+    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ship', why: 'It only wires in parts as they are.', version: laneJudgeVersion(), model: 'claude-haiku-4-5' }]);
     expect(o.lines('lane-raised')).toEqual([]);
   });
 

@@ -11,6 +11,7 @@ import { BotHook } from './botHook';
 import { Inbox } from './captainsInbox';
 import { ChiefOfStaff } from './chief';
 import { ClaudeJudge } from './claudeJudge';
+import { CREW } from './crew';
 import { DemoJudge } from './demoJudge';
 import { STANDING_ORDERS } from './judge';
 import { inboxRoutes } from './routes';
@@ -32,6 +33,8 @@ function readIfThere(file: string): string | undefined {
 const chiefOfStaff: FocusPlugin = {
   id: CHIEF_OF_STAFF,
   start(host) {
+    // a crew file that's wrong stops Focus as it starts, saying which and where, rather than at the first turn it judges
+    CREW.check();
     // the captain's standing orders are read afresh for each turn, so editing the file takes effect at once
     const orders = path.join(host.dataDir(), STANDING_ORDERS);
     const settings = host.state(freshState);

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { parse } from 'yaml';
@@ -25,11 +26,13 @@ export interface CrewSettings {
 }
 
 export interface CrewFile {
-  role: CrewRoleName;
+  role: string;
   description: string;
   settings: CrewSettings;
   prompt: Template;
   texts: Readonly<Record<string, Template>>;
+  /** Its prompt's and texts' words in short (8 hex digits): a different digest means the role was told something else. */
+  digest: string;
 }
 
 /** What's wrong with a crew file, naming it (and the line, where there is one) the way an editor would. */
@@ -111,9 +114,12 @@ function textsOf(value: unknown, role: CrewRole, file: string): Record<string, T
   return Object.fromEntries([...given].map(([name, src]) => [name, template(src, role.textVars ?? role.vars, file, { text: name })]));
 }
 
-/** A crew file's source, read and checked as `role`'s: `file` is how errors name it. */
-export function parseCrewFile(role: CrewRoleName, source: string, file: string): CrewFile {
-  const spec: CrewRole = CREW_ROLES[role];
+/** What a prompt's words come to, short: the same words always give the same digest, and any change gives another. */
+const digestOf = (body: string, texts: [string, string][]): string =>
+  createHash('sha256').update(JSON.stringify([body, ...texts])).digest('hex').slice(0, 8);
+
+/** A crew file's source, read and checked as the role `spec` describes: `file` is how errors name it. */
+export function parseCrewFile(spec: CrewRole, role: string, source: string, file: string): CrewFile {
   const { frontmatter, body, bodyLine } = splitFrontmatter(source, file);
   let fields: unknown;
   try {
@@ -130,54 +136,73 @@ export function parseCrewFile(role: CrewRoleName, source: string, file: string):
     settings: settingsOf(fields, spec, file),
     texts: textsOf(fields.texts, spec, file),
     prompt: template(body, spec.vars, file, { line: bodyLine }),
+    digest: digestOf(body, flatTexts(fields.texts, file)),
   };
 }
 
-const isRole = (name: string): name is CrewRoleName => name in CREW_ROLES;
-
-/** Every role's file in `dir`, read and checked; a file there that's no role's is an error too (a misspelt name, say). */
-export function loadCrew(dir = CREW_DIR): Map<CrewRoleName, CrewFile> {
+/**
+ * Every role's file in `dir` (`<role>.md`), read and checked; a file there that's no role's is an error too (a misspelt
+ * name, say). A README.md is the folder's own.
+ */
+export function loadCrew<Roles extends Record<string, CrewRole>>(dir: string, roles: Roles): Map<string, CrewFile> {
   const shown = (name: string) => path.relative(config.root, path.join(dir, name)) || name;
-  const stray = fs.readdirSync(dir).filter((name) => name.endsWith('.md') && name !== 'README.md' && !isRole(name.slice(0, -3)));
-  if (stray.length) throw new CrewFileError(`${stray.map(shown).join(', ')}: no crew role has that name: they're ${Object.keys(CREW_ROLES).join(', ')}`);
-  const roles = Object.keys(CREW_ROLES).filter(isRole);
+  const names = Object.keys(roles);
+  const stray = fs.readdirSync(dir).filter((name) => name.endsWith('.md') && name !== 'README.md' && !names.includes(name.slice(0, -3)));
+  if (stray.length) throw new CrewFileError(`${stray.map(shown).join(', ')}: no crew role has that name: they're ${names.join(', ')}`);
   return new Map(
-    roles.map((role) => {
+    Object.entries(roles).map(([role, spec]) => {
       const file = path.join(dir, `${role}.md`);
       if (!fs.existsSync(file)) throw new CrewFileError(`${shown(`${role}.md`)}: missing: every crew role has its file`);
-      return [role, parseCrewFile(role, fs.readFileSync(file, 'utf8'), shown(`${role}.md`))];
+      return [role, parseCrewFile(spec, role, fs.readFileSync(file, 'utf8'), shown(`${role}.md`))];
     }),
   );
+}
+
+type TextName<S> = S extends { texts: readonly (infer T extends string)[] } ? T : never;
+type TextVarsOf<S extends CrewRole> = S extends { textVars: infer V extends TemplateVars } ? V : S['vars'];
+
+/** A folder of crew files, `<role>.md` for each of `roles`, read and checked the first time one's asked for (or at `check`). */
+export interface CrewFolder<Roles extends Record<string, CrewRole>> {
+  /** Reads and checks every file now: throws a `CrewFileError` on the first that's wrong. */
+  check(): void;
+  file(role: keyof Roles & string): CrewFile;
+  /** The role's system prompt, filled in. */
+  prompt<R extends keyof Roles & string>(role: R, values: TemplateValues<Roles[R]['vars']>): string;
+  /** One of the role's texts, filled in. */
+  text<R extends keyof Roles & string>(role: R, name: TextName<Roles[R]>, values: TemplateValues<TextVarsOf<Roles[R]>>): string;
+}
+
+export function crewFolder<Roles extends Record<string, CrewRole>>(dir: string, roles: Roles): CrewFolder<Roles> {
+  let loaded: Map<string, CrewFile> | undefined;
+  const file = (role: string): CrewFile => {
+    loaded ??= loadCrew(dir, roles);
+    const found = loaded.get(role);
+    if (!found) throw new CrewFileError(`${path.relative(config.root, path.join(dir, `${role}.md`))} wasn't loaded`);
+    return found;
+  };
+  return {
+    check: () => {
+      loaded = loadCrew(dir, roles);
+    },
+    file,
+    prompt: (role, values) => renderTemplate(file(role).prompt, values),
+    text: (role, name, values) => {
+      const text = file(role).texts[name];
+      if (!text) throw new CrewFileError(`${role}.md has no texts.${name}`);
+      return renderTemplate(text, values);
+    },
+  };
 }
 
 /** The rules more than one prompt shares, for the crew files that say `{{scratchRule}}` and so on. */
 export const CREW_RULES = { publicWordsRule: PUBLIC_WORDS_RULE, scratchRule: SCRATCH_RULE, waitRule: WAIT_RULE };
 
-let loaded: Map<CrewRoleName, CrewFile> | undefined;
+/** The core's crew, in .focus/crew/. */
+const CREW = crewFolder(CREW_DIR, CREW_ROLES);
 
-/** Reads and checks the crew's files now, as Focus starts: throws a `CrewFileError` on the first that's wrong. */
-export function readCrew(): void {
-  loaded = loadCrew();
-}
+/** Reads and checks the core's crew files now, as Focus starts: throws a `CrewFileError` on the first that's wrong. */
+export const readCrew = (): void => CREW.check();
 
-/** The role's file, read with the rest the first time any is asked for (`loadCrew`). */
-export function crewFile(role: CrewRoleName): CrewFile {
-  loaded ??= loadCrew();
-  const file = loaded.get(role);
-  if (!file) throw new CrewFileError(`.focus/crew/${role}.md wasn't loaded`);
-  return file;
-}
-
-type Roles = typeof CREW_ROLES;
-type TextName<R extends CrewRoleName> = Roles[R] extends { texts: readonly (infer T extends string)[] } ? T : never;
-type TextVarsOf<R extends CrewRoleName> = Roles[R] extends { textVars: infer V extends TemplateVars } ? V : Roles[R]['vars'];
-
-/** The role's system prompt, from its file, filled in. */
-export const crewPrompt = <R extends CrewRoleName>(role: R, values: TemplateValues<Roles[R]['vars']>): string => renderTemplate(crewFile(role).prompt, values);
-
-/** One of the role's texts, from its file, filled in. */
-export function crewText<R extends CrewRoleName>(role: R, name: TextName<R>, values: TemplateValues<TextVarsOf<R>>): string {
-  const text = crewFile(role).texts[name];
-  if (!text) throw new CrewFileError(`.focus/crew/${role}.md has no texts.${name}`);
-  return renderTemplate(text, values);
-}
+export const crewFile = (role: CrewRoleName): CrewFile => CREW.file(role);
+export const crewPrompt: CrewFolder<typeof CREW_ROLES>['prompt'] = (role, values) => CREW.prompt(role, values);
+export const crewText: CrewFolder<typeof CREW_ROLES>['text'] = (role, name, values) => CREW.text(role, name, values);

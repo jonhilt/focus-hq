@@ -1,7 +1,7 @@
 import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
-import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, verdictSchema } from './judge';
-import { heldForRead, LANE_JUDGE_VERSION, lostRaise, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
+import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, verdictSchema } from './judge';
+import { heldForRead, laneJudgeVersion, lostRaise, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, pickOf, unreadShip } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
 import { judged, reading, waking } from './lanes';
 import { capped, unattendedRounds } from './rounds';
@@ -116,7 +116,7 @@ export class ChiefOfStaff {
     if (!work) return;
     const from = pickOf(prs);
     const { shipped } = work;
-    const read = { agent: lead.name, goal: work.title, prs: prs.map((p) => ({ repo: p.repo, pr: p.number, ...(p.sha && { sha: p.sha }) })), from, version: LANE_JUDGE_VERSION };
+    const read = { agent: lead.name, goal: work.title, prs: prs.map((p) => ({ repo: p.repo, pr: p.number, ...(p.sha && { sha: p.sha }) })), from, version: laneJudgeVersion() };
     let lane: Lane = 'ask';
     let why: string;
     try {
@@ -158,7 +158,7 @@ export class ChiefOfStaff {
       this.host.record(agent.projectId, {
         kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, why: verdict.why,
         ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,
-        version: routing ? `${JUDGE_VERSION}+${routing.how.version}` : JUDGE_VERSION,
+        version: routing ? `${judgeVersion()}+${routing.how.version}` : judgeVersion(),
         ...(result.costUsd !== undefined && { costUsd: result.costUsd }),
         ...(routing && { router: { by: 'jev', ...routing.how } }),
         ...(failed && { routerFailed: failed }),

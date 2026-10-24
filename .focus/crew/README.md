@@ -17,5 +17,9 @@ is on and `{{^flag}}…{{/flag}}` when it's off. A section tag alone on its line
 Focus reads every file when it starts and won't start with one that's wrong, saying which file and line: a name the role
 hasn't got, a section left open, a text missing, a setting nothing reads.
 
+A plugin keeps its crew beside its code, in a folder of the same files (`crewFolder` in `plugin-api/server.ts`), so
+the core never names it. Each file's digest, a short hash of its prompt and texts, can stand for its version: the same
+words always give the same one.
+
 The prompts are pinned word for word (`server/agents/crewGolden.test.ts`). Changing one on purpose, run
 `pnpm test -- -u` and the snapshot's diff shows what the agent will now be told.

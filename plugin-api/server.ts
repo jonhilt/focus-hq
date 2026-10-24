@@ -24,6 +24,12 @@ export { type ChatProject, projectList, type ShipStatus } from '../server/agents
 /** GitHub, as a brief's Effect reads it (`BriefSpec.brief`), and a merged or closed pull request as it gives it. */
 export { GitHub } from '../server/github/service';
 export type { PastPullRequest } from '../server/github/provider';
+/**
+ * A folder of crew files, as the core's .focus/crew/ (its README.md): a plugin's own crew, beside its code, each role's
+ * prompt and texts checked against what the code fills in, and a digest of its words for a version.
+ */
+export { crewFolder, type CrewFolder, CrewFileError } from '../server/agents/crewFiles';
+export type { CrewRole } from '../server/agents/crewRoles';
 /** A plugin's own folder for files, for its scripts (its server part has `host.dataDir()`, the same folder). */
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** Focus on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */

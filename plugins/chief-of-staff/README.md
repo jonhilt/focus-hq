@@ -19,7 +19,7 @@ Only a lead's ended turn is the chief of staff's: a raised hand, a question, an 
 
 ## Raising a ship's lane
 
-A goal's lead ships each slice in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges): Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):
+A goal's lead ships each slice in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges): Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):
 
 - **It reads each ship once,** as the project's board refreshes after it: the goal, the pull requests' title and description, the lead's pick and the slice's recap, by the lane rules and the captain's standing orders, with Haiku as for a turn. Its answer is a `cos-lane` ledger line, kept or raised, with why and its prompt's version, to check against what the captain did with it.
 - **Nothing in Ship or Show merges by itself before it has read it** at the commit it's at (`mergeHeld`): a new ship is read again. Ask is as high as it goes, so it isn't read.
@@ -53,7 +53,7 @@ Its words sending themselves and its wakes each start a lead's next turn without
 
 ## The four routes, from its principles
 
-It reasons from seven principles, and the routes follow from them (`judge.ts`):
+It reasons from seven principles, and the routes follow from them (`crew/judge.md`, read by `judge.ts`):
 
 - **P1.** The captain's attention is the scarcest thing aboard: spend it where their judgement changes what gets built.
 - **P2.** Direction is the captain's, craft the lead's: what to build, for whom, what users see, the scope, the next slice and whether it's done are theirs; how it's built, tested and merged is the lead's.
@@ -75,7 +75,7 @@ It reasons from seven principles, and the routes follow from them (`judge.ts`):
 - **Which turns:** a goal lead's turn as it ends, in a project it's switched on for. It's judged in the background: the turn doesn't wait, and a judgement that fails is logged and dropped. A turn the lead said nothing in isn't judged, nor is one your plan's usage limit stopped: Ops carries those on itself. A turn is judged once however often it ends.
 - **Who judges:** Claude Haiku, in a read-only session with no tools and a structured answer: the route, a one-line headline for the inbox (`ask`: what's being decided, or in brief what it would tell the lead), why, and the words it would send (to the lead on routes 1 and 4, to the captain on 2 and 3). Spending money is always an interrupt. The demo's judge is scripted.
 - **Route with Jev** (per project, beside Auto-send in the manager's **Projects** tab): TypeSafe's Jev picks the route first, in under a second, by the backtest's questions and its proposed policy ([backtesting Jev](#backtesting-jev)), and Haiku writes the words for that route. When Jev can't answer (no key, an error, a timeout), Haiku routes as it does everywhere else, and the verdict says why. It needs a TypeSafe key: `TYPESAFE_API_KEY` where Focus starts, or `typesafe.key` in the plugin's folder, which reaches no other plugin. `pnpm run jev-watch` shows each day's turns and interrupts by who routed them ([scripts](../../docs/scripts.md)).
-- **What it writes:** a `cos-verdict` line in the ledger, with the prompt's version and what it cost; Jev's routing, when it routed (`router`: its interrupt probability, its pick, what it cost, the version tagged `+jev-v1`), or why it couldn't (`routerFailed`).
+- **What it writes:** a `cos-verdict` line in the ledger, with the prompt's version and what it cost. The version is a digest of `crew/judge.md`'s words (`judge-823b93a9` is v9's, as it moved there; lines before that say `v9`), so a change to the words is a new version by itself, and the same goes for the lane judge's (`lane-7dcda9b1` was `lane-v1`). Jev's routing, when it routed (`router`: its interrupt probability, its pick, what it cost, the version tagged `+jev-v1`), or why it couldn't (`routerFailed`).
 
 ## The captain's standing orders
 

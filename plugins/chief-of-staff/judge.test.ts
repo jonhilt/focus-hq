@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { JUDGE_VERSION, judgePrompt, judgeSystemPrompt, parseVerdict, VERDICT_SCHEMA, verdictSchema } from './judge';
+import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, VERDICT_SCHEMA, verdictSchema } from './judge';
 import { MAX_REPLIES, MAX_REPLY_LABEL } from './shared';
 import { demoReplies } from './demoJudge';
 
@@ -10,7 +10,7 @@ describe('the judge', () => {
     expect(prompt).toContain('message: always the actual words you would send');
     expect(judgeSystemPrompt(undefined)).toContain('past replies:\nNone yet');
     expect(judgeSystemPrompt('  \n')).toContain('past replies:\nNone yet');
-    expect(JUDGE_VERSION).toBe('v9');
+    expect(judgeVersion()).toMatch(/^judge-[0-9a-f]{8}$/);
     expect(prompt).toContain('- replies: buttons for the captain');
     expect(prompt).toContain('3 at most');
     expect(prompt).toContain('Spending money is always 3');
