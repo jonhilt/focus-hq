@@ -141,8 +141,5 @@ export function gifArgs(mp4: string, out: string): string[] {
   ];
 }
 
-/** A length of time as the comment says it: `0:48`, `12:05`. */
-export function clock(seconds: number): string {
-  const s = Math.round(seconds);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
+/** A length of time as the comment says it: `0:48`, `12:05` (the station's report card says it the same way). */
+export { clipClock as clock } from '../../shared/qa';

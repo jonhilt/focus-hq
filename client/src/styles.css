@@ -651,6 +651,9 @@ textarea.qa-chat-input { width: 100%; min-height: 56px; }
 .qa-shots figure { margin: 0; }
 .qa-shots img { display: block; width: 100%; aspect-ratio: 11 / 7; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); }
 .qa-shots figcaption { font-size: 13px; margin-top: 4px; line-height: 1.3; }
+.qa-recording { margin: 8px 0; }
+.qa-recording img, .qa-recording video { display: block; max-width: 100%; border-radius: 8px; border: 1px solid var(--line); }
+.qa-recording figcaption { font-size: 13px; margin-top: 4px; line-height: 1.3; }
 .qa-fix { border-left: 6px solid var(--lcars-gold); background: color-mix(in srgb, var(--lcars-gold) 14%, var(--surface)); border-radius: 0 10px 10px 0; padding: 8px 10px; margin: 8px 0; }
 .qa-fix strong { text-transform: uppercase; letter-spacing: 0.06em; color: var(--lcars-gold); }
 .qa-fix p { margin: 4px 0 0; white-space: pre-wrap; }

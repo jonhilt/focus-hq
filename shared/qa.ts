@@ -1,4 +1,4 @@
-import type { FileAccount, PullRequest, QaFile, QaReport, QaReview, QaSpotCheck, Settings } from './types';
+import type { FileAccount, PullRequest, QaFile, QaRecording, QaReport, QaReview, QaSpotCheck, Settings } from './types';
 
 // QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
 
@@ -155,4 +155,15 @@ export function filesCovered(report: QaReport, account: FileAccount | undefined)
     missing: rows.filter((r) => !r.said).length,
     sentBack: account?.sentBack ?? 0,
   };
+}
+
+/** A length of time as a recording's caption says it: `0:48`, `12:05`. */
+export function clipClock(seconds: number): string {
+  const s = Math.round(seconds);
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+}
+
+/** How a recording of QA's browser was edited, in a line: how long the session took and how long the clip shows it in. */
+export function recordingLine(r: Pick<QaRecording, 'realSeconds' | 'shownSeconds' | 'actions'>): string {
+  return `took ${clipClock(r.realSeconds)}, shown in ${clipClock(r.shownSeconds)} · ${r.actions} browser action${r.actions === 1 ? '' : 's'} at real speed, waits fast-forwarded`;
 }

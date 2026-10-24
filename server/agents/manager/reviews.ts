@@ -399,7 +399,7 @@ export class Reviews extends Part {
       const failedRounds = (review?.failedRounds ?? 0) + (report.verdict === 'pass' ? 0 : 1);
       // the verdict's on disk before it goes anywhere: a restart from here on posts it and tells everyone (`deliverVerdict`)
       const crew = qaStamp(agent, this.core.version);
-      this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, files: account, sha: review?.sha, crew });
+      this.record(prKey(agent.repo, number), { kind: 'reported', verdict: report.verdict, officer: agent.name, body, failedRounds, report, screenshots, ...(recording && { recording }), files: account, sha: review?.sha, crew });
       yield* this.deliverVerdict(agent.projectId, agent.repo, number);
     });
   }
@@ -512,8 +512,8 @@ export class Reviews extends Part {
   }
 
   /**
-   * Edits the recording of the QA officer's browser down and uploads it to the repo's QA evidence branch: nothing when
-   * it wasn't recorded or they never acted in the browser. One that can't be edited, or whose MP4 can't be uploaded,
+   * Edits the recording of the QA officer's browser down, keeps it for the station and uploads it to the repo's QA
+   * evidence branch: nothing when it wasn't recorded or they never acted in the browser. One that can't be edited, or whose MP4 can't be uploaded,
    * stays off the PR comment (without its GIF, the comment links the MP4 alone), and why goes to their terminal.
    */
   private keepRecording(agent: Agent, sha: string | undefined): Effect.Effect<QaRecording | undefined, never, GitHub | Recordings> {
@@ -527,13 +527,20 @@ export class Reviews extends Part {
       const edited = yield* (yield* Recordings).finish(agent.id).pipe(Effect.catch(failed('edit the recording of the browser')));
       if (!edited) return undefined;
       const at = Date.now();
+      const keep = (ext: string, bytes: Buffer) => {
+        const file = `${slugify(agent.repo)}-${agent.issue.number}-${at}-recording.${ext}`;
+        this.store.saveShot(file, bytes);
+        return file;
+      };
       const upload = (ext: string, bytes: Buffer) =>
         github.uploadQaEvidence(agent.repo, recordingPath(agent.issue.number, sha, at, ext), bytes).pipe(Effect.catch(failed(`upload the recording's ${ext.toUpperCase()}`)));
       const mp4Url = yield* upload('mp4', edited.mp4);
       if (!mp4Url) return undefined;
       const gifUrl = edited.gif ? yield* upload('gif', edited.gif) : undefined;
+      const mp4File = keep('mp4', edited.mp4);
+      const gifFile = edited.gif && keep('gif', edited.gif);
       this.print(agent, [{ kind: 'system', text: `✻ Uploaded the recording of the browser (${clock(edited.realSeconds)} shown in ${clock(edited.shownSeconds)}) to the QA evidence branch` }]);
-      return { mp4Url, ...(gifUrl && { gifUrl }), realSeconds: edited.realSeconds, shownSeconds: edited.shownSeconds, actions: edited.actions };
+      return { mp4Url, ...(gifUrl && { gifUrl }), realSeconds: edited.realSeconds, shownSeconds: edited.shownSeconds, actions: edited.actions, mp4File, ...(gifFile && { gifFile }) };
     });
   }
 

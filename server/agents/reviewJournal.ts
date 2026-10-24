@@ -1,6 +1,6 @@
 import { assign, setup, type StateValue, transition } from 'xstate';
 import type { CrewStamp } from '../../shared/ledger';
-import type { AgentStatus, FileAccount, QaFollowUp, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
+import type { AgentStatus, FileAccount, QaFollowUp, QaRecording, QaReport, QaReview, QaScreenshot, Triage } from '../../shared/types';
 import type { Recovery } from './runJournal';
 
 // A QA review's journal, pure: the facts Ops records about one pull request's review (data/runs/reviews/<pr>.jsonl),
@@ -73,6 +73,8 @@ export interface Reported {
   failedRounds: number;
   report: QaReport;
   screenshots: QaScreenshot[];
+  /** The recording of QA's browser, when there was one. */
+  recording?: QaRecording;
   files?: FileAccount;
   /** The commit tested. */
   sha?: string;
@@ -140,7 +142,7 @@ function endedView(view: QaReview, e: Event<'ended'>): QaReview {
 
 /** The board's review once the verdict's posted. */
 function verdictView(view: QaReview, r: Reported & { url?: string }, t: number): QaReview {
-  return { ...view, status: r.verdict === 'pass' ? 'passed' : 'failed', report: r.report, screenshots: r.screenshots, commentUrl: r.url, files: r.files, failedRounds: r.failedRounds, finishedAt: t, error: undefined };
+  return { ...view, status: r.verdict === 'pass' ? 'passed' : 'failed', report: r.report, screenshots: r.screenshots, recording: r.recording, commentUrl: r.url, files: r.files, failedRounds: r.failedRounds, finishedAt: t, error: undefined };
 }
 
 /**

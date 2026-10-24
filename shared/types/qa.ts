@@ -117,6 +117,9 @@ export interface QaRecording {
   shownSeconds: number;
   /** How many browser actions it shows. */
   actions: number;
+  /** The clip as Ops keeps it for the station, served at /api/qa-shots/<file>. Missing on recordings from before it was kept. */
+  mp4File?: string;
+  gifFile?: string;
 }
 
 export type QaStatus = 'queued' | 'testing' | 'passed' | 'failed' | 'error';
@@ -163,6 +166,8 @@ export interface QaReview {
   report?: QaReport;
   /** The screenshots that go with the report, in the order they were taken. */
   screenshots?: QaScreenshot[];
+  /** The recording of QA's browser that went with the report, when the project records one. */
+  recording?: QaRecording;
   /** The QA report posted on the pull request. */
   commentUrl?: string;
   /** How QA covered the changed files this round. Missing on reviews from before it was kept. */

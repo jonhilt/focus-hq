@@ -338,13 +338,26 @@ describe('shotsToDrop', () => {
   const shots = (...files: string[]) => ({ screenshots: files.map((file) => ({ caption: file, file })) });
 
   it('drops the screenshots the replacement no longer shows, and keeps the ones it does', () => {
-    expect(shotsToDrop(shots('a.png', 'b.png', 'c.png'), shots('b.png', 'd.png'))).toEqual(['a.png', 'c.png']);
+    expect(shotsToDrop([shots('a.png', 'b.png', 'c.png')], [shots('b.png', 'd.png')])).toEqual(['a.png', 'c.png']);
   });
 
   it('drops them all when nothing replaces the review, and none when there was none', () => {
-    expect(shotsToDrop(shots('a.png', 'b.png'))).toEqual(['a.png', 'b.png']);
-    expect(shotsToDrop(shots('a.png'), {})).toEqual(['a.png']);
-    expect(shotsToDrop(undefined, shots('a.png'))).toEqual([]);
-    expect(shotsToDrop({}, shots('a.png'))).toEqual([]);
+    expect(shotsToDrop([shots('a.png', 'b.png')])).toEqual(['a.png', 'b.png']);
+    expect(shotsToDrop([shots('a.png')], [{}])).toEqual(['a.png']);
+    expect(shotsToDrop([undefined], [shots('a.png')])).toEqual([]);
+    expect(shotsToDrop([{}], [shots('a.png')])).toEqual([]);
+  });
+
+  it('drops the recording with them, unless the replacement shows the same one', () => {
+    const recording = { mp4Url: 'u', realSeconds: 60, shownSeconds: 20, actions: 3, mp4File: 'r.mp4', gifFile: 'r.gif' };
+    expect(shotsToDrop([{ ...shots('a.png'), recording }])).toEqual(['a.png', 'r.mp4', 'r.gif']);
+    expect(shotsToDrop([{ ...shots('a.png'), recording }], [{ recording }])).toEqual(['a.png']);
+    expect(shotsToDrop([{ recording: { ...recording, mp4File: undefined, gifFile: undefined } }])).toEqual([]);
+  });
+
+  it('keeps what any kept review still names, the verdict a precheck can put back among them', () => {
+    const verdict = shots('a.png', 'b.png');
+    expect(shotsToDrop([verdict], [{}, verdict])).toEqual([]);
+    expect(shotsToDrop([{}, verdict], [shots('c.png')])).toEqual(['a.png', 'b.png']);
   });
 });

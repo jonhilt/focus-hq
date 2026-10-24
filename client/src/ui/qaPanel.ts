@@ -16,6 +16,7 @@ import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
 import { type NavItem, shownView, SideNav } from './panels';
 import { qaChat } from './qaChat';
+import { recordingFigure } from './qaRecording';
 import { checksList, fullPrompt, stepsList, toggle, whenQaRuns } from './qaPlaybook';
 
 /** The QA station's views: the reports, and the playbook: what QA does on this project, with the switches that change it. */
@@ -213,6 +214,7 @@ function reviewCard(ui: Ui, review: QaReview): HTMLElement {
       ? h('table', { class: 'qa-checks' }, ...report.checks.map((c) => h('tr', null, h('td', null, h('span', { class: `chip check ${c.result}` }, c.result)), h('td', null, h('strong', null, c.name)), h('td', null, c.details))))
       : null,
     review.screenshots?.length ? h('div', { class: 'qa-shots' }, ...review.screenshots.map((s, i) => screenshot(s, i))) : null,
+    review.recording ? recordingFigure(review.recording) : null,
     report?.proofs?.length
       ? h('div', { class: 'qa-proofs' }, h('strong', null, 'Proof, as Ops checked it'), h('ul', null, ...report.proofs.map((p) =>
         h('li', null, h('span', { class: `chip check ${p.outcome === 'failed' ? 'fail' : p.outcome === 'passed' ? 'pass' : 'skip'}` }, p.outcome === 'failed' ? 'holds' : p.outcome === 'passed' ? 'passed' : 'not proof'),

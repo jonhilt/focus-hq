@@ -52,8 +52,13 @@ describe('qaShotServing', () => {
     expect(qaShotServing('o-a-12-1700-1.svg')).toEqual({ type: 'svg', headers: { 'Cache-Control': KEEP, 'Content-Security-Policy': SVG_SANDBOX } });
   });
 
+  it('keeps a recording of QA’s browser for good, as its GIF and its MP4', () => {
+    expect(qaShotServing('o-a-12-1700-recording.gif')).toEqual({ type: 'gif', headers: { 'Cache-Control': KEEP } });
+    expect(qaShotServing('o-a-12-1700-recording.mp4')).toEqual({ type: 'mp4', headers: { 'Cache-Control': KEEP } });
+  });
+
   it("doesn't serve any other name", () => {
-    for (const file of ['../store.json', 'a.html', 'a.jpg.html', 'a b.png', '.jpg']) expect(qaShotServing(file)).toBeUndefined();
+    for (const file of ['../store.json', 'a.html', 'a.jpg.html', 'a b.png', '.jpg', 'a.webm']) expect(qaShotServing(file)).toBeUndefined();
   });
 });
 

@@ -54,9 +54,9 @@ const picture = (ext: string, fresh: boolean): Serving => ({
   headers: { 'Cache-Control': fresh ? 'no-cache' : KEEP, ...(ext === 'svg' && { 'Content-Security-Policy': SVG_SANDBOX }) },
 });
 
-/** A QA screenshot (`GET /api/qa-shots/:file`), or undefined for a name Focus doesn't serve. */
+/** A QA screenshot or recording (`GET /api/qa-shots/:file`), or undefined for a name Focus doesn't serve. */
 export function qaShotServing(file: string): Serving | undefined {
-  const ext = /^[\w-]+\.(jpg|png|svg)$/.exec(file)?.[1];
+  const ext = /^[\w-]+\.(jpg|png|svg|gif|mp4)$/.exec(file)?.[1];
   return ext ? picture(ext, false) : undefined;
 }
 

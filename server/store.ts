@@ -93,6 +93,8 @@ export class Store {
   plugins: PluginStates = {};
   /** The latest QA review per pull request (by prKey), as the board shows it: what each review journal adds up to (`reviewJournal`). */
   readonly reviews = new Map<string, QaReview>();
+  /** Each review's board view and the verdict a precheck can put back: the reviews whose files Ops keeps. */
+  private readonly keptReviews = new Map<string, (QaReview | undefined)[]>();
   /** PRs the operations officer closed as the wrong approach, by prKey of the issue they were for. */
   closedPrs = new Map<string, ClosedPr>();
   /** The ship's log of how work went, oldest first: data/ledger.jsonl, appended to as it grows. */
@@ -290,9 +292,9 @@ export class Store {
     return fsp.readFile(path.join(paths.qaShots, file)).catch(() => undefined);
   }
 
-  /** Deletes the screenshots of a review that its replacement no longer shows. */
-  private dropShots(old: QaReview | undefined, replacement?: QaReview): void {
-    for (const file of shotsToDrop(old, replacement)) {
+  /** Deletes the screenshots and recordings the reviews `old` named that none of `kept` still does. */
+  private dropShots(old: (QaReview | undefined)[], kept: (QaReview | undefined)[]): void {
+    for (const file of shotsToDrop(old, kept)) {
       this.shots.delete(file);
       if (this.persist) fs.rm(path.join(paths.qaShots, file), { force: true }, () => undefined);
     }
@@ -407,8 +409,13 @@ export class Store {
 
   /** The board's review of a pull request, as its journal has it now (none once it's gone), and its screenshots kept with it. */
   private showReview(key: string): void {
-    const view = reviewView(this.review(key));
-    this.dropShots(this.reviews.get(key), view);
+    const state = this.review(key);
+    const view = reviewView(state);
+    // a review asked for again keeps its last verdict's files: a precheck that finds nothing to test puts that verdict back
+    const kept = [view, state.previous];
+    this.dropShots(this.keptReviews.get(key) ?? [this.reviews.get(key)], kept);
+    if (view) this.keptReviews.set(key, kept);
+    else this.keptReviews.delete(key);
     if (view) this.reviews.set(key, view);
     else this.reviews.delete(key);
   }
@@ -510,10 +517,13 @@ export class Store {
   }
 }
 
-/** The screenshots of review `old` that its replacement no longer shows (all of them when there's none). */
-export function shotsToDrop(old: Pick<QaReview, 'screenshots'> | undefined, replacement?: Pick<QaReview, 'screenshots'>): string[] {
-  const keep = new Set(replacement?.screenshots?.map((s) => s.file));
-  return (old?.screenshots ?? []).map((s) => s.file).filter((file) => !keep.has(file));
+type Shown = Pick<QaReview, 'screenshots' | 'recording'> | undefined;
+
+/** The screenshots and recordings of the reviews `old` that none of `kept` still names (all of them when there's none). */
+export function shotsToDrop(old: Shown[], kept: Shown[] = []): string[] {
+  const files = (r: Shown) => [...(r?.screenshots ?? []).map((s) => s.file), r?.recording?.mp4File, r?.recording?.gifFile].filter((f) => f !== undefined);
+  const keep = new Set(kept.flatMap(files));
+  return [...new Set(old.flatMap(files))].filter((file) => !keep.has(file));
 }
 
 /** Why Focus won't open a data folder another Focus is using, and what to do instead. */

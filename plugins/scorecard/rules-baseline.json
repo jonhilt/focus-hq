@@ -5,7 +5,7 @@
   "server/agents/manager/core.ts": 82,
   "server/agents/manager/delivery.ts": 81,
   "server/agents/manager/ledger.ts": 52,
-  "server/agents/manager/reviews.ts": 76,
+  "server/agents/manager/reviews.ts": 77,
   "server/agents/manager/seating.ts": 79,
   "server/agents/manager/sessions.ts": 42,
   "server/agents/recorder.ts": 6,
@@ -21,6 +21,6 @@
   "server/secrets.ts": 100,
   "server/speech.ts": 8,
   "server/speechWorker.ts": 0,
-  "server/store.ts": 69,
+  "server/store.ts": 71,
   "server/voice.ts": 25
 }

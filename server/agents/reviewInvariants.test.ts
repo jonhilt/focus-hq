@@ -72,6 +72,8 @@ interface Kept {
   comments: number;
   /** Of them, the ones with QA's browser recording. */
   recorded: number;
+  /** The QA station's report card shows the recording that went with the verdict. */
+  recordingShown: boolean;
 }
 
 const reviews: Subject<Kept[]> = {
@@ -99,6 +101,7 @@ const reviews: Subject<Kept[]> = {
         verdicts: store.ledger.filter((e) => e.kind === 'qa-verdict' && e.pr === pr.number).length,
         comments: comments.get(pr.number)?.length ?? 0,
         recorded: comments.get(pr.number)?.filter((c) => c.includes('🎬 Recording')).length ?? 0,
+        recordingShown: !!store.reviews.get(prKey(pr.repo, pr.number))?.recording,
       }));
     const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
       const ended = new Set<number>();
@@ -148,6 +151,18 @@ describe('QA reviews, under Focus’s two rules', () => {
     }
     r.close?.();
     expect(said).toEqual(expect.arrayContaining(['testing', 'failed', 'passed']));
+  });
+
+  // the verdict's recording is on the station's report card as well as the PR: a description where it never was would prove nothing
+  it('shows the recording that went with a verdict at the QA station, as on the pull request', async () => {
+    const r = await reviews.start(now);
+    for (const name of ['review #7 asked for', 'QA passes it']) {
+      await Promise.resolve(r.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await r.settle();
+    }
+    const said = r.durable();
+    r.close?.();
+    expect(said).toEqual(expect.arrayContaining([expect.objectContaining({ pr: 7, status: 'passed', recorded: 1, recordingShown: true })]));
   });
 
   it('reaches a review ended without a verdict, for the captain', async () => {
