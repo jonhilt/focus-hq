@@ -64,12 +64,13 @@ export const reading = (now: number): CosRead => ({ at: now });
 
 /**
  * Its read once it's judged the turn, or nothing when the verdict comes too late: the turn's already judged, or it's
- * an earlier turn's (its judging began, `since`, before this one ended). Words for the lead, in a project where it
- * sends them itself (`autoSend`), go after `AUTO_SEND_MS`.
+ * an earlier turn's (its judging began, `since`, before this one ended). Its words sending a turn back to the lead, in
+ * a project where it sends them itself (`autoSend`), go after `AUTO_SEND_MS`; it never carries a lead on by itself,
+ * so words that would are only ever the captain's to send (README.md#what-it-does-with-a-turn).
  */
 export function judged(read: CosRead | undefined, verdict: Verdict, since: number, autoSend: boolean, now: number): CosRead | undefined {
   if (!read || read.judged || since < read.at) return undefined;
-  return { ...read, judged: verdict, ...(autoSend && forLead(verdict) && read.acked === undefined && { sendsAt: now + AUTO_SEND_MS }) };
+  return { ...read, judged: verdict, ...(autoSend && verdict.route === 4 && read.acked === undefined && { sendsAt: now + AUTO_SEND_MS }) };
 }
 
 /**

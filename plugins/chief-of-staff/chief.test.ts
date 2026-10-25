@@ -54,12 +54,14 @@ function fakeJev(answer: 1 | 2 | 3 | 4 | Error) {
 }
 
 describe('routing with Jev', () => {
-  it('lets Jev pick the route where it’s switched on, Haiku writing the words for that route', async () => {
+  it('lets Jev pick the route where it’s switched on, the judge writing the words for that route', async () => {
     const jev = fakeJev(3);
     const o = await aboard(undefined, undefined, { router: jev.router, on: () => true });
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
     await until(() => o.verdicts().length === 1);
-    expect(jev.asked[0]).toEqual({ state: o.asked[0].prompt, orders: 'STANDING ORDERS\nSay yes.' });
+    // Jev routes by the goal and the turn alone, as it was trained; the judge reads them against what's agreed
+    expect(jev.asked[0]).toEqual({ state: `Goal: Saved items\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2?\n>>>`, orders: 'STANDING ORDERS\nSay yes.' });
+    expect(o.asked[0].prompt).toMatch(/^GOAL: Saved items\n/);
     expect(o.asked[0].system).toContain('The route is decided already: 3 (interrupt)');
     expect(o.asked[0].schema).toMatchObject({ properties: { route: { enum: [3] } } });
     expect(o.verdicts()[0]).toMatchObject({
@@ -69,7 +71,7 @@ describe('routing with Jev', () => {
     expect(o.read()?.judged).toMatchObject({ route: 3 });
   });
 
-  it('routes as Haiku says when Jev can’t answer, keeping why', async () => {
+  it('routes as the judge says when Jev can’t answer, keeping why', async () => {
     const jev = fakeJev(new Error('Jev answered HTTP 529'));
     const o = await aboard(undefined, undefined, { router: jev.router, on: () => true });
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
@@ -92,14 +94,16 @@ describe('routing with Jev', () => {
 
 describe('the chief of staff', () => {
   it('judges a lead’s turn as it ends and writes the verdict in the ledger, saying nothing to anyone', async () => {
-    const o = await aboard();
+    const o = await aboard({ route: 4, check: 'evidence', ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
     await until(() => o.verdicts().length === 1);
     expect(o.verdicts()[0]).toMatchObject({
       kind: 'cos-verdict', projectId: o.project.id, sessionId: 'session-1', agent: o.lead().name, goal: o.lead().lead?.title, turnUuid: 'b',
-      route: 4, why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: judgeVersion(), costUsd: 0.001,
+      route: 4, check: 'evidence', why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: judgeVersion(), costUsd: 0.001,
     });
-    expect(o.asked[0].prompt).toBe(`Goal: ${o.lead().lead?.title}\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2?\n>>>`);
+    // it reads the turn against the goal as the captain put it (context.ts has the rest of what's agreed)
+    expect(o.asked[0].prompt).toMatch(new RegExp(`^GOAL: ${o.lead().lead?.title}\n\nThe captain's first words:\n`));
+    expect(o.asked[0].prompt).toMatch(/\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2\?\n>>>$/);
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');
     // nothing was sent to the lead
     expect(o.claude.turns[0].sent).toEqual([]);

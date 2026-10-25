@@ -10,7 +10,10 @@ export function demoReplies(prompt: string): Reply[] {
   return [{ label: 'Go ahead', text: 'Yes, go ahead.' }, { label: 'Not yet', text: 'Not yet: hold off until I’ve had a look.' }];
 }
 
-/** The demo's judge: takes a moment, then sends a turn that asks something to the captain's queue, and carries on otherwise. */
+/**
+ * The demo's judge: takes a moment, then sends a turn that asks something to the captain's queue, one that says it
+ * hasn't tested what it reports back to the lead, and carries on otherwise.
+ */
 export class DemoJudge implements Judge {
   readonly model = 'demo';
 
@@ -19,10 +22,16 @@ export class DemoJudge implements Judge {
     // a ship's lane: it keeps the lead's pick (a lane read only ever raises)
     if (req.schema === LANE_SCHEMA) return { structured: { lane: 'ship', why: 'It only wires in parts as they are, so it can merge once QA passes it.' }, costUsd: 0 };
     const asks = /\?\s*(>>>)?\s*$/.test(req.prompt);
+    const untested = /\b(?:untested|not tested|haven['’]t tested)\b/i.test(req.prompt.slice(req.prompt.lastIndexOf('<<<')));
+    if (untested && !asks)
+      return {
+        structured: { route: 4, check: 'evidence', ask: 'Test it before reporting it done', why: 'The lead reports the work done without having tested it, and it can test it itself.', message: 'Before this goes to the captain, test what you built and show what you saw.', replies: [] },
+        costUsd: 0,
+      };
     return {
       structured: asks
-        ? { route: 2, ask: 'The lead asks you to pick, and recommends one: go with it?', why: 'The lead is asking you to choose, and it has said which way it would go, so this can wait in your queue.', message: 'The lead has a question for you and recommends the option it describes. Shall it go ahead with that?', replies: demoReplies(req.prompt) }
-        : { route: 1, ask: 'Carry on with the next step it described', why: 'The lead is making progress within the slice and has said what it will do next.', message: 'Thanks, that all sounds right. Carry on with the next step you described.', replies: [] },
+        ? { route: 2, check: 'captains', ask: 'The lead asks you to pick, and recommends one: go with it?', why: 'The lead is asking you to choose, and it has said which way it would go, so this can wait in your queue.', message: 'The lead has a question for you and recommends the option it describes. Shall it go ahead with that?', replies: demoReplies(req.prompt) }
+        : { route: 1, check: 'none', ask: 'Carry on with the next step it described', why: 'The lead is making progress within the slice and has said what it will do next.', message: 'Thanks, that all sounds right. Carry on with the next step you described.', replies: [] },
       costUsd: 0,
     };
   }

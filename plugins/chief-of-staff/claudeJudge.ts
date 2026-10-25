@@ -3,8 +3,11 @@ import type { ReadOnlyResult, ReadOnlyRun } from '../../plugin-api/server';
 import type { Judge } from './chief';
 import { VERDICT_SCHEMA } from './judge';
 
-/** The model that judges a turn: Claude Code's alias for the latest Haiku, as the backtest ran it. About a tenth of a cent a turn. */
-export const JUDGE_MODEL = 'haiku';
+/**
+ * The model that judges a turn: Claude Code's alias for the latest Sonnet, as the defence backtest ran it (README.md#what-it-reads-a-turn-against).
+ * About 3 cents a turn with what it reads a turn against, against Haiku's tenth of a cent: the user's call, for fewer turns routed wrong.
+ */
+export const JUDGE_MODEL = 'sonnet';
 
 /** The chief of staff's judge, as a read-only Claude Code session: no tools, its own system prompt, a structured answer. */
 export class ClaudeJudge implements Judge {

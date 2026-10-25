@@ -1,6 +1,6 @@
 import { isOneOf, isRecord } from '../../plugin-api/shared';
 import { CREW, crewVersion } from './crew';
-import { type CosRoute, MAX_REPLIES, MAX_REPLY_LABEL, repliesOf, ROUTES, type Verdict } from './shared';
+import { CHECKS, type CosRoute, MAX_REPLIES, MAX_REPLY_LABEL, repliesOf, ROUTES, type Verdict } from './shared';
 
 export type { Verdict } from './shared';
 
@@ -31,14 +31,19 @@ export function judgeSystemPrompt(standingOrders?: string, pinned?: CosRoute): s
   });
 }
 
-/** What the judge reads: the goal, and the end of what the lead said this turn. */
-export const judgePrompt = (goal: string | undefined, tail: string): string => `Goal: ${goal || '(untitled)'}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
+/**
+ * What the judge reads: the goal, or what the turn is read against (`contextText`: what's agreed, the project's compass,
+ * the captain's own words) when it has it, and the end of what the lead said this turn.
+ */
+export const judgePrompt = (goal: string | undefined, tail: string, context?: string): string =>
+  `${context || `Goal: ${goal || '(untitled)'}`}\n\nThe end of what the lead said:\n<<<\n${tail}\n>>>`;
 
 /** The verdict's shape; with `pinned`, the one route it may give. */
 export const verdictSchema = (pinned?: CosRoute) => ({
   type: 'object',
   properties: {
     route: { type: 'integer', enum: pinned ? [pinned] : [...ROUTES] },
+    check: { type: 'string', enum: [...CHECKS] },
     ask: { type: 'string' },
     why: { type: 'string' },
     message: { type: 'string' },
@@ -48,7 +53,7 @@ export const verdictSchema = (pinned?: CosRoute) => ({
       items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'], additionalProperties: false },
     },
   },
-  required: ['route', 'ask', 'why', 'message', 'replies'],
+  required: ['route', 'check', 'ask', 'why', 'message', 'replies'],
   additionalProperties: false,
 });
 
@@ -57,7 +62,7 @@ export const VERDICT_SCHEMA = verdictSchema();
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /**
- * The judge's answer, if it's one: a route of the four, a reason, its headline, the words it would send (empty if it
+ * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its headline, the words it would send (empty if it
  * gave none), and the replies it suggests (`repliesOf`: left out when there are none). With no headline, its reason
  * stands in.
  */
@@ -66,5 +71,12 @@ export function parseVerdict(structured: unknown): Verdict | undefined {
   const why = text(structured.why);
   if (!why) return undefined;
   const replies = repliesOf(structured.replies);
-  return { route: structured.route, ask: text(structured.ask) || why, why, message: text(structured.message), ...(replies.length && { replies }) };
+  return {
+    route: structured.route,
+    ...(isOneOf(CHECKS, structured.check) && { check: structured.check }),
+    ask: text(structured.ask) || why,
+    why,
+    message: text(structured.message),
+    ...(replies.length && { replies }),
+  };
 }

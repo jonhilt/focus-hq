@@ -94,6 +94,8 @@ export type LedgerEntry =
    */
   | {
       kind: 'cos-verdict'; sessionId: string; agent: string; goal?: string; turnUuid: string; route: VerdictRoute; why: string; message?: string; model: string; version: string; costUsd?: number;
+      /** Which of the judge's checks decided it, in the plugin's own words (`irreversible`, `overreach`…): left out by older verdicts. */
+      check?: string;
       /** Who picked the route when it wasn't the judge's model: Jev, with what it rested on (`jevRouter.ts`); the model only wrote the words. */
       router?: { by: 'jev'; model: string; version: string; interrupt: number; choice?: string; confidence?: number; costUsd: number };
       /** Why Jev was asked and couldn't route, so the judge's model routed as well. */

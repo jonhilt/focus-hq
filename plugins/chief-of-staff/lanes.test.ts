@@ -95,14 +95,15 @@ describe('its read of a turn', () => {
     expect(judged(reading(10), verdict(2), 9, false, 20)).toBeUndefined();
   });
 
-  it('sends its words for the lead by itself, where it’s let, after a while; never a card', () => {
-    expect(judged(reading(10), verdict(1), 10, true, 20)).toEqual({ at: 10, judged: verdict(1), sendsAt: 20 + AUTO_SEND_MS });
+  it('sends a turn back to the lead by itself, where it’s let, after a while; never a card, and never carries a lead on', () => {
+    expect(judged(reading(10), verdict(4), 10, true, 20)).toEqual({ at: 10, judged: verdict(4), sendsAt: 20 + AUTO_SEND_MS });
+    expect(judged(reading(10), verdict(1), 10, true, 20)).toEqual({ at: 10, judged: verdict(1) });
     expect(judged(reading(10), verdict(2), 10, true, 20)).toEqual({ at: 10, judged: verdict(2) });
     expect(judged(reading(10), verdict(4), 10, false, 20)).toEqual({ at: 10, judged: verdict(4) });
   });
 
   it('never counts down its words on a turn the captain acknowledged while it read it', () => {
-    expect(judged({ at: 10, acked: 15 }, verdict(1), 10, true, 20)).toEqual({ at: 10, acked: 15, judged: verdict(1) });
+    expect(judged({ at: 10, acked: 15 }, verdict(4), 10, true, 20)).toEqual({ at: 10, acked: 15, judged: verdict(4) });
   });
 
   it('keeps what it made of a turn the captain acknowledges, its words going nowhere by themselves', () => {

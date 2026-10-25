@@ -1,5 +1,6 @@
 import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
+import { contextText, turnContext } from './context';
 import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, verdictSchema } from './judge';
 import { type GoalPr, heldForRead, laneJudgeVersion, lostRaises, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, unreadShip } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
@@ -15,7 +16,7 @@ import { wakeFor } from './wake';
 // nothing itself but where the captain lets it (`Inbox.autoSend`), and Ops' own carry-ons, which the core leaves to it:
 // a QA fail back to the lead, and a slice that's landed (`noted`), unless the captain owes the lead an answer.
 
-/** Who judges a turn: a Haiku session (`ClaudeJudge`), the demo's scripted stand-in, or a fake in a test. */
+/** Who judges a turn: a Sonnet session (`ClaudeJudge`), the demo's scripted stand-in, or a fake in a test. */
 export interface Judge {
   /** The model it judges with, as the ledger names it when the session doesn't say. */
   readonly model: string;
@@ -149,15 +150,16 @@ export class ChiefOfStaff {
     this.judging.add(key);
     try {
       const orders = this.standingOrders();
-      const prompt = judgePrompt(goal, tail.text);
-      const { routing, failed } = await this.routeWithJev(agent.projectId, prompt, orders);
+      // it reads the turn against what's agreed (context.ts); Jev routes by the goal and the turn alone, as it was trained
+      const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), jsonl ?? '')));
+      const { routing, failed } = await this.routeWithJev(agent.projectId, judgePrompt(goal, tail.text), orders);
       const pinned = routing?.route;
       const result = await this.judge.judge({ system: judgeSystemPrompt(orders, pinned), prompt, settings: this.host.settings(), ...(pinned && { schema: verdictSchema(pinned) }) });
       const parsed = parseVerdict(result.structured);
       if (!parsed) throw new Error(`the judge gave no verdict: ${JSON.stringify(result.structured)}`);
       const verdict = pinned ? { ...parsed, route: pinned } : parsed;
       this.host.record(agent.projectId, {
-        kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, why: verdict.why,
+        kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, ...(verdict.check && { check: verdict.check }), why: verdict.why,
         ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,
         version: routing ? `${judgeVersion()}+${routing.how.version}` : judgeVersion(),
         ...(result.costUsd !== undefined && { costUsd: result.costUsd }),

@@ -45,9 +45,19 @@ export interface Reply {
   text: string;
 }
 
+/**
+ * Which of its checks decided a turn (crew/judge.md), in the order it makes them: something that can't be undone or
+ * reaches beyond the ship, the lead overreaching what's agreed, a step whose purpose isn't clear, a claim with no
+ * evidence, a question that isn't ready for the captain, a step only the captain can agree, or none of them.
+ */
+export const CHECKS = ['irreversible', 'contradiction', 'overreach', 'compass', 'evidence', 'prepared', 'captains', 'none'] as const;
+export type Check = (typeof CHECKS)[number];
+
 /** A turn as it judged it: its route, the line on what's decided, why, its words, and the replies it suggests. */
 export interface Verdict {
   route: CosRoute;
+  /** The check that decided it: left out by verdicts from before it said. */
+  check?: Check;
   /** What's being decided, in a line: the captain's inbox leads with it. */
   ask: string;
   /** Why the turn goes where it does. */

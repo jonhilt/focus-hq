@@ -167,7 +167,7 @@ describe('acknowledging a lead’s turn (Got it)', () => {
   });
 
   it('stops its words going by themselves', async () => {
-    const { inbox, claude, read } = await waitingLead({ verdict: { route: 1, ask: 'Carry on', why: 'Progress.', message: 'Go on.' }, autoSend: true });
+    const { inbox, claude, read } = await waitingLead({ verdict: { route: 4, ask: 'Test it first', why: 'No evidence.', message: 'Test it first.' }, autoSend: true });
     const sendsAt = read()?.sendsAt ?? 0;
     await inbox.decide(inbox.view().open[0].id, { ack: true }, 'office');
     expect(read()?.sendsAt).toBeUndefined();
@@ -177,33 +177,37 @@ describe('acknowledging a lead’s turn (Got it)', () => {
 });
 
 describe('the chief of staff’s words, sent by themselves where the captain lets it', () => {
+  const sendBack = { route: 4 as const, ask: 'Show the settings page working', why: 'It says it works with nothing behind it.', message: 'Show the settings page working before it goes to the captain.' };
   const carryOn = { route: 1 as const, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' };
 
-  it('sends them once they’re due, recorded as sent by the chief of staff', async () => {
-    const { inbox, claude, decisions, read } = await waitingLead({ verdict: carryOn, autoSend: true });
+  it('sends a turn back to the lead once they’re due, recorded as sent by the chief of staff', async () => {
+    const { inbox, claude, decisions, read } = await waitingLead({ verdict: sendBack, autoSend: true });
     const sendsAt = read()?.sendsAt ?? 0;
     expect(sendsAt - Date.now()).toBeGreaterThan(AUTO_SEND_MS - 5000);
     await inbox.autoSend(sendsAt - 1);
     expect(claude.turns).toHaveLength(1);
     await inbox.autoSend(sendsAt);
     await until(() => claude.turns.length === 2);
-    expect(claude.turns[1].req.prompt).toContain('[Chief of Staff] Go on to the settings page.');
+    expect(claude.turns[1].req.prompt).toContain('[Chief of Staff] Show the settings page working before it goes to the captain.');
     expect(decisions()).toMatchObject([{ answer: 'Sent the chief of staff’s words', via: 'chief-of-staff' }]);
   });
 
   it('holds them for the captain when they say so', async () => {
-    const held = await waitingLead({ verdict: carryOn, autoSend: true });
+    const held = await waitingLead({ verdict: sendBack, autoSend: true });
     held.inbox.hold(held.inbox.view().open[0].id);
-    expect(held.read()).toMatchObject({ judged: { route: 1 } });
+    expect(held.read()).toMatchObject({ judged: { route: 4 } });
     expect(held.read()?.sendsAt).toBeUndefined();
     await held.inbox.autoSend(Date.now() + AUTO_SEND_MS);
     expect(held.claude.turns).toHaveLength(1);
   });
 
-  it('never sends by itself what it would put to the captain, or where it isn’t let', async () => {
+  it('never sends by itself what it would put to the captain, words carrying a lead on, or where it isn’t let', async () => {
     const card = await waitingLead({ verdict: { route: 2, ask: 'Filters or drag-reorder?', why: 'A pick.', message: 'Filters.' }, autoSend: true });
     expect(card.read()?.sendsAt).toBeUndefined();
-    const notLet = await waitingLead({ verdict: carryOn });
+    const onwards = await waitingLead({ verdict: carryOn, autoSend: true });
+    expect(onwards.read()).toMatchObject({ judged: { route: 1 } });
+    expect(onwards.read()?.sendsAt).toBeUndefined();
+    const notLet = await waitingLead({ verdict: sendBack });
     expect(notLet.read()?.sendsAt).toBeUndefined();
   });
 
@@ -224,7 +228,7 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     o.project.plugins = [CHIEF_OF_STAFF];
     // what a Focus from before kept on the project, when the setting was the core's
     if (legacy) Reflect.set(o.project, 'cosAutoSend', true);
-    o.agents.startPlugins([chiefOfStaff], { demo: true, ownRepo: () => undefined, transcript: () => Promise.resolve(said('t1', 'Slice 1 is up. Writing the settings page next.')) });
+    o.agents.startPlugins([chiefOfStaff], { demo: true, ownRepo: () => undefined, transcript: () => Promise.resolve(said('t1', 'Slice 1 is up, untested. Writing the settings page next.')) });
     const route = (path: string) => {
       const found = o.agents.plugins.routes().find((r) => r.route.path === path && !r.route.bot)?.route;
       if (!found) throw new Error(`no route ${path}`);
@@ -241,7 +245,7 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     const o = await aboard(true);
     o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
     await until(() => !!o.read()?.judged);
-    expect(o.read()).toMatchObject({ judged: { route: 1 }, sendsAt: expect.any(Number) });
+    expect(o.read()).toMatchObject({ judged: { route: 4 }, sendsAt: expect.any(Number) });
   });
 
   it('sends nothing by itself in a project that never said so', async () => {
@@ -257,7 +261,7 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     await until(() => o.read()?.sendsAt !== undefined);
     o.route('/auto-send')({ projectId: o.project.id, on: false });
     expect(o.state()).toEqual({ autoSend: { [o.project.id]: false }, jev: {} });
-    expect(o.read()).toMatchObject({ judged: { route: 1 } });
+    expect(o.read()).toMatchObject({ judged: { route: 4 } });
     expect(o.read()?.sendsAt).toBeUndefined();
     expect(() => o.route('/auto-send')({ on: true })).toThrow(/projectId/);
   });
@@ -278,7 +282,7 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     expect(view.open).toMatchObject([{ lane: 'ready' }]);
     await o.route('/inbox/:id/decide')({ send: true }, { id: view.open[0].id });
     await until(() => o.claude.turns.length === 2);
-    expect(o.claude.turns[1].req.prompt).toContain('[Chief of Staff] Thanks, that all sounds right.');
+    expect(o.claude.turns[1].req.prompt).toContain('[Chief of Staff] Before this goes to the captain, test what you built');
   });
 });
 
