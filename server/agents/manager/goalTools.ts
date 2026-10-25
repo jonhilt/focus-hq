@@ -1,24 +1,48 @@
 import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
-import { askProblem, type RaiseInput, raiseDecision, settleDecision } from '../../../shared/decisions';
-import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
-import { type Frame, type Frames, type Picture, Renderer } from '../services';
+import { askProblem, goalDecisions, type RaiseInput, raiseDecision, settleDecision } from '../../../shared/decisions';
+import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, pageErrorsNote } from '../lead';
+import { BRIEF_FILE, briefedGoal, briefForPrompt, briefMovedNote, decisionLines, needsBrief } from '../briefFile';
+import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../services';
 import { type Answers, type AskedQuestion, optionPage } from '../questions';
 import { Part, Refused } from './core';
 
-/** The lead's `office` MCP tools besides ship: the goal's note, show, ask (and the captain's answer) and propose_close. */
+/** The lead's `office` MCP tools besides recap: show, ask (and the captain's answer), propose_close and decision. */
 export class GoalTools extends Part {
-  /** The lead's note tool: the goal's note and title, as they want them. */
-  noteGoal(agent: Agent, input: NoteInput): Effect.Effect<string, Refused> {
+  /**
+   * Reads the lead's brief, ./brief.md in their workspace, and takes what it says onto the goal (`briefedGoal`): as an
+   * edit of it finishes, and as each of their turns starts and ends. A brief that isn't there (not written yet, or a
+   * reopened goal's, gone with its old workspace) leaves the goal as it was; a cloud lead's isn't here to read.
+   */
+  readBrief(leadId: string): Effect.Effect<void, never, Workspace> {
     return Effect.gen({ self: this }, function* () {
-      const work = agent.lead;
-      if (!work) return yield* new Refused({ message: 'There’s no goal to keep a note on' });
-      const noted = notedGoal(work, input, Date.now());
-      if ('error' in noted) return yield* new Refused({ message: noted.error });
-      this.update(agent, { lead: noted.lead, issue: { ...agent.issue, title: noted.lead.title } });
-      return noted.reply;
+      const before = this.store.agents.get(leadId);
+      if (!before?.lead || before.cloud) return;
+      const workspace = yield* Workspace;
+      const text = yield* workspace.readIn(workspace.dir(leadId), BRIEF_FILE);
+      const lead = this.store.agents.get(leadId);
+      if (text === undefined || !lead?.lead) return;
+      const work = briefedGoal(lead.lead, text, Date.now());
+      if (work !== lead.lead) this.update(lead, { lead: work, issue: { ...lead.issue, title: work.title } });
     });
+  }
+
+  /**
+   * What a lead from before brief.md hears as their next turn starts, once: write the brief from the note they kept
+   * (`briefMovedNote`). Nothing for any other lead.
+   */
+  briefMoved(leadId: string): string | undefined {
+    const lead = this.store.agents.get(leadId);
+    if (!lead?.lead || lead.cloud || !needsBrief(lead.lead)) return undefined;
+    this.update(lead, { lead: { ...lead.lead, briefAsked: true } });
+    return briefMovedNote(lead.lead);
+  }
+
+  /** What the lead hears once their conversation's compacted: the goal, their brief and its decisions (`briefForPrompt`). */
+  afterCompact(leadId: string): string {
+    const work = this.store.agents.get(leadId)?.lead;
+    return work ? briefForPrompt(work, decisionLines(goalDecisions(this.store.ledger, leadId))) : '';
   }
 
   /**

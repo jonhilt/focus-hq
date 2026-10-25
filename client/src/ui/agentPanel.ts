@@ -1,6 +1,7 @@
 import { contextLevel, runLine, statusLine } from '../../../shared/agentStatus';
 import { AUTONOMY_LABEL, AUTONOMY_MODES, effectiveAutonomy } from '../../../shared/autonomy';
 import { cloudSessionUrl } from '../../../shared/cloud';
+import type { GoalDecisions } from '../../../shared/decisions';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
 import type { Agent, Autonomy, BackgroundTask, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
@@ -15,7 +16,7 @@ import type { Ui } from './context';
 import { confirmDialog } from './confirmDialog';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { closeGoal, CONTEXT_TONE, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
+import { closeGoal, CONTEXT_TONE, decisionsView, EFFORT_HINT, noteView, prLink, reviewing, tasksView } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { messageAgent } from './resume';
 import { RunReplay } from './runReplay';
@@ -81,6 +82,18 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
 
   // the view you picked (or opened it on) stays put; until you pick one, it's the first with something in it
   let picked: View | undefined = view;
+  // a lead's decisions, read from the ledger as the goal view shows: again at most every few seconds, as it's redrawn
+  let decisions: GoalDecisions | undefined;
+  let decisionsAt = 0;
+  const readDecisions = (a: Agent) => {
+    if (a.task !== 'lead' || Date.now() - decisionsAt < 5000) return;
+    decisionsAt = Date.now();
+    void api.decisions(a.id).then((d) => {
+      if (JSON.stringify(d) === JSON.stringify(decisions)) return;
+      decisions = d;
+      renderViews();
+    }, () => undefined);
+  };
   const nav = new SideNav<View>((view) => {
     picked = view;
     renderViews();
@@ -282,12 +295,14 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     }
   };
 
-  /** What the goal is, its note as the lead keeps it, and the pull requests it's shipped. */
+  /** What the goal is, its note as the lead's brief has it with its decisions beside, and the pull requests it's shipped. */
   const goalView = (a: Agent) => {
+    readDecisions(a);
     const prs = a.lead?.prs ?? [];
     return h('div', { class: 'goal-note' },
       h('div', null, h('h4', null, 'Goal'), a.lead?.title ?? a.issue.title),
       noteView(a.lead?.note),
+      decisionsView(decisions),
       prs.length || reviewing(a) ? h('div', null, h('h4', null, 'Pull requests'), h('div', { class: 'row' }, ...prs.map(prLink)), reviewing(a)) : null,
     );
   };

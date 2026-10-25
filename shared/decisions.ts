@@ -41,8 +41,14 @@ export function decisionRegister(events: LedgerEvent[], projectId?: string): Map
   return register;
 }
 
+/** A goal's decisions: open ones (still to make) and decided ones (still standing). */
+export interface GoalDecisions {
+  open: Decision[];
+  decided: Decision[];
+}
+
 /** A goal's decisions, oldest raised first: open ones (still to make) and decided ones (still standing), superseded ones left out. */
-export function goalDecisions(events: LedgerEvent[], goalId: string): { open: Decision[]; decided: Decision[] } {
+export function goalDecisions(events: LedgerEvent[], goalId: string): GoalDecisions {
   const all = [...decisionRegister(events).values()].filter((d) => d.goalId === goalId).sort((a, b) => a.raisedAt - b.raisedAt);
   return { open: all.filter((d) => d.status === 'open'), decided: all.filter((d) => d.status === 'decided') };
 }

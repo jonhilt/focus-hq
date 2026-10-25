@@ -336,7 +336,7 @@ export class Leads extends Part {
 
   /**
    * The captain spins one of a goal's ideas for next (a projected course on its chart) off as a goal of its own, starting
-   * it with `text` (or putting it in line for a station): the idea comes off the goal's note, and its lead hears so.
+   * it with `text` (or putting it in line for a station): the idea comes off the goal's note, and its lead hears so (to take it off their brief).
    */
   spinOffIdea(leadId: string, idea: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
     const lead = this.store.agents.get(leadId);
@@ -348,7 +348,8 @@ export class Leads extends Part {
     const title = goal?.lead?.title ?? goalTitle(text);
     const work = this.store.agent(leadId).lead ?? lead.lead;
     const next = spunOffIdea(work.note?.next, idea);
-    if (work.note && !('error' in next)) this.update(lead, { lead: { ...work, note: { ...work.note, next } } });
+    // it stays off the note while the lead's brief still lists it (`briefedGoal`)
+    if (work.note && !('error' in next)) this.update(lead, { lead: { ...work, note: { ...work.note, next }, spunOffIdeas: [...(work.spunOffIdeas ?? []), idea] } });
     this.noteForLead(lead, 'Star chart', spunOffIdeaNote(idea, title, goal?.lead?.station));
     return started;
   }

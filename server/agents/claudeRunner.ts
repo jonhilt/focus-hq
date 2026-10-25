@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { query, type CanUseTool, type Options, type PermissionMode, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import { type HookCallback, query, type CanUseTool, type Options, type PermissionMode, type PermissionResult, type Query, type SDKMessage, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
 import type { Autonomy } from '../../shared/types';
 import { paths } from '../config';
@@ -8,6 +8,7 @@ import { errorMessage, sleep, truncate } from '../util';
 import { keyFallback } from './apiKey';
 import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
+import { editsBrief, EDIT_TOOLS } from './briefFile';
 import { opsMcpServer } from './opsTool';
 import { openScratch } from './scratch';
 import { askedQuestions } from './questions';
@@ -275,6 +276,26 @@ export function claudeConfig(userClaudeMd: boolean, configDir: string): Pick<Opt
 }
 
 /** How full the session's context window is, from Claude Code's own count (its last response's usage, no extra calls). */
+/**
+ * A local session's hooks: the scratch dir's guard on Bash (and the push guard's), before it runs; and for a goal's lead,
+ * their brief read again as an edit of it finishes, and given back to them once their conversation's compacted (by
+ * Claude Code itself or by Ops), which a message wouldn't reach until their next one.
+ */
+export function sessionHooks(req: Pick<RunRequest, 'cwd' | 'brief'>, scratch?: HookCallback): Options['hooks'] {
+  const brief = req.brief;
+  const edited: HookCallback = (input) => {
+    if (brief && input.hook_event_name === 'PostToolUse' && editsBrief(req.cwd, input.tool_input)) brief.edited();
+    return Promise.resolve({});
+  };
+  const compacted: HookCallback = (input) =>
+    Promise.resolve(brief && input.hook_event_name === 'SessionStart' ? { hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: brief.afterCompact() } } : {});
+  if (!scratch && !brief) return undefined;
+  return {
+    ...(scratch && { PreToolUse: [{ matcher: 'Bash', hooks: [scratch] }] }),
+    ...(brief && { PostToolUse: [{ matcher: EDIT_TOOLS, hooks: [edited] }], SessionStart: [{ matcher: 'compact', hooks: [compacted] }] }),
+  };
+}
+
 async function reportContext(q: Query, hooks: RunHooks): Promise<void> {
   try {
     const usage = await Promise.race([q.getContextUsage({ detail: 'summary' }), sleep(3000).then(() => null)]);
@@ -399,8 +420,7 @@ export class ClaudeRunner implements AgentRunner {
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
             mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: opsMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
-            // the scratch dir's guard on Bash (and the push guard's), before it runs
-            hooks: scratch?.hook && { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] },
+            hooks: sessionHooks(req, scratch?.hook),
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       // the lead's helpers sit round their team station: a line every ~30s on what each is doing, for their speech bubbles

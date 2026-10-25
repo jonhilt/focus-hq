@@ -79,7 +79,8 @@ const SHIELD_WORDS = { none: '', held: 'shields held', absorbed: 'hit absorbed',
 const standing = (c: Contact) =>
   !c.closed ? `open since waypoint ${c.slice}`
     : c.closed.as === 'spun off' ? `spun off as “${c.closed.title}”`
-      : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
+      : c.closed.as === 'cleared' ? `taken off the brief in waypoint ${c.closed.slice}`
+        : c.closed.as === 'pursued' ? `pursued in waypoint ${c.closed.slice}` : `dropped${c.closed.why ? `: ${c.closed.why}` : ''}`;
 
 /** What a contact spun off as a goal of its own starts the goal with, until the captain edits it: the thread, and where it came from. */
 export const spinOffText = (goal: { title: string }, c: Contact) => `${c.text}\n\n(Spun off from “${goal.title}”, contact ${c.id}, noticed in waypoint ${c.slice}.)`;
@@ -457,11 +458,13 @@ function contactView(goal: ChartGoal, c: Contact, nav: Nav, ui: Ui, spin?: SpinO
     section('Noticed in', LCARS.orange, waypointLink(goal, c.slice, nav)),
     closed?.as === 'spun off'
       ? section('Spun off as', LCARS.peach, spunOffGoal(closed, ui), h('small', null, 'From ', waypointLink(goal, closed.slice, nav)))
-      : closed?.as === 'pursued'
-        ? section('Pursued in', GREEN, waypointLink(goal, closed.slice, nav), closed.why ? h('p', null, closed.why) : null)
-        : closed
-          ? section('Dropped', LCARS.red, h('p', null, closed.why ?? 'No reason given'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
-          : section('Still open', LCARS.sky, h('p', null, 'The lead hears it with the note at every new slice, until they pursue it or drop it.')),
+      : closed?.as === 'cleared'
+        ? section('Taken off the brief', LCARS.lilac, h('p', null, 'The lead took it off their brief’s loose threads: done, dropped or folded into other work.'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
+        : closed?.as === 'pursued'
+          ? section('Pursued in', GREEN, waypointLink(goal, closed.slice, nav), closed.why ? h('p', null, closed.why) : null)
+          : closed
+            ? section('Dropped', LCARS.red, h('p', null, closed.why ?? 'No reason given'), h('small', null, 'In ', waypointLink(goal, closed.slice, nav)))
+            : section('Still open', LCARS.sky, h('p', null, 'It’s open while the lead’s brief lists it under its loose threads.')),
     !closed && spin ? spinOffSection(`contact:${c.id}`, spinOffText(goal, c), (text) => spin.contact(c, text), spin, ui) : null,
   );
 }

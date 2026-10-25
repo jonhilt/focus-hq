@@ -67,6 +67,43 @@ function auditor(agents: AgentManager) {
 }
 
 describe('AgentManager', () => {
+  it('reads the lead’s brief as their edit of it finishes and as their turn ends, gives it back once they’re compacted, and asks a lead from before it to write theirs', async () => {
+    // the first lead's brief, in their workspace alone
+    let brief: string | undefined;
+    let theirs = '';
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, readIn: async (dir, file) => (file === 'brief.md' && dir.endsWith(theirs) ? brief : undefined) });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    theirs = lead.id;
+    await until(() => claude.turns.length === 1);
+    const req = claude.turns[0].req;
+    if (!req.brief) throw new Error('A lead’s session has no brief');
+    // nothing written yet: the goal is as it was
+    expect(req.brief.afterCompact()).toContain("You haven't written ./brief.md yet.");
+    brief = '# Saved items, anywhere\n\n## Loose threads\n\n- Rate limits?\n';
+    req.brief.edited();
+    await until(() => store.agent(lead.id).lead?.briefMd === brief);
+    expect(store.agent(lead.id)).toMatchObject({ issue: { title: 'Saved items, anywhere' }, lead: { title: 'Saved items, anywhere', contacts: [{ id: 'c1', text: 'Rate limits?' }] } });
+    expect(req.brief.afterCompact()).toContain('Your brief, ./brief.md, as it stands:\n\n# Saved items, anywhere');
+    // changed some other way (with Bash, say): read as the turn ends
+    brief = '# Saved items, anywhere\n\n## Loose threads\n';
+    claude.turns[0].end({ ok: true, summary: 'Wrote the brief' });
+    await until(() => store.agent(lead.id).lead?.briefMd === brief);
+    expect(store.agent(lead.id).lead?.contacts?.[0].closed?.as).toBe('cleared');
+
+    // a goal from before brief.md: its lead hears once, as their next turn starts, to write it from their note
+    const { agent: older } = agents.startGoal(project.id, 'Dark mode') as { agent: { id: string } };
+    await until(() => claude.turns.length === 2);
+    claude.turns[1].end({ ok: true, summary: 'Shaped it' });
+    await until(() => store.agent(older.id).status === 'done');
+    const work = store.agent(older.id).lead;
+    if (!work) throw new Error('No lead work');
+    store.putAgent({ ...store.agent(older.id), lead: { ...work, note: { done: 'Follows the system', learned: [], next: ['Toggle'] } } });
+    agents.message(older.id, 'Carry on');
+    await until(() => claude.turns.length === 3);
+    expect(claude.turns[2].req.prompt).toMatch(/^\[Ops\] The goal's note is now a file you keep yourself: \.\/brief\.md[\s\S]*## Next\n\n- Toggle[\s\S]*Carry on$/);
+    expect(store.agent(older.id).lead?.briefAsked).toBe(true);
+  });
+
   it('puts a question the lead asks with AskUserQuestion on their station, and hands the captain’s pick back into the same turn', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
@@ -908,12 +945,14 @@ describe('AgentManager', () => {
     const goal = store.agent(spun.agent.id);
     expect(goal.lead).toMatchObject({ station: 1, brief: 'Saved items follow you across devices' });
     expect(store.agent(lead.id).lead!.contacts![0].closed).toMatchObject({ as: 'spun off', goal: goal.id, title: goal.lead!.title });
-    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun contact c1 (Sync across devices?) off as a goal of its own');
+    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun one of your loose threads (Sync across devices?) off as a goal of its own');
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
 
     const idea = agents.spinOffIdea(lead.id, 'Tidy the store', 'Tidy the store code') as { agent: { id: string } };
     expect(store.agent(idea.agent.id).lead).toMatchObject({ station: 2 });
     expect(store.agent(lead.id).lead!.note!.next).toEqual(['Show it in the header']);
+    // and stays off it while the lead's brief still lists it
+    expect(store.agent(lead.id).lead!.spunOffIdeas).toEqual(['Tidy the store']);
     expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun your idea for next (Tidy the store) off');
     expect(() => agents.spinOffIdea(lead.id, 'Tidy the store', 'Again')).toThrow('isn’t one of the lead’s ideas');
   });
@@ -1039,7 +1078,7 @@ describe('AgentManager', () => {
     if (!('agent' in started)) throw new Error('It went in line');
     const closed = store.agent(lead.id).lead?.contacts?.[0].closed;
     expect(closed).toMatchObject({ as: 'spun off', goal: started.agent.id, title: 'Auth off the LAN', slice: 1 });
-    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun contact c1 (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”, at team station ${(started.agent.lead?.station ?? 0) + 1}. It's closed on your chart: leave that thread to the new goal.`);
+    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”, at team station ${(started.agent.lead?.station ?? 0) + 1}. Leave that thread to the new goal: take it off your brief.`);
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
     expect(() => agents.spinOffContact(lead.id, 'c9', 'Who?')).toThrow("There's no contact c9. Open contacts: c2 (Dark mode).");
 

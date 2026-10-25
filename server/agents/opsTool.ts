@@ -2,23 +2,7 @@ import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@
 import { z } from 'zod';
 import { RECAP_SCHEMA } from './recapSchema';
 import { errorMessage } from '../util';
-import { CONTACT_LIMITS as C } from './contacts';
 import type { ExtraTool, OpsTools, ToolReply } from './types';
-
-/** The note tool's input: what the goal's note keeps, and the goal's contacts. */
-export const noteShape = {
-  title: z.string().optional().describe('A better title for the goal, in a few words.'),
-  done: z.string().optional().describe('What done looks like, as agreed with the captain.'),
-  learned: z.string().optional().describe('One new line on what a slice taught you, or a decision and why.'),
-  allLearned: z.array(z.string()).optional().describe('Replaces every learned line: to merge older lessons.'),
-  next: z.array(z.string()).optional().describe('Ideas for what comes next, replacing the last ones.'),
-  contact: z.string().max(C.text).optional().describe(`Log one loose thread you noticed and don't want lost, a question, a risk or an idea off the current path, as a contact on the goal's chart (at most ${C.text} characters, ${C.open} open at once). Ops gives it an id (c1, c2…).`),
-  closeContact: z.object({
-    id: z.string().describe('The contact\'s id, like c2.'),
-    as: z.enum(['pursued', 'dropped']).describe('pursued: you\'re taking it up as work; dropped: it isn\'t worth it, or the course moved on.'),
-    why: z.string().max(C.why).optional().describe(`Why, in a line (at most ${C.why} characters).`),
-  }).optional().describe('Close an open contact once you pursue or drop it.'),
-};
 
 /** One tool's answer: what happened, in words (and any pictures), or (marked as an error) why it didn't. */
 async function answer(run: () => Promise<string | ToolReply>, failed: string): Promise<{ content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean }> {
@@ -32,7 +16,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
-export const OPS_TOOL_NAMES = ['recap', 'note', 'show', 'ask', 'propose_close', 'decision'] as const;
+export const OPS_TOOL_NAMES = ['recap', 'show', 'ask', 'propose_close', 'decision'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
 /** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
@@ -46,7 +30,7 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, note, show, ask,
+ * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, show, ask,
  * propose_close and decision, and those the plugins switched on add.
  */
 export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
@@ -54,7 +38,7 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
     name: 'office',
     version: '1.0.0',
     alwaysLoad: true,
-    instructions: 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.',
+    instructions: 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.',
     tools: [
       tool(
         'recap',
@@ -65,12 +49,6 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
           recap: RECAP_SCHEMA,
         },
         ({ repo, number, recap }) => answer(() => tools.recap({ repo, number, recap }), "Couldn't put the recap on it"),
-      ),
-      tool(
-        'note',
-        'Update the goal\'s note, which survives when your conversation gets summarised and which the captain sees. Send only what changes: each field replaces what was there, except learned, which adds a line, and contact and closeContact, which log and close loose threads on the goal\'s chart. Keep it short: a few lines, not a spec.',
-        noteShape,
-        (input) => answer(() => tools.note(input), "Couldn't update the note"),
       ),
       tool(
         'show',

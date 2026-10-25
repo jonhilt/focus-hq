@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy, TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, answerEnds, ClaudeRunner, claudeConfig, DECLINED, UNANSWERED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, answerEnds, ClaudeRunner, claudeConfig, DECLINED, UNANSWERED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, sessionHooks, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { WorkflowPermits } from './workflows';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
@@ -479,5 +479,32 @@ describe('a session’s outcome', () => {
     const stderr = 'one\ntwo\nthree\nfour\n';
     expect(failedOutcome(answered, new Error('exited with code 1'), { ...failure, stderr })).toEqual({ ok: false, summary: 'Done', error: 'exited with code 1 — two three four', started: true });
     expect(failedOutcome(answered, new Error('exited with code 1'), failure).error).toBe('exited with code 1');
+  });
+});
+
+describe('a session’s hooks', () => {
+  const signal = new AbortController().signal;
+  const post = (file: string) => ({ hook_event_name: 'PostToolUse' as const, tool_name: 'Edit', tool_input: { file_path: file }, tool_response: {}, tool_use_id: 't1', session_id: 's', transcript_path: '', cwd: '/ws/l1' });
+
+  it('reads a lead’s brief again as an edit of it finishes, and gives it back once the conversation’s compacted', async () => {
+    const edited = vi.fn();
+    const hooks = sessionHooks({ cwd: '/ws/l1', brief: { edited, afterCompact: () => 'The goal: Saved items' } });
+    const [onEdit] = hooks?.PostToolUse ?? [];
+    expect(onEdit.matcher).toBe('Write|Edit|MultiEdit');
+    await onEdit.hooks[0](post('/ws/l1/web/src/app.ts'), 't1', { signal });
+    expect(edited).not.toHaveBeenCalled();
+    await onEdit.hooks[0](post('/ws/l1/brief.md'), 't1', { signal });
+    expect(edited).toHaveBeenCalledOnce();
+    const [onStart] = hooks?.SessionStart ?? [];
+    expect(onStart.matcher).toBe('compact');
+    expect(await onStart.hooks[0]({ hook_event_name: 'SessionStart', source: 'compact', session_id: 's', transcript_path: '', cwd: '/ws/l1' }, undefined, { signal })).toEqual({
+      hookSpecificOutput: { hookEventName: 'SessionStart', additionalContext: 'The goal: Saved items' },
+    });
+  });
+
+  it('keeps the scratch dir’s guard on Bash, and has none for a session with neither', () => {
+    const guard = () => Promise.resolve({});
+    expect(sessionHooks({ cwd: '/ws/a1' }, guard)).toEqual({ PreToolUse: [{ matcher: 'Bash', hooks: [guard] }] });
+    expect(sessionHooks({ cwd: '/ws/a1' })).toBeUndefined();
   });
 });

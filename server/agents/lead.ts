@@ -1,4 +1,4 @@
-import type { Agent, Effort, LeadAgent, GoalArtifact, GoalNote, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
+import type { Agent, Effort, LeadAgent, GoalArtifact, GoalQuestion, GoalRecord, Helper, LeadPr, LeadWork, QaReport, QaReview, QueuedGoal, Settings } from '../../shared/types';
 import { TEAM_STATIONS } from '../../shared/types';
 import { unanswered } from '../../shared/artifacts';
 import type { BranchState, HelperEvent, WorkflowEvent } from './types';
@@ -8,8 +8,8 @@ import { applyWorkflowEvent } from './workflows';
 import { slugify } from '../util';
 import { CREW_RULES, crewPrompt } from './crewFiles';
 import { proofsToKeep } from './qaProof';
-import { applyContacts, type ContactInput, contactsForPrompt } from './contacts';
-import { notedWaypoint, probedWaypoints, taskedWaypoint } from './waypoints';
+import { BRIEF_FILE, briefForPrompt } from './briefFile';
+import { probedWaypoints, taskedWaypoint } from './waypoints';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -102,14 +102,14 @@ export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string
 
 /**
  * What a lead's conversation keeps when the captain compacts it: the goal and how it's going, not the details the code
- * and the note already hold.
+ * and the brief already hold (Ops gives the lead the brief again once it's compacted: `briefForPrompt`).
  */
-export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 'contacts'>): string {
+export function compactInstructions(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 'briefMd' | 'contacts'>): string {
   return [
     `Summarise this conversation for the lead of the goal "${work.title}" to carry on from.`,
     'Keep: the goal, what the captain asked for and what done looks like; the decisions made and why; what each slice taught us; what the captain prefers, and anything they asked to keep in mind; the pull requests and what became of them; what to do next.',
-    'Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and the goal note hold it now.',
-    `The goal note as it stands:\n${noteForPrompt(work)}`,
+    `Drop: file contents, diffs, command and tool output, and the step-by-step of finished work: the code and ./${BRIEF_FILE} hold it now.`,
+    `Where the goal stands:\n${briefForPrompt(work)}`,
   ].join('\n\n');
 }
 
@@ -125,50 +125,6 @@ export function compactsFirst(lead: Pick<Agent, 'sessionId' | 'cloud' | 'context
 /** What any other agent's conversation keeps when the captain compacts it. */
 export const COMPACT_INSTRUCTIONS =
   'Summarise this conversation so you can carry on with your task: keep the task, what you have done and decided and why, and what is left. Drop file contents, diffs, and command and tool output.';
-
-export const emptyNote = (): GoalNote => ({ done: '', learned: [], next: [] });
-
-/**
- * What the lead can send through the note tool: each field replaces what was there, except `learned`, which adds a
- * line (`allLearned` replaces them all, to merge old lessons), and the contacts (`contacts.ts`).
- */
-export interface NoteInput extends ContactInput {
-  title?: string;
-  done?: string;
-  learned?: string;
-  allLearned?: string[];
-  next?: string[];
-}
-
-/** The goal's title and note after the lead's update. */
-export function applyNote(work: Pick<LeadWork, 'title' | 'note'>, input: NoteInput): { title: string; note: GoalNote } {
-  const before = work.note ?? emptyNote();
-  const clean = (text: string) => text.replace(/\s+/g, ' ').trim();
-  const title = input.title !== undefined && clean(input.title) ? clean(input.title) : work.title;
-  const note: GoalNote = {
-    done: input.done !== undefined ? input.done.trim() : before.done,
-    learned: [...(input.allLearned ? input.allLearned.map(clean).filter(Boolean) : before.learned), ...(input.learned && clean(input.learned) ? [clean(input.learned)] : [])],
-    next: input.next ? input.next.map(clean).filter(Boolean) : before.next,
-  };
-  return { title, note };
-}
-
-/**
- * The goal once the lead sends the note tool, and what the tool says back, or why it was refused (nothing changes then):
- * its title and note (`applyNote`), its contacts (`contacts.ts`) and its waypoints, where a lesson, or a change to what
- * done looks like, goes on the slice it's about (`notedWaypoint`).
- */
-export function notedGoal(work: LeadWork, input: NoteInput, now: number): { lead: LeadWork; reply: string } | { error: string } {
-  const next = applyNote(work, input);
-  const contacts = applyContacts(work, input, now);
-  if ('error' in contacts) return contacts;
-  const waypoints = notedWaypoint(work, input, next.note, now);
-  const contact = input.contact?.trim() ? contacts.at(-1) : undefined;
-  return {
-    lead: { ...work, title: next.title, note: next.note, ...(waypoints && { waypoints }), ...(contacts.length && { contacts }) },
-    reply: `Noted.${contact ? ` Logged contact ${contact.id}.` : ''}`,
-  };
-}
 
 export const ARTIFACT_LIMITS = { id: 40, title: 80, count: 12, bytes: 2_000_000 } as const;
 
@@ -280,22 +236,6 @@ export function answerInChat(questions: readonly GoalQuestion[], text: string, a
 }
 
 /**
- * The goal as the captain put it and the lead last wrote it down: for a new slice, and anywhere their conversation may
- * have been summarised or lost.
- */
-export function noteForPrompt(work: Pick<LeadWork, 'title' | 'note' | 'brief' | 'contacts'>): string {
-  const n = work.note ?? emptyNote();
-  const parts = [`The goal: ${work.title}`];
-  if (work.brief && work.brief !== work.title) parts.push(`As the captain first put it:\n${work.brief.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')}`);
-  if (n.done) parts.push(`What done looks like: ${n.done}`);
-  if (n.learned.length) parts.push(`What the slices so far taught us:\n${n.learned.map((l) => `- ${l}`).join('\n')}`);
-  if (n.next.length) parts.push(`Ideas for next:\n${n.next.map((x) => `- ${x}`).join('\n')}`);
-  const contacts = contactsForPrompt(work.contacts);
-  if (contacts) parts.push(contacts);
-  return parts.join('\n\n');
-}
-
-/**
  * A repo of a goal's workspace as the goal closes: whether it has uncommitted changes (or git couldn't tell), and how its
  * branch stands with GitHub (missing when git couldn't tell).
  */
@@ -342,7 +282,7 @@ export function goalRecord(agent: LeadAgent, now: number): GoalRecord {
   const work = agent.lead;
   return {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
-    brief: work.brief, branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
+    brief: work.brief, ...(work.briefMd !== undefined && { briefMd: work.briefMd }), branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
     ...(work.artifacts?.length && { artifacts: work.artifacts }), ...(work.questions?.length && { questions: work.questions }),
     ...(work.waypoints?.length && { waypoints: work.waypoints }), ...(work.contacts?.length && { contacts: work.contacts }),
   };
@@ -364,7 +304,7 @@ export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
   const current = goal.slice === undefined ? goal.prs : goal.prs.filter((p) => p.slice === slice);
   const landed = goal.slice === undefined ? [] : goal.prs.filter((p) => p.slice !== slice);
   return {
-    station, title: goal.title, brief: goal.brief, note: goal.note, repos: goal.repos ?? [], slice, prs: current,
+    station, title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
     ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
     ...(goal.waypoints && { waypoints: goal.waypoints }), ...(goal.contacts && { contacts: goal.contacts }),
@@ -379,14 +319,16 @@ export function reopenedNote(work: LeadWork, branch: string, closedAt: number): 
   const closed = new Date(closedAt).toISOString().slice(0, 10);
   const wip = `“${snapshotMessage(work.title)}”`;
   const open = work.prs.filter((p) => !p.outcome);
-  return [
+  const said = [
     `[Ops] The captain reopened this goal, closed on ${closed}.`,
     sliceLanded(work.prs)
       ? `Its last slice had landed, so the next one starts on fresh code, as above. If you had uncommitted work when it closed, it was the commit ${wip}, and it came along with any others you hadn't shipped.`
       : `Your repos are checked out again on \`${branch}\`, as you left them: ${work.repos.map((r) => `./${r.folder}`).join(', ')}. If you had uncommitted work when it closed, it's the commit ${wip} at the tip: build on it, or \`git reset HEAD~1\` to have it uncommitted again.`,
     open.length ? `Still open on GitHub: ${open.map((p) => `${p.repo}#${p.number}`).join(', ')}.` : '',
-    "Tell the captain where the goal stands and what you'd do next.",
   ].filter(Boolean).join(' ');
+  // the brief went with the goal's old workspace, unless it's still there: the lead writes it back
+  const brief = work.briefMd?.trim() ? `\n\nIf ./${BRIEF_FILE} isn't there any more, write it back as it was:\n\n\`\`\`markdown\n${work.briefMd.trim()}\n\`\`\`\n\n` : ' ';
+  return `${said}${brief}Tell the captain where the goal stands and what you'd do next.`;
 }
 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */
@@ -558,7 +500,7 @@ export function freshSessionPrompt(work: LeadWork, branch: string, inbox: string
   if (work.brief !== undefined && inbox.length && goalBrief(inbox[0]) === work.brief) return `${workspaceNote(work, branch)}\n\n${words}`;
   return [
     landed ? '' : workspaceNote(work, branch),
-    `You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.${landed ? '' : ` Where the goal stands:\n\n${noteForPrompt(work)}`}`,
+    `You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.${landed ? '' : ` Where the goal stands:\n\n${briefForPrompt(work)}`}`,
     words || "Look over the repos, then tell the captain where you think the goal stands and what you'd do next.",
   ].filter(Boolean).join('\n\n');
 }

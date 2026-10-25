@@ -1,5 +1,6 @@
 import { type Agent, type ClaudeTask, EFFORT_LEVELS, type Effort, type GoalNote } from '../../../shared/types';
 import type { contextLevel } from '../../../shared/agentStatus';
+import type { GoalDecisions } from '../../../shared/decisions';
 import { LCARS } from '../world/starship';
 import { api } from '../net/api';
 import { state } from '../net/state';
@@ -33,7 +34,7 @@ export function leadEffortPicker(value: Effort = 'high'): { el: HTMLElement; sel
   return { el: h('span', { class: 'row' }, select, hint), select, picked };
 }
 
-/** The goal's note as its lead keeps it: what done looks like, what we learned, what's next. */
+/** The goal's note as its lead's brief has it: what done looks like, what we learned, what's next. */
 export function noteView(note: GoalNote | undefined, compact = false): HTMLElement | null {
   if (!note || (!note.done && !note.learned.length && !note.next.length)) return null;
   const list = (items: string[]) => h('ul', { class: 'goal-list' }, ...items.map((t) => h('li', null, t)));
@@ -41,6 +42,17 @@ export function noteView(note: GoalNote | undefined, compact = false): HTMLEleme
     note.done ? h('div', null, h('h4', null, 'Done looks like'), note.done) : null,
     !compact && note.learned.length ? h('div', null, h('h4', null, 'Learned'), list(note.learned)) : null,
     !compact && note.next.length ? h('div', null, h('h4', null, 'Next'), list(note.next)) : null,
+  );
+}
+
+/** The goal's decisions on record, beside the brief: each decided one with what was chosen, then the ones still open. */
+export function decisionsView(d: GoalDecisions | undefined): HTMLElement | null {
+  if (!d || (!d.open.length && !d.decided.length)) return null;
+  return h('div', null,
+    h('h4', null, 'Decisions'),
+    h('ul', { class: 'goal-list' },
+      ...d.decided.map((x) => h('li', { class: 'ticked' }, `${x.question} `, h('b', null, x.chosen ?? ''), x.rationale ? h('small', { class: 'muted' }, ` · ${x.rationale}`) : null)),
+      ...d.open.map((x) => h('li', null, `${x.question} `, h('small', { class: 'muted' }, `open: ${x.options.join(' / ')}`)))),
   );
 }
 

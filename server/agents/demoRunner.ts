@@ -5,6 +5,7 @@ import type { TermLine } from '../../shared/types';
 import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
 import { demoOpenPr, demoPush, demoReady } from '../github/demo';
+import { BRIEF_FILE } from './briefFile';
 import { leadWorktreeId } from './lead';
 import type { PackageFacts } from '../packageManager';
 import { randomHex, sleep } from '../util';
@@ -17,6 +18,22 @@ import type { TriageDecision, Triager, TriageRequest } from './triage';
 import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 /** The made-up files of each kind of demo repo: a web app's, an API's, a game's. */
+/** The briefs the demo's scripted leads write, by their workspace: the demo workspace reads them back, as Ops reads a real one. */
+const demoBriefs = new Map<string, string>();
+
+/** A scripted lead's brief: the goal, what done looks like, and what its slices so far taught, with what's next and what's loose. */
+export function demoBrief(goal: string, slices: number, threads: string[]): string {
+  const learned = Array.from({ length: slices }, (_, i) => `- Slice ${i + 1}: the data side holds up; the store code needs tidying`);
+  const next = slices ? ['- Show it in the header', '- Tidy the store code it exposed'] : ['- A thin slice end to end'];
+  return [
+    `# ${goal[0].toUpperCase()}${goal.slice(1)}`,
+    `## Done looks like\n\n${goal}: it works end to end, and survives a reload on another device.`,
+    ...(learned.length ? [`## Learned\n\n${learned.join('\n')}`] : []),
+    `## Next\n\n${next.join('\n')}`,
+    `## Loose threads\n\n${threads.map((t) => `- ${t}`).join('\n')}`,
+  ].join('\n\n');
+}
+
 export const FILES: Record<string, string[]> = {
   web: ['src/App.tsx', 'src/components/Header.tsx', 'src/components/CartBadge.tsx', 'src/pages/Product.tsx', 'src/store/cart.ts', 'src/styles/theme.css'],
   api: ['src/server.ts', 'src/routes/auth.ts', 'src/routes/products.ts', 'src/routes/orders.ts', 'src/middleware/rateLimit.ts', 'test/orders.test.ts'],
@@ -427,10 +444,11 @@ export class DemoRunner implements AgentRunner {
         await tool('Bash', { command: 'git push', description: 'Push the fix to the same pull request' }, ['To github.com:demo/repo.git']);
         if (pr && demoPush) demoPush(pr.repo, pr.number, 'change');
       };
-      const note = async (input: Parameters<typeof tools.note>[0]) => {
-        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__note(${Object.keys(input).join(', ')})` }]);
-        const result = await tools.note(input).catch((err: Error) => err.message);
-        hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+      // the lead keeps the goal's brief in their workspace with Claude Code's Write, and Ops reads it as the write finishes
+      const writeBrief = async (md: string) => {
+        demoBriefs.set(req.cwd, md);
+        await tool('Write', { file_path: `${req.cwd}/${BRIEF_FILE}`, content: md }, [`Wrote ${md.split('\n').length} lines to ${BRIEF_FILE}`]);
+        req.brief?.edited();
       };
       // the plugins' lead tools the scripted lead plays with, as a real lead would call them: each one's demo input
       const pluginTool = async (t: ExtraTool, input: Record<string, unknown>) => {
@@ -549,9 +567,9 @@ export class DemoRunner implements AgentRunner {
       const landed = /Slice (\d+) has landed/.exec(req.prompt);
       if (landed) {
         await think();
-        // a loose thread noticed on the way, logged as a contact on the chart; by the next landing it's been dropped
-        const thread = landed[1] === '1' ? { contact: 'Should saved items follow a shopper who signs in on another device?' } : { closeContact: { id: 'c1', as: 'dropped' as const, why: 'Signing in already brings them along' } };
-        await note({ learned: `Slice ${landed[1]}: the data side holds up; the store code needs tidying`, next: ['Show it in the header', 'Tidy the store code it exposed'], ...thread });
+        // a loose thread noticed on the way, a contact on the chart; by the next landing it's off the brief
+        const threads = landed[1] === '1' ? ['Should saved items follow a shopper who signs in on another device?'] : [];
+        await writeBrief(demoBrief(goal, Number(landed[1]), threads));
         // by the second slice the goal's done: the captain closes it, or carries on
         if (Number(landed[1]) >= 2) {
           hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__propose_close(What done looks like is met)' }]);
@@ -569,7 +587,7 @@ export class DemoRunner implements AgentRunner {
           await tool('Glob', { pattern: `${r.folder}/src/**/*` }, [`Found ${14 + r.folder.length} files`]);
         }
         await think();
-        await note({ done: `${goal}: it works end to end, and survives a reload on another device.`, next: ['A thin slice end to end'] });
+        await writeBrief(demoBrief(goal, 0, []));
         await show({ id: 'data-flow', title: 'The data flow', html: demoFlowPage(goal, repos.map((r) => r.folder)) });
         hooks.lines([{ kind: 'tool', text: '⏺ mcp__office__ask(Which layout should it start with?)' }]);
         const asked = await tools.ask({
@@ -855,7 +873,7 @@ export const demoWorkspace: WorkspaceOps = {
     const file = args.at(-1) ?? 'the proof';
     return { code: 1, output: ` FAIL  ${file} > handles an empty list\nAssertionError: expected [] to have a length of 1 but got +0\n\n Tests  1 failed (1)` };
   },
-  readIn: async (_dir, file) => `import { expect, it } from 'vitest';\n\n// ${file}\nit('handles an empty list', () => {\n  expect(render([])).toHaveLength(1);\n});\n`,
+  readIn: async (dir, file) => (file === BRIEF_FILE ? demoBriefs.get(dir) : `import { expect, it } from 'vitest';\n\n// ${file}\nit('handles an empty list', () => {\n  expect(render([])).toHaveLength(1);\n});\n`),
   // the demo's repos are npm projects with the usual checks and a CLAUDE.md, as their pretend runs above say
   packageFacts: async () => DEMO_PACKAGE,
   cloneFacts: async () => DEMO_PACKAGE,

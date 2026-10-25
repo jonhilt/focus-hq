@@ -1,6 +1,6 @@
 # Threads
 
-A project's loose threads, kept past the goal that noticed them. A goal's lead logs a contact for something that needs real attention (a risk, a question, something off the course) and closes it when it's pursued or dropped. A goal often closes with some still open, and until now nothing read them again: they stayed on a closed goal's chart. This plugin lists every contact a project's leads left open, its closed goals' and its goals under way's, and the ideas for next its goals closed with, in a **Threads** view in the project's goals panel, after Closed, and keeps where the captain decides each of a closed goal's ends. **Sort for me** has a model propose those ends, for the captain to accept.
+A project's loose threads, kept past the goal that noticed them. A goal's lead lists something that needs real attention (a risk, a question, something off the course) under their brief's loose threads, which makes it a contact, and takes it off once it's dealt with. A goal often closes with some still open, and until now nothing read them again: they stayed on a closed goal's chart. This plugin lists every contact a project's leads left open, its closed goals' and its goals under way's, and the ideas for next its goals closed with, in a **Threads** view in the project's goals panel, after Closed, and keeps where the captain decides each of a closed goal's ends. **Sort for me** has a model propose those ends, for the captain to accept.
 
 `FOCUS_PLUGINS=threads`, then switched on per project in its settings.
 

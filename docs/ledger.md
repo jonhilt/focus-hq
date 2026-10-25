@@ -31,7 +31,7 @@ When an agent's session ends, Ops digests what's new in its Claude Code transcri
 
 ## Intent and decisions
 
-A project's or a goal's intent (what it's after, and its constraints) and a goal's decisions are ledger lines of their own (`intent`, `decision`; read back in `shared/decisions.ts`), not prose in a lead's note or the inbox. The inbox is built from live state, so an unanswered question could go quiet there, and nothing settled was on record to point to when a lead asked again. Typed records are also overwritten less than markdown when models keep them.
+A project's or a goal's intent (what it's after, and its constraints) and a goal's decisions are ledger lines of their own (`intent`, `decision`; read back in `shared/decisions.ts`), not prose in a lead's brief or the inbox. The inbox is built from live state, so an unanswered question could go quiet there, and nothing settled was on record to point to when a lead asked again. Typed records are also overwritten less than markdown when models keep them.
 
 - **Whole lines, never edits.** Each change to a decision (raised, proposed, decided, replaced) is a new line with every field again, so the latest line for its id is the record and the earlier ones are how it got there.
 - **One intent format.** A project's intents are `intent` lines with no goal, several to a project, each by its `id`; a goal's names the goal, and the project intents it `serves`. A change says `why`, and an intent is ended by a `retired` line, not by deleting it. Anything that keeps intents (a lead, the threads plugin) writes this line, never a format of its own.

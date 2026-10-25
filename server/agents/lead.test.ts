@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { verdictStands, verdictToast, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, landedNote, leadSystemAppend, moveQueued, nextGoal, noteForPrompt, reopenable, reopenedNote, reopenedWork, reposBackNote, pickStation, qaVerdictNote, queuedStart, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { verdictStands, verdictToast, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, landedNote, leadSystemAppend, moveQueued, nextGoal, reopenable, reopenedNote, reopenedWork, reposBackNote, pickStation, qaVerdictNote, queuedStart, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -107,7 +107,8 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/Never push a base branch, or a branch whose pull request has merged/);
     expect(prompt).toContain('mcp__office__recap');
     expect(prompt).toMatch(/Hand independent work, and broad exploration, to subagents with the Agent tool, and keep their conclusions/);
-    expect(prompt).toMatch(/mcp__office__note keeps the goal's note/);
+    expect(prompt).toMatch(/Keep the goal's brief in \.\/brief\.md, at the root of your workspace beside the repos/);
+    expect(prompt).not.toContain('mcp__office__note');
     expect(prompt).toMatch(/When what done looks like is met, or nothing worthwhile is left, say so with mcp__office__propose_close/);
     expect(prompt).toMatch(/You hear when a slice's pull requests have all merged or closed; your checkouts stay as they are/);
   });
@@ -339,84 +340,10 @@ describe('workflowChange', () => {
   });
 });
 
-describe('the goal’s note', () => {
-  const start = { title: 'Saved items', note: undefined };
-
-  it('takes only what the lead sends: each field replaces, learned adds a line', () => {
-    expect(applyNote(start, {})).toEqual({ title: 'Saved items', note: emptyNote() });
-    const first = applyNote(start, { done: 'Saved items survive a reload', next: ['Thin slice'] });
-    expect(first).toEqual({ title: 'Saved items', note: { done: 'Saved items survive a reload', learned: [], next: ['Thin slice'] } });
-    const second = applyNote(first, { title: '  Saved   items, anywhere ', learned: 'The store is fine', next: ['Header', ' '] });
-    expect(second).toEqual({
-      title: 'Saved items, anywhere',
-      note: { done: 'Saved items survive a reload', learned: ['The store is fine'], next: ['Header'] },
-    });
-    expect(applyNote(second, { learned: 'Header next' })).toMatchObject({ note: { learned: ['The store is fine', 'Header next'] } });
-    expect(applyNote(second, { allLearned: ['Merged lesson'], learned: 'Newest' })).toMatchObject({ note: { learned: ['Merged lesson', 'Newest'] } });
-  });
-
-  it('keeps whatever the lead sends, however long: the note has no limits', () => {
-    const long = 'x'.repeat(500);
-    const items = Array.from({ length: 12 }, (_, i) => `idea ${i}`);
-    expect(applyNote(start, { title: long, done: long, learned: long, next: items })).toEqual({ title: long, note: { done: long, learned: [long], next: items } });
-  });
-
-  it('reads back as the goal where it stands, leaving out what’s empty', () => {
-    expect(noteForPrompt({ title: 'Saved items' })).toBe('The goal: Saved items');
-    expect(noteForPrompt({ title: 'Saved items', note: { done: 'Works on any device', learned: ['Store is fine'], next: ['Header'] } })).toBe(
-      'The goal: Saved items\n\nWhat done looks like: Works on any device\n\nWhat the slices so far taught us:\n- Store is fine\n\nIdeas for next:\n- Header',
-    );
-  });
-
-  it('carries the goal as the captain first put it, so it outlives the conversation', () => {
-    const brief = goalBrief('Let shoppers save items for later.\n\nThey should survive a reload.\n');
-    expect(brief).toBe('Let shoppers save items for later.\n\nThey should survive a reload.');
-    expect(noteForPrompt({ title: 'Let shoppers save items for later', brief })).toBe(
-      'The goal: Let shoppers save items for later\n\nAs the captain first put it:\n> Let shoppers save items for later.\n>\n> They should survive a reload.',
-    );
-    // a one-liner is its own title: no need to say it twice
-    expect(noteForPrompt({ title: 'Saved items', brief: 'Saved items' })).toBe('The goal: Saved items');
+describe('the goal as the captain first put it', () => {
+  it('is kept whole up to a limit, so it outlives the conversation', () => {
+    expect(goalBrief('Let shoppers save items for later.\n\nThey should survive a reload.\n')).toBe('Let shoppers save items for later.\n\nThey should survive a reload.');
     expect(goalBrief('x'.repeat(BRIEF_LIMIT + 50))).toHaveLength(BRIEF_LIMIT + 1);
-  });
-
-});
-
-describe('notedGoal', () => {
-  // slice 1 landed, slice 2 is under way with three commits so far
-  const course: LeadWork = { ...work, waypoints: [{ slice: 1, startedAt: 1, title: 'Store' }, { slice: 2, startedAt: 2, commits: 3 }] };
-  const noted = (input: Parameters<typeof notedGoal>[1], on: LeadWork = course) => {
-    const result = notedGoal(on, input, 50);
-    if ('error' in result) throw new Error(result.error);
-    return result;
-  };
-
-  it('keeps the note and title, leaving the chart alone when nothing on it changed', () => {
-    const { lead, reply } = noted({ title: 'Saved items, anywhere', next: ['Header'] }, work);
-    expect(lead).toEqual({ ...work, title: 'Saved items, anywhere', note: { ...emptyNote(), next: ['Header'] } });
-    expect(reply).toBe('Noted.');
-    expect(noted({ next: ['Header'] }).lead.waypoints).toEqual(course.waypoints);
-  });
-
-  it('puts a lesson, and what done used to look like, on the slice that landed', () => {
-    const first = noted({ done: 'Saved items survive a reload', learned: 'The store is fine' }).lead;
-    expect(first.waypoints).toEqual([{ slice: 1, startedAt: 1, title: 'Store', learned: ['The store is fine'] }, { slice: 2, startedAt: 2, commits: 3 }]);
-    expect(noted({ done: 'Saved items work anywhere' }, first).lead.waypoints?.[0]).toEqual({ slice: 1, startedAt: 1, title: 'Store', learned: ['The store is fine'], turnedFrom: 'Saved items survive a reload' });
-  });
-
-  it('names the contact it logged, and not one it only closed', () => {
-    const logged = noted({ contact: 'Is the API rate limited?' });
-    expect(logged.lead.contacts).toEqual([{ id: 'c1', text: 'Is the API rate limited?', slice: 1, at: 50 }]);
-    expect(logged.reply).toBe('Noted. Logged contact c1.');
-    const both = noted({ contact: 'Dark mode', closeContact: { id: 'c1', as: 'dropped' } }, logged.lead);
-    expect(both.reply).toBe('Noted. Logged contact c2.');
-    const closed = noted({ closeContact: { id: 'c2', as: 'pursued' } }, both.lead);
-    expect(closed.reply).toBe('Noted.');
-    expect(closed.lead.contacts?.map((c) => c.closed?.as)).toEqual(['dropped', 'pursued']);
-    expect(noted({ contact: '   ' }).lead).not.toHaveProperty('contacts');
-  });
-
-  it('refuses what the contacts refuse, changing nothing', () => {
-    expect(notedGoal(course, { done: 'Fine', closeContact: { id: 'c9', as: 'dropped' } }, 50)).toEqual({ error: 'There\'s no contact c9. Open contacts: none.' });
   });
 });
 
@@ -518,6 +445,15 @@ describe('reopening a closed goal', () => {
     expect(reopenedWork(goalRecord(lead, closedAt), 1)).not.toHaveProperty('questions');
   });
 
+  it('keeps the lead’s brief with the closed goal, and has a reopened goal’s lead write it back', () => {
+    const briefMd = '# Saved items\n\n## Next\n\n- Header';
+    const record = goalRecord({ ...lead, lead: { ...work, briefMd } }, closedAt);
+    expect(record.briefMd).toBe(briefMd);
+    const again = reopenedWork(record, 0);
+    expect(again.briefMd).toBe(briefMd);
+    expect(reopenedNote(again, 'focus/saved-items-2-ab12', closedAt)).toMatch(/acme\/api#7\.\n\nIf \.\/brief\.md isn't there any more, write it back as it was:\n\n```markdown\n# Saved items\n\n## Next\n\n- Header\n```\n\nTell the captain/);
+    expect(goalRecord(lead, closedAt)).not.toHaveProperty('briefMd');
+  });
 
   it('tells the lead where their repos are, and where uncommitted work went', () => {
     const record = goalRecord(lead, closedAt);
@@ -640,13 +576,13 @@ describe('the lead’s context', () => {
     expect(compactsFirst(big, true, 200_000, 's0')).toBe(true);
   });
 
-  it('keeps the goal, the decisions and the lessons, drops the details, and carries the note', () => {
-    const keep = compactInstructions({ title: 'Saved items', brief: 'Let shoppers save items for later', note: { done: 'Works anywhere', learned: ['Store is fine'], next: ['Header'] } });
+  it('keeps the goal, the decisions and the lessons, drops the details, and carries the brief', () => {
+    const keep = compactInstructions({ title: 'Saved items', brief: 'Let shoppers save items for later', briefMd: '# Saved items\n\n## Done looks like\n\nWorks anywhere\n\n## Learned\n\n- Store is fine' });
     expect(keep).toMatch(/^Summarise this conversation for the lead of the goal "Saved items"/);
     expect(keep).toMatch(/Keep: the goal, what the captain asked for and what done looks like; the decisions made and why/);
     expect(keep).toMatch(/Drop: file contents, diffs, command and tool output/);
-    expect(keep).toContain('What done looks like: Works anywhere');
-    expect(keep).toContain('- Store is fine');
+    expect(keep).toMatch(/the code and \.\/brief\.md hold it now/);
+    expect(keep).toContain('Your brief, ./brief.md, as it stands:\n\n# Saved items\n\n## Done looks like\n\nWorks anywhere');
     expect(keep).toContain('As the captain first put it:\n> Let shoppers save items for later');
     expect(COMPACT_INSTRUCTIONS).toMatch(/keep the task, what you have done and decided and why, and what is left/);
   });
@@ -665,7 +601,7 @@ describe('a slice’s merge conflicts', () => {
 });
 
 describe('a lead’s first message in a new conversation', () => {
-  const goal: LeadWork = { ...work, brief: 'Let shoppers save items for later', slice: 2, note: { done: 'Saved items survive a reload', learned: [], next: [] } };
+  const goal: LeadWork = { ...work, brief: 'Let shoppers save items for later', slice: 2, briefMd: '# Saved items\n\n## Done looks like\n\nSaved items survive a reload' };
 
   it('is the captain’s words and where the repos are, for a new goal', () => {
     expect(freshSessionPrompt(goal, 'focus/saved-1-ab', ['Let shoppers save items for later', 'Web first'], false)).toBe(
@@ -677,7 +613,7 @@ describe('a lead’s first message in a new conversation', () => {
     const text = freshSessionPrompt(goal, 'focus/saved-2-ab', ['[Ops] Slice 1 has landed'], false);
     expect(text).toMatch(/^Your workspace, with every repo/);
     expect(text).toContain("You're carrying on with this goal in a new conversation");
-    expect(text).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Let shoppers save items for later\n\nWhat done looks like: Saved items survive a reload');
+    expect(text).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Let shoppers save items for later\n\nYour brief, ./brief.md, as it stands:\n\n# Saved items\n\n## Done looks like\n\nSaved items survive a reload');
     expect(text).toMatch(/\[Ops\] Slice 1 has landed$/);
     // a slice that has landed: the new slice's note says where the repos are and where the goal stands
     expect(freshSessionPrompt(goal, 'focus/saved-1-ab', [], true)).toBe(

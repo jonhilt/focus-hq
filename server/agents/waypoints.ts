@@ -1,12 +1,11 @@
 // A goal's slices as waypoints on its chart: what each set out to do, what it taught us, and when. Ops keeps
-// them as the lead ships, notes and lands each slice; these are the pure decisions, and the manager's parts call them.
+// them as the lead ships, briefs and lands each slice; these are the pure decisions, and the manager's parts call them.
 
 import type { ChecksState, ClaudeTask, Evidence, GoalNote, LeadWork, Probe, QaReport, SpotCheck, Waypoint } from '../../shared/types';
-import type { NoteInput } from './lead';
 import type { HelperEvent, ProbeEvent } from './types';
 
 /** How much a waypoint keeps: they all travel with the goal on every update, so each stays a few lines long. */
-export const WAYPOINT_LIMITS = { summary: 280, learned: 3, kept: 40, probes: 6, probeSummary: 200, tasks: 20, task: 120 } as const;
+export const WAYPOINT_LIMITS = { summary: 280, kept: 40, probes: 6, probeSummary: 200, tasks: 20, task: 120 } as const;
 
 type Course = Pick<LeadWork, 'slice' | 'waypoints'>;
 
@@ -57,15 +56,14 @@ export function notedSlice(work: Course): number {
 }
 
 /**
- * The waypoints once the lead updates the note: a lesson they add goes on the slice it's about, and so does what done
- * looked like before they changed it (the first time; changing it back is no correction at all).
+ * The waypoints once Ops reads the lead's brief: when what done looks like changed, what it looked like before goes on the
+ * slice the note is about (the first time; changing it back is no correction at all). The same waypoints otherwise.
  */
-export function notedWaypoint(work: Course & Pick<LeadWork, 'note'>, input: NoteInput, after: GoalNote, now: number): Waypoint[] | undefined {
-  const line = input.learned?.replace(/\s+/g, ' ').trim();
+export function turnedWaypoint(work: Course & Pick<LeadWork, 'note'>, after: GoalNote, now: number): Waypoint[] | undefined {
   const before = work.note?.done ?? '';
-  if (!line && (!before || after.done === before)) return work.waypoints;
+  if (!before || after.done === before) return work.waypoints;
   return withWaypoint(work, now, (w) => {
-    const next: Waypoint = { ...w, ...(line && { learned: [...(w.learned ?? []), line].slice(-WAYPOINT_LIMITS.learned) }) };
+    const next: Waypoint = { ...w };
     const from = w.turnedFrom ?? before;
     if (from && after.done !== from) next.turnedFrom = from;
     else delete next.turnedFrom;

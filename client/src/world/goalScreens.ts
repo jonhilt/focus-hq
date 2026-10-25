@@ -933,7 +933,7 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
   }
 
   for (const c of plot.contacts) {
-    const color = c.state === 'pursued' ? '#99cc66' : c.state === 'spun off' ? LCARS.peach : c.state === 'dropped' ? '#4b4466' : LCARS.sky;
+    const color = c.state === 'pursued' ? '#99cc66' : c.state === 'spun off' ? LCARS.peach : c.state === 'dropped' || c.state === 'cleared' ? '#4b4466' : LCARS.sky;
     const trail = c.pursuedAt ?? c.departsTo;
     if (trail) {
       ctx.setLineDash([2, 5]);

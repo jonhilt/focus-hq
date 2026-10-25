@@ -49,12 +49,12 @@ export interface Projected {
 }
 
 /**
- * A loose thread, as a sensor contact by the waypoint that noticed it: open, pursued (into `pursuedAt`), dropped, or spun
- * off as a goal of its own (heading off towards `departsTo`).
+ * A loose thread, as a sensor contact by the waypoint that noticed it: open, pursued (into `pursuedAt`), dropped, taken off
+ * the lead's brief (cleared), or spun off as a goal of its own (heading off towards `departsTo`).
  */
 export interface PlottedContact extends Pt {
   contact: Contact;
-  state: 'open' | 'pursued' | 'dropped' | 'spun off';
+  state: 'open' | 'pursued' | 'dropped' | 'spun off' | 'cleared';
   /** Missing when there's no clear room for it. */
   label?: Label;
   text: string;

@@ -20,6 +20,7 @@ export interface QueuedGoal {
  * What a goal's lead keeps track of, through Ops' note tool: not a spec, but the part of the goal that has to
  * survive a summarised conversation.
  */
+/** The goal's note, as Ops reads it from the lead's brief.md (`server/agents/briefFile.ts`), or their note tool on older goals. */
 export interface GoalNote {
   /** What done looks like, agreed with the captain at the start. */
   done: string;
@@ -50,7 +51,7 @@ export interface Waypoint {
   tasks?: ClaudeTask[];
   /** The opening of what it shipped with (its pull requests' description), cut short. */
   summary?: string;
-  /** The lessons the lead added to the goal's note during the slice. */
+  /** The lessons the lead added to the goal's note during the slice, on goals from before brief.md (the brief keeps them for the whole goal). */
   learned?: string[];
   /** What done looked like before the lead changed it during the slice: a course correction. */
   turnedFrom?: string;
@@ -131,7 +132,11 @@ export interface Contact {
    * Missing while it's open: pursued (taken up as work) or dropped (with why), in `slice`; or spun off by the captain as a
    * goal of its own, `goal` (its lead's id, unless it's waiting in line for a station) titled `title` when it started.
    */
-  closed?: { as: 'pursued' | 'dropped'; why?: string; slice: number; at: number } | { as: 'spun off'; goal?: string; title: string; slice: number; at: number };
+  closed?:
+    | { as: 'pursued' | 'dropped'; why?: string; slice: number; at: number }
+    | { as: 'spun off'; goal?: string; title: string; slice: number; at: number }
+    /** The lead took it off their brief: done, dropped or folded into something else, they don't say which. */
+    | { as: 'cleared'; slice: number; at: number };
 }
 
 /** A closed goal, in its room's log: enough to look back on, and to pick it back up one day. */
@@ -154,6 +159,8 @@ export interface GoalRecord {
   repos?: LeadWork['repos'];
   /** The goal as the captain first put it, for a reopened goal's lead. */
   brief?: string;
+  /** The lead's brief.md as the goal closed, which a reopened goal's lead writes back. */
+  briefMd?: string;
   /** What its lead showed, and asked with pictures, kept to look back at (and for a reopened goal's screen). */
   artifacts?: GoalArtifact[];
   questions?: GoalQuestion[];
@@ -202,8 +209,17 @@ export interface LeadWork {
    * survives a summarised conversation, or one that's gone. Missing on goals started before it was kept.
    */
   brief?: string;
-  /** The lead's note on the goal, once they've written one. */
+  /** The lead's note on the goal, read from `briefMd` (or, on goals from before it, kept by the note tool). */
   note?: GoalNote;
+  /**
+   * The lead's brief.md, in their workspace beside the repos, as Ops last read it: once they've written one. Ops reads
+   * it as they edit it and as each turn starts and ends, and only reads it: the lead keeps it with Claude Code's own tools.
+   */
+  briefMd?: string;
+  /** A goal from before brief.md: the lead has been asked to write theirs, from the note they kept. */
+  briefAsked?: true;
+  /** The ideas for next the captain spun off as goals of their own, until the lead takes them off their brief. */
+  spunOffIdeas?: string[];
   /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */
   closing?: { reason: string; at: number };
   /**

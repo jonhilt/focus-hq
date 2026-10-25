@@ -2,7 +2,7 @@ import type { RaiseInput } from '../../shared/decisions';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
-import type { ArtifactInput, NoteInput, QuestionInput } from './lead';
+import type { ArtifactInput, QuestionInput } from './lead';
 import type { LeadTool } from '../plugins/contract';
 import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
@@ -111,6 +111,11 @@ export interface RunRequest {
    * session's id, and `systemAppend` goes into the first message.
    */
   cloud?: { branch: string };
+  /**
+   * A goal lead's brief, ./brief.md in `cwd` (`briefFile.ts`): `edited` as the lead's Write or Edit of it finishes, for
+   * Ops to read it again, and `afterCompact` what Claude Code gives the lead once their conversation's compacted.
+   */
+  brief?: { edited(): void; afterCompact(): string };
   /** What the demo ship's scripted stand-in writes up, for a plugin's brief (`BriefSpec.demo`): a real session ignores it. */
   scripted?: { title: string; summary: string };
 }
@@ -125,8 +130,6 @@ export interface ToolReply {
 export interface OpsTools {
   /** Puts a recap on one of the goal's open pull requests, which sets its lane. Throws, in words, when it's refused. */
   recap(input: RecapInput): Promise<string>;
-  /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
-  note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
   show(input: ArtifactInput): Promise<string>;
   /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */
