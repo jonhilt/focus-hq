@@ -149,7 +149,8 @@ const goal = (only?: RegExp): Subject<Kept> => ({
         logged: !!record,
         archived: closedGoals(store.ledger, project.id).filter((g) => g.id === id).map((g) => `${(g.artifacts ?? []).map(artifact).join(', ')} | ${(g.questions ?? []).map(question).join(', ')}`),
         artifacts: (where?.artifacts ?? []).map(artifact),
-        questions: (where?.questions ?? []).map(question),
+        // one a turn waits on, unanswered, is the turn's, not the goal's: it comes down when the turn ends, a restart's included
+        questions: (where?.questions ?? []).filter((q) => q.via !== 'question-tool' || q.answer).map(question),
         prs: (lead ? everyPr(lead) : (record?.prs ?? [])).map(pr).sort(),
         lost: [
           ...(where?.artifacts ?? []).flatMap((a) => [`${a.id}.html`, ...(a.image ? [`${a.id}.jpg`] : [])]),
@@ -180,6 +181,16 @@ const goal = (only?: RegExp): Subject<Kept> => ({
         show('flow'),
         show('plan'),
         { name: 'the lead asks', run: () => tool((t) => t.ask({ question: 'Which layout?', options: [{ label: 'Grid', html: '<p>grid</p>' }, { label: 'List', html: '<p>list</p>' }] })) },
+        // with Claude Code's own question: the turn waits on the answer, which this description never gives, so the
+        // question is up until the turn ends or Focus restarts, and then it comes down
+        {
+          name: 'the lead asks with Claude Code',
+          run: () => {
+            if (busy) throw new Error('the lead is using another tool');
+            const options = [{ label: 'Grid', description: 'Rows', preview: '<p>grid</p>' }, { label: 'List', description: 'Lines' }];
+            void turn().hooks.question({ questions: [{ question: 'Grid or list?', header: '', multiSelect: false, options }] }, new AbortController().signal);
+          },
+        },
         {
           name: 'the lead leaves work uncommitted',
           run: () => {

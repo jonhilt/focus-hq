@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy, TermLine } from '../../shared/types';
 import type { BrowserPool } from './browserTool';
-import { allowedWithoutAsking, answerEnds, ClaudeRunner, claudeConfig, DECLINED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
+import { allowedWithoutAsking, answerEnds, ClaudeRunner, claudeConfig, DECLINED, UNANSWERED, endedOutcome, failedOutcome, holdsInput, Listening, permissionAsk, permissionOptions, runningInBackground, showsHeard, toolPermission, withResult, type SoFar } from './claudeRunner';
 import { CLOUD_UNAVAILABLE } from './cloud';
 import { WorkflowPermits } from './workflows';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN, type ProbeEvent, type RunHooks, type WorkflowEvent } from './types';
@@ -336,8 +336,23 @@ describe('toolPermission', () => {
       waits.push(ms);
       return Promise.resolve();
     };
-    return { asked, waits, permits, session, canUseTool: toolPermission(() => session.mode, permits, ask, wait) };
+    const questioned: unknown[] = [];
+    const question = (q: unknown) => (questioned.push(q), Promise.resolve(answer ? { 'Grid or list?': 'Grid' } : undefined));
+    return { asked, waits, permits, session, questioned, canUseTool: toolPermission(() => session.mode, permits, ask, question, wait) };
   };
+
+  it('hands a question for the user to the question hook, whatever the mode, and their answers back to Claude Code', async () => {
+    const q = { questions: [{ question: 'Grid or list?', header: 'Layout', multiSelect: false, options: [{ label: 'Grid', description: 'Rows' }, { label: 'List', description: 'Lines' }] }] };
+    for (const mode of ['ask', 'full'] as const) {
+      const { asked, questioned, session, canUseTool } = setup(true);
+      session.mode = mode;
+      expect(await canUseTool('AskUserQuestion', q, call())).toEqual({ behavior: 'allow', updatedInput: { ...q, answers: { 'Grid or list?': 'Grid' } } });
+      expect(questioned).toEqual([q]);
+      expect(asked).toEqual([]);
+    }
+    expect(await setup(false).canUseTool('AskUserQuestion', q, call())).toEqual({ behavior: 'deny', message: UNANSWERED });
+    expect(await setup(true).canUseTool('AskUserQuestion', { questions: [{ question: 'Hm?' }] }, call())).toMatchObject({ behavior: 'deny' });
+  });
 
   it("lets through what the session's mode allows, without asking", async () => {
     const { asked, canUseTool } = setup(false);

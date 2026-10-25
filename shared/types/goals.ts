@@ -268,6 +268,11 @@ export interface GoalQuestion {
   at: number;
   /** The open decision it asks the captain to make (`shared/decisions.ts`): their pick decides it. */
   decision?: string;
+  /**
+   * How it was asked: with Ops' ask tool (missing), whose pick reaches the lead as a message; or with Claude Code's own
+   * AskUserQuestion ('question-tool'), whose turn waits on the answer, and which comes down if that turn ends first.
+   */
+  via?: 'question-tool';
   /** How the captain answered: the `option` they picked on screen (with what they added), or no `option` when they replied in chat (`note` is what they said). */
   answer?: { option?: string; note?: string; at: number };
 }

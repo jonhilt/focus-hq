@@ -9,6 +9,7 @@ import type { CommandRun } from './qaProof';
 import type { PackageFacts } from '../packageManager';
 import type { BackgroundEvent } from './backgroundTasks';
 import type { RecapInput } from './recap';
+import type { Answers, AskedQuestion } from './questions';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -83,6 +84,8 @@ export interface RunHooks {
   taskTool?(name: string, input: Record<string, unknown>, result: unknown, resultText: string): void;
   /** The agent raises its hand. Resolves true when the manager approves. */
   permission(tool: string, summary: string, signal: AbortSignal): Promise<boolean>;
+  /** A goal's lead asks the user with Claude Code's AskUserQuestion. Resolves with their answers, or undefined when there won't be any (the turn's over). */
+  question(input: { questions: AskedQuestion[] }, signal: AbortSignal): Promise<Answers | undefined>;
 }
 
 export interface RunRequest {

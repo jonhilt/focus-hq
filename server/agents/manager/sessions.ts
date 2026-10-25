@@ -196,6 +196,7 @@ export class AgentSessions extends Part {
         this.store.journal(agent.id, { kind: 'signed-in', turn, onKey });
         this.update(agent, { onKey });
       },
+      question: (input, signal) => this.core.goalTools.askFromTool(agent, input, signal),
       permission: (tool, summary, signal) =>
         new Promise<boolean>((resolve) => {
           const req: PermissionRequest = { id: newId('ask'), tool, summary: truncate(summary, 300), at: Date.now() };

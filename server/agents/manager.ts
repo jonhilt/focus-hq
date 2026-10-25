@@ -113,12 +113,13 @@ export class AgentManager {
   }
 
   /**
-   * After a restart: each QA review, each goal that was closing, then each agent's run picks up from its journal
-   * (`Reviews.recover`, `Leads.recoverCloses`, `AgentSessions.recover`).
+   * After a restart: each QA review, each goal that was closing, each question a turn was waiting on, then each agent's
+   * run picks up from its journal (`Reviews.recover`, `Leads.recoverCloses`, `GoalTools.recover`, `AgentSessions.recover`).
    */
   recover(): void {
     const rooms = this.core.reviews.recover(keyFallback.onKey());
     const closing = this.core.leads.recoverCloses(keyFallback.onKey());
+    this.core.goalTools.recover();
     this.core.sessions.recover(keyFallback.onKey(), new Set(closing));
     for (const room of rooms) this.core.reviews.nextReview(room);
   }

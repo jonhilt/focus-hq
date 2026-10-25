@@ -124,7 +124,7 @@ describe('the session’s stand-in, beyond the recorded streams', () => {
 
 const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: true, leadEffort: 'high', leadCompactAt: 200_000 };
 const request: RunRequest = { agentId: 'lead_contract', agentName: 'Lt. Lead', cwd: process.cwd(), prompt: 'the brief', systemAppend: '', settings, autonomy: 'ask' };
-const hooks = (): RunHooks => ({ lines: () => undefined, activity: () => undefined, browser: () => undefined, screenshot: () => undefined, session: () => undefined, cost: () => undefined, permission: () => Promise.resolve(true) });
+const hooks = (): RunHooks => ({ lines: () => undefined, activity: () => undefined, browser: () => undefined, screenshot: () => undefined, session: () => undefined, cost: () => undefined, permission: () => Promise.resolve(true), question: () => Promise.resolve(undefined) });
 
 /**
  * `ClaudeRunner` hearing what Claude Code said in a real session, beat by beat (Ops' own moves left to the

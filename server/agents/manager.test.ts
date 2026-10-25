@@ -67,6 +67,88 @@ function auditor(agents: AgentManager) {
 }
 
 describe('AgentManager', () => {
+  it('puts a question the lead asks with AskUserQuestion on their station, and hands the captain’s pick back into the same turn', async () => {
+    const { agents, claude, store, project } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const asked = claude.turns[0].hooks.question({
+      questions: [{
+        question: 'Grid or list for saved items?',
+        header: 'Layout',
+        multiSelect: false,
+        options: [{ label: 'Grid', description: 'Cards in rows, with pictures', preview: '<p>grid</p>' }, { label: 'List', description: 'One per line, denser' }],
+      }],
+    }, new AbortController().signal);
+    await until(() => !!openQuestion(store.agent(lead.id)));
+    const question = openQuestion(store.agent(lead.id))!;
+    expect(question).toMatchObject({ question: 'Grid or list for saved items?', options: [{ id: 'a', label: 'Grid', detail: 'Cards in rows, with pictures' }, { id: 'b', label: 'List', detail: 'One per line, denser' }] });
+    // each option a page on the station's screen: its preview, or what it says
+    expect(await store.readArtifact(lead.id, `${question.id}.a.html`)).toEqual(Buffer.from('<p>grid</p>'));
+    expect((await store.readArtifact(lead.id, `${question.id}.b.html`))?.toString()).toContain('One per line, denser');
+
+    agents.answer(lead.id, question.id, 'a');
+    expect(await asked).toEqual({ 'Grid or list for saved items?': 'Grid' });
+    expect(openQuestion(store.agent(lead.id))).toBeUndefined();
+    // the same turn carries on with it: nothing sent to the lead, no new turn
+    expect(claude.turns).toHaveLength(1);
+    expect(claude.turns[0].sent).toEqual([]);
+  });
+
+  /** A goal's lead asking with AskUserQuestion, mid-turn: `ask` puts the questions to the captain. */
+  async function asking() {
+    const o = focus();
+    const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => o.claude.turns.length === 1);
+    const option = (label: string) => ({ label, description: `${label}, as it sounds` });
+    const ask = (questions: string[], abort = new AbortController()) => ({
+      answers: o.claude.turns[0].hooks.question({ questions: questions.map((question) => ({ question, header: '', multiSelect: false, options: [option('Grid'), option('List')] })) }, abort.signal),
+      abort,
+    });
+    const open = () => openQuestion(o.store.agent(lead.id));
+    return { ...o, lead: lead.id, ask, open };
+  }
+
+  it('takes what the captain writes to a lead waiting on their question as its answer, into the same turn', async () => {
+    const o = await asking();
+    const { answers } = o.ask(['Grid or list?']);
+    await until(() => !!o.open());
+    o.agents.message(o.lead, 'A list, but compact');
+    expect(await answers).toEqual({ 'Grid or list?': 'A list, but compact' });
+    expect(o.open()).toBeUndefined();
+    expect(o.claude.turns).toHaveLength(1);
+    expect(o.claude.turns[0].sent).toEqual([]);
+  });
+
+  it('puts several questions to the captain one after another, and hands back every answer together', async () => {
+    const o = await asking();
+    const { answers } = o.ask(['Grid or list?', 'Newest first?']);
+    await until(() => o.open()?.question === 'Grid or list?');
+    o.agents.answer(o.lead, o.open()!.id, 'a');
+    await until(() => o.open()?.question === 'Newest first?');
+    o.agents.answer(o.lead, o.open()!.id, 'b');
+    expect(await answers).toEqual({ 'Grid or list?': 'Grid', 'Newest first?': 'List' });
+  });
+
+  it('takes a question down when the turn that asked it ends unanswered, and after a restart', async () => {
+    const o = await asking();
+    const { answers, abort } = o.ask(['Grid or list?']);
+    await until(() => !!o.open());
+    const id = o.open()!.id;
+    abort.abort();
+    expect(await answers).toBeUndefined();
+    expect(o.open()).toBeUndefined();
+    expect(o.store.agent(o.lead).lead!.questions ?? []).toEqual([]);
+    expect(await o.store.readArtifact(o.lead, `${id}.a.html`)).toBeUndefined();
+
+    // Focus went down with one up: nothing waits on it as Focus starts again
+    o.ask(['Newest first?']);
+    await until(() => !!o.open());
+    o.agents.shutDown();
+    const after = restarted(o.store);
+    after.agents.recover();
+    expect(openQuestion(o.store.agent(o.lead))).toBeUndefined();
+  });
+
   it('runs a goal’s lead one turn at a time, however often Ops schedules', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

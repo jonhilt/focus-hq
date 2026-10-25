@@ -10,6 +10,7 @@ import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { opsMcpServer } from './opsTool';
 import { openScratch } from './scratch';
+import { askedQuestions } from './questions';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { sessionEnv } from './wait';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
@@ -214,6 +215,9 @@ function summarizeInput(toolName: string, input: Record<string, unknown>): strin
 /** What an agent hears when the captain declines its tool call. */
 export const DECLINED = 'The manager declined this action. Find another approach, or explain in your final summary why it is needed.';
 
+/** What a lead hears when their question went unanswered (their turn ended, or they were stopped). */
+export const UNANSWERED = 'The captain didn’t answer before your turn ended, so your question has come down from your station’s screen: ask again if it still matters.';
+
 /** How long a helper's request waits for a workflow's progress to name it: 10 looks, 200 ms apart. */
 const PERMIT_LOOKS = 10;
 const PERMIT_WAIT_MS = 200;
@@ -227,9 +231,16 @@ export function toolPermission(
   autonomy: () => Autonomy,
   permits: WorkflowPermits,
   ask: RunHooks['permission'],
+  question: RunHooks['question'],
   wait: (ms: number) => Promise<unknown> = sleep,
 ): (...args: Parameters<CanUseTool>) => Promise<PermissionResult> {
   return async (toolName, toolInput, { signal, title, agentID, toolUseID }) => {
+    // Claude Code's question for the user isn't an approval: whatever the mode, it waits for their answers
+    if (toolName === 'AskUserQuestion') {
+      const questions = askedQuestions(toolInput);
+      const answers = questions && (await question({ questions }, signal));
+      return answers ? { behavior: 'allow', updatedInput: { ...toolInput, answers } } : { behavior: 'deny', message: questions ? UNANSWERED : 'Ops couldn’t read the questions: ask again with 1–4 questions of 2–4 options each.' };
+    }
     if (allowedWithoutAsking(autonomy(), toolName)) return { behavior: 'allow', updatedInput: toolInput };
     for (let i = 0; i < PERMIT_LOOKS && permits.mightApprove(agentID); i++) await wait(PERMIT_WAIT_MS);
     if (permits.approves(agentID)) return { behavior: 'allow', updatedInput: toolInput };
@@ -353,7 +364,7 @@ export class ClaudeRunner implements AgentRunner {
     // a cloud agent has to push its own branch, and only that one
     const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
     const permits = new WorkflowPermits();
-    const canUseTool = toolPermission(() => autonomy, permits, (tool, summary, signal) => hooks.permission(tool, summary, signal));
+    const canUseTool = toolPermission(() => autonomy, permits, (tool, summary, signal) => hooks.permission(tool, summary, signal), (input, signal) => hooks.question(input, signal));
 
     // a cloud session runs on your plan in the cloud, whatever this machine signs in with
     const onKey = !cloud && keyFallback.onKey();
@@ -375,7 +386,10 @@ export class ClaudeRunner implements AgentRunner {
       model: req.model || req.settings.model || undefined,
       effort: req.effort,
       ...claudeConfig(req.settings.userClaudeMd, process.env.CLAUDE_CONFIG_DIR ?? join(homedir(), '.claude')),
-      disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
+      // a goal's lead (the one with Ops' tools) asks the user with Claude Code's own questions, drawn on their station's
+      // screen, each option's preview a page; everyone else works on their own
+      disallowedTools: req.tools ? ['EnterPlanMode'] : ['AskUserQuestion', 'EnterPlanMode'],
+      ...(req.tools && { toolConfig: { askUserQuestion: { previewFormat: 'html' } } }),
       ...(cloud
         ? // the cloud VM has its own browser; ours runs on this machine. `--cloud <id>` reattaches to the session.
           { systemPrompt: { type: 'preset', preset: 'claude_code' }, extraArgs: { cloud: req.resumeSessionId ?? null } }

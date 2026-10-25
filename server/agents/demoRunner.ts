@@ -518,6 +518,19 @@ export class DemoRunner implements AgentRunner {
         }
         return { ok: true, summary: 'Heard back from QA.' };
       }
+      // asked to ask: Claude Code's own question, on the station's screen, its answer back in this turn
+      if (/\bask me\b/i.test(req.prompt)) {
+        const question = 'Grid or list for saved items?';
+        const page = (label: string, cells: string) => `<!doctype html><style>body{font:28px system-ui;margin:48px}div{display:grid;gap:16px;${cells}}span{background:#dde;border-radius:12px;padding:32px}</style><h1>${label}</h1><div>${'<span>Saved item</span>'.repeat(6)}</div>`;
+        hooks.lines([{ kind: 'tool', text: `⏺ AskUserQuestion(${question})` }]);
+        const answers = await hooks.question({ questions: [{ question, header: 'Layout', multiSelect: false, options: [
+          { label: 'Grid', description: 'Cards in rows, with a picture each', preview: page('Grid', 'grid-template-columns:repeat(3,1fr)') },
+          { label: 'List', description: 'One per line, denser', preview: page('List', 'grid-template-columns:1fr') },
+        ] }] }, abort.signal);
+        hooks.lines([{ kind: 'output', text: `  ⎿  ${answers ? `${question} → ${answers[question]}` : 'No answer'}` }]);
+        await say(answers ? `${answers[question]} it is. I'll build that next.` : 'No answer yet: the question is still on the screen.');
+        return { ok: true, summary: 'Asked the captain a question.' };
+      }
       // asked to mark their side fix ready: it goes to QA as the board next sees it
       const sideFix = this.leads.get(sessionId)?.sideFix;
       if (sideFix && demoReady && /\bready\b/i.test(req.prompt)) {

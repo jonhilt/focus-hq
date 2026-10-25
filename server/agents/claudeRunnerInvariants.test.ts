@@ -96,6 +96,7 @@ const sessionOf = (only?: RegExp, except?: RegExp, asked = false): Subject<Said>
         session: () => undefined,
         cost: () => undefined,
         permission: () => Promise.resolve(true),
+        question: () => Promise.resolve(undefined),
         background: (e) => {
           if (e.kind === 'started') told.set(e.id, 'local_bash');
           if (e.kind === 'ended') told.delete(e.id);

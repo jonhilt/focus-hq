@@ -4,6 +4,7 @@ import { answerMessage, openQuestion } from '../../../shared/artifacts';
 import { askProblem, type RaiseInput, raiseDecision, settleDecision } from '../../../shared/decisions';
 import { answerInChat, answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact, type NoteInput, notedGoal, pageErrorsNote } from '../lead';
 import { type Frame, type Frames, type Picture, Renderer } from '../services';
+import { type Answers, type AskedQuestion, optionPage } from '../questions';
 import { Part, Refused } from './core';
 
 /** The lead's `office` MCP tools besides ship: the goal's note, show, ask (and the captain's answer) and propose_close. */
@@ -112,6 +113,66 @@ export class GoalTools extends Part {
   }
 
   /**
+   * A lead's questions asked with Claude Code's AskUserQuestion: each goes on their station's screen in turn, as one asked
+   * with the ask tool (an option's preview its page, or else what it says), and the captain's pick, or what they write
+   * meanwhile, comes back as the tool's result, into the same turn (`answer`, `captainMessage`). Undefined when the turn
+   * ends first: the question comes down (`withdraw`).
+   */
+  async askFromTool(agent: Agent, input: { questions: AskedQuestion[] }, signal: AbortSignal): Promise<Answers | undefined> {
+    const answers: Answers = {};
+    for (const q of input.questions) {
+      const options = q.options.map((o) => ({ label: o.label, detail: o.description, html: o.preview ?? optionPage(o) }));
+      const shown = await this.runtime.runPromise(this.askCaptain(agent, { question: q.question, ...(q.header && { context: q.header }), options }).pipe(Effect.as(true), Effect.orElseSucceed(() => false)));
+      const asked = shown ? openQuestion(this.store.agents.get(agent.id)) : undefined;
+      if (!asked) return undefined;
+      // the turn waits on this one: it comes down if the turn ends first
+      const work = this.store.agent(agent.id).lead;
+      if (work) this.update(agent, { lead: { ...work, questions: (work.questions ?? []).map((x) => (x.id === asked.id ? { ...x, via: 'question-tool' as const } : x)) } });
+      if (signal.aborted) {
+        this.withdraw(agent.id, asked.id);
+        return undefined;
+      }
+      const answer = await this.answerOf(agent, asked.id, q.question, signal);
+      if (answer === undefined) return undefined;
+      answers[q.question] = answer;
+    }
+    return answers;
+  }
+
+  /** Takes a question asked with Claude Code's question tool down, pages and all, now nothing waits on its answer. */
+  private withdraw(leadId: string, questionId: string): void {
+    const agent = this.store.agents.get(leadId);
+    const work = agent?.lead;
+    const question = work?.questions?.find((q) => q.id === questionId && !q.answer);
+    if (!agent || !work || !question) return;
+    for (const o of question.options) for (const ext of ['html', 'jpg']) this.store.deleteArtifact(leadId, `${question.id}.${o.id}.${ext}`);
+    this.update(agent, { lead: { ...work, questions: (work.questions ?? []).filter((q) => q.id !== questionId) } });
+    this.print(agent, [{ kind: 'system', text: `✻ Took down “${question.question}”: the turn that asked it ended unanswered` }]);
+  }
+
+  /** After a restart: nothing waits on a question asked with Claude Code's question tool any more, so each comes down. */
+  recover(): void {
+    for (const agent of this.store.agents.values()) {
+      for (const q of agent.lead?.questions ?? []) if (q.via === 'question-tool' && !q.answer) this.withdraw(agent.id, q.id);
+    }
+  }
+
+  /** The captain's answer to the lead's open question `questionId`, as their session waits on it; undefined if the turn ends first. */
+  private answerOf(agent: Agent, questionId: string, question: string, signal: AbortSignal): Promise<string | undefined> {
+    const rt = this.rt(agent.id);
+    return new Promise((resolve) => {
+      rt.asking = { questionId, resolve };
+      this.update(agent, { activity: `Asking you: ${question.slice(0, 60)}` });
+      signal.addEventListener('abort', () => {
+        if (rt.asking?.questionId !== questionId) return;
+        rt.asking = undefined;
+        this.withdraw(agent.id, questionId);
+        resolve(undefined);
+      });
+    });
+  }
+
+  /**
    * The captain picks an option of the lead's open question: it's marked answered, and the lead hears which. Unless
    * hearing it would cost enough on your API key to ask the captain first (`how` is their answer): then nothing changes.
    */
@@ -121,6 +182,16 @@ export class GoalTools extends Part {
     if (!work) throw new Error(`${agent.name} isn’t leading a goal`);
     const answered = answerQuestion(work.questions ?? [], questionId, option, note, Date.now());
     if ('error' in answered) throw new Error(answered.error);
+    // their session waits on it (they asked with Claude Code's question tool): the answer goes back into that turn
+    const rt = this.rt(id);
+    if (rt.asking?.questionId === questionId) {
+      const { resolve } = rt.asking;
+      rt.asking = undefined;
+      this.update(agent, { activity: 'Reading your answer', lead: { ...work, questions: answered.questions } });
+      if (answered.question.decision) this.decide(agent, answered.question.decision, answered.question.options.find((o) => o.id === option)?.label ?? option, note);
+      resolve([answered.question.options.find((o) => o.id === option)?.label ?? option, note?.trim()].filter(Boolean).join(': '));
+      return agent;
+    }
     const reply = this.core.comms.message(id, answerMessage(answered.question, option, note), undefined, how);
     if ('costly' in reply) return reply;
     // read again: sending it may have changed the goal (a proposal to close dropped)
@@ -158,6 +229,16 @@ export class GoalTools extends Part {
    * replied in words instead of picking an option). Not the message `answer` sends, which records the pick itself.
    */
   captainMessage(id: string, text: string, how?: ResumeHow): MessageReply {
+    // the lead's turn waits on their question: what the captain writes is its answer, in their words
+    const rt = this.rt(id);
+    const waiting = rt.asking;
+    const asked = this.store.agent(id).lead;
+    if (waiting && asked && text.trim()) {
+      rt.asking = undefined;
+      this.update(this.store.agent(id), { activity: 'Reading your answer', lead: { ...asked, questions: answerInChat(asked.questions ?? [], text, Date.now()) } });
+      waiting.resolve(text.trim());
+      return { sent: true };
+    }
     const reply = this.core.comms.message(id, text, undefined, how);
     if ('costly' in reply) return reply;
     const agent = this.store.agent(id);

@@ -70,6 +70,8 @@ export interface Runtime {
   /** The manager's notes folded into the task when it was handed out, kept in case it has to be told again. */
   notes: string[];
   permission?: { req: PermissionRequest; resolve: (ok: boolean) => void; resume: AgentStatus };
+  /** The lead's question (by its id) their session waits on the answer to, asked with Claude Code's AskUserQuestion. */
+  asking?: { questionId: string; resolve: (answer: string | undefined) => void };
   nudged: boolean;
   busy: boolean;
   /** A goal's lead's QA fail, noted mid-turn: the note, and the captain's toast if the turn ends with it unheard. */
