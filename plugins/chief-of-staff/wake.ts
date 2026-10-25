@@ -19,10 +19,10 @@ export function wakeFor(note: Pick<LeadNote, 'about' | 'inTurn'>, project: { aut
       if (about.verdict !== 'fail' || about.behind || !autoSendBackFor(project) || about.failedRounds > LEAD_FIX_ROUNDS) return undefined;
       return `Fix ${about.repo}#${about.number} and ship again (QA's verdict is just above), or tell the captain why not.`;
     case 'slice-landed':
-      // mid-turn, their commits come along: a lead that stops to make the move happen leaves the goal waiting on the captain
+      // a lead that stops after each landing leaves the goal waiting on the captain: what's agreed carries it on
       return note.inTurn
-        ? `Slice ${about.slice} has landed: carry on where you are. Your repos move to fresh code at the start of your next turn, bringing your commits along.`
-        : `Slice ${about.slice} has landed: carry on with what's next, unless it's the captain's call.`;
+        ? `Slice ${about.slice} has landed: carry on where you are.`
+        : `Slice ${about.slice} has landed: carry on with what's next if it's within what the captain has agreed; if it isn't, say what you'd do and stop for them.`;
     case 'other':
       return undefined;
   }

@@ -215,7 +215,7 @@ describe('the chief of staff', () => {
       const o = await shipped();
       for (const pr of o.lead().lead!.prs) o.agents.prClosed(pr.repo, pr.number, true);
       await until(() => o.claude.turns.length === 2);
-      expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\n\[Ops\] Slice 1 has landed: carry on with what's next, unless it's the captain's call\.$/s);
+      expect(o.claude.turns[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\n\[Ops\] Slice 1 has landed: carry on with what's next if it's within what the captain has agreed; if it isn't, say what you'd do and stop for them\.$/s);
     });
 
     it('leaves a landing for the captain in a project it’s off for', async () => {
@@ -278,7 +278,7 @@ describe('the chief of staff', () => {
       expect(o.claude.turns).toHaveLength(1);
       answer();
       await until(() => o.claude.turns.length === 2);
-      expect(o.claude.turns[1].req.prompt).toMatch(/Slice 1 has landed: carry on with what's next, unless it's the captain's call\.$/);
+      expect(o.claude.turns[1].req.prompt).toMatch(/Slice 1 has landed: carry on with what's next if it's within what the captain has agreed; if it isn't, say what you'd do and stop for them\.$/);
     });
 
     it('drops the news it waited with once a verdict makes the turn the captain’s', async () => {
