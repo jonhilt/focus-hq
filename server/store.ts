@@ -14,8 +14,7 @@ import { fitDesks } from './agents/desks';
 import { upgradeLead } from './agents/lead';
 import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type ReviewState, reviewView } from './agents/reviewJournal';
 import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
-import { EMPTY_SLICE, evolveSlice, type SliceFact, type SliceState } from './agents/sliceJournal';
-import { Journals, type Stamped } from './journals';
+import { Journals } from './journals';
 import { EMPTY_PERSONAL_LOG, evolvePersonalLog, type PersonalFact, type PersonalLog } from '../shared/personalLog';
 import { machinePath, machineRuns } from './agents/machines';
 import type { MachineRun, MachineStep } from '../shared/machines';
@@ -112,8 +111,6 @@ export class Store {
   private runs: Journals<RunFact, RunState>;
   /** Each pull request's review journal, by prKey (data/runs/reviews/<pr>.jsonl, `reviewJournal`). */
   private reviewJournals: Journals<ReviewFact, ReviewState>;
-  /** Each goal's slice journal, by its lead's id (data/runs/slices/<lead>.jsonl, `sliceJournal`). */
-  private slices: Journals<SliceFact, SliceState>;
   /** The captain's personal log, one journal (data/personal-log.jsonl, `shared/personalLog`). */
   private personal: Journals<PersonalFact, PersonalLog>;
 
@@ -121,7 +118,6 @@ export class Store {
     const asIs = (id: string) => id;
     this.runs = new Journals(persist, { dir: paths.runs, name: asIs, key: asIs }, EMPTY_RUN, evolve, JOURNAL_MEMORY);
     this.reviewJournals = new Journals(persist, { dir: path.join(paths.runs, 'reviews'), name: fileKey, key: prKeyOf }, EMPTY_REVIEW, evolveReview, JOURNAL_MEMORY);
-    this.slices = new Journals(persist, { dir: path.join(paths.runs, 'slices'), name: asIs, key: asIs }, EMPTY_SLICE, evolveSlice, JOURNAL_MEMORY);
     const personal = path.basename(paths.personalLog, '.jsonl');
     this.personal = new Journals<PersonalFact, PersonalLog>(persist, { dir: path.dirname(paths.personalLog), name: () => personal, key: () => PERSONAL }, EMPTY_PERSONAL_LOG, evolvePersonalLog, JOURNAL_MEMORY);
   }
@@ -134,7 +130,6 @@ export class Store {
     if (!this.persist) return;
     fs.mkdirSync(paths.logs, { recursive: true });
     fs.mkdirSync(path.join(paths.runs, 'reviews'), { recursive: true });
-    fs.mkdirSync(path.join(paths.runs, 'slices'), { recursive: true });
     const holder = takeLock(`${paths.state}.lock`);
     if (holder) throw new StateLockedError(holder, config.dataDir);
     // what changed in the last moments before exiting is saved too, before the lock goes
@@ -374,7 +369,7 @@ export class Store {
 
   /** A run's path through machine `machine` (`key` an agent's id, or a pull request's key), from its journal: none for a machine it isn't. */
   machinePath(machine: string, key: string): MachineStep[] {
-    return machinePath(machine, key, { runs: this.runs, slices: this.slices, reviews: this.reviewJournals });
+    return machinePath(machine, key, { runs: this.runs, reviews: this.reviewJournals });
   }
 
   /** Where every run of each of Ops' machines is now (`machineRuns`). */
@@ -382,7 +377,6 @@ export class Store {
     return machineRuns({
       agents: [...this.agents.values()],
       projects: this.projects,
-      slice: (leadId) => this.slices.state(leadId),
       reviews: [...this.reviews.keys()].map((key) => ({ key, ...this.reviewJournals.state(key) })),
     });
   }
@@ -430,25 +424,6 @@ export class Store {
     return this.reviewJournals.entries(key);
   }
 
-  // ---- slice journals ----
-
-  /** Records a fact in a goal's slice journal (`id` its lead's), flushed before this returns, and what its slices add up to with it. */
-  sliceJournal(id: string, fact: SliceFact): SliceState {
-    const after = this.slices.append(id, fact);
-    this.stepped?.('slice', id);
-    return after;
-  }
-
-  /** What a goal's slice journal adds up to. */
-  slice(id: string): SliceState {
-    return this.slices.state(id);
-  }
-
-  /** A goal's slice journal, oldest first. */
-  sliceEntries(id: string): Stamped<SliceFact>[] {
-    return this.slices.entries(id);
-  }
-
   // ---- the captain's personal log ----
 
   /** Records a fact in the captain's personal log, flushed before this returns, and what the log adds up to with it. */
@@ -468,7 +443,6 @@ export class Store {
     return {
       runs: this.runs.written(since).map((key) => ({ key, entries: this.runs.entries(key) })),
       reviews: this.reviewJournals.written(since).map((key) => ({ key, entries: this.reviewJournals.entries(key) })),
-      slices: this.slices.written(since).map((key) => ({ key, entries: this.slices.entries(key) })),
     };
   }
 

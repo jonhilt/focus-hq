@@ -28,13 +28,13 @@ export interface MachineGraph {
   title: string;
   /** What it decides, in a sentence. */
   about: string;
-  /** What one run of it is: an agent's run, a goal's slices, a pull request's review. */
+  /** What one run of it is: an agent's run, a pull request's review. */
   runs: string;
   states: MachineState[];
   transitions: MachineTransition[];
 }
 
-/** A run of a machine and where it is now: an agent's run, a goal's slices, a pull request's review. */
+/** A run of a machine and where it is now: an agent's run, a pull request's review. */
 export interface MachineRun {
   machine: string;
   /** Which run, within its machine: an agent's id, a pull request's key. */

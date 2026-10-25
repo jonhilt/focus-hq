@@ -14,8 +14,6 @@ import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
 import type { ReviewEntry } from '../agents/reviewJournal';
 import type { JournalEntry } from '../agents/runJournal';
-import type { SliceFact } from '../agents/sliceJournal';
-import type { Stamped } from '../journals';
 
 export interface FocusPlugin {
   /** Its name in FOCUS_PLUGINS: also its state's key in state.json, and its routes' prefix (`/api/plugins/<id>`). */
@@ -275,7 +273,7 @@ export interface PluginHost {
   ledger(): Readonly<LedgerEvent>[];
   /**
    * Ops' state machines (`server/agents/machines.ts`), each as data to draw it from, in the order they're shown,
-   * and where every run of each is now: each agent's run and what followed their last turn, each goal's slices, each
+   * and where every run of each is now: each agent's run and what followed their last turn, and each
    * review on the boards.
    */
   machines(): { graphs: readonly Readonly<MachineGraph>[]; runs: readonly Readonly<MachineRun>[] };
@@ -287,7 +285,7 @@ export interface PluginHost {
   machinePath(machine: string, key: string): readonly Readonly<MachineStep>[];
   /**
    * Ops' journals written to since `since` (by their files' times), each with every fact it holds, oldest
-   * first: each agent's run journal, each pull request's review journal and each goal's slice journal.
+   * first: each agent's run journal and each pull request's review journal.
    */
   journals(since: number): LentJournals;
   /**
@@ -427,14 +425,12 @@ export interface LentJournal<E> {
   entries: readonly Readonly<E>[];
 }
 
-/** Ops' journals (`host.journals`): how each run, review and goal went, fact by fact. */
+/** Ops' journals (`host.journals`): how each run and review went, fact by fact. */
 export interface LentJournals {
   /** Each agent's run journal, by agent id. */
   runs: LentJournal<JournalEntry>[];
   /** Each pull request's review journal, by its key (`owner/repo#12`). */
   reviews: LentJournal<ReviewEntry>[];
-  /** Each goal's slice journal, by its lead's id. */
-  slices: LentJournal<Stamped<SliceFact>>[];
 }
 
 export interface PluginState<S> {

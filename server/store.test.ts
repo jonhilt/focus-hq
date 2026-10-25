@@ -83,11 +83,9 @@ describe('Store on disk', () => {
     store.load();
     store.journal('a1', { kind: 'waiting' });
     store.reviewJournal('acme/shop-app#12', { kind: 'requested', projectId: 'p1', repo: 'acme/shop-app', number: 12, title: 'PR' });
-    store.sliceJournal('lead1', { kind: 'started', slice: 1, branch: 'b' });
     const journals = store.journalsSince(Date.now() - 60_000);
     expect(journals.runs.map((s) => s.key)).toContain('a1');
     expect(journals.reviews.map((s) => s.key)).toContain('acme/shop-app#12');
-    expect(journals.slices.find((s) => s.key === 'lead1')?.entries).toHaveLength(1);
     expect(store.journalsSince(Date.now() + 60_000).runs).toEqual([]);
     expect(prKeyOf(fileKey('my-org/some-repo-2#7'))).toBe('my-org/some-repo-2#7');
   });
@@ -324,11 +322,8 @@ describe('a run’s path through its machine', () => {
     store.journal('a1', { kind: 'turn-requested', turn: 't1', turnKind: 'work', prompt: 'Go' });
     store.journal('a1', { kind: 'turn-started', turn: 't1', session: 's1' });
     store.journal('a1', { kind: 'decided', turn: 't1', target: 'deliver' });
-    store.sliceJournal('l1', { kind: 'started', slice: 1, branch: 'focus/x' });
-    store.sliceJournal('l1', { kind: 'shipping', title: 'x', summary: 'y' });
     expect(store.machinePath('run', 'a1').map((s) => s.state)).toEqual(['idle', 'waiting', 'turn.requested', 'turn.started']);
     expect(store.machinePath('turn', 'a1').map((s) => s.state)).toEqual(['deliver']);
-    expect(store.machinePath('slice', 'l1').map((s) => s.state)).toEqual(['working', 'shipping']);
     expect(store.machinePath('review', 'acme/web#1').map((s) => s.state)).toEqual(['idle']);
     expect(store.machinePath('nonsense', 'a1')).toEqual([]);
   });

@@ -42,38 +42,6 @@ A pull request of the goal's can carry a **system recap**, which the lead puts o
 - **Its map's arrows are checked against the code.** An arrow between two primitives is solid when a file of one imports a file of the other, either way round, and dashed when Ops found no import, with a key saying so (`recapImports.ts`). Dashed isn't refused: the browser calling the server over HTTP is a true arrow with no import behind it. Only JavaScript and TypeScript's relative imports are read, up to a few hundred files a primitive.
 - The lead names the primitives itself, the same from one pull request to the next, and picks the pull request's [lane](merging.md#lanes-how-a-goals-leads-slice-merges), which the recap shows: never lower than its rollup allows. With no recap, a pull request is in Ask.
 
-## The slice journal: what each slice did
+## No slice journal
 
-Each goal keeps a slice journal, `~/.focus/runs/slices/<lead id>.jsonl` (`server/agents/sliceJournal.ts`), like an agent's run journal ([agents](agents.md#the-run-journal-where-a-run-was-and-picking-up-after-a-restart)): numbered facts, each flushed to disk before Ops acts on it (`Store.sliceJournal`), never rewritten. It says `started` (the goal's first slice and its branch) and `landed` as each pull request of the slice merges or closes. Journals from before leads opened their own pull requests also have `shipping`, `pr`, `shipped`, `ship-ended`, `moving` and `moved`: what Ops did when it shipped slices and moved them to fresh code, read as they were. What they add up to is a state machine's (`sliceMachine`, XState), drawn from its code (a test keeps this picture in step):
-
-<!-- slice-machine:start -->
-```mermaid
----
-config:
-  layout: elk
----
-stateDiagram-v2
-  direction LR
-  state "slice" as slice {
-    [*] --> slice_working
-    state "working" as slice_working
-    state "shipping" as slice_shipping
-    state "in-review" as slice_in_review
-    state "landed" as slice_landed
-    state "moving" as slice_moving
-  }
-  slice_working --> slice_shipping : shipping
-  slice_shipping --> slice_landed : shipped | ship-ended [every one landed]
-  slice_shipping --> slice_in_review : shipped
-  slice_shipping --> slice_in_review : ship-ended [pull requests open]
-  slice_shipping --> slice_working : ship-ended
-  slice_in_review --> slice_shipping : shipping
-  slice_in_review --> slice_landed : landed [every one landed]
-  slice_moving --> slice_working : moved
-  slice --> slice_working : started
-  slice --> slice_moving : moving
-  classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
-```
-<!-- slice-machine:end -->
-
-**After a restart** nothing of a slice is left to finish: the lead pushes and opens their own pull requests, and the board's next refresh claims any it hadn't yet (as Focus starts). The journal is kept as the slice's record, which the captain's log reads; its shipping and moving facts are from before leads opened their own pull requests, and a ship one of those left under way is ended, with the lead told to push and open the pull requests themselves.
+A goal's slices have no journal of their own. Once leads opened their own pull requests, nothing of a slice is left for Ops to finish after a restart: the lead pushes and opens them, and the board's next refresh claims any it hadn't yet (as Focus starts). Where the slice is (its number, its pull requests, those landed) is kept with the lead in the store, and what happened to it is in the ledger (`pr`, `pr-ready`, `merged`, `closed`, `goal-closed`), which the captain's log reads. The journal it had (`~/.focus/runs/slices/`) was dropped rather than cut down: it recorded only when the first slice started and each pull request landing, which the ledger already had, and Ops never read it back. Its files from before are left on disk, unread.

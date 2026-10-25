@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { JournalEntry, LedgerEvent, ReviewEntry, RunFact, SliceFact } from '../../plugin-api/server';
+import type { JournalEntry, LedgerEvent, ReviewEntry, RunFact } from '../../plugin-api/server';
 import { demoWorkspace, focus, leadOpensPrs, until } from '../../plugin-api/testing';
 import { captainsLog, type LogSources, logSources } from './log';
 import captainsLogPlugin from './server';
@@ -7,7 +7,7 @@ import type { LogLine } from './shared';
 
 let seq = 0;
 const at = <F>(t: number, fact: F) => ({ v: 1 as const, seq: ++seq, t, ...fact });
-const sources = (s: Partial<LogSources>): LogSources => ({ runs: [], reviews: [], slices: [], ledger: [], nameOf: () => undefined, ...s });
+const sources = (s: Partial<LogSources>): LogSources => ({ runs: [], reviews: [], ledger: [], nameOf: () => undefined, ...s });
 
 describe('the captain’s log', () => {
   it('tells a crew member’s run by what a captain would want to hear, not Ops’ bookkeeping', () => {
@@ -26,23 +26,6 @@ describe('the captain’s log', () => {
     expect(log.map((l) => [l.t, l.kind, l.who])).toEqual([[13, 'asked', 'Ens. Park'], [14, 'answered', 'Ens. Park'], [16, 'held', 'Ens. Park'], [17, 'interrupted', 'Ens. Park'], [18, 'failed', 'Ens. Park']]);
     expect(log[0]).toMatchObject({ source: 'run', tag: 'Hand up', tone: 'warn', text: 'Hand up: approval for npm publish', projectId: 'p', agentId: 'a1' });
     expect(log.at(-1)?.text).toBe('Turn failed: Tests failed');
-  });
-
-  it('tells a goal’s ships and moves with the slice, its title and its pull requests', () => {
-    const entries = [
-      at<SliceFact>(1, { kind: 'started', slice: 1, branch: 'b1' }),
-      at<SliceFact>(2, { kind: 'shipping', title: 'Saved items', summary: 's' }),
-      at<SliceFact>(3, { kind: 'pr', repo: 'o/web', number: 4, url: 'u', sha: 'abc', branch: 'b1' }),
-      at<SliceFact>(4, { kind: 'shipped' }),
-      at<SliceFact>(5, { kind: 'shipping', title: 'Fix', summary: 's' }),
-      at<SliceFact>(6, { kind: 'ship-ended', error: 'Commit first' }),
-      at<SliceFact>(7, { kind: 'landed', repo: 'o/web', number: 4, merged: true }),
-      at<SliceFact>(8, { kind: 'moving', slice: 2, branch: 'b2', from: 'b1', repos: [], carry: [] }),
-      at<SliceFact>(9, { kind: 'moved' }),
-    ];
-    const log = captainsLog(sources({ slices: [{ key: 'lead1', who: 'Lt. Oyelaran', goal: 'Saved items', entries }] }), 0);
-    expect(log.map((l) => l.text)).toEqual(['Took up the goal: slice 1', 'Shipped slice 1: Saved items → web #4', "Couldn't ship “Fix”: Commit first", 'Slice 2 starts on fresh code']);
-    expect(log[1]).toMatchObject({ source: 'slice', kind: 'shipped', tone: 'ok', who: 'Lt. Oyelaran', goal: 'Saved items' });
   });
 
   it('names QA by who’s reviewing, and leaves verdicts and merges to the ledger', () => {
@@ -92,11 +75,10 @@ describe('who and what each journal is about', () => {
     ] as unknown as LedgerEvent[];
     const agents = [{ id: 'lead2', name: 'Lt. Reyes', projectId: 'p', lead: { title: 'Search', prs: [{ repo: 'o/web', number: 4 }] } }] as never;
     const projects = [{ id: 'p', repos: ['o/web'] }] as never;
-    const journals = { runs: [{ key: 'dev1', entries: [] }, { key: 'gone', entries: [] }], reviews: [{ key: 'o/web#4', entries: [] }], slices: [{ key: 'lead1', entries: [] }, { key: 'lead3', entries: [] }] };
+    const journals = { runs: [{ key: 'dev1', entries: [] }, { key: 'gone', entries: [] }, { key: 'lead1', entries: [] }], reviews: [{ key: 'o/web#4', entries: [] }] };
     const s = logSources({ journals, agents, projects, ledger });
-    expect(s.runs.map((r) => r.who)).toEqual(['Ens. Park', 'A crew member who’s gone home']);
+    expect(s.runs.map((r) => [r.who, r.goal])).toEqual([['Ens. Park', undefined], ['A crew member who’s gone home', undefined], ['Lt. Oyelaran', 'Saved items']]);
     expect(s.reviews[0]).toMatchObject({ who: 'QA', projectId: 'p', goal: 'Search' });
-    expect(s.slices.map((r) => [r.who, r.goal])).toEqual([['Lt. Oyelaran', 'Saved items'], ['A lead who’s gone home', undefined]]);
     expect(s.nameOf('lead2')).toBe('Lt. Reyes');
   });
 });

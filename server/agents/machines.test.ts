@@ -45,7 +45,7 @@ describe('machineGraph', () => {
       expect(graph.states.length, graph.id).toBeGreaterThan(3);
       for (const t of graph.transitions) expect([ids.has(t.from), ids.has(t.to)], `${graph.id}: ${t.from} → ${t.to}`).toEqual([true, true]);
     }
-    expect(MACHINES.map((m) => m.id)).toEqual(['run', 'turn', 'slice', 'review']);
+    expect(MACHINES.map((m) => m.id)).toEqual(['run', 'turn', 'review']);
   });
 });
 
@@ -61,7 +61,7 @@ describe('machineRuns', () => {
   const agent = (o: Partial<Agent>): Agent => ({ id: 'a1', name: 'Ensign Ro', projectId: 'p1', ...o }) as Agent;
   const projects = [{ id: 'p1', repos: ['acme/web'] }, { id: 'p2', repos: ['acme/api'] }] as Project[];
 
-  it('puts each agent in its run and what followed their last turn, a lead’s goal in its slices, each review in its review', () => {
+  it('puts each agent in its run and what followed their last turn, each review in its review', () => {
     const runs = machineRuns({
       agents: [
         agent({ run: { phase: 'turn.started', turns: 1, seq: 4 } }),
@@ -69,7 +69,6 @@ describe('machineRuns', () => {
         agent({ id: 'new', name: 'Not started' }),
       ],
       projects,
-      slice: () => ({ phase: 'in-review', seq: 3 }),
       reviews: [{ key: 'acme/api#12', phase: { reported: 'posting' }, seq: 6 }, { key: 'other/repo#1', phase: 'queued', seq: 1 }],
     });
     expect(runs).toEqual([
@@ -78,7 +77,6 @@ describe('machineRuns', () => {
       { machine: 'turn', key: 'a1', label: 'Ensign Ro', projectId: 'p1', state: 'turn.local', seq: 4 },
       { machine: 'run', key: 'l1', label: 'Lt. Lindqvist', projectId: 'p1', state: 'ended', seq: 9 },
       { machine: 'turn', key: 'l1', label: 'Lt. Lindqvist', projectId: 'p1', state: 'lead-done', seq: 9 },
-      { machine: 'slice', key: 'l1', label: 'State machines', projectId: 'p1', state: 'in-review', seq: 3 },
       { machine: 'review', key: 'acme/api#12', label: 'acme/api#12', projectId: 'p2', state: 'reported.posting', seq: 6 },
       { machine: 'review', key: 'other/repo#1', label: 'other/repo#1', state: 'queued', seq: 1 },
     ]);
@@ -89,7 +87,6 @@ describe('machineRuns', () => {
     const runs = machineRuns({
       agents: [agent({ cloud: true, run: { phase: 'delivering.pushing', turns: 1, seq: 2 }, lead: { title: 'x' } as Agent['lead'] })],
       projects,
-      slice: () => ({ phase: 'working', seq: 0 }),
       reviews: [{ key: 'acme/web#1', phase: 'idle', seq: 0 }],
     });
     for (const run of runs) expect(states.get(run.machine)?.has(run.state), `${run.machine}: ${run.state}`).toBe(true);

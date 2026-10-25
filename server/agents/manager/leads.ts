@@ -64,7 +64,6 @@ export class Leads extends Part {
     };
     this.core.freshRuntime(id, text.trim());
     this.store.putAgent(agent);
-    this.store.sliceJournal(id, { kind: 'started', slice: 1, branch: agent.branch });
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
       { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort)` },

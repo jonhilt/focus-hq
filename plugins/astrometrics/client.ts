@@ -167,7 +167,7 @@ const astrometrics: ClientPlugin = {
   },
   project: {
     label: 'State machines',
-    about: 'Draws Ops’ state machines (a crew member’s run, what follows a turn, a goal’s slices, QA’s review) on a screen in the project’s holodeck, with where its runs of each are now',
+    about: 'Draws Ops’ state machines (a crew member’s run, what follows a turn, QA’s review) on a screen in the project’s holodeck, with where its runs of each are now',
   },
   ship,
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { awayPhrases, awaySummary, type LogKind, type LogLine, logSince } from './shared';
 
-const line = (t: number, kind: LogKind): LogLine => ({ t, who: 'Lt. Oyelaran', source: 'slice', kind, tag: kind, tone: 'info', text: kind });
+const line = (t: number, kind: LogKind): LogLine => ({ t, who: 'Lt. Oyelaran', source: 'ledger', kind, tag: kind, tone: 'info', text: kind });
 const DAY = 86_400_000;
 
 describe('what happened while you were away', () => {

@@ -55,7 +55,6 @@ export class GoalPrs extends Part {
     if (!lead?.lead) return false;
     const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
     const work = { ...lead.lead, prs };
-    this.store.sliceJournal(lead.id, { kind: 'landed', repo, number, merged });
     // every pull request of the slice in: the goal moves on to its next slice there and then, its checkouts as they are
     const landed = sliceLanded(prs);
     this.update(lead, { lead: landed ? { ...work, slice: work.slice + 1, prs: [], landed: everyPr(work), waypoints: nextWaypoints(work, Date.now()) } : work });

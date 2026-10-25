@@ -1,9 +1,7 @@
 import {
   type Agent,
   EMPTY_REVIEW,
-  EMPTY_SLICE,
   evolveReview,
-  evolveSlice,
   factLine,
   type JournalEntry,
   type LedgerEvent,
@@ -11,19 +9,17 @@ import {
   type LentJournals,
   type Project,
   type ReviewEntry,
-  type SliceFact,
-  type Stamped,
 } from '../../plugin-api/server';
 import type { LogKind, LogLine, LogTone } from './shared';
 
-// The captain's log, pure: every journal (each agent's run, each pull request's review, each goal's slices) and the
-// ledger, on one timeline, oldest first. Each journal is told by its own machine's facts, so a line is only as good as
+// The captain's log, pure: every journal (each agent's run, each pull request's review) and the ledger,
+// on one timeline, oldest first. Each journal is told by its own machine's facts, so a line is only as good as
 // the fact behind it; most facts are Ops' bookkeeping (a message queued, a turn asked for), so only the ones a
 // captain coming back would want to hear make a line. QA's verdicts and merges come from the ledger, which has them all.
 
 /** A journal, with who and what it's about. */
 export interface Source<E> {
-  /** An agent's id, a pull request's key (`owner/repo#12`), or a lead's id. */
+  /** An agent's id, or a pull request's key (`owner/repo#12`). */
   key: string;
   who: string;
   projectId?: string;
@@ -35,7 +31,6 @@ export interface Source<E> {
 export interface LogSources {
   runs: Source<JournalEntry>[];
   reviews: Source<ReviewEntry>[];
-  slices: Source<Stamped<SliceFact>>[];
   ledger: readonly LedgerEvent[];
   /** A crew member's name, by agent id, when they're known. */
   nameOf: (agentId: string) => string | undefined;
@@ -83,10 +78,6 @@ export function logSources({ journals, agents, projects, ledger }: LogHost): Log
     reviews: journals.reviews.map(({ key, entries }) => {
       const [repo, number] = [key.slice(0, key.lastIndexOf('#')), Number(key.slice(key.lastIndexOf('#') + 1))];
       return { key, who: 'QA', ...about({ projectId: roomOf(repo), goal: leadOf(repo, number)?.lead?.title }), entries };
-    }),
-    slices: journals.slices.map(({ key, entries }) => {
-      const goal = goals.get(key);
-      return { key, who: nameOf(key) ?? 'A lead who’s gone home', ...about({ agentId: key, projectId: goal?.projectId, goal: goal?.title }), entries };
     }),
     ledger,
     nameOf,
@@ -152,26 +143,6 @@ function reviewLines(src: Source<ReviewEntry>, since: number, nameOf: (id: strin
   return out;
 }
 
-/** A goal's slice facts as lines: the goal taken up, each ship (or ship that failed), each move to fresh code. */
-function sliceLines(src: Source<Stamped<SliceFact>>, since: number): LogLine[] {
-  let state = EMPTY_SLICE;
-  const out: LogLine[] = [];
-  for (const e of src.entries) {
-    const before = state;
-    state = evolveSlice(state, e);
-    if (e.t <= since) continue;
-    const prs = state.prs.map((p) => `${short(p.repo)} #${p.number}`).join(', ');
-    const s =
-      e.kind === 'started' ? said('started', 'Goal', 'info', `Took up the goal: slice ${e.slice}`)
-      : e.kind === 'shipped' ? said('shipped', 'Shipped', 'ok', `Shipped slice ${state.slice || '?'}${before.ship ? `: ${before.ship.title}` : ''}${prs ? ` → ${prs}` : ''}`)
-      : e.kind === 'ship-ended' && e.error ? said('ship-failed', 'Ship failed', 'bad', `Couldn't ship${before.ship ? ` “${before.ship.title}”` : ''}: ${e.error}`)
-      : e.kind === 'moved' ? said('moved', `Slice ${state.slice}`, 'info', `Slice ${state.slice} starts on fresh code`)
-      : undefined;
-    if (s) out.push(line(src, e.t, 'slice', s));
-  }
-  return out;
-}
-
 /** A plugin by its id, as the log names who did something: `chief-of-staff` is the Chief of Staff. */
 const pluginName = (id: string): string => id.split('-').map((w) => (w === 'of' ? w : w[0].toUpperCase() + w.slice(1))).join(' ');
 
@@ -194,9 +165,8 @@ function line(src: Pick<Source<unknown>, 'who' | 'projectId' | 'goal' | 'agentId
 
 /** Everything since `since`, from every journal and the ledger, oldest first (the ledger's before a journal's at the same moment). */
 export function captainsLog(sources: LogSources, since: number): LogLine[] {
-  const order = { ledger: 0, slice: 1, review: 2, run: 3 } as const;
+  const order = { ledger: 0, review: 1, run: 2 } as const;
   return [
-    ...sources.slices.flatMap((s) => sliceLines(s, since)),
     ...sources.reviews.flatMap((s) => reviewLines(s, since, sources.nameOf)),
     ...sources.runs.flatMap((s) => runLines(s, since)),
     ...ledgerLines(sources.ledger, since),

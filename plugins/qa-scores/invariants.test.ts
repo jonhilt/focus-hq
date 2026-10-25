@@ -39,7 +39,7 @@ type Kept = string[];
 /** The plugin on QA's journals (each pull request's verdicts, by its commits) and the ledger, both kept through a restart. */
 function life(later: Later, ledger: LedgerEvent[], verdicts: Map<number, string[]>): Running<Kept> {
   const host: QaScoresHost = {
-    journals: () => ({ runs: [], slices: [], reviews: [...verdicts].map(([pr, shas]) => journalOf(pr, shas)) }),
+    journals: () => ({ runs: [], reviews: [...verdicts].map(([pr, shas]) => journalOf(pr, shas)) }),
     ledger: () => [...ledger],
     record: (projectId: string, entry: LedgerEntry) => {
       ledger.push({ ...entry, projectId, at: 1000 + ledger.length, seq: ledger.length + 1 });

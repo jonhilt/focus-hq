@@ -8,7 +8,6 @@ const DAY = 86_400_000;
 const MOST = 500;
 
 const SOURCES: Record<LogSource, { label: string; color: string }> = {
-  slice: { label: 'Slices', color: LCARS.peach },
   review: { label: 'QA', color: LCARS.periwinkle },
   run: { label: 'Crew', color: LCARS.lilac },
   ledger: { label: 'Ledger', color: LCARS.sky },
@@ -25,8 +24,8 @@ function dayOf(t: number): string {
 }
 
 /**
- * The captain's log: what happened across the ship, from every crew member's run journal, every QA review's, every
- * goal's slices and the ledger, on one timeline, newest first, with what happened since you last looked at the top.
+ * The captain's log: what happened across the ship, from every crew member's run journal, every QA review's and the
+ * ledger, on one timeline, newest first, with what happened since you last looked at the top.
  * Read-only, filtered by where it came from, the room, the goal, or who.
  */
 export function openCaptainsLogPanel(ui: Ui): void {

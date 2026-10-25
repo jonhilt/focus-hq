@@ -5,11 +5,10 @@ import { Journals } from '../journals';
 import { EMPTY_REVIEW, evolveReview, reviewMachine, type ReviewFact, type ReviewState } from './reviewJournal';
 import { EMPTY_RUN, evolve, journalMachine, type RunFact, type RunState } from './runJournal';
 import { runMachine } from './runMachine';
-import { EMPTY_SLICE, evolveSlice, sliceMachine, type SliceFact, type SliceState } from './sliceJournal';
 
 // Focus's state machines (docs/agents.md), each as data a drawing is made from (`machineGraph`), and where each
-// run of one is now (`machineRuns`): an agent's run, what followed their last turn, a goal's slices, a pull request's
-// review, each read from its journal. The plugins get both (`PluginHost.machines`), and hear as a journal steps
+// run of one is now (`machineRuns`): an agent's run, what followed their last turn, a pull request's review,
+// each read from its journal. The plugins get both (`PluginHost.machines`), and hear as a journal steps
 // (`machineStepped`).
 
 /** A state's id under its machine: its path, dotted (`turn.started`). */
@@ -60,7 +59,6 @@ export function leafOf(value: StateValue): string {
 export const MACHINES: readonly MachineGraph[] = [
   machineGraph(journalMachine, { id: 'run', title: 'A crew member’s run', about: 'Where an agent’s run is, from its journal: waiting, setting up, in a turn, delivering, held.', runs: 'crew member' }),
   machineGraph(runMachine, { id: 'turn', title: 'What follows a turn', about: 'What Ops does once a turn ends, by where it ran and how it ended.', runs: 'crew member' }),
-  machineGraph(sliceMachine, { id: 'slice', title: 'A goal’s slices', about: 'A goal’s slice of work: shipped, reviewed, landed, and on to the next.', runs: 'goal' }),
   machineGraph(reviewMachine, { id: 'review', title: 'QA’s review', about: 'A pull request’s review by QA: queued, checked, tested, reported.', runs: 'pull request' }),
 ];
 
@@ -68,15 +66,13 @@ export const MACHINES: readonly MachineGraph[] = [
 export interface RunSources {
   agents: readonly Agent[];
   projects: readonly Project[];
-  /** A goal's slices, by its lead's id. */
-  slice(leadId: string): { phase: StateValue; seq: number };
   /** The pull requests QA has reviews of on the boards, by prKey (`owner/repo#n`), each with its journal. */
   reviews: readonly { key: string; phase: StateValue; seq: number }[];
 }
 
 /**
  * Where every run of each machine is now: each agent's run (its journal's phase) and what followed their last turn
- * (once it's decided; while a turn's open, where it runs), each goal's slices, and each review on the boards.
+ * (once it's decided; while a turn's open, where it runs), and each review on the boards.
  */
 export function machineRuns(from: RunSources): MachineRun[] {
   const runs: MachineRun[] = [];
@@ -85,10 +81,6 @@ export function machineRuns(from: RunSources): MachineRun[] {
     if (!agent.run) continue;
     runs.push({ machine: 'run', ...who, state: agent.run.phase, seq: agent.run.seq });
     runs.push({ machine: 'turn', ...who, state: agent.run.target ?? (agent.cloud ? 'turn.cloud.running' : 'turn.local'), seq: agent.run.seq });
-    if (agent.lead) {
-      const slice = from.slice(agent.id);
-      runs.push({ machine: 'slice', ...who, label: agent.lead.title || agent.name, state: leafOf(slice.phase), seq: slice.seq });
-    }
   }
   for (const review of from.reviews) {
     const repo = review.key.slice(0, review.key.lastIndexOf('#'));
@@ -125,11 +117,10 @@ export function turnPath(entries: readonly { kind: string; seq: number; t: numbe
 export function machinePath(
   machine: string,
   key: string,
-  journals: { runs: Journals<RunFact, RunState>; slices: Journals<SliceFact, SliceState>; reviews: Journals<ReviewFact, ReviewState> },
+  journals: { runs: Journals<RunFact, RunState>; reviews: Journals<ReviewFact, ReviewState> },
 ): MachineStep[] {
   if (machine === 'run') return pathOf(journals.runs.entries(key), evolve, EMPTY_RUN);
   if (machine === 'turn') return turnPath(journals.runs.entries(key));
-  if (machine === 'slice') return pathOf(journals.slices.entries(key), evolveSlice, EMPTY_SLICE);
   if (machine === 'review') return pathOf(journals.reviews.entries(key), evolveReview, EMPTY_REVIEW);
   return [];
 }

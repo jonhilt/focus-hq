@@ -36,7 +36,7 @@ const { openCaptainsLogPanel } = await import('./panel');
 
 const DAY = 86_400_000;
 const now = Date.now();
-const line = (over: Partial<LogLine>): LogLine => ({ t: now - 60_000, who: 'Lt. Oyelaran', source: 'slice', kind: 'shipped', tag: 'Shipped', tone: 'ok', text: 'Shipped slice 1', projectId: 'p', goal: 'Saved items', ...over });
+const line = (over: Partial<LogLine>): LogLine => ({ t: now - 60_000, who: 'Lt. Oyelaran', source: 'ledger', kind: 'shipped', tag: 'Shipped', tone: 'ok', text: 'Shipped slice 1', projectId: 'p', goal: 'Saved items', ...over });
 const LINES = [
   line({}),
   line({ t: now - 50_000, source: 'review', kind: 'testing', who: 'Lt. Quintero', tag: 'QA', text: 'Testing web#4', goal: undefined }),

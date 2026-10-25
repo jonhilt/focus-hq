@@ -51,7 +51,6 @@ export { leadTail } from '../server/agents/sessionDigest';
 export type { Stamped } from '../server/journals';
 export { factLine, type JournalEntry, type RunFact, type TurnKind } from '../server/agents/runJournal';
 export { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact } from '../server/agents/reviewJournal';
-export { EMPTY_SLICE, evolveSlice, type SliceFact } from '../server/agents/sliceJournal';
 /** QA's catch rate (docs/qa-catch.md): Focus's latest run, and its totals. */
 export { latestRun as latestQaCatch } from '../server/agents/qaCatchRuns';
 export { type CatchRun, catchTotals } from '../server/agents/qaCatch';

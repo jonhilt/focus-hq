@@ -1,5 +1,5 @@
-// The captain's log: what happened across the ship, from every journal (each agent's run, each QA review, each goal's
-// slices) and the ledger, on one timeline (built by log.ts). What's here is what both halves need of it: a line's
+// The captain's log: what happened across the ship, from every journal (each agent's run, each QA review) and the
+// ledger, on one timeline (built by log.ts). What's here is what both halves need of it: a line's
 // shape, how far back the log reads, and what happened while you were away, in a sentence or two.
 
 /** The plugin's id: in FOCUS_PLUGINS, and its routes' prefix. */
@@ -7,15 +7,12 @@ export const CAPTAINS_LOG = 'captains-log';
 
 export type LogTone = 'ok' | 'bad' | 'warn' | 'info';
 
-/** Where a line of the log comes from: an agent's run journal, a PR's review journal, a goal's slice journal, or the ledger. */
-export type LogSource = 'run' | 'review' | 'slice' | 'ledger';
+/** Where a line of the log comes from: an agent's run journal, a PR's review journal, or the ledger. */
+export type LogSource = 'run' | 'review' | 'ledger';
 
 /** What a line is, for counting what happened while you were away. */
 export type LogKind =
   | 'shipped'
-  | 'ship-failed'
-  | 'moved'
-  | 'started'
   | 'pr'
   | 'merged'
   | 'closed'
@@ -94,7 +91,7 @@ export function awayPhrases(s: AwaySummary): string[] {
     qa ? `QA ${qa}` : '',
     c('held') ? `${plural(c('held'), 'hold')} for your plan's limit` : '',
     s.restarts ? `Focus restarted ${s.restarts === 1 ? 'once' : `${s.restarts} times`}` : '',
-    c('failed') + c('ship-failed') ? `${plural(c('failed') + c('ship-failed'), 'failure')}` : '',
+    c('failed') ? `${plural(c('failed'), 'failure')}` : '',
     c('asked') ? `${plural(c('asked'), 'hand')} up` : '',
   ].filter(Boolean);
 }
