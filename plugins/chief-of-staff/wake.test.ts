@@ -27,5 +27,7 @@ describe('wakeFor', () => {
 
   it('leaves any other note for the captain', () => {
     expect(wakeFor(idle({ kind: 'other' }), { autoSendBack: true })).toBeUndefined();
+    // a review on GitHub waits for the captain to say what to do about it
+    expect(wakeFor(idle({ kind: 'pr-review', repo: 'o/web', number: 4, state: 'CHANGES_REQUESTED', author: 'jonhilt' }), { autoSendBack: true })).toBeUndefined();
   });
 });

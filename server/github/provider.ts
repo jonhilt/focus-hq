@@ -1,4 +1,4 @@
-import type { ChecksState, FailedCheck, GitHubStatus, Issue, PullRequest } from '../../shared/types';
+import type { ChecksState, FailedCheck, GitHubStatus, Issue, PullRequest, ReviewComment } from '../../shared/types';
 
 export interface RepoInfo {
   nameWithOwner: string;
@@ -70,6 +70,8 @@ export interface GitHubProvider {
   editPullRequestBody(repo: string, number: number, body: string): Promise<void>;
   /** What a pull request's comments say, oldest first. */
   pullRequestComments(repo: string, number: number): Promise<string[]>;
+  /** A review's comments on lines of code (`reviewId` as `PrReview.id` has it), in order. */
+  reviewComments(repo: string, reviewId: string): Promise<ReviewComment[]>;
   /** Commits a file to the repo's QA evidence branch, creating the branch on first use, and returns its URL. */
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Promise<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Promise<{ number: number; url: string }>;

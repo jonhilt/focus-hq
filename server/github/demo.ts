@@ -1,6 +1,6 @@
 import { Effect, Layer } from 'effect';
 import { sameCommit } from '../../shared/qa';
-import type { Issue, PullRequest } from '../../shared/types';
+import type { Issue, PrReview, PullRequest, ReviewComment } from '../../shared/types';
 import { demoCommit } from '../demoGit';
 import { closingIssues, evidenceUrl } from './provider';
 import { GitHub, GitHubNotFound, GitHubRejected } from './service';
@@ -8,7 +8,7 @@ import { GitHub, GitHubNotFound, GitHubRejected } from './service';
 interface FakeRepo {
   description: string;
   issues: Issue[];
-  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; body?: string; comments?: string[]; rerunAt?: number })[];
+  prs: (PullRequest & { state: 'OPEN' | 'CLOSED' | 'MERGED'; body?: string; comments?: string[]; rerunAt?: number; reviewComments?: Record<string, ReviewComment[]> })[];
   nextNumber: number;
 }
 
@@ -65,6 +65,9 @@ export let demoOpenPr: ((repo: string, req: { head: string; base: string; title:
 /** A demo lead marking their draft ready for review, as `gh pr ready` would. Set while a demo GitHub is around. */
 export let demoReady: ((repo: string, number: number) => void) | undefined;
 
+/** Someone reviewing an open demo PR on GitHub, with comments on lines of its code: the review's id. Set while a demo GitHub is around. */
+export let demoReview: ((repo: string, number: number, review: Omit<PrReview, 'id' | 'submittedAt'>, comments?: Omit<ReviewComment, 'author'>[]) => string) | undefined;
+
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
   const opened = (r: FakeRepo, name: string, req: { head: string; base: string; title: string; body: string }, isDraft: boolean) => {
@@ -101,6 +104,15 @@ export const demoLayer = Layer.sync(GitHub, () => {
     const r = repos.get(name);
     if (!r) throw new Error(`${name} is not a demo repo`);
     return opened(r, name, req, draft);
+  };
+  demoReview = (name, number, review, comments = []) => {
+    const p = repos.get(name)?.prs.find((p) => p.number === number && p.state === 'OPEN');
+    if (!p) throw new Error(`${name}#${number} is not an open pull request`);
+    const id = `PRR_demo_${name.replace(/\W/g, '_')}_${number}_${(p.reviews ?? []).length + 1}`;
+    p.reviews = [...(p.reviews ?? []), { ...review, id, submittedAt: new Date().toISOString() }];
+    p.reviewComments = { ...p.reviewComments, [id]: comments.map((c) => ({ ...c, author: review.author })) };
+    p.updatedAt = new Date().toISOString();
+    return id;
   };
   demoPush = (name, number, kind) => {
     const p = repos.get(name)?.prs.find((p) => p.number === number && p.state === 'OPEN');
@@ -226,7 +238,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
         Effect.map((r) =>
           r.prs
             .filter((p) => p.state === 'OPEN')
-            .map(({ state: _state, body: _body, comments: _comments, rerunAt, ...p }): PullRequest => {
+            .map(({ state: _state, body: _body, comments: _comments, reviewComments: _reviewComments, rerunAt, ...p }): PullRequest => {
               const running = Date.now() - Math.max(Date.parse(p.createdAt), rerunAt ?? 0) < CHECKS_TAKE_MS;
               // every fifth PR has a flaky test: it fails until it's re-run
               if (running) return { ...p, checks: 'pending', failedChecks: [] };
@@ -288,6 +300,8 @@ export const demoLayer = Layer.sync(GitHub, () => {
       ),
 
     pullRequestComments: (name, number) => pr(name, number).pipe(Effect.map((p) => [...(p.comments ?? [])])),
+    reviewComments: (name, reviewId) =>
+      repo(name).pipe(Effect.map((r) => [...(r.prs.find((p) => p.reviewComments?.[reviewId])?.reviewComments?.[reviewId] ?? [])])),
 
     uploadQaEvidence: (name, path) => repo(name).pipe(Effect.as(evidenceUrl(name, path))),
 

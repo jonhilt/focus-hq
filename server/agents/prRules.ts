@@ -1,7 +1,7 @@
-import type { GoalRecord, LeadPr, PullRequest, QaReview } from '../../shared/types';
+import type { GoalRecord, LeadPr, PrReview, PullRequest, QaReview, ReviewComment } from '../../shared/types';
 
 // The rules for a goal's pull requests, as small pure functions: which are a goal's, when one goes to QA, when QA
-// tests it again. `manager/goalPrs.ts` runs them as the board refreshes and the lead's turns start and end; each rule
+// tests it again, which reviews on GitHub its lead hears. `manager/goalPrs.ts` runs them as the board refreshes and the lead's turns start and end; each rule
 // changes here, with its test beside it (prRules.test.ts).
 
 /** The branches one lead's checkout of a repo has been on, as its own HEAD reflog has them. */
@@ -91,4 +91,38 @@ export function retestAfterTurn<P extends Pick<PullRequest, 'repo' | 'number' | 
 export function reflogBranches(reflog: string): string[] {
   const moves = [...reflog.matchAll(/^checkout: moving from (\S+) to (\S+)$/gm)];
   return [...new Set(moves.flatMap((m) => [m[1], m[2]]))];
+}
+
+/**
+ * The reviews on the board's copy of one of the goal's open pull requests that its lead hasn't heard, oldest first: each
+ * submitted one, by anyone (the captain on GitHub, a teammate, a review bot), once. Ops' and QA's own words go on a pull
+ * request as plain comments, never reviews, so they aren't among them.
+ */
+export function unheardReviews(pr: Pick<LeadPr, 'heardReviews' | 'outcome'>, board: Pick<PullRequest, 'reviews'> | undefined): PrReview[] {
+  if (pr.outcome) return [];
+  const heard = new Set(pr.heardReviews ?? []);
+  return (board?.reviews ?? []).filter((r) => !heard.has(r.id));
+}
+
+/** How long a review's words may be in the lead's note, each of its comments, and how many comments it lists. */
+export const REVIEW_NOTE_LIMITS = { body: 4000, comment: 1500, comments: 30 } as const;
+
+const STATE_WORDS: Record<PrReview['state'], string> = { APPROVED: 'approved it', CHANGES_REQUESTED: 'asked for changes', COMMENTED: 'commented', DISMISSED: 'reviewed it (since dismissed)' };
+const clip = (text: string, max: number) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
+const quoted = (text: string) => text.trim().split('\n').map((l) => `> ${l}`.trimEnd()).join('\n');
+
+/**
+ * What the lead hears of a review on `repo#number`: who, how, what they said and their comments on the code. Nothing for
+ * a review that only comments and says nothing (a reply's empty wrapper, say): it's still heard, so it isn't asked about again.
+ */
+export function reviewNote(repo: string, number: number, review: PrReview, comments: readonly ReviewComment[]): string | undefined {
+  const L = REVIEW_NOTE_LIMITS;
+  const said = review.body.trim();
+  if (review.state === 'COMMENTED' && !said && !comments.length) return undefined;
+  const lines = comments.slice(0, L.comments).map((c) => `- ${c.path}${c.line ? `:${c.line}` : ' (on code that has since changed)'}${c.author !== review.author ? ` (${c.author})` : ''}:\n${quoted(clip(c.body, L.comment)).replace(/^/gm, '  ')}`);
+  return [
+    `${review.author} reviewed ${repo}#${number} on GitHub and ${STATE_WORDS[review.state]}${said || lines.length ? ':' : '.'}`,
+    said ? quoted(clip(said, L.body)) : '',
+    lines.length ? `On the code:\n${lines.join('\n')}${comments.length > L.comments ? `\n…and ${comments.length - L.comments} more on GitHub.` : ''}` : '',
+  ].filter(Boolean).join('\n\n');
 }

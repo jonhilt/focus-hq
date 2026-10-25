@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import { describe, expect, it } from 'vitest';
 import { demoWorkspace } from '../agents/demoRunner';
-import { demoLayer, demoPush } from './demo';
+import { demoLayer, demoPush, demoReview } from './demo';
 import { GitHub } from './service';
 
 // What the demo's GitHub must keep of the real one (docs/contracts.md): behaviours real GitHub showed Ops, some
@@ -68,6 +68,17 @@ describe('the demo GitHub keeps the GitHub contract', () => {
     const { gh, repo, pr } = await opened();
     await Effect.runPromise(gh.commentOnPullRequest(repo, pr.number, 'QA passed <!-- focus-verdict:abc -->'));
     expect(await Effect.runPromise(gh.pullRequestComments(repo, pr.number))).toEqual(['QA passed <!-- focus-verdict:abc -->']);
+  });
+
+  it('lists a pull request’s reviews with it, its comments on the code read by the review, and Ops’ own comments among none of them', async () => {
+    const { gh, repo, pr } = await opened();
+    // Ops and QA comment on a pull request: a comment isn't a review
+    await Effect.runPromise(gh.commentOnPullRequest(repo, pr.number, 'QA passed it'));
+    const listed = async () => (await Effect.runPromise(gh.listPullRequests(repo))).find((p) => p.number === pr.number);
+    expect((await listed())?.reviews ?? []).toEqual([]);
+    const id = demoReview?.(repo, pr.number, { author: 'jonhilt', state: 'CHANGES_REQUESTED', body: 'Rename it' }, [{ path: 'src/store.ts', line: 42, body: 'Call it savedItems' }]) ?? '';
+    expect((await listed())?.reviews).toEqual([{ id, author: 'jonhilt', state: 'CHANGES_REQUESTED', body: 'Rename it', submittedAt: expect.any(String) }]);
+    expect(await Effect.runPromise(gh.reviewComments(repo, id))).toEqual([{ author: 'jonhilt', path: 'src/store.ts', line: 42, body: 'Call it savedItems' }]);
   });
 
   it('keeps a pull request’s description as it opened, and as it was edited after', async () => {

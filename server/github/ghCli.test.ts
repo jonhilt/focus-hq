@@ -42,6 +42,12 @@ const prJson = JSON.stringify([{
   updatedAt: '2026-10-01T11:00:00Z',
   body: 'Adds a saved-for-later list.\n\nCloses #7, fixes #9',
   closingIssuesReferences: [{ number: 7 }, { number: 8 }],
+  reviews: [
+    { id: 'PRR_1', author: { login: 'sam' }, state: 'CHANGES_REQUESTED', body: 'Rename it', submittedAt: '2026-10-01T12:00:00Z' },
+    // a draft review is its author's alone, and one by a deleted account has no author
+    { id: 'PRR_2', author: { login: 'jon' }, state: 'PENDING', body: '', submittedAt: null },
+    { id: 'PRR_3', author: null, state: 'COMMENTED', body: null, submittedAt: '2026-10-01T13:00:00Z' },
+  ],
 }]);
 
 describe('gh CLI layer', () => {
@@ -64,8 +70,26 @@ describe('gh CLI layer', () => {
         closes: [7, 8, 9],
         createdAt: '2026-10-01T10:00:00Z',
         updatedAt: '2026-10-01T11:00:00Z',
+        reviews: [
+          { id: 'PRR_1', author: 'sam', state: 'CHANGES_REQUESTED', body: 'Rename it', submittedAt: '2026-10-01T12:00:00Z' },
+          { id: 'PRR_3', author: 'someone', state: 'COMMENTED', body: '', submittedAt: '2026-10-01T13:00:00Z' },
+        ],
       }]);
     expect(calls[0].slice(0, 5)).toEqual(['pr', 'list', '-R', 'acme/shop', '--state']);
+  });
+
+  it('reads a review’s comments on the code by its id, from GitHub’s GraphQL API', async () => {
+    const answer = { data: { node: { comments: { nodes: [{ author: { login: 'sam' }, path: 'src/store.ts', line: 42, body: 'Call it savedItems' }, { author: null, path: 'src/old.ts', line: null, body: 'Gone?' }] } } } };
+    const { calls, layer } = fakeGh(() => Effect.succeed(JSON.stringify(answer)));
+    expect(await succeed(layer, (gh) => gh.reviewComments('acme/shop', 'PRR_1'))).toEqual([
+      { author: 'sam', path: 'src/store.ts', line: 42, body: 'Call it savedItems' },
+      { author: 'someone', path: 'src/old.ts', body: 'Gone?' },
+    ]);
+    expect(calls[0].slice(0, 2)).toEqual(['api', 'graphql']);
+    expect(calls[0]).toContain('id=PRR_1');
+    // a node that isn't a review (or is gone) has none
+    const gone = fakeGh(() => Effect.succeed(JSON.stringify({ data: { node: null } })));
+    expect(await succeed(gone.layer, (gh) => gh.reviewComments('acme/shop', 'PRR_9'))).toEqual([]);
   });
 
   it('names failed checks, with the Actions run to re-run where there is one', async () => {

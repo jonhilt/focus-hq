@@ -193,6 +193,8 @@ export interface LeadPr {
   raised?: { lane: Lane; by: string; why: string };
   /** The recap the lead last put on it (`office__recap`), with its title and description then: what the chief of staff reads its lane by. */
   recap?: { title: string; summary: string; recap: SliceRecap };
+  /** The GitHub reviews on it the lead has heard (their ids), so each reaches them once (`unheardReviews`). */
+  heardReviews?: string[];
 }
 
 /**

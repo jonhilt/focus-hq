@@ -1,5 +1,5 @@
 import { Context, Data, Effect, ManagedRuntime, type Layer } from 'effect';
-import type { GitHubStatus, Issue, PullRequest } from '../../shared/types';
+import type { GitHubStatus, Issue, PullRequest, ReviewComment } from '../../shared/types';
 import type { CreatePullRequest, GitHubProvider, IssueDetail, PastPullRequest, PullRequestDetail, RepoInfo } from './provider';
 import type { GhBadOutput, GhCommandError } from './runner';
 
@@ -33,6 +33,8 @@ export class GitHub extends Context.Service<GitHub, {
   editPullRequestBody(repo: string, number: number, body: string): Op<void>;
   /** What a pull request's comments say, oldest first. */
   pullRequestComments(repo: string, number: number): Op<string[]>;
+  /** A review's comments on lines of code (`reviewId` as `PrReview.id` has it), in order. */
+  reviewComments(repo: string, reviewId: string): Op<ReviewComment[]>;
   uploadQaEvidence(repo: string, path: string, bytes: Buffer): Op<string>;
   createPullRequest(repo: string, pr: CreatePullRequest): Op<{ number: number; url: string }>;
   mergePullRequest(repo: string, number: number, method: 'squash' | 'merge' | 'rebase', headSha?: string): Op<void>;
@@ -63,6 +65,7 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     commentOnPullRequest: (repo, number, body) => call((gh) => gh.commentOnPullRequest(repo, number, body)),
     editPullRequestBody: (repo, number, body) => call((gh) => gh.editPullRequestBody(repo, number, body)),
     pullRequestComments: (repo, number) => call((gh) => gh.pullRequestComments(repo, number)),
+    reviewComments: (repo, reviewId) => call((gh) => gh.reviewComments(repo, reviewId)),
     uploadQaEvidence: (repo, path, bytes) => call((gh) => gh.uploadQaEvidence(repo, path, bytes)),
     createPullRequest: (repo, pr) => call((gh) => gh.createPullRequest(repo, pr)),
     mergePullRequest: (repo, number, method, headSha) => call((gh) => gh.mergePullRequest(repo, number, method, headSha)),

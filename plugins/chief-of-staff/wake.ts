@@ -23,6 +23,9 @@ export function wakeFor(note: Pick<LeadNote, 'about' | 'inTurn'>, project: { aut
       return note.inTurn
         ? `Slice ${about.slice} has landed: carry on where you are.`
         : `Slice ${about.slice} has landed: carry on with what's next if it's within what the captain has agreed; if it isn't, say what you'd do and stop for them.`;
+    case 'pr-review':
+      // a review on GitHub is someone's word on the work: it waits for the captain to say what to do about it
+      return undefined;
     case 'other':
       return undefined;
   }

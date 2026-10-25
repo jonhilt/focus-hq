@@ -8,7 +8,7 @@ import type { Lane } from '../../shared/mergeLane';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
-import type { Agent, Issue, MessageReply, Planner, PluginSecret, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, PluginSecret, PrReview, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -116,6 +116,8 @@ export type LeadNews =
   | { kind: 'qa-verdict'; repo: string; number: number; verdict: 'pass' | 'fail'; advisory: boolean; failedRounds: number; behind: boolean }
   /** Every pull request of slice `slice` merged or closed: their repos move to fresh code as their next turn starts. */
   | { kind: 'slice-landed'; slice: number }
+  /** Someone reviewed one of their pull requests on GitHub (`author`, the review's `state`): what they said and their comments on the code. */
+  | { kind: 'pr-review'; repo: string; number: number; state: PrReview['state']; author: string }
   /** Anything else: Ops merged a base into their pull request, the star chart, a restart Ops finished something for. */
   | { kind: 'other' };
 

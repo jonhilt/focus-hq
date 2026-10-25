@@ -31,7 +31,7 @@ What each part caught and found goes in the sections below, with every live bug 
 | part | test | rules |
 | --- | --- | --- |
 | a goal's lead (held for the plan's limit, its run, its inbox and notes, the turn the captain read, plugins' marks on its turn) | `server/agents/managerInvariants.test.ts` | restart |
-| a goal's pull requests, claimed as the goal's (`GoalPrs`) | `server/agents/goalPrsInvariants.test.ts` | both |
+| a goal's pull requests, claimed as the goal's, and the reviews on them its lead hears (`GoalPrs`) | `server/agents/goalPrsInvariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
 | the QA scores plugin's grades of QA's reports | `plugins/qa-scores/invariants.test.ts` | both |
 | QA reviews | `server/agents/reviewInvariants.test.ts` | both |

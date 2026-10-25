@@ -1,5 +1,5 @@
 import { Effect, Layer, Schema } from 'effect';
-import type { Issue } from '../../shared/types';
+import type { Issue, PrReview } from '../../shared/types';
 import { closingIssues, evidenceUrl, failedChecks, QA_EVIDENCE_BRANCH, rollupChecks } from './provider';
 import { decodeJson, GhBadOutput, GhRunner } from './runner';
 import { GitHub } from './service';
@@ -43,7 +43,36 @@ const RawPr = Schema.Struct({
   statusCheckRollup: Schema.optional(Schema.Unknown),
   createdAt: Schema.String,
   updatedAt: Schema.optional(Schema.String),
+  reviews: Schema.optional(Schema.Array(Schema.Struct({
+    id: Schema.String,
+    author: Login,
+    state: Schema.String,
+    body: Schema.optional(Schema.NullOr(Schema.String)),
+    submittedAt: Schema.optional(Schema.NullOr(Schema.String)),
+  }))),
 });
+
+/** A review's comments on the code, as GitHub's GraphQL API answers for its node. */
+const RawReviewComments = Schema.Struct({
+  data: Schema.Struct({
+    node: Schema.NullOr(Schema.Struct({
+      comments: Schema.optional(Schema.Struct({
+        nodes: Schema.Array(Schema.Struct({ author: Login, path: Schema.String, line: Schema.optional(Schema.NullOr(Schema.Number)), body: Schema.String })),
+      })),
+    })),
+  }),
+});
+
+const REVIEW_COMMENTS = 'query($id: ID!) { node(id: $id) { ... on PullRequestReview { comments(first: 100) { nodes { author { login } path line body } } } } }';
+const REVIEW_STATES = ['APPROVED', 'CHANGES_REQUESTED', 'COMMENTED', 'DISMISSED'] as const;
+
+/** The reviews gh lists on a pull request that were submitted (a draft review, pending, is its author's alone). */
+function submittedReviews(raw: typeof RawPr.Type['reviews']): PrReview[] {
+  return (raw ?? []).flatMap((r) => {
+    const state = REVIEW_STATES.find((s) => s === r.state);
+    return state && r.submittedAt ? [{ id: r.id, author: r.author?.login ?? 'someone', state, body: r.body ?? '', submittedAt: r.submittedAt }] : [];
+  });
+}
 
 const RawPastPr = Schema.Struct({
   number: Schema.Number,
@@ -66,7 +95,7 @@ const RawRepo = Schema.Struct({
 });
 
 const ISSUE_FIELDS = 'number,title,body,url,labels,author,createdAt';
-const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt,updatedAt,body,closingIssuesReferences';
+const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt,updatedAt,body,closingIssuesReferences,reviews';
 
 function toIssue(repo: string, raw: typeof RawIssue.Type): Issue {
   return {
@@ -185,6 +214,7 @@ const make = Effect.gen(function* () {
             closes: linkedIssues(p.closingIssuesReferences, p.body ?? ''),
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
+            reviews: submittedReviews(p.reviews),
           })),
         ),
       ),
@@ -241,6 +271,11 @@ const make = Effect.gen(function* () {
 
     pullRequestComments: (repo, number) =>
       ghJson(RawPrComments, ['pr', 'view', String(number), '-R', repo, '--json', 'comments']).pipe(Effect.map((raw) => raw.comments.map((c) => c.body))),
+
+    reviewComments: (_repo, reviewId) =>
+      ghJson(RawReviewComments, ['api', 'graphql', '-f', `query=${REVIEW_COMMENTS}`, '-f', `id=${reviewId}`]).pipe(
+        Effect.map((raw) => (raw.data.node?.comments?.nodes ?? []).map((c) => ({ author: c.author?.login ?? 'someone', path: c.path, ...(typeof c.line === 'number' && { line: c.line }), body: c.body }))),
+      ),
 
     uploadQaEvidence: (repo, path, bytes) =>
       evidenceBranch(repo).pipe(

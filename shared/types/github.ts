@@ -57,6 +57,26 @@ export interface PullRequest {
   updatedAt?: string;
   /** Where Ops' merge check on its head stands (docs/merging.md): Ops stamps it on, GitHub never says. */
   mergeCheck?: MergeCheck;
+  /** The reviews submitted on it, oldest first. Missing when the provider can't tell. */
+  reviews?: PrReview[];
+}
+
+/** A review submitted on a pull request on GitHub: approving it, asking for changes, or commenting (on lines of code too). */
+export interface PrReview {
+  /** GitHub's id for it, which its comments on the code are read by (`GitHub.reviewComments`). */
+  id: string;
+  author: string;
+  state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
+  body: string;
+  submittedAt: string;
+}
+
+/** One of a review's comments on a line of code. `line` is missing on one whose code has since changed. */
+export interface ReviewComment {
+  author: string;
+  path: string;
+  line?: number;
+  body: string;
 }
 
 /** Where a PR's merge check stands, as its card on the board shows it (shared/mergeCheck.ts). */

@@ -1,10 +1,10 @@
-import { Effect } from 'effect';
+import { Effect, Option } from 'effect';
 import { higherLane, type Lane, laneName, raisedPrs, raisedSaid } from '../../../shared/mergeLane';
 import { autoQaFor, prKey } from '../../../shared/qa';
-import type { Agent, LeadPr, PullRequest } from '../../../shared/types';
+import type { Agent, LeadPr, PrReview, PullRequest, ReviewComment } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { everyPr, hasLeadWork, landedNote, leadWorktreeId, sliceLanded } from '../lead';
-import { claims, filedClaims, readyPrs, retestAfterTurn, type SeenBranches } from '../prRules';
+import { claims, filedClaims, readyPrs, retestAfterTurn, reviewNote, type SeenBranches, unheardReviews } from '../prRules';
 import { writeRefused } from '../pushGuard';
 import { diffFiles, type RecapInput, recapLane, recapMarkdown, recapPage, recapProblems, type SliceRecap, withRecap } from '../recap';
 import { backedMap, MAX_FILES, primitivesToRead, SOURCE } from '../recapImports';
@@ -28,10 +28,14 @@ export class GoalPrs extends Part {
     return this.store.agentsIn(projectId).flatMap((a) => (a.task === 'lead' ? (a.lead?.prs ?? []).filter((p) => !p.outcome) : []));
   }
 
-  /** The board refreshed: the goals claim the pull requests their leads opened, note those gone ready, and send them to QA. */
+  /**
+   * The board refreshed: the goals claim the pull requests their leads opened, note those gone ready, send them to QA,
+   * and their leads hear the reviews on them they haven't.
+   */
   async boardRefreshed(projectId: string, prs: readonly PullRequest[]): Promise<void> {
     await this.claim(projectId, prs);
     this.sendReady(projectId, prs);
+    await this.hearReviews(projectId, prs);
   }
 
   /** A lead's turn starts: their pushes are held to the goal as it is now. */
@@ -175,6 +179,33 @@ export class GoalPrs extends Part {
       this.update(lead, { lead: { ...lead.lead, waypoints: shippedWaypoint(lead.lead, { title: pr.title, summary: '' }, Date.now()) } });
     }
     if (claimed.length) this.boardChanged(projectId);
+  }
+
+  /**
+   * The reviews on the goals' open pull requests that their leads haven't heard (`unheardReviews`): every one's comments
+   * on the code read from GitHub first, then, all together, a note for each lead (`reviewNote`) and the review marked
+   * heard on its pull request, so a review reaches them once, and a restart part way leaves none half told. A review
+   * GitHub won't give the comments of waits for the next refresh.
+   */
+  private async hearReviews(projectId: string, prs: readonly PullRequest[]): Promise<void> {
+    const read: { leadId: string; repo: string; number: number; review: PrReview; comments: ReviewComment[] }[] = [];
+    for (const lead of this.store.agentsIn(projectId).filter(hasLeadWork)) {
+      for (const { repo, number, ...held } of lead.lead.prs) {
+        for (const review of unheardReviews(held, prs.find((p) => p.repo === repo && p.number === number))) {
+          const comments = await this.runtime.runPromise(GitHub.use((gh) => gh.reviewComments(repo, review.id)).pipe(Effect.option));
+          if (Option.isSome(comments)) read.push({ leadId: lead.id, repo, number, review, comments: comments.value });
+        }
+      }
+    }
+    for (const { leadId, repo, number, review, comments } of read) {
+      // heard while GitHub answered (a refresh at the same time), or no longer the goal's: nothing to tell
+      const lead = this.store.agents.get(leadId);
+      const pr = lead?.lead?.prs.find((p) => p.repo === repo && p.number === number && !p.outcome);
+      if (!lead?.lead || !pr || pr.heardReviews?.includes(review.id)) continue;
+      const note = reviewNote(repo, number, review, comments);
+      if (note) this.core.leads.noteForLead(lead, 'GitHub', note, { kind: 'pr-review', repo, number, state: review.state, author: review.author });
+      this.update(lead, { lead: { ...lead.lead, prs: lead.lead.prs.map((p) => (p === pr ? { ...p, heardReviews: [...(p.heardReviews ?? []), review.id] } : p)) } });
+    }
   }
 
   /** The goal PRs on the board that are ready and QA hasn't looked at go to QA, where the project sends PRs to QA itself. */
