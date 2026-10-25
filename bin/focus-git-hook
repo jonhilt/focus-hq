@@ -26,7 +26,7 @@ if [ "$name" = pre-push ]; then
         exit 1
       fi
       if grep -qxF "merged $branch" "$FOCUS_PUSH_REFUSED"; then
-        echo "Refused by Ops: $branch’s pull request already merged, and a squash merge leaves its commits off the base, so a new pull request from it would carry them again. Start a fresh branch from the base (git fetch, then git switch -c <new> origin/<base>), cherry-pick the commits that never merged, and push that." >&2
+        echo "Refused by Ops: ${branch}’s pull request already merged, and a squash merge leaves its commits off the base, so a new pull request from it would carry them again. Start a fresh branch from the base (git fetch, then git switch -c <new> origin/<base>), cherry-pick the commits that never merged, and push that." >&2
         exit 1
       fi
     done || exit 1
