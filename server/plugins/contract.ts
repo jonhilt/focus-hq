@@ -416,9 +416,9 @@ export interface PluginGoals {
   /**
    * Raises the lane of a goal's lead's open pull requests to `lane` (docs/merging.md#lanes-how-a-goals-leads-slice-merges),
    * saying why: each in a lower lane goes up, with a ledger line and a comment on it, as the plugin's doing; none comes
-   * down. What it raised, by repo#number: none for anyone but a goal's lead.
+   * down. Only `pr`, when it's given. What it raised, by repo#number: none for anyone but a goal's lead.
    */
-  raiseLane(agentId: string, lane: Lane, why: string): string[];
+  raiseLane(agentId: string, lane: Lane, why: string, pr?: { repo: string; number: number }): string[];
 }
 
 /** A journal Ops keeps, as a plugin has it: what it's about and its facts, oldest first. */

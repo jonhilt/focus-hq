@@ -2,9 +2,10 @@ import { type ArchivedGoal, blocks, keysOf, type LedgerEvent, type Line, message
 import type { CaptainReason, FlowNow, FlowState, LeadFlow, Said } from './shared';
 
 // Where a goal's time goes (README.md), from code alone: its lead's Claude Code transcript says when the lead was
-// at work and when it sat between turns, the ship tool's results say when each pull request went out, and the
-// ledger's QA verdicts and merges say what the lead was waiting on meanwhile. Every moment from the goal opening to
-// it closing lands in exactly one state, so the states add up to the goal's lead time. The I/O is in scripts/flow.ts.
+// at work and when it sat between turns, the ledger's ready lines (or, from before, the ship tool's results) say when
+// each pull request went out, and the ledger's QA verdicts and merges say what the lead was waiting on meanwhile.
+// Every moment from the goal opening to it closing lands in exactly one state, so the states add up to the goal's
+// lead time. The I/O is in scripts/flow.ts.
 
 /** The states in the order a report lists them, with what each means. */
 export const FLOW_STATES: Record<FlowState, string> = {
@@ -206,7 +207,9 @@ function stretches(moments: Moment[], openedAt: number, closedAt: number, busyNo
  */
 export function goalFlow(goal: ArchivedGoal, moments: Moment[], ledger: LedgerEvent[], busyNow = false): GoalFlow {
   const { openedAt, closedAt } = goal;
-  const ships = moments.flatMap((m) => (m.kind === 'ship' ? m.prs.map((p) => ({ ...p, at: m.at })) : []));
+  // a pull request goes out with a ship (the ship tool's result in the transcript), or as its lead marks their own ready (the ledger)
+  const readied = ledger.flatMap((e) => (e.kind === 'pr-ready' && e.lead === goal.id ? [{ repo: e.repo, pr: e.pr, at: e.at }] : []));
+  const ships = [...moments.flatMap((m) => (m.kind === 'ship' ? m.prs.map((p) => ({ ...p, at: m.at })) : [])), ...readied];
   const prs: PrKey[] = [];
   for (const p of [...goal.prs.map((p) => ({ repo: p.repo, pr: p.number })), ...ships]) if (!prs.some(same(p))) prs.push({ repo: p.repo, pr: p.pr });
   const verdicts = ledger.flatMap((e) => (e.kind === 'qa-verdict' && prs.some(same(e)) ? [e] : []));

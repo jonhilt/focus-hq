@@ -154,6 +154,15 @@ describe('the state a goal is in now', () => {
     expect(goalFlow(goal(20), transcriptMoments(jsonl), []).now).toEqual({ state: 'qa', since: min(3) });
   });
 
+  it('is waiting on QA once the lead marks a pull request of their own ready, from the ledger', () => {
+    n = 0;
+    const jsonl = [said('Your workspace', 0), work(1), work(3)].join('\n');
+    const ready = ev({ kind: 'pr-ready', repo: 'o/r', pr: 1, lead: 'lead_p_1', agent: 'Lt. L', goal: 'Faster goals', branch: 'fix/x' }, 2);
+    const anothers = ev({ kind: 'pr-ready', repo: 'o/r', pr: 1, lead: 'lead_p_2', agent: 'Lt. M', goal: 'Other', branch: 'fix/y' }, 2);
+    expect(goalFlow(goal(20), transcriptMoments(jsonl), [ready]).now).toEqual({ state: 'qa', since: min(3) });
+    expect(goalFlow(goal(20), transcriptMoments(jsonl), [anothers]).now).toEqual({ state: 'captain', since: min(3), reason: 'report' });
+  });
+
   it('takes in a verdict logged the very moment it’s worked out', () => {
     n = 0;
     const jsonl = [said('Your workspace', 0), ship('s1', 1), shipped('s1', 'Opened o/r#1', 2), work(3)].join('\n');

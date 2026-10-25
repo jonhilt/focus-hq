@@ -1,23 +1,21 @@
-import { type Lane, raisedPrs, raisedSaid } from '../../../shared/mergeLane';
 import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
-import type { Agent, Effort, Evidence, LeadAgent, LeadPr, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
+import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, landedNote, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
+import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
-import { EVIDENCE_PER_PR, evidenceFile, landedWaypoint, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
+import { EVIDENCE_PER_PR, evidenceFile, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import type { LeadNews } from '../../plugins/contract';
 import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
 export class Leads extends Part {
   /** The leads whose goal is closing right now: nothing of theirs ships, so a WIP snapshot never reaches a pull request. */
-  closingGoals = new Set<string>();
 
   /** Titles a new goal from the captain's first words (Haiku, off the demo), to replace the title it starts with. */
   titleGoal?: (brief: string) => Promise<string | undefined>;
@@ -153,11 +151,6 @@ export class Leads extends Part {
     this.projectsChanged();
   }
 
-  private projectsChanged(): void {
-    this.store.save();
-    this.hub.send({ type: 'projects', projects: this.store.projects });
-  }
-
   /** Starts a queued goal at a free team station, with the captain's last edits to it. */
   startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
     const project = this.store.project(projectId);
@@ -201,27 +194,20 @@ export class Leads extends Part {
         }), { concurrency: 'unbounded' });
       const check = closeCheck(work, agent.branch, repos);
       if (check.kind === 'warn' && !force) return { warn: check.reasons };
-      // a ship under way would open its pull requests after the goal's filed, on no goal: it finishes first. One that
-      // starts from here on is refused (`closingGoals`)
-      if (this.store.slice(id).phase === 'shipping') return yield* new Refused({ message: `${agent.name} is shipping their slice: close the goal once it’s shipped` });
-      this.closingGoals.add(id);
-      // on disk before any snapshot's taken: a restart from here finishes the close
+      // on disk before any snapshot's taken: a restart from here finishes the close. From here the lead's pushes are
+      // refused, so a snapshot never goes up into a pull request
       this.markClosing(agent, { at: Date.now() });
       yield* Effect.forEach(work.repos, (r) =>
         workspace.snapshot(dir(r.folder), snapshotMessage(work.title)).pipe(
           Effect.mapError((err) => new Refused({ message: `Couldn’t commit ./${r.folder}’s uncommitted work as a WIP snapshot (${err.message}), so “${work.title}” stays open` })),
           Effect.tap((saved) => Effect.sync(() => saved && this.print(agent, [{ kind: 'system', text: `✻ Committed ./${r.folder}’s uncommitted work as a WIP snapshot on ${repoBranch(r, agent.branch)}` }]))),
-        ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => {
-          this.closingGoals.delete(id);
-          this.markClosing(agent, undefined);
-        })));
+        ), { discard: true }).pipe(Effect.onError(() => Effect.sync(() => this.markClosing(agent, undefined))));
       const project = this.store.project(agent.projectId);
       const record = goalRecord(agent, Date.now());
       project.goals = fileGoal(project.goals ?? [], record);
       this.core.ledger.record(project.id, { kind: 'goal-closed', goal: record });
       this.projectsChanged();
       yield* this.core.seating.goHome(id);
-      this.closingGoals.delete(id);
       // the goal's reviewer goes home with its lead; a review they were on, or still waiting, goes to the room's QA officer
       const reviewer = goalReviewerId(id);
       for (const r of this.store.reviews.values()) {
@@ -237,9 +223,10 @@ export class Leads extends Part {
     }));
   }
 
-  /** The lead's goal as closing (its snapshots under way), or not any more: read afresh, as it may have changed meanwhile. */
+  /** The lead's goal as closing (its snapshots under way, their pushes refused), or not any more: read afresh, as it may have changed meanwhile. */
   private markClosing(agent: Agent, closeStarted: { at: number } | undefined): void {
     if (agent.lead) this.update(agent, { lead: { ...agent.lead, closeStarted } });
+    this.core.goalPrs.guardPushes(agent.id);
   }
 
   /**
@@ -264,7 +251,7 @@ export class Leads extends Part {
     return Effect.gen({ self: this }, function* () {
       const rt = this.rt(agent.id);
       const project = this.store.project(agent.projectId);
-      yield* this.core.slices.checkOutSlice(agent, project.repos);
+      yield* this.core.checkouts.checkOut(agent, project.repos);
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       // a new goal, or one whose conversation couldn't be resumed: the lead hears where it stands
       yield* this.core.sessions.runSession(agent, freshSessionPrompt(agent.lead, agent.branch, rt.inbox.take(), sliceLanded(agent.lead.prs)));
@@ -299,18 +286,13 @@ export class Leads extends Part {
     });
   }
 
-  /** The lead whose open pull request this is, if any. */
-  leadWith(repo: string, number: number): Agent | undefined {
-    return [...this.store.agents.values()].find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === repo && p.number === number && !p.outcome));
-  }
-
   /**
    * QA's verdict on a lead's pull request goes on its slice's waypoint as its shield, with its spot-checks and how CI
    * stood: the review and the board's entry are both gone by the time the pull request lands.
    */
   leadShielded(projectId: string, repo: string, number: number, report: QaReport, failedRounds: number, shots: readonly QaScreenshot[]): Effect.Effect<void> {
     return Effect.gen({ self: this }, function* () {
-      const lead = this.leadWith(repo, number);
+      const lead = this.core.goalPrs.ownerOf(repo, number);
       if (!lead?.lead) return;
       const ci = this.store.boards.get(projectId)?.prs.find((p) => p.repo === repo && p.number === number)?.checks;
       // QA's own copies go with its review when the pull request lands: the goal keeps copies of its own, as evidence
@@ -378,7 +360,7 @@ export class Leads extends Part {
    * one that comes mid-turn tells them again if the turn ends without the lead hearing it (`leadWentIdle`).
    */
   leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind): void {
-    const lead = this.leadWith(repo, number);
+    const lead = this.core.goalPrs.ownerOf(repo, number);
     if (!lead) return;
     const wasIdle = FINISHED.includes(lead.status);
     const verdict = { repo, number, verdict: report.verdict, failedRounds, behind: !!behind };
@@ -414,45 +396,4 @@ export class Leads extends Part {
     return note;
   }
 
-  /** The lead's pull request was merged or closed. Once the slice's have all landed, the lead hears about it. */
-  leadPrClosed(repo: string, number: number, merged: boolean): boolean {
-    const lead = this.leadWith(repo, number);
-    if (!lead?.lead) return false;
-    const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
-    this.store.sliceJournal(lead.id, { kind: 'landed', repo, number, merged });
-    this.update(lead, { lead: { ...lead.lead, prs, ...(sliceLanded(prs) && { waypoints: landedWaypoint(lead.lead, Date.now()) }) } });
-    this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
-    if (sliceLanded(prs)) {
-      this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
-      // their repos move at the start of their next turn, which the captain starts (or a plugin, for this)
-      this.noteForLead(lead, 'Ops', landedNote(lead.lead), { kind: 'slice-landed', slice: lead.lead.slice });
-    }
-    return true;
-  }
-
-  /**
-   * A plugin (`by`, its id) raises the lane of a goal's lead's open pull requests to `lane`, saying why: each in a lower
-   * lane goes up (docs/merging.md#lanes-how-a-goals-leads-slice-merges), with a ledger line and a comment on it; none
-   * comes down. What it raised, by repo#number.
-   */
-  raiseLane(leadId: string, lane: Lane, why: string, by: string): string[] {
-    const lead = this.store.agents.get(leadId);
-    if (lead?.task !== 'lead' || !lead.lead) return [];
-    const { prs, from } = raisedPrs(lead.lead.prs, lane, { by, why });
-    if (!from.size) return [];
-    this.update(lead, { lead: { ...lead.lead, prs } });
-    for (const [pr, was] of from) {
-      this.core.ledger.record(lead.projectId, { kind: 'lane-raised', repo: pr.repo, pr: pr.number, goal: lead.lead.title, from: was, to: lane, by, why });
-      this.background(GitHub.use((gh) => gh.commentOnPullRequest(pr.repo, pr.number, raisedSaid(was, lane))).pipe(Effect.ignore));
-    }
-    const where = [...from.keys()].map((p) => `${p.repo.split('/')[1]}#${p.number}`);
-    this.hub.toast('info', `⬆ ${where.join(', ')} raised to ${lane[0].toUpperCase()}${lane.slice(1)}: ${why}`, lead.id);
-    this.boardChanged(lead.projectId);
-    return where;
-  }
-
-  /** The leads' pull requests still open, for Ops to notice when they're merged or closed on GitHub. */
-  leadPrs(projectId: string): Pick<LeadPr, 'repo' | 'number' | 'lane'>[] {
-    return this.store.agentsIn(projectId).flatMap((a) => (a.task === 'lead' ? (a.lead?.prs ?? []).filter((p) => !p.outcome) : []));
-  }
 }

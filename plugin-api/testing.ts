@@ -2,7 +2,7 @@
 // switch the plugin on in; `FOCUS_DIR` is Focus's own checkout, a real repo to try things on.
 import { config } from '../server/config';
 
-export { focus, until } from '../server/agents/fakeFocus';
+export { focus, leadOpensPrs, until } from '../server/agents/fakeFocus';
 /** The demo's workspace, which a test's Focus works in unless it's given another, and the shape of one. */
 export { demoWorkspace } from '../server/agents/demoRunner';
 export type { WorkspaceOps } from '../server/agents/types';

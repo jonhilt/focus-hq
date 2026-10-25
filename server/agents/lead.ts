@@ -31,17 +31,6 @@ export function sliceBranch(goalTitle: string, slice: number, suffix: string): s
 }
 
 /**
- * The branch a repo's pull request ships from: named after what the slice did (the ship's title), keeping the id its
- * working branch ends in so it stays unique. Undefined when the title has nothing to name it by.
- */
-export function shipBranch(title: string, working: string): string | undefined {
-  const slug = branchSlug(title, 40);
-  if (!slug) return undefined;
-  const id = /[^-/]*$/.exec(working)?.[0];
-  return `focus/${slug}${id ? `-${id}` : ''}`;
-}
-
-/**
  * The team station a new goal gets: `wanted` if it's free, otherwise the first free one. Undefined when `wanted` is taken
  * or out of range, or when every station is.
  */
@@ -82,71 +71,8 @@ export const hasLeadWork = (agent: Agent): agent is LeadAgent => agent.lead !== 
 /** Whether the slice has landed: it shipped, and every pull request it opened has merged or closed. */
 export const sliceLanded = (prs: LeadPr[]): boolean => prs.length > 0 && prs.every((p) => p.outcome);
 
-/** The commit last shipped to a repo's pull request this slice, if any. */
-export const shippedSha = (work: LeadWork, repo: string): string | undefined => work.prs.findLast((p) => p.repo === repo && p.sha)?.sha;
-
-/** The lead's open pull request in a repo, if the slice has one. */
-export const openPr = (work: Pick<LeadWork, 'prs'>, repo: string): LeadPr | undefined => work.prs.find((p) => p.repo === repo && !p.outcome);
-
-/**
- * What a ship does with a repo's pull request once its push is done, from the one open when the ship started (`before`)
- * and the lead's pull requests as they are now: the captain may have merged or closed it while the push was under way.
- * One still open is updated; one that landed meanwhile stays landed (never put back as open), and what the push added
- * to its branch hasn't shipped: it's carried as unshipped commits are (onto a fresh branch at the next ship, or onto the
- * next slice). With none open before, Ops finds or opens one.
- */
-export type AfterPush = { kind: 'update'; pr: LeadPr } | { kind: 'landed'; pr: LeadPr & { outcome: 'merged' | 'closed' } } | { kind: 'open' };
-
-export function afterPush(before: LeadPr | undefined, now: Pick<LeadWork, 'prs'>, repo: string): AfterPush {
-  const open = openPr(now, repo);
-  if (open) return { kind: 'update', pr: open };
-  const landed = before && now.prs.find((p) => p.repo === before.repo && p.number === before.number);
-  if (landed?.outcome) return { kind: 'landed', pr: { ...landed, outcome: landed.outcome } };
-  return { kind: 'open' };
-}
-
-/** What the lead hears about a pull request that merged or closed while their ship was pushing to it. */
-export function landedMidShipNote(pr: Pick<LeadPr, 'repo' | 'number'> & { outcome: 'merged' | 'closed' }): string {
-  const then = pr.outcome === 'merged'
-    ? 'Those commits haven\'t shipped: Ops carries them over (onto a fresh branch when you ship again, or onto the next slice once this one has landed).'
-    : 'Those commits are still on its branch: ship again and Ops opens a new pull request from it.';
-  return `${pr.repo}#${pr.number} was ${pr.outcome} while the ship was pushing to it, so what this ship pushed isn't in it. ${then}`;
-}
-
 /** The branch one of the lead's repos is on: the goal's, unless Ops started it a fresh one (`needsFreshBranch`). */
 export const repoBranch = (repo: Pick<LeadWork['repos'][number], 'branch'>, branch: string): string => repo.branch ?? branch;
-
-/**
- * Whether a repo has to move to a fresh branch from its base before it ships again: a pull request from the branch it's
- * on has merged, and the slice has none open in it. A squash merge leaves the branch's own commits off the base, so a
- * new pull request from it would carry them all again, and conflict. Ops starts a new branch from the base
- * instead, bringing only the commits that haven't shipped, as a new slice does. (A pull request that was closed
- * unmerged leaves its branch fit to ship again.)
- */
-export function needsFreshBranch(work: Pick<LeadWork, 'prs'>, repo: string, branch: string): boolean {
-  if (openPr(work, repo)) return false;
-  // a pull request shipped before its branch was kept came from the branch the repo is on: nothing else moved it
-  return work.prs.some((p) => p.repo === repo && p.outcome === 'merged' && (p.branch ?? branch) === branch);
-}
-
-/** A repo Ops moved to a fresh branch before shipping it, and whether its unshipped commits came along. */
-export interface FreshBranch {
-  folder: string;
-  from: string;
-  to: string;
-  baseBranch: string;
-  commits: string[];
-  applied: boolean;
-}
-
-/** What the lead hears about a repo Ops moved to a fresh branch because its pull request had merged. */
-export function freshBranchNote({ folder, from, to, baseBranch, commits, applied }: FreshBranch): string {
-  const moved = `./${folder}'s pull request from \`${from}\` has merged, so Ops moved it to a new branch, \`${to}\`, from fresh \`${baseBranch}\``;
-  const one = commits.length === 1;
-  if (!commits.length) return `${moved}.`;
-  if (applied) return `${moved}, and brought along the ${one ? 'commit' : `${commits.length} commits`} you hadn't shipped.`;
-  return `${moved}, but the ${one ? 'commit' : `${commits.length} commits`} you hadn't shipped didn't apply cleanly to it, so ${one ? "it's" : "they're"} only on \`${from}\`. Bring ${one ? 'it' : 'them'} over with \`git -C ${folder} cherry-pick ${commits.map((c) => c.slice(0, 10)).join(' ')}\`, resolve the conflicts, then ship again.`;
-}
 
 /**
  * One repo of the lead's workspace when they ask to ship: uncommitted changes, commits not on its base branch, and
@@ -158,30 +84,6 @@ export interface RepoState {
   dirty: boolean;
   ahead: number;
   changed: boolean;
-}
-
-/** What shipping would do: nothing until every repo's work is committed, then push each repo with new commits. */
-export type ShipPlan = { kind: 'commit-first'; folders: string[] } | { kind: 'nothing' } | { kind: 'ship'; repos: string[] };
-
-export function shipPlan(repos: RepoState[]): ShipPlan {
-  const dirty = repos.filter((r) => r.dirty).map((r) => r.folder);
-  if (dirty.length) return { kind: 'commit-first', folders: dirty };
-  const ready = repos.filter((r) => r.ahead > 0 && r.changed).map((r) => r.repo);
-  return ready.length ? { kind: 'ship', repos: ready } : { kind: 'nothing' };
-}
-
-/** What the lead hears back from the ship tool when it couldn't ship. */
-export function notShipped(plan: Exclude<ShipPlan, { kind: 'ship' }>): string {
-  return plan.kind === 'commit-first'
-    ? `Nothing shipped: ${plan.folders.map((f) => `./${f}`).join(' and ')} ${plan.folders.length === 1 ? 'has' : 'have'} uncommitted changes. Commit them (or drop them) and ship again.`
-    : 'Nothing shipped: no repo has new commits since it last shipped.';
-}
-
-/** A slice's pull request description: the lead's summary, the repos shipping alongside it, and the slice's recap (`recapMarkdown`). */
-export function leadPrBody(summary: string, lead: Pick<Agent, 'name'>, alongside: string[], attribution: boolean, recap?: string): string {
-  const also = alongside.length ? `\n\nShipped alongside the same slice in ${alongside.join(' and ')}.` : '';
-  const body = `${summary.trim() || 'A slice of work toward a larger goal.'}${also}${recap ? `\n\n${recap}` : ''}`;
-  return attribution ? `${body}\n\n---\n_Built by **${lead.name}**, a lead aboard the USS Focus, with Claude Code._` : body;
 }
 
 /** Where the lead's repos are and which branch each is on, for their first message and a new slice. */
@@ -197,14 +99,6 @@ export function workspaceList(work: LeadWork, branch: string): string {
 export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string, station: number): string {
   return crewPrompt('lead', { name: agent.name, project: projectName, station: String(station + 1), ...CREW_RULES }).trim();
 }
-
-/**
- * What happens when a slice has landed and the lead takes their next turn: nothing moves while a repo has uncommitted
- * changes; otherwise the repos move to fresh code for the next slice, taking along commits that never shipped. The
- * conversation is left as it is: it's compacted before a turn once it's grown big enough (`compactsFirst`), or when
- * the captain asks.
- */
-export const afterLanding = (dirtyFolders: string[]): 'held-back' | 'next' => (dirtyFolders.length ? 'held-back' : 'next');
 
 /**
  * What a lead's conversation keeps when the captain compacts it: the goal and how it's going, not the details the code
@@ -313,8 +207,6 @@ export function pageErrorsNote(errors: readonly string[]): string {
   const more = distinct.length > shown.length ? ` (and ${distinct.length - shown.length} more)` : '';
   return ` But the page reported ${distinct.length === 1 ? 'an error' : 'errors'} as it loaded${more}: ${shown.map((e) => `“${e}”`).join('; ')}. Fix it and show it again under the same id.`;
 }
-
-
 
 export const QUESTION_LIMITS = { question: 300, context: 600, label: 60, detail: 500, minOptions: 2, maxOptions: 4, kept: 12, note: 1000 } as const;
 
@@ -537,12 +429,6 @@ export function workspaceNote(work: LeadWork, branch: string): string {
   return `Your workspace, with every repo of the project checked out side by side:\n${workspaceList(work, branch)}`;
 }
 
-/** What the lead hears back after shipping: each pull request opened or updated, and whether QA reviews it by itself. */
-export function shipped(lines: string[], autoQa: boolean): string {
-  const qa = autoQa ? "The room's QA officer reviews each pull request, and you'll hear their verdict." : "Auto-QA is off for this project: QA reviews a pull request when the captain sends it, and you'll hear that verdict.";
-  return `${lines.join('\n')}\n\n${qa}`;
-}
-
 /** A goal's own QA reviewer, reused from review to review like the room's QA officer. */
 export const goalReviewerId = (leadId: string) => `qa_${leadId}`;
 
@@ -634,11 +520,6 @@ export function conflictsResolvedNote(pr: { repo: string; number: number; baseBr
   ].join(' ');
 }
 
-/** The lead's checkout of a repo is missing commits someone else pushed to the slice's branch, so shipping it would lose them. */
-export function behindNote(folder: string, branch: string): string {
-  return `Nothing shipped: GitHub's \`${branch}\` has commits ./${folder} doesn't (Ops pushed a merge to it). Pull them with \`git -C ${folder} pull --no-rebase origin ${branch}\`, check the result, then ship again.`;
-}
-
 /** The slice's pull requests, each merged or closed unmerged. */
 function landedPrs(work: LeadWork): string {
   return work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
@@ -646,24 +527,13 @@ function landedPrs(work: LeadWork): string {
 
 /**
  * The slice's pull requests have all merged or closed, as a note for the lead: heard with the next message they get,
- * mid-turn or as a turn starts, so it says what landed and when their repos move rather than what to do next.
+ * mid-turn or as a turn starts, so it says what landed and where their checkouts stand rather than what to do next.
  */
 export function landedNote(work: LeadWork): string {
   return [
     `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
-    `Your repos move to fresh code at the start of your first turn after it landed, bringing your later commits along.`,
+    `Your checkouts stay as they are: start what's next on a fresh branch from the base, since a push to a branch whose pull request merged is refused.`,
   ].join(' ');
-}
-
-/**
- * What the lead hears when a new slice starts: their repos on fresh code, and the goal as the captain put it and the
- * lead wrote it down.
- */
-export function newSliceNote(work: LeadWork, branch: string): string {
-  return [
-    `Slice ${work.slice} starts on fresh code. Your repos are now:\n${workspaceList(work, branch)}`,
-    `Where the goal stands:\n\n${noteForPrompt(work)}`,
-  ].join('\n\n');
 }
 
 /**
@@ -691,30 +561,6 @@ export function freshSessionPrompt(work: LeadWork, branch: string, inbox: string
     `You're carrying on with this goal in a new conversation: the one before couldn't be picked back up.${landed ? '' : ` Where the goal stands:\n\n${noteForPrompt(work)}`}`,
     words || "Look over the repos, then tell the captain where you think the goal stands and what you'd do next.",
   ].filter(Boolean).join('\n\n');
-}
-
-/** The slice landed but some repos still have uncommitted changes: the next slice waits for them. */
-export function heldBack(work: LeadWork, folders: string[]): string {
-  return `Slice ${work.slice} has landed, but ${folders.map((f) => `./${f}`).join(' and ')} still ${folders.length === 1 ? 'has' : 'have'} uncommitted changes, so your repos stay where they are. Ship them as part of the next slice, or discard them; the next slice starts on fresh code once every repo is clean.`;
-}
-
-/** Commits in one repo that hadn't shipped when the slice landed, and whether they made it onto the new slice's branch. */
-export interface Carried {
-  folder: string;
-  commits: string[];
-  applied: boolean;
-}
-
-/** What the lead hears about the commits they hadn't shipped when the slice landed (nothing when there were none). */
-export function carriedNote(carried: Carried[], oldBranch: string): string {
-  const lines = carried.map(({ folder, commits, applied }) => {
-    const one = commits.length === 1;
-    const these = one ? 'the commit' : `the ${commits.length} commits`;
-    return applied
-      ? `- ./${folder}: ${these} you hadn't shipped came along onto the new branch.`
-      : `- ./${folder}: ${these} you hadn't shipped didn't apply cleanly to fresh code, so ${one ? "it's" : "they're"} only on \`${oldBranch}\`. Bring ${one ? 'it' : 'them'} over with \`git cherry-pick ${commits.map((c) => c.slice(0, 10)).join(' ')}\` and resolve the conflicts.`;
-  });
-  return lines.length ? `Work you'd committed but not shipped:\n${lines.join('\n')}` : '';
 }
 
 /** How long a finished helper stays at the team station, so you see it done before it goes. */

@@ -27,14 +27,20 @@ describe('raising the lane of a lead’s pull requests', () => {
   const by = { by: 'chief-of-staff', why: 'It changes a card.' };
 
   it('takes each open one in a lower lane up, with who and why, and leaves the rest', () => {
-    const prs = [{ n: 1, lane: 'ship' as const }, { n: 2, lane: 'ask' as const }, { n: 3, lane: 'ship' as const, outcome: 'merged' }];
+    const prs = [{ repo: 'o/r', number: 1, lane: 'ship' as const }, { repo: 'o/r', number: 2, lane: 'ask' as const }, { repo: 'o/r', number: 3, lane: 'ship' as const, outcome: 'merged' }];
     const { prs: next, from } = raisedPrs(prs, 'show', by);
-    expect(next).toEqual([{ n: 1, lane: 'show', raised: { lane: 'show', ...by } }, prs[1], prs[2]]);
+    expect(next).toEqual([{ repo: 'o/r', number: 1, lane: 'show', raised: { lane: 'show', ...by } }, prs[1], prs[2]]);
     expect([...from.values()]).toEqual(['ship']);
   });
 
+  it('takes only the one it’s given up, when it’s given one', () => {
+    const prs = [{ repo: 'o/r', number: 1, lane: 'ship' as const }, { repo: 'o/r', number: 2, lane: 'ship' as const }];
+    const { prs: next } = raisedPrs(prs, 'ask', by, { repo: 'o/r', number: 2 });
+    expect(next.map((p) => p.lane)).toEqual(['ship', 'ask']);
+  });
+
   it('lowers none', () => {
-    expect(raisedPrs([{ lane: 'ask' as const }], 'ship', by).from.size).toBe(0);
+    expect(raisedPrs([{ repo: 'o/r', number: 1, lane: 'ask' as const }], 'ship', by).from.size).toBe(0);
   });
 
   it('says so on the pull request', () => {

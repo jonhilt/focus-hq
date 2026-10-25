@@ -454,7 +454,7 @@ export class Reviews extends Part {
       const done = this.store.reviews.get(prKey(repo, number));
       const checks = { pass: 0, fail: 0, skip: 0 };
       for (const c of report.checks) checks[c.result]++;
-      this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.leads.leadWith(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds, ...(crew && { crew }) });
+      this.core.ledger.record(projectId, { kind: 'qa-verdict', repo, pr: number, goal: this.core.goalPrs.ownerOf(repo, number)?.lead?.title, verdict: verdict.verdict, sha, reviewer: officer, checks, failedRounds, ...(crew && { crew }) });
       if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
       this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${report.advisory ? 'passed, with advice,' : pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
       this.boardChanged(projectId);
@@ -582,7 +582,7 @@ export class Reviews extends Part {
       if (!report) return;
       const where = `${review.repo.split('/')[1]}#${review.number}`;
       const why = fixes.kind === 'qa' ? 'failed QA' : 'keeps failing its checks';
-      if (fixes.kind === 'checks') this.core.ledger.record(review.projectId, { kind: 'checks-sent-back', repo: review.repo, pr: review.number, goal: this.core.leads.leadWith(review.repo, review.number)?.lead?.title, checks: fixes.checks.map((c) => c.name) });
+      if (fixes.kind === 'checks') this.core.ledger.record(review.projectId, { kind: 'checks-sent-back', repo: review.repo, pr: review.number, goal: this.core.goalPrs.ownerOf(review.repo, review.number)?.lead?.title, checks: fixes.checks.map((c) => c.name) });
       const advice = note && `${plannerFor(review.projectId).name}, the operations officer, looked at why this PR is stuck: ${note}`;
       const owner = this.core.seating.prOwner(review.repo, review.number);
       if (owner) {

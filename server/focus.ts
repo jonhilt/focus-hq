@@ -389,6 +389,7 @@ export class Focus {
     const preview = this.previews.list().find((p) => p.projectId === projectId);
     for (const { repo, number } of previewPrsGone(preview, board)) this.previews.closed(repo, number);
 
+    await this.agents.boardRefreshed(projectId, board.prs);
     await this.noticeClosedPullRequests(projectId, board);
     await this.requestedMerges(projectId, board);
     this.verdictsCatchUp(projectId, board);

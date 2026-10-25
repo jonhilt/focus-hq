@@ -38,16 +38,13 @@ export interface Expectation {
   run(w: World): Promise<void>;
 }
 
-const rejects = (p: Promise<unknown>) => p.then(() => false, () => true);
-
 export const WORKSPACE_CONTRACT: Expectation[] = [
   {
-    name: 'a new checkout starts at origin’s base: nothing ahead, unshipped or uncommitted',
+    name: 'a new checkout starts at origin’s base: nothing ahead or uncommitted',
     run: async (w) => {
       const dir = await w.checkout('a1', 'focus/new');
       expect(await w.ops.head(dir)).toBe(await w.originHead('main'));
       expect(await w.ops.commitsAhead(dir, 'main')).toBe(0);
-      expect(await w.ops.unshippedCommits(dir, 'main')).toEqual([]);
       expect(await w.ops.hasUncommittedChanges(dir)).toBe(false);
     },
   },
@@ -61,21 +58,6 @@ export const WORKSPACE_CONTRACT: Expectation[] = [
       const after = await w.ops.head(dir);
       expect(after).not.toBe(before);
       expect(await w.ops.head(dir)).toBe(after);
-    },
-  },
-  {
-    name: 'unshipped commits are those since the base, oldest first, less what shipped (all of them when git doesn’t know the shipped one)',
-    run: async (w) => {
-      const dir = await w.checkout('a1', 'focus/unshipped');
-      await w.commit(dir, 'a.ts', 'a');
-      const a = await w.ops.head(dir);
-      await w.commit(dir, 'b.ts', 'b');
-      const b = await w.ops.head(dir);
-      expect(await w.ops.commitsAhead(dir, 'main')).toBe(2);
-      expect(await w.ops.unshippedCommits(dir, 'main')).toEqual([a, b]);
-      expect(await w.ops.unshippedCommits(dir, 'main', a)).toEqual([b]);
-      expect(await w.ops.unshippedCommits(dir, 'main', b)).toEqual([]);
-      expect(await w.ops.unshippedCommits(dir, 'main', '0123456789abcdef0123456789abcdef01234567')).toEqual([a, b]);
     },
   },
   {
@@ -112,7 +94,6 @@ export const WORKSPACE_CONTRACT: Expectation[] = [
       await w.land('theirs.ts', 'theirs');
       await w.ops.push(dir, 'focus/moved');
       expect(await w.ops.commitsAhead(dir, 'main')).toBe(1);
-      expect(await w.ops.unshippedCommits(dir, 'main')).toHaveLength(1);
       if (w.ops.changedFiles) expect(await w.ops.changedFiles(dir, 'main')).toEqual(['mine.ts']);
     },
   },
@@ -123,57 +104,7 @@ export const WORKSPACE_CONTRACT: Expectation[] = [
       await w.land('readme.md', 'moved before the checkout');
       const dir = await w.checkout('a1', 'focus/base');
       expect(await w.localRef(dir, 'main')).toBe(await w.originHead('main'));
-      await w.land('readme.md', 'moved again');
-      await w.ops.freshBranch(dir, 'focus/base-2', 'main');
-      const tip = await w.originHead('main');
-      expect(await w.localRef(dir, 'main')).toBe(tip);
-      expect(await w.ops.head(dir)).toBe(tip);
       expect(await w.ops.commitsAhead(dir, 'main')).toBe(0);
-    },
-  },
-  {
-    name: 'a squash-merged slice moves to fresh code carrying only what never shipped',
-    run: async (w) => {
-      const dir = await w.checkout('a1', 'focus/slice-1');
-      await w.commit(dir, 'saved.ts', 'save');
-      await w.ops.push(dir, 'focus/slice-1');
-      const shipped = await w.ops.head(dir);
-      await w.commit(dir, 'saved.ts', 'save and list');
-      const next = await w.ops.head(dir);
-      // the pull request merges, squashed into one commit on main, and GitHub deletes its branch
-      await w.land('saved.ts', 'save');
-      await w.deleteOnOrigin('focus/slice-1');
-      const unshipped = await w.ops.unshippedCommits(dir, 'main', shipped);
-      expect(unshipped).toEqual([next]);
-      await w.ops.freshBranch(dir, 'focus/slice-2', 'main');
-      await w.ops.cherryPick(dir, unshipped);
-      expect(await w.ops.commitsAhead(dir, 'main')).toBe(1);
-      expect(await w.read(dir, 'saved.ts')).toBe('save and list');
-    },
-  },
-  {
-    name: 'commits that don’t apply fail the cherry-pick, leaving HEAD and the checkout as they were',
-    run: async (w) => {
-      const dir = await w.checkout('a1', 'focus/pick');
-      await w.commit(dir, 'saved.ts', 'save');
-      await w.commit(dir, 'saved.ts', 'save and list');
-      const next = await w.ops.head(dir);
-      // the first never landed, so the second has nothing to apply to
-      await w.ops.freshBranch(dir, 'focus/pick-2', 'main');
-      const before = await w.ops.head(dir);
-      expect(await rejects(w.ops.cherryPick(dir, [next]))).toBe(true);
-      expect(await w.ops.head(dir)).toBe(before);
-      expect(await w.ops.hasUncommittedChanges(dir)).toBe(false);
-    },
-  },
-  {
-    name: 'renaming onto a branch that’s taken fails, and onto a free name works',
-    run: async (w) => {
-      await w.checkout('a1', 'focus/taken');
-      const dir = await w.checkout('a2', 'focus/working');
-      expect(await rejects(w.ops.renameBranch(dir, 'focus/working', 'focus/taken'))).toBe(true);
-      await w.ops.renameBranch(dir, 'focus/working', 'focus/named');
-      expect(await w.localRef(dir, 'HEAD')).toBe(await w.localRef(dir, 'focus/named'));
     },
   },
   {

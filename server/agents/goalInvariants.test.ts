@@ -2,12 +2,12 @@ import { Effect, Layer } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import { closedGoals } from '../../shared/ledger';
 import { openQuestion } from '../../shared/artifacts';
-import type { GoalArtifact, GoalQuestion, LeadPr } from '../../shared/types';
+import type { GoalArtifact, GoalQuestion, LeadPr, PullRequest } from '../../shared/types';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
 import { everyPr, leadWorktreeId } from './lead';
-import { focus, type Render, restarted } from './fakeFocus';
+import { focus, leadOpensPrs, type Render, restarted } from './fakeFocus';
 import { type Action, checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
 import type { OpsTools, WorkspaceOps } from './types';
 
@@ -69,7 +69,6 @@ const workspace = (later: Later, disk: Disk): WorkspaceOps => {
       return Promise.resolve(true);
     }),
     head: (dir) => Promise.resolve(`${dir}@${disk.commits.get(dir) ?? 0}`),
-    unshippedCommits: (dir, _base, shipped) => Promise.resolve(shipped === `${dir}@${disk.commits.get(dir) ?? 0}` ? [] : [`${dir}@${disk.commits.get(dir) ?? 0}`]),
     push: () => later('push', () => Promise.resolve()),
   };
 };
@@ -160,7 +159,7 @@ const goal = (only?: RegExp): Subject<Kept> => ({
         work: [...[...disk.checkouts.values()].flatMap((c) => c.uncommitted.map((w) => `${w}, uncommitted`)), ...[...disk.branches.values()].flat().map((w) => `${w}, committed`)].sort(),
       };
     };
-    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude'>): Running<Kept> => {
+    const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude' | 'github'>): Running<Kept> => {
       const ended = new Set<number>();
       // Claude Code calls a tool that changes things one at a time: never two of the lead's at once
       let busy = false;
@@ -193,16 +192,18 @@ const goal = (only?: RegExp): Subject<Kept> => ({
           },
         },
         {
-          name: 'the lead ships',
-          run: () =>
-            tool((t) => {
-              // they commit, then ship
-              for (const r of store.agent(id).lead?.repos ?? []) {
-                const dir = demoWorkspace.dir(leadWorktreeId(id, r.folder));
-                disk.commits.set(dir, (disk.commits.get(dir) ?? 0) + 1);
-              }
-              return t.ship({ title: 'Saved items', summary: 'A slice.' });
-            }),
+          name: 'the lead opens its pull requests',
+          run: () => {
+            // in a turn, one tool at a time: they commit, push and open them with gh, and the board sees them
+            if (busy) throw new Error('the lead is using another tool');
+            turn();
+            busy = true;
+            for (const r of store.agent(id).lead?.repos ?? []) {
+              const dir = demoWorkspace.dir(leadWorktreeId(id, r.folder));
+              disk.commits.set(dir, (disk.commits.get(dir) ?? 0) + 1);
+            }
+            return leadOpensPrs({ agents: o.agents, store, github: o.github }, id).finally(() => (busy = false));
+          },
         },
         {
           name: 'the turn ends',
@@ -233,6 +234,9 @@ const goal = (only?: RegExp): Subject<Kept> => ({
           o.agents.shutDown();
           const after = restarted(store, workspace(later, disk), github(later), pictures(later));
           after.agents.recover();
+          // as Focus starts, it refreshes the board: the pull requests open on GitHub are claimed again
+          const board = opened.map((p): PullRequest => ({ repo: p.repo, number: p.number, title: 'Saved items', url: `https://github.com/${p.repo}/pull/${p.number}`, branch: p.branch, baseBranch: 'main', isDraft: false, mergeable: 'MERGEABLE', checks: 'pending', failedChecks: [], closes: [], createdAt: '2026-10-25T00:00:00Z' }));
+          void after.agents.boardRefreshed(project.id, board);
           return life(after);
         },
       };
@@ -263,7 +267,7 @@ describe('a goal’s life to its close, under Focus’s two rules', () => {
     await take('the lead asks');
     await take('the turn ends');
     await take('the captain picks A');
-    await take('the lead ships');
+    await take('the lead opens its pull requests');
     await take('the lead leaves work uncommitted');
     expect(g.durable()).toMatchObject({ open: true, logged: false, work: ['edit 1, uncommitted'], prs: [expect.stringContaining('#'), expect.stringContaining('#')] });
     const closed = await take('the captain closes the goal');
@@ -302,8 +306,8 @@ describe('a goal’s life to its close, under Focus’s two rules', () => {
     await checkAtOnce(goal(/asks|closes/), { runs: 40, prefix: 2 });
   });
 
-  // the captain closing while the lead ships: the pull requests the ship opens stay on the goal
-  it('end a close and a ship at once as one after the other would', async () => {
-    await checkAtOnce(goal(/uncommitted|ships|closes/), { runs: 25, prefix: 1 });
+  // the captain closing while the lead opens pull requests: those the goal claims stay on it
+  it('end a close and the lead opening pull requests at once as one after the other would', async () => {
+    await checkAtOnce(goal(/uncommitted|opens its pull requests|closes/), { runs: 25, prefix: 1 });
   });
 });

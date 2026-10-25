@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, FocusPlugin } from '../../plugin-api/server';
-import { demoWorkspace, focus, until } from '../../plugin-api/testing';
+import { demoWorkspace, focus, leadOpensPrs, until } from '../../plugin-api/testing';
 import { ChiefOfStaff, type Judge } from './chief';
 import type { Router } from './jevRouter';
 import { judgeVersion } from './judge';
@@ -197,12 +197,12 @@ describe('the chief of staff', () => {
   });
 
   describe('waking a lead for a note Ops left them', () => {
-    /** The lead ships its slice and ends its turn, which the judge sends back to them (or `answer`s) once `held` is over. */
+    /** The lead opens its pull requests and ends its turn, which the judge sends back to them (or `answer`s) once `held` is over. */
     async function shipped(answer?: unknown, held?: Promise<void>) {
       const o = await aboard(answer, held);
       o.project.autoSendBack = true;
-      await o.claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-      o.claude.turns[0].end({ ok: true, summary: 'Shipped' });
+      await leadOpensPrs(o, o.lead().id, 'Saved items, first slice');
+      o.claude.turns[0].end({ ok: true, summary: 'Opened the pull requests' });
       await until(() => o.lead().status === 'done' && (!!held || !!o.read()?.judged));
       return o;
     }
@@ -294,7 +294,7 @@ describe('the chief of staff', () => {
   });
 });
 
-// README.md#raising-a-ships-lane: it reads each ship's recap and raises its lane where the captain would want to see it first
+// README.md#raising-a-pull-requests-lane: it reads each pull request's recap and raises its lane where the captain would want to see it first
 describe('the chief of staff reading a ship’s lane', () => {
   /** A lead who shipped a slice in Ship, and a chief of staff whose judge answers its read with `answer` (or fails). */
   async function shipped(answer: unknown) {
@@ -318,11 +318,13 @@ describe('the chief of staff reading a ship’s lane', () => {
     o.agents.startPlugins([plugin], { demo: false, ownRepo: () => undefined, transcript: () => Promise.resolve('') });
     const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
     await until(() => o.claude.turns.length === 1);
-    const ship = (lane: 'ship' | 'show') => o.claude.turns[0].req.tools!.ship({
-      title: 'Saved items',
-      summary: 'A thin first slice.',
+    const prs = await leadOpensPrs(o, agent.id);
+    // the lead puts a recap on each of their pull requests, which picks its lane
+    const ship = (lane: 'ship' | 'show') => Promise.all(prs.map((pr) => o.claude.turns[0].req.tools!.recap({
+      repo: pr.repo,
+      number: pr.number,
       recap: { primitives: [{ id: 'saved', group: 'shop', impact: 'composes', change: 'Wired in', paths: ['webshop-frontend/', 'webshop-api/'] }], lane },
-    });
+    })));
     await ship('ship');
     const lanes = () => o.store.agents.get(agent.id)!.lead!.prs.map((p) => p.lane);
     const pr = () => o.store.agents.get(agent.id)!.lead!.prs[0];
@@ -339,13 +341,14 @@ describe('the chief of staff reading a ship’s lane', () => {
     expect(o.asked[0].prompt).toContain('- saved (shop), composes: Wired in');
   });
 
-  it('keeps the lead’s pick, saying why in the ledger, and reads a ship once', async () => {
+  it('keeps the lead’s pick, saying why in the ledger, and reads each pull request once', async () => {
     const o = await shipped({ lane: 'ship', why: 'It only wires in parts as they are.' });
     await o.read();
     await o.read();
-    expect(o.asked).toHaveLength(1);
+    expect(o.asked).toHaveLength(2);
     expect(o.lanes()).toEqual(['ship', 'ship']);
-    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ship', why: 'It only wires in parts as they are.', version: laneJudgeVersion(), model: 'claude-haiku-4-5' }]);
+    const read = { from: 'ship', to: 'ship', why: 'It only wires in parts as they are.', version: laneJudgeVersion(), model: 'claude-haiku-4-5' };
+    expect(o.lines('cos-lane')).toMatchObject([read, read]);
     expect(o.lines('lane-raised')).toEqual([]);
   });
 
@@ -360,7 +363,7 @@ describe('the chief of staff reading a ship’s lane', () => {
     expect(o.lanes()).toEqual(['ask', 'ask']);
   });
 
-  it('takes a raise again that a restart lost, without reading the ship again', async () => {
+  it('takes a raise again that a restart lost, without reading the pull requests again', async () => {
     const o = await shipped({ lane: 'ask', why: 'It changes what the captain sees on a card.' });
     await o.read();
     // Focus went down after the ledger had the read, before the raise was saved
@@ -368,9 +371,22 @@ describe('the chief of staff reading a ship’s lane', () => {
     o.store.agents.set(lead.id, { ...lead, lead: { ...lead.lead!, prs: lead.lead!.prs.map(({ raised: _, ...p }) => ({ ...p, lane: 'ship' as const })) } });
     expect(o.chief.mergeHeld(o.pr())).toBe('the chief of staff raised it to Ask');
     await o.read();
-    expect(o.asked).toHaveLength(1);
+    expect(o.asked).toHaveLength(2);
     expect(o.lanes()).toEqual(['ask', 'ask']);
     expect(o.chief.mergeHeld(o.pr())).toBeUndefined();
+  });
+
+  it('reads a lead’s own pull request by the recap they put on it', async () => {
+    const o = await shipped({ lane: 'ship', why: 'It only fixes a typo.' });
+    const lead = [...o.store.agents.values()].find((a) => a.lead)!;
+    const recap = { primitives: [{ id: 'header', group: 'shop', impact: 'composes' as const, change: 'Fixes a typo', paths: ['webshop-frontend/'] }], lane: 'ship' as const };
+    const own = { repo: 'demo/webshop-frontend', number: 77, url: 'u', branch: 'fix/typo', sha: 'abc1234', lane: 'ship' as const, recap: { title: 'Fix the typo in the header', summary: 'Wishlsit, fixed.', recap } };
+    o.store.agents.set(lead.id, { ...lead, lead: { ...lead.lead!, prs: [own] } });
+    expect(o.chief.mergeHeld(own)).toBe('the chief of staff hasn’t read its lane yet');
+    await o.read();
+    expect(o.asked[0].prompt).toContain('Fix the typo in the header');
+    expect(o.lines('cos-lane')).toMatchObject([{ prs: [{ repo: 'demo/webshop-frontend', pr: 77, sha: 'abc1234' }], from: 'ship', to: 'ship' }]);
+    expect(o.chief.mergeHeld(own)).toBeUndefined();
   });
 
   it('reads a ship only once Ops has pushed all of it', async () => {
@@ -380,11 +396,11 @@ describe('the chief of staff reading a ship’s lane', () => {
     expect(o.chief.readShips(o.project.id)).toEqual([]);
   });
 
-  it('puts a ship it couldn’t read in Ask: an unread one is the captain’s', async () => {
+  it('puts a pull request it couldn’t read in Ask: an unread one is the captain’s', async () => {
     const o = await shipped(new Error('Haiku is down'));
     await o.read();
     expect(o.lanes()).toEqual(['ask', 'ask']);
-    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ask', failed: 'Haiku is down' }]);
+    expect(o.lines('cos-lane')).toMatchObject([{ from: 'ship', to: 'ask', failed: 'Haiku is down' }, { from: 'ship', to: 'ask', failed: 'Haiku is down' }]);
     expect(o.chief.mergeHeld(o.pr())).toBeUndefined();
   });
 });

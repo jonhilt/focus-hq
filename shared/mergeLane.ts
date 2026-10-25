@@ -47,12 +47,12 @@ export const LANE_SAID_PUBLIC: Record<Lane, string> = {
   ask: 'waits for a maintainer to merge it',
 };
 
-/** What a raise does to a lead's pull requests: each still open in a lower lane goes up to `lane`, the rest as they were. */
-export function raisedPrs<P extends { lane?: Lane; outcome?: unknown }>(prs: readonly P[], lane: Lane, raised: { by: string; why: string }): { prs: P[]; from: Map<P, Lane> } {
+/** What a raise does to a lead's pull requests (or just `only`): each still open in a lower lane goes up to `lane`, the rest as they were. */
+export function raisedPrs<P extends { repo: string; number: number; lane?: Lane; outcome?: unknown }>(prs: readonly P[], lane: Lane, raised: { by: string; why: string }, only?: { repo: string; number: number }): { prs: P[]; from: Map<P, Lane> } {
   const from = new Map<P, Lane>();
   const next = prs.map((p) => {
     const was = p.lane ?? 'ask';
-    if (p.outcome || higherLane(was, lane) === was) return p;
+    if (p.outcome || higherLane(was, lane) === was || (only && !(p.repo === only.repo && p.number === only.number))) return p;
     const up = { ...p, lane, raised: { lane, ...raised } };
     from.set(up, was);
     return up;

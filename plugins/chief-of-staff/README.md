@@ -17,14 +17,14 @@ Over a goal's pod, the team screen shows it holding the goal's move while it rea
 
 Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 
-## Raising a ship's lane
+## Raising a pull request's lane
 
-A goal's lead ships each slice in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges): Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):
+A goal's lead puts each of their pull requests in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges) with the recap they put on it: Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):
 
-- **It reads each ship once,** as the project's board refreshes after it: the goal, the pull requests' title and description, the lead's pick and the slice's recap, by the lane rules and the captain's standing orders, with Haiku as for a turn. Its answer is a `cos-lane` ledger line, kept or raised, with why and its prompt's version, to check against what the captain did with it.
-- **Nothing in Ship or Show merges by itself before it has read it** at the commit it's at (`mergeHeld`): a new ship is read again. Ask is as high as it goes, so it isn't read.
-- **One it couldn't read goes in Ask,** since a ship it hasn't read is the captain's, and the `cos-lane` line says why (`failed`).
-- **A raise is Ops'**, through `host.goals.raiseLane`: each pull request in a lower lane goes up, with a `lane-raised` line and a comment on it saying why.
+- **It reads each pull request once,** as the project's board refreshes after the lead's recap: the goal, the pull request's title and description, the lead's pick and its recap, by the lane rules and the captain's standing orders, with Haiku as for a turn. Its answer is a `cos-lane` ledger line, kept or raised, with why and its prompt's version, to check against what the captain did with it.
+- **Nothing in Ship or Show merges by itself before it has read it** at the commit its recap was put on at (`mergeHeld`): a new recap is read again. Ask is as high as it goes, so it isn't read.
+- **One it couldn't read goes in Ask,** since a pull request it hasn't read is the captain's, and the `cos-lane` line says why (`failed`).
+- **A raise is Ops'**, through `host.goals.raiseLane`, on that pull request alone: it goes up, with a `lane-raised` line and a comment on it saying why.
 
 ## Landed in Show
 

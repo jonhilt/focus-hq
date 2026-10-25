@@ -25,7 +25,7 @@ export class Ledger extends Part {
     const key = prKey(repo, number);
     if (this.landed.has(key)) return;
     const review = this.store.reviews.get(key);
-    const lead = this.core.leads.leadWith(repo, number);
+    const lead = this.core.goalPrs.ownerOf(repo, number);
     const projectId = review?.projectId ?? lead?.projectId ?? this.core.seating.prOwner(repo, number)?.projectId;
     if (!projectId) return;
     this.landed.add(key);
@@ -54,7 +54,7 @@ export class Ledger extends Part {
     if (!read || !sessionId || agent.cloud) return;
     // as they are now: the agent may be gone by the time the transcript's read
     const who = { id: agent.id, name: agent.name, task: agent.task, sessionId, costUsd: agent.costUsd };
-    const goal = agent.lead?.title ?? prs.map((p) => this.core.leads.leadWith(p.repo, p.pr)?.lead?.title).find(Boolean);
+    const goal = agent.lead?.title ?? prs.map((p) => this.core.goalPrs.ownerOf(p.repo, p.pr)?.lead?.title).find(Boolean);
     const digest = async () => {
       const text = await read(sessionId);
       const span = text && transcriptSpan(text, lastDigest(this.store.ledger, sessionId)?.toUuid);

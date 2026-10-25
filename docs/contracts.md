@@ -10,16 +10,12 @@ So each interface Focus fakes gets a **contract**: one suite of behavioural expe
 
 | expectation | taught by | git | demo |
 | --- | --- | --- | --- |
-| a new checkout starts at origin's base: nothing ahead, unshipped or uncommitted | | ✓ | always 2 ahead |
+| a new checkout starts at origin's base: nothing ahead or uncommitted | | ✓ | always 2 ahead |
 | HEAD stays put until a commit, which moves it | | ✓ | a new HEAD on every read |
-| unshipped commits: those since the base, oldest first, less what shipped | | ✓ | 2 ahead, none unshipped |
 | an untracked file is an uncommitted change, and a snapshot commits it | b186a17 | ✓ | no disk |
 | a branch never pushed isn't on origin and counts from the base; once pushed, nothing is unpushed | | ✓ | always on origin |
 | the base moving on origin is never the branch's own work | | ✓ | no disk |
 | the local base follows origin's, so an agent's diff against `main` is only theirs | b0ac83c | ✓ | no disk |
-| a squash-merged slice moves to fresh code carrying only what never shipped | | ✓ | no disk |
-| commits that don't apply fail the cherry-pick, leaving HEAD as it was | | ✓ | always applies |
-| renaming onto a taken branch fails | | ✓ | always works |
 | a push lands after GitHub deleted the branch it last went to | 5e27b8e | ✓ | no origin |
 | someone else's commits on origin's branch are noticed, and a pull brings them in | | ✓ | nobody else pushes |
 | publishing creates the branch, or takes what a cloud session pushed, never overwriting it | | ✓ | no origin |

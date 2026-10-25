@@ -67,7 +67,7 @@ export class Merges extends Part {
   }
 
   private record(projectId: string, pr: MergeTarget, how: MergeHow, fields: CheckFields): void {
-    const goal = this.core.leads.leadWith(pr.repo, pr.number)?.lead?.title;
+    const goal = this.core.goalPrs.ownerOf(pr.repo, pr.number)?.lead?.title;
     this.core.ledger.record(projectId, { kind: 'merge-check', repo: pr.repo, pr: pr.number, ...(goal && { goal }), by: how.by, ...fields });
   }
 

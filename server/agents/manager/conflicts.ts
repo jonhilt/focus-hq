@@ -24,7 +24,7 @@ export class Conflicts extends Part {
   async resolveConflicts(projectId: string, pr: PullRequest): Promise<ConflictsOutcome> {
     const resolving = [...this.store.agents.values()].find((a) => a.task === 'conflicts' && a.repo === pr.repo && a.pr?.number === pr.number && !FINISHED.includes(a.status));
     if (resolving) throw new Refused({ message: `${resolving.name} is already resolving the conflicts on #${pr.number}` });
-    const lead = this.core.leads.leadWith(pr.repo, pr.number);
+    const lead = this.core.goalPrs.ownerOf(pr.repo, pr.number);
     const owner = lead ? undefined : this.core.seating.prOwner(pr.repo, pr.number);
     const merge = await this.mergeBase(pr);
     if (merge.kind === 'up-to-date') return merge;

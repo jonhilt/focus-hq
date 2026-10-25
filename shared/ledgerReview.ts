@@ -51,6 +51,8 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'alert':
     case 'intent':
     case 'decision':
+    case 'pr':
+    case 'pr-ready':
       return 'goals';
     case 'retro-decision':
       return 'retro';
@@ -193,9 +195,13 @@ function scoreRow(e: Of<'qa-score'>): RowParts {
   return { tag: 'Scored', tone: e.passed ? 'ok' : e.score > 0 ? 'warn' : 'bad', title: `${short(e.repo)} #${e.pr} · QA's report graded ${e.label} (${e.score})`, detail: [e.why, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
 }
 
-/** A line about a goal itself: it closing, its threads, its intent and decisions. */
-function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'decision'>): RowParts {
+/** A line about a goal itself: it closing, its threads, its intent and decisions, a PR its lead opened. */
+function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'decision' | 'pr' | 'pr-ready'>): RowParts {
   switch (e.kind) {
+    case 'pr-ready':
+      return { tag: 'Ready', tone: 'info', title: `${short(e.repo)} #${e.pr} · ready for review`, detail: [e.agent, e.branch, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
+    case 'pr':
+      return { tag: 'Opened', tone: 'info', title: `${short(e.repo)} #${e.pr} · opened by ${e.agent}${e.draft ? ' as a draft' : ''}`, detail: [e.branch, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
     case 'goal-closed':
       return goalClosedRow(e);
     case 'thread-decided':

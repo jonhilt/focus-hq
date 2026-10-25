@@ -100,16 +100,12 @@ const demoWorld = (n: number): World => ({
 const NO_DISK = 'no checkout on disk: what an agent does in one never shows';
 const NO_ORIGIN = 'no origin: nothing pushed or pulled is kept';
 holdsToWorkspaceContract('the demo workspace', demoWorld, {
-  'a new checkout starts at origin’s base: nothing ahead, unshipped or uncommitted': 'every checkout is 2 commits ahead, so every agent has something to ship',
+  'a new checkout starts at origin’s base: nothing ahead or uncommitted': 'every checkout is 2 commits ahead, so every agent has something to ship',
   'HEAD stays put until a commit, which moves it': 'every read of HEAD is a new commit, standing for a session that just committed',
-  'unshipped commits are those since the base, oldest first, less what shipped (all of them when git doesn’t know the shipped one)': '2 commits ahead, none of them unshipped: demo agents ship all they commit',
   'an untracked file is an uncommitted change, and a snapshot commits it': NO_DISK,
   'a branch never pushed isn’t on origin and counts its commits from the base; once pushed, nothing is unpushed': 'every branch is on origin with nothing unpushed',
   'the base moving on origin is never counted as the branch’s own work': NO_DISK,
   'the local base follows origin’s, so an agent’s own diff against main is only their commits': NO_DISK,
-  'a squash-merged slice moves to fresh code carrying only what never shipped': NO_DISK,
-  'commits that don’t apply fail the cherry-pick, leaving HEAD and the checkout as they were': 'a cherry-pick always applies',
-  'renaming onto a branch that’s taken fails, and onto a free name works': 'a rename always works: there are no branches',
   'a push still lands after GitHub deleted the branch its last push went to': NO_ORIGIN,
   'someone else’s commits on origin’s branch are noticed, and a pull brings them in': 'nobody else ever pushes to a branch',
   'publishing creates the branch on origin, or takes what a cloud session pushed there without overwriting it': NO_ORIGIN,

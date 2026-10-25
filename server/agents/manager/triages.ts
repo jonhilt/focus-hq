@@ -98,7 +98,7 @@ export class Triages extends Part {
       if (!now || !Exit.isSuccess(exit)) return;
       const result = exit.value;
       const decided = 'decision' in result ? (this.core.reviews.record(key, { kind: 'triaged', triage: { officer: officer.name, ...result.decision, at: Date.now() } }) ?? now) : now;
-      if ('decision' in result) this.core.ledger.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.core.leads.leadWith(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
+      if ('decision' in result) this.core.ledger.record(review.projectId, { kind: 'triage', repo: review.repo, pr: review.number, goal: this.core.goalPrs.ownerOf(review.repo, review.number)?.lead?.title, officer: officer.name, ...result.decision });
       yield* this.afterTriage(decided, afterTriage(officer.name, result, { closes: pr?.linkedIssues ?? [] }));
     });
   }

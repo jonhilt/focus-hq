@@ -9,6 +9,7 @@ import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
+import { reflogBranches } from './prRules';
 import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
 import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, trashName } from './worktrees';
 
@@ -415,16 +416,6 @@ export async function commitsAhead(dir: string, baseBranch: string): Promise<num
 }
 
 /**
- * The commits on HEAD that haven't shipped, oldest first: those not on the base branch, nor part of `shipped` (the commit
- * last pushed for a pull request), when git still has it.
- */
-export async function unshippedCommits(dir: string, baseBranch: string, shipped?: string): Promise<string[]> {
-  const known = shipped ? await git(dir, ['cat-file', '-e', `${shipped}^{commit}`]).then(() => true, () => false) : false;
-  const out = await git(dir, ['rev-list', '--reverse', 'HEAD', `^origin/${baseBranch}`, ...(known ? [`^${shipped}`] : [])]);
-  return out.split('\n').map((l) => l.trim()).filter(Boolean);
-}
-
-/**
  * Runs a command in a checkout, without a shell (QA's proofs, docs/qa.md#proof): its exit code, null when it timed out
  * or couldn't start, and everything it printed, stdout then stderr. Never rejects.
  */
@@ -460,33 +451,13 @@ export async function changedFiles(dir: string, baseBranch: string): Promise<str
   return out.split('\n').map((l) => l.trim()).filter(Boolean);
 }
 
-/**
- * Moves the checkout in `dir` onto a new local `branch` at origin's `baseBranch`, fetched first. Commits on the branch it
- * was on stay there. (Like a new worktree's, the branch doesn't track the base, so a stray `git push` can't land on it.)
- */
-export async function freshBranch(dir: string, branch: string, baseBranch: string): Promise<void> {
-  await retryLockRace(() => git(dir, ['fetch', 'origin', `+refs/heads/${baseBranch}:refs/remotes/origin/${baseBranch}`], 5 * 60_000), () => sleep(750));
-  await followOrigin(dir, baseBranch);
-  await git(dir, ['checkout', '--no-track', '-B', branch, `origin/${baseBranch}`]);
-}
-
-/** Renames the branch checked out in `dir` from `from` to `to`; fails if a branch called `to` is already there. */
-export async function renameBranch(dir: string, from: string, to: string): Promise<void> {
-  await git(dir, ['branch', '-m', from, to]);
-}
-
-/** Applies `commits` on top of HEAD, in order. If they don't apply cleanly, HEAD is left as it was and this fails. */
-export async function cherryPick(dir: string, commits: string[]): Promise<void> {
-  try {
-    await git(dir, ['cherry-pick', '--keep-redundant-commits', ...commits]);
-  } catch (err) {
-    await git(dir, ['cherry-pick', '--abort']).catch(() => undefined);
-    throw err;
-  }
-}
-
 export async function head(dir: string): Promise<string> {
   return (await git(dir, ['rev-parse', 'HEAD'])).trim();
+}
+
+export async function branchesSeen(dir: string): Promise<string[]> {
+  const [reflog, current] = await Promise.all([git(dir, ['reflog', 'show', '--format=%gs', 'HEAD']), git(dir, ['branch', '--show-current'])]);
+  return [...new Set([current.trim(), ...reflogBranches(reflog)].filter(Boolean))];
 }
 
 export async function hasUncommittedChanges(dir: string): Promise<boolean> {
@@ -627,11 +598,8 @@ export const liveWorkspace: WorkspaceOps = {
   hasUncommittedChanges: hasUncommittedChanges,
   commitsAhead: commitsAhead,
   head: head,
-  unshippedCommits: unshippedCommits,
+  branchesSeen: branchesSeen,
   changedFiles: changedFiles,
-  freshBranch: freshBranch,
-  renameBranch: renameBranch,
-  cherryPick: cherryPick,
   push: pushBranch,
   publish: publishBranch,
   pull: pullBranch,

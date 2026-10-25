@@ -184,6 +184,8 @@ export interface LeadPr {
   lane?: Lane;
   /** Who raised its lane above the lead's pick, to which, and why: a ship after keeps it at least that high. */
   raised?: { lane: Lane; by: string; why: string };
+  /** The recap the lead last put on it (`office__recap`), with its title and description then: what the chief of staff reads its lane by. */
+  recap?: { title: string; summary: string; recap: SliceRecap };
 }
 
 /**
@@ -236,11 +238,6 @@ export interface LeadWork {
   slice: number;
   /** This slice's pull requests. */
   prs: LeadPr[];
-  /**
-   * What this slice last shipped with: its pull requests' title and description, and its recap. Kept before any pull
-   * request opens, so whoever reads a ship reads it as shipped. None before it ships, or from a lead that sent no recap.
-   */
-  shipped?: { title: string; summary: string; recap: SliceRecap };
   /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
   landed?: LeadPr[];
   /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */

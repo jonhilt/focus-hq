@@ -244,7 +244,7 @@ export class AgentSessions extends Part {
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       scripted: this.core.plugins.brief(agent.brief)?.demo,
       tools: agent.task === 'lead'
-        ? { ship: (input) => tool(this.core.slices.shipLead(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), decision: (input) => tool(this.core.goalTools.raiseDecision(agent, input)), extra: this.leadTools(agent, cwd) }
+        ? { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), note: (input) => tool(this.core.goalTools.noteGoal(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), decision: (input) => tool(this.core.goalTools.raiseDecision(agent, input)), extra: this.leadTools(agent, cwd) }
         : undefined,
     };
   }
@@ -349,7 +349,8 @@ export class AgentSessions extends Part {
         if (yield* this.compact(lead, compactInstructions(lead.lead))) resumeSessionId = lead.sessionId ?? resumeSessionId;
         else rt.compactFailed = lead.sessionId;
       }
-      if (lead) prompt = [yield* this.core.slices.beforeTurn(lead), prompt].filter(Boolean).join('\n\n');
+      if (lead) prompt = [yield* this.core.checkouts.beforeTurn(lead), prompt].filter(Boolean).join('\n\n');
+      if (lead) this.core.goalPrs.turnStarts(lead.id);
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
@@ -471,6 +472,7 @@ export class AgentSessions extends Part {
           // subagents and workflows ended with it; any that just finished linger a moment
           this.update(agent, { status: 'done', activity: 'Your turn', finishedAt: Date.now(), helpers: agent.helpers?.filter((h) => h.status !== 'working'), workflows: agent.workflows?.filter((w) => w.status !== 'running'), background: agent.background?.filter((t) => t.status !== 'running') });
           this.core.leads.leadWentIdle(agent);
+          this.core.goalPrs.turnEnded(agent.id);
           this.core.seating.schedule();
           return;
         case 'deliver':

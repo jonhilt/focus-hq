@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/shared';
-import { heldForRead, lanePrompt, laneSystemPrompt, lostRaise, parseLane, pickOf, unreadShip } from './laneJudge';
+import { heldForRead, lanePrompt, laneSystemPrompt, lostRaises, parseLane, unreadShip } from './laneJudge';
 
 type Pr = { repo: string; number: number; url: string; sha?: string; lane?: 'ship' | 'show' | 'ask'; outcome?: 'merged' | 'closed' };
 const pr = (number: number, more: Partial<Pr> = {}): Pr => ({ repo: 'acme/shop', number, url: '', sha: `sha${number}`, lane: 'ship', ...more });
@@ -32,7 +32,7 @@ describe('the ships it has still to read', () => {
     expect(unreadShip(lead(prs), [read([{ pr: 7, sha: 'sha7' }, { pr: 8, sha: 'sha8' }])])).toEqual([]);
   });
 
-  it('is read again once the lead ships a new commit', () => {
+  it('is read again once the lead pushes a new commit and recaps it again', () => {
     expect(unreadShip(lead([pr(7, { sha: 'newer' })]), [read([{ pr: 7, sha: 'sha7' }])]).map((p) => p.number)).toEqual([7]);
   });
 
@@ -45,14 +45,9 @@ describe('the ships it has still to read', () => {
   it('keeps holding one a read raised, until the raise is in its lane (a restart lost it), and says which to take again', () => {
     const ledger = [read([{ pr: 7, sha: 'sha7' }, { pr: 8, sha: 'sha8' }], 'show'), read([{ pr: 8, sha: 'sha8' }], 'ask')];
     expect(heldForRead(pr(7), ledger)).toBe('the chief of staff raised it to Show');
-    expect(lostRaise(lead([pr(7), pr(8)]), ledger)).toEqual({ lane: 'ask', why: 'It changes a card.' });
+    expect(lostRaises(lead([pr(7), pr(8)]), ledger).map((r) => [r.pr.number, r.lane])).toEqual([[7, 'show'], [8, 'ask']]);
     expect(heldForRead(pr(7, { lane: 'show' }), ledger)).toBeUndefined();
-    expect(lostRaise(lead([pr(7, { lane: 'show' }), pr(8, { lane: 'ask' })]), ledger)).toBeUndefined();
-  });
-
-  it('takes the lowest lane of its pull requests as the lead’s pick', () => {
-    expect(pickOf([pr(7, { lane: 'show' }), pr(8)])).toBe('ship');
-    expect(pickOf([pr(7, { lane: 'show' })])).toBe('show');
+    expect(lostRaises(lead([pr(7, { lane: 'show' }), pr(8, { lane: 'ask' })]), ledger)).toEqual([]);
   });
 });
 

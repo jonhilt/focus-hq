@@ -10,6 +10,7 @@ import { BrowserPool, browserMcpServer } from './browserTool';
 import { CLOUD_UNAVAILABLE, cloudRefused } from './cloud';
 import { opsMcpServer } from './opsTool';
 import { openScratch } from './scratch';
+import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { sessionEnv } from './wait';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import { WorkflowPermits, workflowAsk } from './workflows';
@@ -360,7 +361,10 @@ export class ClaudeRunner implements AgentRunner {
     // a local session's scratch dir for throwaway files, deleted when the run ends, and Focus's focus-wait on its
     // PATH; a cloud session has its own machine
     const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
-    const env = sessionEnv(agentEnv(onKey), scratch?.env);
+    const base = agentEnv(onKey);
+    // its git runs Ops' hooks, which refuse a lead's harmful pushes and hand on to the repo's own
+    if (scratch) writePushHooks(paths.gitHooks);
+    const env = sessionEnv(base, scratch && { ...scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(req.agentId), base) });
     const resets = keyFallback.resetsAt();
     if (onKey && resets) hooks.lines([{ kind: 'system', text: `✻ On your API key: your plan's usage limit is reached until ${clock(resets)}` }]);
 
@@ -381,7 +385,7 @@ export class ClaudeRunner implements AgentRunner {
             systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
             mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: opsMcpServer(req.tools) }) },
             resume: req.resumeSessionId,
-            // the scratch dir's guard on Bash, before it runs
+            // the scratch dir's guard on Bash (and the push guard's), before it runs
             hooks: scratch?.hook && { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] },
           }),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,

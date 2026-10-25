@@ -21,7 +21,8 @@ import { type Lent, pluginHost } from './manager/pluginHost';
 import { Reviews } from './manager/reviews';
 import { Seating } from './manager/seating';
 import { AgentSessions, backgroundOutputLines, workflowAgentLines, workflowScript } from './manager/sessions';
-import { Slices } from './manager/slices';
+import { Checkouts } from './manager/checkouts';
+import { GoalPrs } from './manager/goalPrs';
 import { Triages } from './manager/triages';
 import { Core, type ManagerServices } from './manager/core';
 
@@ -51,7 +52,8 @@ export class AgentManager {
     this.core.reviews = new Reviews(this.core);
     this.core.seating = new Seating(this.core);
     this.core.sessions = new AgentSessions(this.core);
-    this.core.slices = new Slices(this.core);
+    this.core.checkouts = new Checkouts(this.core);
+    this.core.goalPrs = new GoalPrs(this.core);
     this.core.triages = new Triages(this.core);
   }
 
@@ -103,7 +105,7 @@ export class AgentManager {
 
   /** Ops opened the PR: one of its developers', a plugin's brief, or a goal's slice. */
   opsPr(repo: string, number: number): boolean {
-    return this.core.seating.openedByOffice(repo, number) || !!this.core.leads.leadWith(repo, number);
+    return this.core.seating.openedByOffice(repo, number) || !!this.core.goalPrs.ownerOf(repo, number);
   }
 
   busyOn(repo: string, number: number): boolean {
@@ -111,14 +113,13 @@ export class AgentManager {
   }
 
   /**
-   * After a restart: each QA review, each goal that was closing, each lead's slice, then each agent's run picks up from
-   * its journal (`Reviews.recover`, `Leads.recoverCloses`, `Slices.recover`, `AgentSessions.recover`).
+   * After a restart: each QA review, each goal that was closing, then each agent's run picks up from its journal
+   * (`Reviews.recover`, `Leads.recoverCloses`, `AgentSessions.recover`).
    */
   recover(): void {
     const rooms = this.core.reviews.recover(keyFallback.onKey());
     const closing = this.core.leads.recoverCloses(keyFallback.onKey());
-    const later = this.core.slices.recover(keyFallback.onKey());
-    this.core.sessions.recover(keyFallback.onKey(), new Set([...later, ...closing]));
+    this.core.sessions.recover(keyFallback.onKey(), new Set(closing));
     for (const room of rooms) this.core.reviews.nextReview(room);
   }
 
@@ -196,8 +197,13 @@ export class AgentManager {
     return this.core.comms.setAutonomy(id, autonomy);
   }
 
+  /** A project's board refreshed: its goals claim the pull requests their leads opened, and those ready go to QA. */
+  boardRefreshed(projectId: string, prs: readonly PullRequest[]): Promise<void> {
+    return this.core.goalPrs.boardRefreshed(projectId, prs);
+  }
+
   leadPrs(projectId: string): Pick<LeadPr, 'repo' | 'number' | 'lane'>[] {
-    return this.core.leads.leadPrs(projectId);
+    return this.core.goalPrs.open(projectId);
   }
 
   requestReview(projectId: string, repo: string, number: number, title: string, retryNote?: string, asked = false, shippedHead?: string): QaReview {

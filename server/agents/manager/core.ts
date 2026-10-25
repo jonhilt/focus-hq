@@ -21,7 +21,8 @@ import type { PlanLimit } from './planLimit';
 import type { Reviews } from './reviews';
 import type { Seating } from './seating';
 import type { AgentSessions } from './sessions';
-import type { Slices } from './slices';
+import type { Checkouts } from './checkouts';
+import type { GoalPrs } from './goalPrs';
 import type { Triages } from './triages';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
@@ -113,7 +114,8 @@ export class Core {
   delivery!: Delivery;
   conflicts!: Conflicts;
   leads!: Leads;
-  slices!: Slices;
+  checkouts!: Checkouts;
+  goalPrs!: GoalPrs;
   goalTools!: GoalTools;
   comms!: Comms;
   reviews!: Reviews;
@@ -254,6 +256,12 @@ export abstract class Part {
 
   protected get runs(): FiberMap.FiberMap<string, void, never> {
     return this.core.runs;
+  }
+
+  /** The projects changed (a goal filed, the queue): saved, and sent out. */
+  protected projectsChanged(): void {
+    this.store.save();
+    this.hub.send({ type: 'projects', projects: this.store.projects });
   }
 
   protected boardChanged(projectId: string): void {

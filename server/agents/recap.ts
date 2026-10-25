@@ -21,6 +21,18 @@ export interface ShipInput {
   recap?: SliceRecap;
 }
 
+/** A recap for one of the goal's open pull requests, which sets the lane it merges in. */
+export interface RecapInput {
+  repo: string;
+  number: number;
+  recap: SliceRecap;
+}
+
+/** The files a unified diff changes, by their path after the change (a deleted file by its old one), once each. */
+export function diffFiles(diff: string): string[] {
+  return [...new Set([...diff.matchAll(/^diff --git a\/(\S+) b\/(\S+)$/gm)].map((m) => m[2]))];
+}
+
 /** The most a recap takes of each: a recap is read at a glance. */
 export const RECAP_LIMITS = { primitives: 16, invariants: 6, steps: 16, text: 160 } as const;
 

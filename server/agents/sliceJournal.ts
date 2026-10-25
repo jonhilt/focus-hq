@@ -142,28 +142,3 @@ export function foldSlice(entries: readonly (SliceFact & { seq?: number })[]): S
   return entries.reduce(evolveSlice, EMPTY_SLICE);
 }
 
-/** What Ops does at startup with a slice its journal says was part way through something. */
-export type SliceRecovery =
-  | { kind: 'none' }
-  /** A ship was cut off: Ops ships it again (pushing, finding or opening each pull request, asking QA), no Claude turn needed. */
-  | ({ kind: 'ship' } & ShipInput)
-  /** A move to fresh code was cut off: Ops finishes it from what was decided. */
-  | { kind: 'move'; moving: Moving };
-
-export function sliceRecovery(state: SliceState): SliceRecovery {
-  if (state.phase === 'shipping' && state.ship) return { kind: 'ship', ...state.ship };
-  if (state.phase === 'moving' && state.moving) return { kind: 'move', moving: state.moving };
-  return { kind: 'none' };
-}
-
-/**
- * The lead's pull requests as the journal has them: any the saved state lost (a crash before it was saved) put back, and
- * any that landed marked, so Ops keeps watching every one of them. Ones the journal doesn't know are left as they are.
- */
-export function reconciledPrs(lead: LeadPr[], journal: SlicePr[]): LeadPr[] {
-  const known = lead.map((p) => {
-    const told = journal.find((j) => same(j, p));
-    return told?.outcome && !p.outcome ? { ...p, outcome: told.outcome } : p;
-  });
-  return [...known, ...journal.filter((j) => !lead.some((p) => same(p, j)))];
-}

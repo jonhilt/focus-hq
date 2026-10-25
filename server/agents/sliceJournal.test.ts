@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LeadPr } from '../../shared/types';
-import { foldSlice, type Moving, reconciledPrs, type SliceFact, sliceRecovery } from './sliceJournal';
+import { foldSlice, type Moving, type SliceFact } from './sliceJournal';
 
 const pr = (repo: string, number: number): SliceFact => ({ kind: 'pr', repo, number, url: `https://github.com/${repo}/pull/${number}`, sha: 'abc', branch: 'focus/saved-items' });
 const moving: Moving = { slice: 2, branch: 'focus/saved-items-2', from: 'focus/saved-items', repos: [{ repo: 'o/web', folder: 'web' }], carry: [{ repo: 'o/web', commits: ['c1'] }] };
@@ -41,24 +40,5 @@ describe('a goal’s slice journal', () => {
 
   it('moves on from a journal that began before slices had one', () => {
     expect(foldSlice([{ kind: 'moving', ...moving }, { kind: 'moved' }])).toMatchObject({ phase: 'working', slice: 2 });
-  });
-});
-
-describe('a slice after a restart', () => {
-  it('ships again a ship that was cut off, and finishes a move', () => {
-    expect(sliceRecovery(foldSlice(shipped.slice(0, 3)))).toEqual({ kind: 'ship', title: 'Saved items', summary: 'First slice' });
-    expect(sliceRecovery(foldSlice([...shipped, { kind: 'moving', ...moving }]))).toEqual({ kind: 'move', moving });
-    for (const facts of [[started], shipped, [...shipped, { kind: 'moving', ...moving }, { kind: 'moved' }]] as SliceFact[][]) expect(sliceRecovery(foldSlice(facts))).toEqual({ kind: 'none' });
-  });
-
-  it('puts back pull requests the saved state lost, and marks those that landed', () => {
-    const web: LeadPr = { repo: 'o/web', number: 4, url: 'u', sha: 'abc' };
-    const journal = foldSlice([...shipped, { kind: 'landed', repo: 'o/web', number: 4, merged: true }]).prs;
-    const prs = reconciledPrs([web], journal);
-    expect(prs.map((p) => [p.repo, p.number, p.outcome])).toEqual([['o/web', 4, 'merged'], ['o/api', 7, undefined]]);
-    // what the saved state has and the journal doesn't is left alone
-    const theirs: LeadPr = { repo: 'o/docs', number: 1, url: 'u' };
-    expect(reconciledPrs([theirs], [])).toEqual([theirs]);
-    expect(reconciledPrs([web], [web])[0]).toBe(web);
   });
 });

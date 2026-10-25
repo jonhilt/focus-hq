@@ -32,7 +32,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
-export const OPS_TOOL_NAMES = ['ship', 'note', 'show', 'ask', 'propose_close', 'decision'] as const;
+export const OPS_TOOL_NAMES = ['recap', 'note', 'show', 'ask', 'propose_close', 'decision'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
 /** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
@@ -46,7 +46,7 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__ship, note, show, ask,
+ * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, note, show, ask,
  * propose_close and decision, and those the plugins switched on add.
  */
 export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
@@ -54,17 +54,17 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
     name: 'office',
     version: '1.0.0',
     alwaysLoad: true,
-    instructions: 'Ops, the automated side of Focus: it pushes your work and opens pull requests for you, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done. Never push or open pull requests yourself.',
+    instructions: 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, keeps your goal\'s note, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.',
     tools: [
       tool(
-        'ship',
-        'Ship the slice: Ops pushes every repo in your workspace with new commits, and opens (or updates) a pull request in each. Commit everything first. With it goes the slice\'s system recap, which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses the ship if a file the slice changes is under none of the primitives\' paths, then puts the recap in the pull requests and on your station\'s screen. Use the same primitive ids from slice to slice. In the recap, pick the slice\'s lane: ship merges it by itself once QA passes it, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows.',
+        'recap',
+        'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it), which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses one that leaves a file the pull request changes under none of its primitives\' paths (paths start with the repo\'s folder), then puts it in the pull request\'s description and on your station\'s screen. It also picks the lane the pull request merges in once QA passes it: ship merges it by itself, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows. With no recap, a pull request is in ask. Send it again to replace it.',
         {
-          title: z.string().describe('The pull requests’ title: imperative and specific, under 70 characters.'),
-          summary: z.string().describe('The pull requests’ description in Markdown: what the slice does and why, and how you tested it.'),
+          repo: z.string().describe('The pull request\'s repo, owner/name.'),
+          number: z.number().int().describe('The pull request\'s number.'),
           recap: RECAP_SCHEMA,
         },
-        ({ title, summary, recap }) => answer(() => tools.ship({ title, summary, recap }), "Couldn't ship"),
+        ({ repo, number, recap }) => answer(() => tools.recap({ repo, number, recap }), "Couldn't put the recap on it"),
       ),
       tool(
         'note',

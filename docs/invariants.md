@@ -31,7 +31,7 @@ What each part caught and found goes in the sections below, with every live bug 
 | part | test | rules |
 | --- | --- | --- |
 | a goal's lead (held for the plan's limit, its run, its inbox and notes, the turn the captain read, plugins' marks on its turn) | `server/agents/managerInvariants.test.ts` | restart |
-| a goal lead's slices | `server/agents/sliceInvariants.test.ts` | both |
+| a goal's pull requests, claimed as the goal's (`GoalPrs`) | `server/agents/goalPrsInvariants.test.ts` | both |
 | the retro plugin's chief engineer's decisions | `plugins/retro/invariants.test.ts` | both |
 | the QA scores plugin's grades of QA's reports | `plugins/qa-scores/invariants.test.ts` | both |
 | QA reviews | `server/agents/reviewInvariants.test.ts` | both |
@@ -74,9 +74,9 @@ Live bugs the checks found on today's code, each now held in a plain test.
 - **A message sent as the turn ends gets a turn Focus has stopped listening to** (fixed; the session's check for two at once, `claudeRunnerInvariants.test.ts`): the turn's result says nothing's queued while the message is still on its way.
 - **…and so did one on its way as a background command ends** (fixed): `heard` counted what Claude Code says whatever it has read (the background list, a task's start or end); now only an assistant message counts (`showsHeard`).
 - **A verdict posted twice** (fixed; the review check, `reviewRecovery.test.ts`): a restart after GitHub took QA's comment, before Ops recorded it, posted it again. If GitHub can't say whether it went up, Ops posts: twice beats never.
-- **A pull request that merges while the lead ships is put back as open** (fixed; the slices' check for two at once, `sliceRecovery.test.ts`): a ship worked from the pull requests as they were when it started.
-- **A slice that landed mid-turn moves on a turn early after a restart.** By design rather than a bug (nothing is half-done or lost), but not what the rule for a restart allows, so the slices' restart check leaves out merging a slice's last pull request while the lead's turn is under way.
+- **A pull request that merges while the lead ships is put back as open** (fixed, then gone with Ops' shipping once leads opened their own pull requests): a ship worked from the pull requests as they were when it started.
 - **A goal closed while its lead was shipping lost the ship's pull requests** (fixed; the goal's check for two at once, `manager.test.ts`): a close now refuses while the slice is shipping.
+- **A pull request the lead opened as its goal closed was on no goal** (fixed; the goal's check for two at once, `goalInvariants.test.ts`, once leads opened their own): a board refresh now keeps a pull request from a closed goal's own branch with that goal (`filedClaims`), and a closing goal's pushes are refused.
 - **A question asked as its goal closed deleted the filed question's pages** (fixed; `manager.test.ts`).
 - **A restart part way through a close left the goal open with its work committed as a WIP snapshot** (fixed; the goal's restart check, in a soak, `manager.test.ts`): the lead then shipped the snapshot.
 - **A restart as a developer's turn ended left their work off GitHub** (fixed; the delivery's restart check, `runJournal.test.ts`, `deliveryInvariants.test.ts`).

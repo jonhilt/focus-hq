@@ -9,6 +9,7 @@
   "server/agents/manager/reviews.ts": 77,
   "server/agents/manager/seating.ts": 79,
   "server/agents/manager/sessions.ts": 42,
+  "server/agents/pushGuard.ts": 71,
   "server/agents/recorder.ts": 6,
   "server/agents/scratch.ts": 59,
   "server/agents/terminal.ts": 0,

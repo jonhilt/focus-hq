@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/server';
-import { focus, until } from '../../plugin-api/testing';
+import { focus, leadOpensPrs, until } from '../../plugin-api/testing';
 import flowPlugin from './server';
 import { goalMoved, withFlow, withoutClosed } from './flows';
 import { FLOW, type FlowPluginState, type LeadFlow } from './shared';
@@ -43,7 +43,7 @@ describe('the flow plugin', () => {
   it('moves the goal on as QA gives its verdicts and a pull request of its slice lands', async () => {
     const o = flowing();
     const { id, opened } = await goal(o);
-    await o.claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs(o, id, 'Saved items, first slice');
     const [web, api] = o.store.agent(id).lead!.prs;
     o.agents.readTranscript = () => Promise.resolve(transcript(opened, [
       [0, 'user', OPENING],

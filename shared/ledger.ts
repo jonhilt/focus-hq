@@ -63,6 +63,10 @@ export type LedgerEntry =
   | (PrRef & { kind: 'merge-check'; outcome: 'passed' | 'failed' | 'conflicts' | 'broken' | 'overridden' | 'unchecked'; by: Closer; base?: string; head?: string; failed?: string })
   | (PrRef & { kind: 'triage'; officer: string; action: TriageAction; note: string })
   /** A plugin (`by`, its id) raised a goal's lead's pull request from the lane they shipped it in (docs/merging.md#lanes-how-a-goals-leads-slice-merges). */
+  /** A PR a goal's lead opened themselves, which Ops claimed as the goal's from the branches their checkout has been on (server/agents/manager/goalPrs.ts). */
+  | (PrRef & { kind: 'pr'; lead: string; agent: string; branch: string; draft: boolean })
+  /** A goal's lead's pull request seen ready for review the first time (opened ready, or a draft marked ready): when it went out, for flow and the log. */
+  | (PrRef & { kind: 'pr-ready'; lead: string; agent: string; branch: string })
   | (PrRef & { kind: 'lane-raised'; from: Lane; to: Lane; by: string; why: string })
   | { kind: 'goal-closed'; goal: GoalRecord }
   /**

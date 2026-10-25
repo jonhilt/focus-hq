@@ -4,6 +4,8 @@ import path from 'node:path';
 import type { TermLine } from '../../shared/types';
 import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
+import { demoOpenPr, demoPush, demoReady } from '../github/demo';
+import { leadWorktreeId } from './lead';
 import type { PackageFacts } from '../packageManager';
 import { randomHex, sleep } from '../util';
 import type { Transcript } from './transcript';
@@ -52,7 +54,7 @@ export class DemoRunner implements AgentRunner {
   /** How full each pretend session's context is. */
   private context = new Map<string, number>();
   /** Each lead's repos and goal, by session: a resumed turn doesn't hear them again. */
-  private leads = new Map<string, { repos: { folder: string; repo: string }[]; goal: string }>();
+  private leads = new Map<string, { repos: { folder: string; repo: string; branch: string }[]; goal: string; prs?: { repo: string; number: number }[]; sideFix?: { repo: string; number: number } }>();
   /**
    * Each pretend lead's session as Claude Code's transcript would have it, by session: the messages that started its
    * turns, what it said and the tools it called, so what reads a real session's transcript (plugins, through
@@ -382,13 +384,13 @@ export class DemoRunner implements AgentRunner {
       ]);
     };
 
-    // a goal's lead: talks the goal through, builds a slice across every repo, ships it, and hears back
+    // a goal's lead: talks the goal through, builds a slice across every repo, opens its pull requests, and hears back
     const leadScript = async (tools: NonNullable<RunRequest['tools']>): Promise<RunOutcome> => {
       const sessionId = req.resumeSessionId ?? `demo-lead-${randomHex(4)}`;
       hooks.session(sessionId);
       if (!req.resumeSessionId) hooks.lines([{ kind: 'system', text: '✻ Claude Code (demo) · pretend model · acceptEdits' }]);
       // where the repos are comes in the goal's first message and with each new slice; a resumed turn remembers it
-      const listed = [...req.prompt.matchAll(/^- \.\/(\S+): (\S+), on branch/gm)].map((m) => ({ folder: m[1], repo: m[2] }));
+      const listed = [...req.prompt.matchAll(/^- \.\/(\S+): (\S+), on branch `([^`]+)`/gm)].map((m) => ({ folder: m[1], repo: m[2], branch: m[3] }));
       const known = this.leads.get(sessionId);
       const repos = listed.length ? listed : (known?.repos ?? []);
       const kindOf = repoKind;
@@ -396,20 +398,34 @@ export class DemoRunner implements AgentRunner {
       const message = req.prompt.replace(/^(Your workspace|Slice \d+ starts)[^\n]*\n(- [^\n]*(\n|$))*/, '').replace(/\s+/g, ' ').trim();
       // a resumed session doesn't hear the goal again, and a goal's lead keeps the one goal
       const goal = known?.goal ?? (message.replace(/[.!?]$/, '').slice(0, 60) || 'saved items');
-      this.leads.set(sessionId, { repos, goal });
-      const ship = async (title: string, summary: string): Promise<boolean> => {
-        hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__ship(${title})` }]);
-        hooks.activity('pushing', 'Shipping the slice');
-        if (autonomy === 'ask' && !(await hooks.permission('mcp__office__ship', `Ship the slice: ${title}`, abort.signal))) {
+      this.leads.set(sessionId, { repos, goal, ...(known?.prs && { prs: known.prs }), ...(known?.sideFix && { sideFix: known.sideFix }) });
+      // the lead pushes each repo and opens its pull request themselves, ready for review: Ops follows them as the goal's
+      // (from the branches their checkouts have been on) and sends them to QA as the board next sees them
+      const openPrs = async (title: string, summary: string): Promise<boolean> => {
+        if (!demoOpenPr) return false;
+        hooks.activity('pushing', 'Opening pull requests');
+        const command = repos.map((r) => `git -C ${r.folder} push -u origin HEAD && (cd ${r.folder} && gh pr create --title "${title}")`).join(' && ');
+        if (autonomy === 'ask' && !(await hooks.permission('Bash', command, abort.signal))) {
           if (stopped) throw new Error('stopped');
           hooks.lines([{ kind: 'error', text: '  ⎿  Declined by the captain' }]);
-          await say('Holding off on shipping. Tell me what you’d like changed first.');
+          await say('Holding off on opening the pull requests. Tell me what you’d like changed first.');
           return false;
         }
-        const result = await tools.ship({ title, summary, recap: demoRecap(repos.map((r) => r.folder), goal) });
-        journalCall('mcp__office__ship', { title, summary }, result)();
-        hooks.lines(result.split('\n').filter((l) => l.trim()).slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
+        const opened: { repo: string; number: number; url: string }[] = [];
+        for (const r of repos) {
+          const dir = demoWorkspace.dir(leadWorktreeId(req.agentId, r.folder));
+          demoSawBranch(dir, r.branch);
+          opened.push({ repo: r.repo, ...demoOpenPr(r.repo, { head: r.branch, base: 'main', title, body: summary }, false) });
+        }
+        await tool('Bash', { command, description: 'Push each repo and open its pull request' }, opened.map((o) => o.url));
+        this.leads.set(sessionId, { ...(this.leads.get(sessionId) ?? { repos, goal }), prs: opened.map(({ repo, number }) => ({ repo, number })) });
         return true;
+      };
+      // a fix pushed to the pull request QA failed, which QA re-tests as the turn ends
+      const pushFix = async (repo: string) => {
+        const pr = this.leads.get(sessionId)?.prs?.find((p) => p.repo === repo);
+        await tool('Bash', { command: 'git push', description: 'Push the fix to the same pull request' }, ['To github.com:demo/repo.git']);
+        if (pr && demoPush) demoPush(pr.repo, pr.number, 'change');
       };
       const note = async (input: Parameters<typeof tools.note>[0]) => {
         hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__note(${Object.keys(input).join(', ')})` }]);
@@ -489,11 +505,26 @@ export class DemoRunner implements AgentRunner {
           await tool('Edit', { file_path: `/work/${target.folder}/${FILES[kindOf(target.repo)][0]}`, old_string: 'items.length', new_string: '(items ?? []).length' }, ['Updated 1 file']);
           await tool('Bash', { command: `npm --prefix ${target.folder} test` }, ['Tests: 46 passed, 46 total']);
           await commit(target.folder, 'Handle an empty list');
-          if (await ship('Fix what QA found', 'Handles the empty case QA found, with a test.')) await say('Shipped the fix; QA will look again. The rest of the slice is unchanged.');
+          await pushFix(target.repo);
+          await say('Pushed the fix to the same pull request; QA will look again. The rest is unchanged.');
         } else {
-          await say(`QA passed it. It's ready for you to merge whenever you're happy with it.`);
+          // a recap on each of its pull requests, now Ops follows them: what the captain reviews it by, and its lane
+          for (const pr of this.leads.get(sessionId)?.prs ?? []) {
+            hooks.lines([{ kind: 'tool', text: `⏺ mcp__office__recap(${pr.repo}#${pr.number})` }]);
+            const result = await tools.recap({ ...pr, recap: demoRecap(repos.map((r) => r.folder), goal) }).catch((err: Error) => err.message);
+            hooks.lines([{ kind: 'output', text: `  ⎿  ${result}` }]);
+          }
+          await say(`QA passed it, and the recap's on it. It's ready for you to merge whenever you're happy with it.`);
         }
         return { ok: true, summary: 'Heard back from QA.' };
+      }
+      // asked to mark their side fix ready: it goes to QA as the board next sees it
+      const sideFix = this.leads.get(sessionId)?.sideFix;
+      if (sideFix && demoReady && /\bready\b/i.test(req.prompt)) {
+        await tool('Bash', { command: `gh pr ready ${sideFix.number}`, description: 'Mark the typo fix ready for review' }, [`✓ Pull request ${sideFix.repo}#${sideFix.number} is marked as "ready for review"`]);
+        demoReady(sideFix.repo, sideFix.number);
+        await say(`Marked ${sideFix.repo}#${sideFix.number} ready: QA will pick it up.`);
+        return { ok: true, summary: 'Marked the side fix ready.' };
       }
       // asked to run a workflow: the review plays out in the transporter rooms there and then, to watch
       if (/\brun a workflow\b/i.test(req.prompt)) {
@@ -546,7 +577,7 @@ export class DemoRunner implements AgentRunner {
       // the plugins' lead tools go up last (the explainer, with briefings on), so the screen plays it while the slice is built
       await demoTools();
       const leadTodos = (done: number) => ({
-        todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Ship the slice', 'Shipping the slice']].map(([content, activeForm], i) => ({
+        todos: [...repos.map((r) => [`Build ${goal} in ./${r.folder}`, `Building it in ./${r.folder}`]), ['Open the pull requests', 'Opening the pull requests']].map(([content, activeForm], i) => ({
           content,
           activeForm,
           status: i < done ? 'completed' : i === done ? 'in_progress' : 'pending',
@@ -582,9 +613,21 @@ export class DemoRunner implements AgentRunner {
       endJob(server, 'done', 'Background command "pnpm run dev" completed (exit code 0)');
       await handleInbox();
       const title = `Thin slice: ${goal}`.slice(0, 70);
-      if (await ship(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
+      if (await openPrs(title, `## Summary\n\nA first, thin version of ${goal}, end to end.\n\n## Testing\n\n- Tests pass in every repo`)) {
         await tool('TodoWrite', leadTodos(repos.length + 1));
-        await say(`Shipped: ${repos.length > 1 ? `a pull request in each of ${repos.map((r) => r.folder).join(' and ')}` : 'a pull request'}. It works end to end in the simplest way; the store code is a bit tangled now, so I'd tidy it in the next slice. Have a look and merge when you're happy.`);
+        await say(`Opened ${repos.length > 1 ? `a pull request in each of ${repos.map((r) => r.folder).join(' and ')}` : 'a pull request'}, ready for review. It works end to end in the simplest way; the store code is a bit tangled now, so I'd tidy it next. Have a look and merge when you're happy.`);
+      }
+      // a side fix the lead opens a pull request for themselves, which Ops claims as the goal's from where their checkout has been
+      const [first] = repos;
+      if (!this.leads.get(sessionId)?.sideFix && first && demoOpenPr) {
+        const branch = `fix/header-typo-${randomHex(2)}`;
+        await tool('Bash', { command: `git switch -c ${branch} && git commit -am "Fix the typo in the header" && git push -u origin ${branch}`, description: 'Commit the typo fix on its own branch and push it' });
+        const dir = demoWorkspace.dir(leadWorktreeId(req.agentId, first.folder));
+        demoSawBranch(dir, branch);
+        const opened = demoOpenPr(first.repo, { head: branch, base: 'main', title: 'Fix the typo in the header', body: 'Spotted while building the slice: "Wishlsit" in the header.' });
+        this.leads.set(sessionId, { ...(this.leads.get(sessionId) ?? { repos, goal }), sideFix: { repo: first.repo, number: opened.number } });
+        await tool('Bash', { command: 'gh pr create --draft --title "Fix the typo in the header"', description: 'Open a draft pull request for the typo fix' }, [opened.url]);
+        await say(`On the way I spotted a typo in the header, so I opened a draft pull request for it myself: ${opened.url}. Say the word and I'll mark it ready for review.`);
       }
       return { ok: true, summary: 'Shipped the slice.' };
     };
@@ -742,6 +785,14 @@ const DEMO_PACKAGE: PackageFacts = {
   claudeMd: true,
 };
 
+/** The branches each demo checkout has been on: the demo's stand-in for a worktree's HEAD reflog. */
+const demoBranches = new Map<string, Set<string>>();
+
+/** A demo checkout has been on `branch`, as checking it out would leave in its reflog. */
+export function demoSawBranch(dir: string, branch: string): void {
+  demoBranches.set(dir, new Set([...(demoBranches.get(dir) ?? []), branch]));
+}
+
 export const demoWorkspace: WorkspaceOps = {
   create: async (_repo, agentId) => `/demo/${agentId}`,
   remove: async () => undefined,
@@ -751,11 +802,7 @@ export const demoWorkspace: WorkspaceOps = {
   commitsAhead: async () => 2,
   // demo agents always commit something, so every session ends on a new commit
   head: async () => randomHex(5),
-  // ...and ship everything they commit
-  unshippedCommits: async () => [],
-  freshBranch: async () => undefined,
-  renameBranch: async () => undefined,
-  cherryPick: async () => undefined,
+  branchesSeen: async (dir) => [...(demoBranches.get(dir) ?? [])],
   push: async () => sleep(800),
   publish: async () => sleep(400),
   pull: async () => sleep(400),

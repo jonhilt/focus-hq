@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { verdictStands, verdictToast, afterLanding, afterPush, landedMidShipNote, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, carriedNote, freshSessionPrompt, goalBrief, conflictsResolvedNote, behindNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, heldBack, landedNote, leadPrBody, leadSystemAppend, moveQueued, newSliceNote, nextGoal, noteForPrompt, notShipped, reopenable, reopenedNote, reopenedWork, reposBackNote, openPr, pickStation, qaVerdictNote, queuedStart, shippedSha, shipped, shipPlan, shipBranch, sliceBranch, sliceLanded, upgradeLead, workspaceNote, freshBranchNote, needsFreshBranch, repoBranch, workspaceList } from './lead';
+import { verdictStands, verdictToast, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, applyHelperEvent, applyNote, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, notedGoal, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, emptyNote, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, landedNote, leadSystemAppend, moveQueued, nextGoal, noteForPrompt, reopenable, reopenedNote, reopenedWork, reposBackNote, pickStation, qaVerdictNote, queuedStart, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -85,143 +85,36 @@ describe('slices', () => {
     expect(sliceBranch('!!!', 1, 'x')).toBe('focus/goal-1-x');
   });
 
-  it('names the branch a pull request ships from after the slice’s work, keeping its working branch’s id', () => {
-    expect(shipBranch('Name branches after the slice’s work', 'focus/we-need-better-branch-1-96a3')).toBe('focus/name-branches-after-the-slice-s-work-96a3');
-    expect(shipBranch('Proposal editor: let the captain reorder sections and keep versions', 'focus/proposal-editor-3-eae1')).toBe('focus/proposal-editor-let-the-captain-reorder-eae1');
-    expect(shipBranch('Fix it', 'focus/fresh')).toBe('focus/fix-it-fresh');
-    expect(shipBranch('!!!', 'focus/goal-1-x')).toBeUndefined();
-  });
-
   it('lands once it shipped and every pull request has merged or closed', () => {
     expect(sliceLanded(work.prs)).toBe(false);
     expect(sliceLanded([...work.prs.slice(0, 1), { ...work.prs[1], outcome: 'closed' }])).toBe(true);
     expect(sliceLanded([])).toBe(false);
   });
 
-  it('finds the slice’s open pull request in a repo', () => {
-    expect(openPr(work, 'acme/api')?.number).toBe(7);
-    expect(openPr(work, 'acme/web')).toBeUndefined();
-  });
-
-  it('remembers the commit each repo last shipped', () => {
-    const prs = [{ repo: 'acme/web', number: 12, url: 'u12', sha: 'aaa', outcome: 'closed' as const }, { repo: 'acme/web', number: 13, url: 'u13', sha: 'bbb' }];
-    expect(shippedSha({ ...work, prs }, 'acme/web')).toBe('bbb');
-    expect(shippedSha(work, 'acme/api')).toBeUndefined();
-  });
-});
-
-describe('afterPush', () => {
-  const pr = (number: number, more: Partial<LeadWork['prs'][number]> = {}) => ({ repo: 'acme/web', number, url: `u${number}`, sha: 'aaa', ...more });
-
-  it('updates the pull request still open', () => {
-    expect(afterPush(pr(12), { prs: [pr(12)] }, 'acme/web')).toEqual({ kind: 'update', pr: pr(12) });
-  });
-
-  it('never puts back as open one that merged or closed while the push was under way', () => {
-    expect(afterPush(pr(12), { prs: [pr(12, { outcome: 'merged' })] }, 'acme/web')).toEqual({ kind: 'landed', pr: pr(12, { outcome: 'merged' }) });
-    expect(afterPush(pr(12), { prs: [pr(12, { outcome: 'closed' })] }, 'acme/web')).toEqual({ kind: 'landed', pr: pr(12, { outcome: 'closed' }) });
-  });
-
-  it('finds or opens one when none was open as the ship started', () => {
-    expect(afterPush(undefined, { prs: [] }, 'acme/web')).toEqual({ kind: 'open' });
-    // a merged one from before the ship started: the repo moved to a fresh branch, which gets its own
-    expect(afterPush(undefined, { prs: [pr(12, { outcome: 'merged' })] }, 'acme/web')).toEqual({ kind: 'open' });
-    // another repo's open one leaves this one to open its own
-    expect(afterPush(undefined, { prs: [pr(7, { repo: 'acme/api' })] }, 'acme/web')).toEqual({ kind: 'open' });
-  });
-
-  it('tells the lead where what the push added goes', () => {
-    expect(landedMidShipNote({ repo: 'acme/web', number: 12, outcome: 'merged' })).toMatch(/acme\/web#12 was merged while the ship was pushing.*carries them over/);
-    expect(landedMidShipNote({ repo: 'acme/web', number: 12, outcome: 'closed' })).toMatch(/was closed.*opens a new pull request/);
-  });
-});
-
-describe('needsFreshBranch', () => {
-  const pr = (number: number, more: Partial<LeadWork['prs'][number]> = {}) => ({ repo: 'acme/web', number, url: `u${number}`, sha: 'aaa', ...more });
-
-  it('starts a fresh branch once a pull request from the branch the repo is on has merged', () => {
-    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a', outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(true);
-    // shipped before the branch was kept: it came from the branch the repo is on
-    expect(needsFreshBranch({ prs: [pr(12, { outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(true);
-  });
-
-  it('keeps the branch while it has an open pull request, or never had one merged', () => {
-    expect(needsFreshBranch({ prs: [] }, 'acme/web', 'focus/a')).toBe(false);
-    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a' })] }, 'acme/web', 'focus/a')).toBe(false);
-    // closed unmerged: none of its commits are on the base, so the branch can ship again
-    expect(needsFreshBranch({ prs: [pr(12, { branch: 'focus/a', outcome: 'closed' })] }, 'acme/web', 'focus/a')).toBe(false);
-    // another repo's merged pull request leaves this one alone
-    expect(needsFreshBranch({ prs: [pr(12, { repo: 'acme/api', branch: 'focus/a', outcome: 'merged' })] }, 'acme/web', 'focus/a')).toBe(false);
-  });
-
-  it('leaves a repo already on a fresh branch there, until a pull request from that one merges too', () => {
-    const merged = pr(12, { branch: 'focus/a', outcome: 'merged' });
-    expect(needsFreshBranch({ prs: [merged] }, 'acme/web', 'focus/b')).toBe(false);
-    expect(needsFreshBranch({ prs: [merged, pr(13, { branch: 'focus/b' })] }, 'acme/web', 'focus/b')).toBe(false);
-    expect(needsFreshBranch({ prs: [merged, pr(13, { branch: 'focus/b', outcome: 'merged' })] }, 'acme/web', 'focus/b')).toBe(true);
-  });
-
-  it('says where each repo is, and what came of the commits it hadn’t shipped', () => {
-    const moved = { ...work, repos: [{ ...work.repos[0], branch: 'focus/b' }, work.repos[1]] };
-    expect(repoBranch(moved.repos[0], 'focus/a')).toBe('focus/b');
-    expect(workspaceList(moved, 'focus/a')).toBe('- ./web: acme/web, on branch `focus/b` from `main`\n- ./api: acme/api, on branch `focus/a` from `develop`');
-    const fresh = { folder: 'web', from: 'focus/a', to: 'focus/b', baseBranch: 'main' };
-    expect(freshBranchNote({ ...fresh, commits: [], applied: true })).toBe("./web's pull request from `focus/a` has merged, so Ops moved it to a new branch, `focus/b`, from fresh `main`.");
-    expect(freshBranchNote({ ...fresh, commits: ['c1', 'c2'], applied: true })).toMatch(/and brought along the 2 commits you hadn't shipped\.$/);
-    expect(freshBranchNote({ ...fresh, commits: ['0123456789abcdef'], applied: false })).toMatch(/only on `focus\/a`\. Bring it over with `git -C web cherry-pick 0123456789`, resolve the conflicts, then ship again\.$/);
-  });
-});
-
-describe('shipPlan', () => {
-  const state = (folder: string, dirty: boolean, ahead: number, changed = true) => ({ repo: `acme/${folder}`, folder, dirty, ahead, changed });
-
-  it('ships every repo with commits, and only those', () => {
-    expect(shipPlan([state('web', false, 2), state('api', false, 0), state('admin', false, 1)])).toEqual({ kind: 'ship', repos: ['acme/web', 'acme/admin'] });
-  });
-
-  it('ships nothing while any repo has uncommitted changes', () => {
-    const plan = shipPlan([state('web', true, 2), state('api', false, 1)]);
-    expect(plan).toEqual({ kind: 'commit-first', folders: ['web'] });
-    expect(notShipped(plan as Exclude<typeof plan, { kind: 'ship' }>)).toMatch(/^Nothing shipped: \.\/web has uncommitted changes/);
-  });
-
-  it('leaves a repo alone that hasn’t moved on since it last shipped', () => {
-    expect(shipPlan([state('web', false, 3, false), state('api', false, 1)])).toEqual({ kind: 'ship', repos: ['acme/api'] });
-  });
-
-  it('says so when there is nothing new', () => {
-    expect(shipPlan([state('web', false, 0)])).toEqual({ kind: 'nothing' });
-    expect(shipPlan([state('web', false, 2, false)])).toEqual({ kind: 'nothing' });
-    expect(notShipped({ kind: 'nothing' })).toMatch(/no repo has new commits since it last shipped/);
-  });
 });
 
 describe('what the lead writes and hears', () => {
-  it('describes each pull request with the repos shipping alongside it, signed when attribution is on', () => {
-    expect(leadPrBody('Adds saving', { name: 'Lt. Okafor' }, ['acme/api'], true)).toBe(
-      'Adds saving\n\nShipped alongside the same slice in acme/api.\n\n---\n_Built by **Lt. Okafor**, a lead aboard the USS Focus, with Claude Code._',
-    );
-    expect(leadPrBody(' ', { name: 'x' }, [], false)).toBe('A slice of work toward a larger goal.');
-  });
-
-  it('works in slices across every repo, ships through Ops, and never pushes', () => {
+  it('works across every repo, opens its own pull requests with gh, ready when they’re ready, and never pushes a base branch', () => {
     const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
     expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
     expect(prompt).toContain('team station 2');
     expect(prompt).toMatch(/Other leads may be working in the same repos at the same time/);
     expect(prompt).toMatch(/Don't write a spec or plan the whole route/);
-    expect(prompt).toMatch(/ship in slices small enough to review and merge cleanly/);
-    expect(prompt).toContain('mcp__office__ship');
-    expect(prompt).toMatch(/never push or open pull requests yourself/);
+    expect(prompt).toMatch(/Keep pull requests reviewable: small enough to review and merge cleanly/);
+    expect(prompt).not.toContain('mcp__office__ship');
+    expect(prompt).toMatch(/push your branches and open pull requests yourself with gh/);
+    expect(prompt).toMatch(/`gh pr create --draft`.*`gh pr ready`/);
+    expect(prompt).toMatch(/Never push a base branch, or a branch whose pull request has merged/);
+    expect(prompt).toContain('mcp__office__recap');
     expect(prompt).toMatch(/Hand independent work, and broad exploration, to subagents with the Agent tool, and keep their conclusions/);
     expect(prompt).toMatch(/mcp__office__note keeps the goal's note/);
     expect(prompt).toMatch(/When what done looks like is met, or nothing worthwhile is left, say so with mcp__office__propose_close/);
-    expect(prompt).toMatch(/your repos move to fresh code on a new branch at the start of your next turn, bringing along commits you hadn't shipped/);
+    expect(prompt).toMatch(/You hear when a slice's pull requests have all merged or closed; your checkouts stay as they are/);
   });
 
   it('draws the star chart from what the lead does, not from a checklist in the note', () => {
     const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
-    expect(prompt).toContain("The goal's star chart is drawn from what you do: your task list (Claude Code's task tools), your commits and your ships.");
+    expect(prompt).toContain("The goal's star chart is drawn from what you do: your task list (Claude Code's task tools), your commits and your pull requests.");
     expect(prompt).not.toMatch(/checklist|heading/);
   });
 
@@ -255,15 +148,13 @@ describe('what the lead writes and hears', () => {
     expect(proved).toContain('it("x")');
   });
 
-  it('tells the lead when the slice has landed, and when their repos move, without telling them to act on it', () => {
+  it('tells the lead when the slice has landed, and that their checkouts stay as they are, without telling them to act on it', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
     // a note, heard with the next message they get: mid-turn or as a turn starts
     expect(landedNote(landed)).toBe(
-      'Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Your repos move to fresh code at the start of your first turn after it landed, bringing your later commits along.',
+      'Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Your checkouts stay as they are: start what\'s next on a fresh branch from the base, since a push to a branch whose pull request merged is refused.',
     );
     expect(landedNote(landed)).not.toMatch(/Carry on/);
-    expect(newSliceNote({ ...work, slice: 3, prs: [] }, 'focus/lead-shop-3-cd')).toContain('Slice 3 starts on fresh code');
-    expect(heldBack(work, ['api'])).toMatch(/\.\/api still has uncommitted changes, so your repos stay where they are/);
   });
 
   it('tells a lead whose repos were checked out again where they are, and that unshipped commits stayed behind', () => {
@@ -275,12 +166,6 @@ describe('what the lead writes and hears', () => {
   });
 });
 
-describe('shipped', () => {
-  it('tells the lead QA reviews what they shipped by itself, or only once the captain sends it', () => {
-    expect(shipped(['Opened acme/api#7'], true)).toBe("Opened acme/api#7\n\nThe room's QA officer reviews each pull request, and you'll hear their verdict.");
-    expect(shipped(['Opened acme/api#7'], false)).toMatch(/^Opened acme\/api#7\n\nAuto-QA is off for this project: QA reviews a pull request when the captain sends it/);
-  });
-});
 
 describe('verdictStands', () => {
   const idle = { wasIdle: true, finished: true, heard: false, queued: false, held: false };
@@ -494,14 +379,6 @@ describe('the goal’s note', () => {
     expect(goalBrief('x'.repeat(BRIEF_LIMIT + 50))).toHaveLength(BRIEF_LIMIT + 1);
   });
 
-  it('comes back at each new slice, after where the repos are', () => {
-    const text = newSliceNote({ ...work, slice: 3, prs: [], note: { done: 'Works anywhere', learned: ['Store is fine'], next: [] } }, 'focus/saved-items-3-cd');
-    expect(text).toMatch(/^Slice 3 starts on fresh code/);
-    expect(text).toContain('`develop`\n\nWhere the goal stands:\n\nThe goal: Saved items');
-    expect(text).not.toMatch(/checklist|heading/);
-    expect(text).not.toContain('summarised');
-    expect(text).toContain('What done looks like: Works anywhere');
-  });
 });
 
 describe('notedGoal', () => {
@@ -749,24 +626,6 @@ describe('reviewsToStart', () => {
 });
 
 describe('the lead’s context', () => {
-  it('moves to the next slice without compacting, unless a repo holds it back', () => {
-    expect(afterLanding([])).toBe('next');
-    expect(afterLanding(['web'])).toBe('held-back');
-  });
-
-  it('tells them which unshipped commits came along to the new slice, and how to bring over the ones that didn’t', () => {
-    expect(carriedNote([], 'focus/saved-items-1-ab')).toBe('');
-    const text = carriedNote(
-      [
-        { folder: 'web', commits: ['1111111111aaaa'], applied: true },
-        { folder: 'api', commits: ['2222222222bbbb', '3333333333cccc'], applied: false },
-      ],
-      'focus/saved-items-1-ab',
-    );
-    expect(text).toMatch(/^Work you'd committed but not shipped:\n- \.\/web: the commit you hadn't shipped came along onto the new branch\./);
-    expect(text).toContain("- ./api: the 2 commits you hadn't shipped didn't apply cleanly to fresh code, so they're only on `focus/saved-items-1-ab`. Bring them over with `git cherry-pick 2222222222 3333333333`");
-  });
-
   it('compacts a lead before a turn that picks a big conversation here back up, unless switched off or it already failed there', () => {
     const big = { sessionId: 's1', context: { percent: 25, tokens: 250_000, max: 1_000_000 } };
     expect(compactsFirst(big, true, 200_000)).toBe(true);
@@ -803,9 +662,6 @@ describe('a slice’s merge conflicts', () => {
     expect(note).toContain("Ops won't ship that repo");
   });
 
-  it('keep the lead from shipping a checkout that’s behind', () => {
-    expect(behindNote('web', 'focus/goal-1')).toMatch(/^Nothing shipped: GitHub's `focus\/goal-1` has commits \.\/web doesn't.*`git -C web pull --no-rebase origin focus\/goal-1`/);
-  });
 });
 
 describe('a lead’s first message in a new conversation', () => {

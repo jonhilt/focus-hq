@@ -1,0 +1,46 @@
+#!/bin/sh
+# focus-git-hook <hook> [args...]
+#
+# Every git hook of a local agent's session runs this: Focus points the session's core.hooksPath at hooks that call it
+# (server/agents/pushGuard.ts). A pre-push to a branch named in $FOCUS_PUSH_REFUSED is refused, saying how to carry
+# on; then the repo's own hook of that name runs, as it would have without Focus.
+
+name=$1
+shift
+
+if [ "$name" = pre-push ]; then
+  refs=$(cat)
+  if [ -n "$FOCUS_PUSH_REFUSED" ] && [ -f "$FOCUS_PUSH_REFUSED" ]; then
+    if grep -qx closing "$FOCUS_PUSH_REFUSED"; then
+      echo "Refused by Ops: the goal is closing, so nothing more goes up from it." >&2
+      exit 1
+    fi
+    zero=0000000000000000000000000000000000000000
+    printf '%s\n' "$refs" | while read -r _local_ref local_sha remote_ref _remote_sha; do
+      case $remote_ref in refs/heads/*) ;; *) continue ;; esac
+      # deleting a branch on GitHub is never refused
+      [ "$local_sha" = "$zero" ] && continue
+      branch=${remote_ref#refs/heads/}
+      if grep -qxF "base $branch" "$FOCUS_PUSH_REFUSED"; then
+        echo "Refused by Ops: $branch is a base branch. Push your work to a branch of its own and open a pull request from it: the user decides what merges." >&2
+        exit 1
+      fi
+      if grep -qxF "merged $branch" "$FOCUS_PUSH_REFUSED"; then
+        echo "Refused by Ops: $branch’s pull request already merged, and a squash merge leaves its commits off the base, so a new pull request from it would carry them again. Start a fresh branch from the base (git fetch, then git switch -c <new> origin/<base>), cherry-pick the commits that never merged, and push that." >&2
+        exit 1
+      fi
+    done || exit 1
+  fi
+fi
+
+own=$(git config --local --get core.hooksPath 2>/dev/null) || own="$(git rev-parse --path-format=absolute --git-common-dir)/hooks"
+case $own in
+  /*) ;;
+  *) own="$(git rev-parse --show-toplevel)/$own" ;;
+esac
+[ -x "$own/$name" ] || exit 0
+if [ "$name" = pre-push ]; then
+  printf '%s\n' "$refs" | "$own/$name" "$@"
+  exit $?
+fi
+exec "$own/$name" "$@"

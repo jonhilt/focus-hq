@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { JournalEntry, LedgerEvent, ReviewEntry, RunFact, SliceFact } from '../../plugin-api/server';
-import { demoWorkspace, focus, until } from '../../plugin-api/testing';
+import { demoWorkspace, focus, leadOpensPrs, until } from '../../plugin-api/testing';
 import { captainsLog, type LogSources, logSources } from './log';
 import captainsLogPlugin from './server';
 import type { LogLine } from './shared';
@@ -102,17 +102,17 @@ describe('who and what each journal is about', () => {
 });
 
 describe('the captain’s log of a real ship', () => {
-  it('has a goal’s ship, by its lead, and QA picking it up, by the reviewer', async () => {
+  it('has a goal’s pull request going out, by its lead, and QA picking it up, by the reviewer', async () => {
     // QA's checkout is instant, so QA's testing in good time
-    const { store, agents, claude, project } = focus({ ...demoWorkspace, checkoutPullRequest: async () => '' });
+    const { store, agents, claude, project, github } = focus({ ...demoWorkspace, checkoutPullRequest: async () => '' });
     agents.startPlugins([captainsLogPlugin], { demo: false, ownRepo: () => undefined });
     const route = agents.plugins.routes().find((r) => r.plugin === 'captains-log' && r.route.path === '/log')!.route;
     const { agent } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
     await until(() => claude.turns.length === 1);
-    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, agent.id, 'Saved items, first slice');
     await until(() => [...store.reviews.values()].some((r) => r.status === 'testing'));
     const log = route.handle({ body: {}, query: {}, params: {} }) as LogLine[];
-    expect(log.find((l) => l.kind === 'shipped')).toMatchObject({ who: agent.name, goal: 'Saved items', projectId: project.id, text: expect.stringMatching(/^Shipped slice 1: Saved items, first slice → /) });
+    expect(log.find((l) => l.kind === 'shipped')).toMatchObject({ who: agent.name, goal: 'Saved items', projectId: project.id, text: expect.stringMatching(/^webshop-\w+ #\d+ · ready for review/) });
     const testing = log.find((l) => l.kind === 'testing');
     expect(testing?.who).toBe(store.agent([...store.reviews.values()].find((r) => r.status === 'testing')!.agentId!).name);
     expect(testing).toMatchObject({ projectId: project.id, goal: 'Saved items' });

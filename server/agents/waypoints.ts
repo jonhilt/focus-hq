@@ -36,8 +36,9 @@ export function opening(markdown: string, max: number = WAYPOINT_LIMITS.summary)
 }
 
 /**
- * The waypoints once the slice ships: what it set out to do is the title and opening it first shipped with, as its pull
- * requests keep them (shipping again, to fix what QA found, say, updates their code but not what they say).
+ * The waypoints once the slice's work goes out (a pull request of the goal's first seen ready): what it set out to do
+ * is the title and opening that pull request first went out with (pushing again, to fix what QA found, say, updates its
+ * code but not what it says).
  */
 export function shippedWaypoint(work: Course, input: { title: string; summary: string }, now: number): Waypoint[] {
   const title = input.title.replace(/\s+/g, ' ').trim();

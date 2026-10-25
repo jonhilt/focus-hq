@@ -8,7 +8,7 @@ import type { SinceVerdict } from './retest';
 import type { CommandRun } from './qaProof';
 import type { PackageFacts } from '../packageManager';
 import type { BackgroundEvent } from './backgroundTasks';
-import type { ShipInput } from './recap';
+import type { RecapInput } from './recap';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
 export type HelperEvent =
@@ -120,8 +120,8 @@ export interface ToolReply {
 
 /** Tools Ops lends a session. Each returns what happened, in words, for Claude to read. */
 export interface OpsTools {
-  /** Ships the slice: pushes every repo with new commits, and opens or updates its pull request. */
-  ship(input: ShipInput): Promise<string>;
+  /** Puts a recap on one of the goal's open pull requests, which sets its lane. Throws, in words, when it's refused. */
+  recap(input: RecapInput): Promise<string>;
   /** Updates the goal's note (and title). Throws, in words, when the note would get too long. */
   note(input: NoteInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
@@ -234,16 +234,10 @@ export interface WorkspaceOps {
   commitsAhead(dir: string, baseBranch: string): Promise<number>;
   /** The commit checked out in `dir`. */
   head(dir: string): Promise<string>;
-  /** The commits on HEAD not on the base branch nor in `shipped`, oldest first. */
-  unshippedCommits(dir: string, baseBranch: string, shipped?: string): Promise<string[]>;
+  /** Every branch `dir`'s checkout has been on, the one it's on now included, from its own HEAD reflog. */
+  branchesSeen(dir: string): Promise<string[]>;
   /** The files HEAD changes against origin's `baseBranch` (a review's checkout): what QA's report accounts for. Missing where there are no real checkouts. */
   changedFiles?(dir: string, baseBranch: string): Promise<string[]>;
-  /** Moves `dir`'s checkout onto a new `branch` at origin's (freshly fetched) `baseBranch`. */
-  freshBranch(dir: string, branch: string, baseBranch: string): Promise<void>;
-  /** Renames the branch checked out in `dir` (the slice's working name, at its first ship); fails if `to` is taken. */
-  renameBranch(dir: string, from: string, to: string): Promise<void>;
-  /** Applies `commits` on top of HEAD; fails, leaving HEAD as it was, if they don't apply cleanly. */
-  cherryPick(dir: string, commits: string[]): Promise<void>;
   push(dir: string, branch: string): Promise<void>;
   /**
    * Makes sure origin has `branch`, for a cloud session to clone: pushes `dir`'s commit if it isn't there yet, and

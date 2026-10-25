@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
+import { pushDenial } from './pushGuard';
 import { shellCommands } from './shell';
 
 /**
@@ -96,7 +97,8 @@ export function openScratch(agentId: string, dcgFile: string, env: NodeJS.Proces
     env: { [SCRATCH_VAR]: dir, ...(!env.DCG_CONFIG && { DCG_CONFIG: dcgFile }) },
     hook: (input) => {
       const command = input.hook_event_name === 'PreToolUse' ? (input.tool_input as { command?: unknown } | undefined)?.command : undefined;
-      const reason = typeof command === 'string' ? scratchRmDenial(command, dir) : null;
+      // the push guard's too: a command that would skip the git hooks it rests on
+      const reason = typeof command === 'string' ? (scratchRmDenial(command, dir) ?? pushDenial(command)) : null;
       return Promise.resolve(reason ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } } : {});
     },
     close: () => {

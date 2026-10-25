@@ -4,7 +4,6 @@ import { qaPlaybook } from './qa';
 import { LANES, raisedSaid } from '../../shared/mergeLane';
 import { type MergeTrial, mergeVerdict, refusalComment } from '../../shared/mergeCheck';
 import { stuckClosedComment } from '../../shared/triage';
-import { leadPrBody } from './lead';
 import { plannerSystemPrompt } from './planner';
 import { pullRequestBody } from './prompts';
 import { qaComment } from './qa';
@@ -50,7 +49,6 @@ describe('what Ops itself writes on GitHub', () => {
     qaComment(report, { officer: 'Odo', sha: 'abc1234' }, [], false),
     carriedComment('main', 'abc1234', 'def5678', ['pnpm test']),
     stuckClosedComment('the approach can’t work.', [7]),
-    leadPrBody('Adds saving.', { name: 'Ivanova' }, ['acme/api'], false),
     pullRequestBody({ name: 'Ada', issue: { number: 7 } }, 'Adds saving.', false),
   ];
 

@@ -175,13 +175,13 @@ function sliceLines(src: Source<Stamped<SliceFact>>, since: number): LogLine[] {
 /** A plugin by its id, as the log names who did something: `chief-of-staff` is the Chief of Staff. */
 const pluginName = (id: string): string => id.split('-').map((w) => (w === 'of' ? w : w[0].toUpperCase() + w.slice(1))).join(' ');
 
-const LEDGER_KINDS: Partial<Record<LedgerEvent['kind'], LogKind>> = { merged: 'merged', closed: 'closed' };
+const LEDGER_KINDS: Partial<Record<LedgerEvent['kind'], LogKind>> = { merged: 'merged', closed: 'closed', 'pr-ready': 'shipped' };
 
 function ledgerLines(events: readonly LedgerEvent[], since: number): LogLine[] {
   return events.filter((e) => e.at > since).map((e) => {
     const row = ledgerRow(e);
     const kind = e.kind === 'qa-verdict' ? (e.verdict === 'pass' ? 'pass' : 'fail') : (LEDGER_KINDS[e.kind] ?? 'other');
-    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' ? e.agent : e.kind === 'cos-verdict' || e.kind === 'cos-lane' ? 'Chief of Staff' : e.kind === 'lane-raised' ? pluginName(e.by) : 'Ops';
+    const who = e.kind === 'qa-verdict' ? e.reviewer : e.kind === 'session-digest' || e.kind === 'pr' || e.kind === 'pr-ready' ? e.agent : e.kind === 'cos-verdict' || e.kind === 'cos-lane' ? 'Chief of Staff' : e.kind === 'lane-raised' ? pluginName(e.by) : 'Ops';
     // the detail names who and the goal, which the line has on its own
     const detail = row.detail?.split(' · ').filter((d) => d !== who && d !== row.goal).join(' · ');
     return { t: e.at, who, source: 'ledger', kind, tag: row.tag, tone: row.tone, text: [row.title, detail].filter(Boolean).join(' · '), ...(row.quotes && { quotes: row.quotes }), projectId: e.projectId, ...(row.goal && { goal: row.goal }) };

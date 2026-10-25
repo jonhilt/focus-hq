@@ -114,7 +114,7 @@ export class Delivery extends Part {
       this.update(agent, { status: 'done', pr, activity: `PR #${pr.number} is ready for review`, finishedAt: Date.now() });
       if (agent.task === 'brief') this.core.plugins.prOpened(agent, pr);
       const head = yield* workspace.head(dir);
-      const lead = agent.task === 'conflicts' ? this.core.leads.leadWith(agent.repo, pr.number) : undefined;
+      const lead = agent.task === 'conflicts' ? this.core.goalPrs.ownerOf(agent.repo, pr.number) : undefined;
       if (lead) this.core.conflicts.mergedForLead(lead, { repo: agent.repo, number: pr.number, baseBranch: agent.baseBranch, branch: agent.branch }, head, agent.name);
       this.boardChanged(agent.projectId);
       this.core.reviews.fixEnded(agent, 'pushed');

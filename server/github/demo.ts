@@ -59,8 +59,49 @@ const RUN_IDS = 4000;
 /** Pushes to an open demo PR: a merge of its base branch, or a change of its own. Set while a demo GitHub is around. */
 export let demoPush: ((repo: string, number: number, kind: 'merge-base' | 'change') => string) | undefined;
 
+/** A demo lead opening a PR of their own (a draft unless `draft` is false), as `gh pr create` would. Set while a demo GitHub is around. */
+export let demoOpenPr: ((repo: string, req: { head: string; base: string; title: string; body: string }, draft?: boolean) => { number: number; url: string }) | undefined;
+
+/** A demo lead marking their draft ready for review, as `gh pr ready` would. Set while a demo GitHub is around. */
+export let demoReady: ((repo: string, number: number) => void) | undefined;
+
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
+  const opened = (r: FakeRepo, name: string, req: { head: string; base: string; title: string; body: string }, isDraft: boolean) => {
+    const number = r.nextNumber++;
+    const url = `https://github.com/${name}/pull/${number}`;
+    r.prs.push({
+      repo: name,
+      number,
+      title: req.title,
+      url,
+      branch: req.head,
+      baseBranch: req.base,
+      author: 'demo-manager',
+      isDraft,
+      mergeable: 'MERGEABLE',
+      checks: 'pending',
+      failedChecks: [],
+      closes: closingIssues(req.body),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      state: 'OPEN',
+      body: req.body,
+      headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
+    });
+    return { number, url };
+  };
+  demoReady = (name, number) => {
+    const p = repos.get(name)?.prs.find((p) => p.number === number && p.state === 'OPEN');
+    if (!p) throw new Error(`${name}#${number} is not an open pull request`);
+    p.isDraft = false;
+    p.updatedAt = new Date().toISOString();
+  };
+  demoOpenPr = (name, req, draft = true) => {
+    const r = repos.get(name);
+    if (!r) throw new Error(`${name} is not a demo repo`);
+    return opened(r, name, req, draft);
+  };
   demoPush = (name, number, kind) => {
     const p = repos.get(name)?.prs.find((p) => p.number === number && p.state === 'OPEN');
     if (!p) throw new Error(`${name}#${number} is not an open pull request`);
@@ -256,28 +297,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
           // GitHub refuses a second open pull request from the same branch (422 "A pull request already exists")
           const open = r.prs.find((p) => p.branch === req.head && p.state === 'OPEN');
           if (open) return Effect.fail(new GitHubRejected({ message: `A pull request already exists for ${name}:${req.head}: ${open.url}` }));
-          const number = r.nextNumber++;
-          const url = `https://github.com/${name}/pull/${number}`;
-          r.prs.push({
-            repo: name,
-            number,
-            title: req.title,
-            url,
-            branch: req.head,
-            baseBranch: req.base,
-            author: 'demo-manager',
-            isDraft: false,
-            mergeable: 'MERGEABLE',
-            checks: 'pending',
-            failedChecks: [],
-            closes: closingIssues(req.body),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            state: 'OPEN',
-            body: req.body,
-            headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
-          });
-          return Effect.succeed({ number, url });
+          return Effect.succeed(opened(r, name, req, false));
         }),
       ),
 

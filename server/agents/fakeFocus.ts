@@ -1,14 +1,15 @@
 // A pretend Focus for the manager's tests, and plugins' (plugins/*/…test.ts): demo GitHub and checkouts, and a
 // Claude Code stand-in whose turns the test ends. Only tests import it.
-import { Layer, Schedule } from 'effect';
+import { Effect, Layer, Schedule } from 'effect';
 import { expect } from 'vitest';
 import { demoLayer } from '../github/demo';
-import type { GitHub } from '../github/service';
+import { GitHub } from '../github/service';
 import type { Triager } from './triage';
 import { Hub } from '../hub';
 import { agentAfterRestart, Store } from '../store';
-import type { Autonomy } from '../../shared/types';
-import { demoWorkspace } from './demoRunner';
+import type { Autonomy, PullRequest } from '../../shared/types';
+import { demoSawBranch, demoWorkspace } from './demoRunner';
+import { hasLeadWork, leadWorktreeId, repoBranch } from './lead';
 import { AgentManager } from './manager';
 import { type Frames, type Picture, QaChat, Recordings, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import { DemoQaChat } from './demoQaChat';
@@ -85,8 +86,10 @@ const pictured: Render = (html, frames) => (html.includes('unrenderable') ? Prom
 
 function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>, triager: Triager, render: Render = pictured, recordings: Layer.Layer<Recordings> = Recordings.none()) {
   const claude = new FakeClaude();
+  // one GitHub, Ops' and the test's: what a test does on it (a lead opening a pull request) is what Ops sees
+  const gh = Effect.runSync(Effect.provide(GitHub, github));
   const services = Layer.mergeAll(
-    github,
+    Layer.succeed(GitHub, gh),
     // retries after a GitHub 5xx come straight away
     Layer.succeed(ShipRetry, Schedule.spaced(0)),
     Workspace.fromOps(workspace),
@@ -97,7 +100,29 @@ function crew(store: Store, workspace: WorkspaceOps, github: Layer.Layer<GitHub>
     // the demo's QA officer at the Playbook, answering at once
     QaChat.fromChatter(new DemoQaChat(0)),
   );
-  return { claude, agents: new AgentManager(store, new Hub(), services, () => undefined) };
+  return { claude, github: gh, agents: new AgentManager(store, new Hub(), services, () => undefined) };
+}
+
+/**
+ * A goal's lead pushing each repo's branch and opening its pull request themselves, ready for review (or as drafts),
+ * and the board refreshing: Ops claims them as the goal's and sends the ready ones to QA, where the project does. The
+ * pull requests, as GitHub has them.
+ */
+export async function leadOpensPrs(o: { agents: AgentManager; store: Store; github: GitHub['Service'] }, leadId: string, title = 'Saved items', draft = false): Promise<PullRequest[]> {
+  const lead = o.store.agent(leadId);
+  if (!hasLeadWork(lead)) throw new Error(`${leadId} isn’t a goal’s lead`);
+  const opened: PullRequest[] = [];
+  for (const r of lead.lead.repos) {
+    const branch = repoBranch(r, lead.branch);
+    demoSawBranch(demoWorkspace.dir(leadWorktreeId(lead.id, r.folder)), branch);
+    // a repo whose branch has one open already keeps it, as gh would: the lead pushes to it instead
+    const open = await Effect.runPromise(o.github.findPullRequest(r.repo, branch));
+    const { number, url } = open ?? await Effect.runPromise(o.github.createPullRequest(r.repo, { head: branch, base: r.baseBranch, title, body: 'A thin first slice.' }));
+    // as the board lists it
+    opened.push({ repo: r.repo, number, title, url, branch, baseBranch: r.baseBranch, isDraft: draft, mergeable: 'MERGEABLE', checks: 'pending', failedChecks: [], closes: [], createdAt: new Date().toISOString() });
+  }
+  await o.agents.boardRefreshed(lead.projectId, opened);
+  return opened;
 }
 
 /** Waits (a few seconds at most) for Focus to get there. */

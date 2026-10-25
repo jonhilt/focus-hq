@@ -14,7 +14,7 @@ A plugin (`FOCUS_PLUGINS=flow`, [plugins](../../docs/plugins.md)): each open goa
 
 ## Where it comes from
 
-It reads the raw records, not the summaries: each goal's lead transcript (Claude Code's, found by the goal's `sessionId` under `~/.claude/projects/`), the ship tool's results in it (which say when each pull request was opened or updated), and the ledger's QA verdicts, merges and closes on those pull requests.
+It reads the raw records, not the summaries: each goal's lead transcript (Claude Code's, found by the goal's `sessionId` under `~/.claude/projects/`), the ledger's `pr-ready` lines (when each of the lead's pull requests went out for review; in goals from before leads opened their own, the ship tool's results in the transcript say it), and the ledger's QA verdicts, merges and closes on those pull requests.
 
 The lead is **at a turn** from the message that starts it (the captain's, Ops', QA's, or a background task's notification) to its last line before the next one, and **between turns** from there until that next message. Every moment from the goal opening to it closing lands in exactly one state, so they add up to its lead time:
 

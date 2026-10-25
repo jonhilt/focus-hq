@@ -8,12 +8,11 @@ import { prKey } from '../../shared/qa';
 import { openQuestion } from '../../shared/artifacts';
 import { decisionRegister, goalDecisions } from '../../shared/decisions';
 import { demoLayer } from '../github/demo';
-import { GhServerError } from '../github/runner';
 import { GitHub } from '../github/service';
 import { Hub } from '../hub';
 import type { PluginHost } from '../plugins/contract';
 import { demoWorkspace } from './demoRunner';
-import { focus, restarted, until } from './fakeFocus';
+import { focus, leadOpensPrs, restarted, until } from './fakeFocus';
 import { Recordings } from './services';
 import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
@@ -23,6 +22,8 @@ import { CLOUD_UNAVAILABLE } from './cloud';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
 import { CARRYING_ON_HERE } from './manager/cloudMoves';
+import { leadWorktreeId } from './lead';
+import { refusedFile } from './pushGuard';
 
 // Ops falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
 vi.hoisted(() => {
@@ -89,6 +90,189 @@ describe('AgentManager', () => {
     const second = claude.turns[1];
     expect(second.req.resumeSessionId).toBe('session-1');
     expect([second.req.prompt, ...second.sent].join('\n\n')).toBe('Go ahead\n\nSmall slices, please');
+  });
+
+  it('claims a draft PR its lead opened from a branch their worktree has been on, once, without sending it to QA', async () => {
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), ['fix/held-frame']);
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    const pr: PullRequest = { ...listed, number: 90, url: 'https://github.com/demo/webshop-frontend/pull/90', branch: 'fix/held-frame', isDraft: true };
+
+    await agents.boardRefreshed(project.id, [pr]);
+    await agents.boardRefreshed(project.id, [pr]);
+
+    expect(store.agent(lead.id).lead!.prs).toEqual([{ repo: pr.repo, number: 90, url: pr.url, branch: 'fix/held-frame' }]);
+    expect(store.ledger.filter((e) => e.kind === 'pr')).toEqual([expect.objectContaining({ repo: pr.repo, pr: 90, lead: lead.id, agent: store.agent(lead.id).name, goal: 'Saved items', branch: 'fix/held-frame', draft: true })]);
+    expect(store.reviews.get(prKey(pr.repo, 90))).toBeUndefined();
+  });
+
+  it('re-tests a lead’s own PR once when their turn ends after pushing to it, and not after a turn with no push', async () => {
+    // listed before Focus starts, so the pushes below go to the GitHub Focus reads (the demo's push hook is its last one's)
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leadTurns = () => claude.turns.filter((t) => t.req.agentId === lead.id);
+    const qaTurns = () => claude.turns.filter((t) => t.req.outputSchema);
+    await until(() => leadTurns().length === 1);
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), [listed.branch]);
+    const ready: PullRequest = { ...listed, isDraft: false };
+    await agents.boardRefreshed(project.id, [ready]);
+    store.boards.set(project.id, { ...store.boards.get(project.id)!, prs: [ready] });
+    await until(() => qaTurns().length === 1);
+    qaTurns()[0].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] } });
+    await until(() => store.reviews.get(prKey(ready.repo, ready.number))?.status === 'passed');
+
+    // the lead pushes two changes in one turn
+    demoGitHub.demoPush!(ready.repo, ready.number, 'change');
+    demoGitHub.demoPush!(ready.repo, ready.number, 'change');
+    leadTurns()[0].end({ ok: true, summary: 'Tidied it' });
+    await until(() => qaTurns().length === 2);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(qaTurns()).toHaveLength(2);
+    qaTurns()[1].end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] } });
+    await until(() => store.reviews.get(prKey(ready.repo, ready.number))?.status === 'passed');
+
+    // a turn with no push leaves the verdict standing
+    agents.message(lead.id, 'Thanks');
+    await until(() => leadTurns().length === 2);
+    leadTurns()[1].end({ ok: true, summary: 'Nothing to do' });
+    await until(() => store.agent(lead.id).status === 'done');
+    await new Promise((r) => setTimeout(r, 50));
+    expect(qaTurns()).toHaveLength(2);
+    expect(store.reviews.get(prKey(ready.repo, ready.number))?.status).toBe('passed');
+  });
+
+  it('keeps a lead’s own PR in Ask until a recap covering its files picks a lane, never lower than the recap allows', async () => {
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), [listed.branch]);
+    const tools = claude.turns[0].req.tools!;
+    const recap = (paths: string[], impact: 'composes' | 'adds', lane: 'ship' | 'show') => ({ repo: listed.repo, number: listed.number, recap: { primitives: [{ id: 'saved', group: 'shop', impact, change: 'Wired in', paths }], lane } });
+    const pr = () => store.agent(lead.id).lead!.prs.find((p) => p.number === listed.number);
+
+    await expect(tools.recap(recap([`${folder}/`], 'composes', 'ship'))).rejects.toThrow(/isn’t one of this goal’s open pull requests/);
+    await agents.boardRefreshed(project.id, [listed]);
+    expect(pr()?.lane).toBeUndefined();
+
+    await expect(tools.recap(recap(['webshop-api/'], 'composes', 'ship'))).rejects.toThrow(/No primitive covers this changed file/);
+    expect(pr()?.lane).toBeUndefined();
+    await expect(tools.recap(recap([`${folder}/`], 'adds', 'ship'))).rejects.toThrow(/lanes are only ever raised/);
+    expect(await tools.recap(recap([`${folder}/`], 'composes', 'ship'))).toMatch(/Ship/);
+    expect(pr()).toMatchObject({ lane: 'ship', recap: { recap: { lane: 'ship' } } });
+    expect(store.agent(lead.id).lead!.artifacts?.some((a) => a.id === `system-recap-${listed.number}`)).toBe(true);
+  });
+
+  it('keeps a goal’s pull requests Ops opened before leads opened their own as they were, and moves the goal on when they land', async () => {
+    const { agents, claude, store, project } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    // shipped by Ops: on the goal already, with the commit it shipped and its lane
+    const shipped = { repo: listed.repo, number: listed.number, url: listed.url, sha: 'abc1234', branch: listed.branch, lane: 'show' as const };
+    const before = store.agent(lead.id);
+    store.putAgent({ ...before, lead: { ...before.lead!, prs: [shipped] } });
+
+    await agents.boardRefreshed(project.id, [listed]);
+    expect(store.agent(lead.id).lead!.prs).toEqual([shipped]);
+    expect(store.ledger.filter((e) => e.kind === 'pr')).toEqual([]);
+    agents.prClosed(listed.repo, listed.number, true);
+    expect(store.agent(lead.id).lead).toMatchObject({ slice: 2, prs: [], landed: [{ ...shipped, outcome: 'merged', slice: 1 }] });
+  });
+
+  it('puts a recap in its pull request’s description once, its map’s arrows checked against the code’s imports', async () => {
+    // each repo's src/saved.ts imports the other repo's: the map's arrow between them stands on it
+    const { agents, claude, store, project, github } = focus({
+      ...demoWorkspace,
+      runIn: async (_dir, args) => (args[0] === 'git' ? { code: 0, output: 'src/saved.ts\nREADME.md' } : { code: 1, output: '' }),
+      readIn: async (dir) => (dir.endsWith('webshop-frontend') ? "import { save } from '../../webshop-api/src/saved';" : ''),
+    });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const [front] = await leadOpensPrs({ agents, store, github }, lead.id);
+    const primitive = (folder: string) => ({ id: `${folder}-saved`, group: folder, impact: 'adds' as const, change: 'New', paths: [`${folder}/`] });
+    const recap = () => claude.turns[0].req.tools!.recap({ repo: front.repo, number: front.number, recap: { primitives: ['webshop-frontend', 'webshop-api'].map(primitive), map: [{ from: 'webshop-frontend-saved', to: 'webshop-api-saved', label: 'saves' }] } });
+    const body = async () => (await Effect.runPromise(github.getPullRequest(front.repo, front.number))).body;
+
+    await recap();
+    expect(await body()).toContain('<summary>System recap: <b>adds a primitive</b> (high risk)</summary>');
+    // the arrow stands on an import, so it's drawn solid
+    expect(await body()).toContain('n_webshop_frontend_saved -->|"saves"| n_webshop_api_saved');
+    // sent again, it replaces the one there
+    await recap();
+    expect((await body()).match(/<!-- system-recap:start -->/g)).toHaveLength(1);
+    expect((await body()).startsWith('A thin first slice.')).toBe(true);
+  });
+
+  it('refuses a lead’s pushes to their base branches, and to a branch of theirs once its PR has merged', async () => {
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const refused = () => fs.readFileSync(refusedFile(lead.id), 'utf8');
+    const bases = [...new Set(store.agent(lead.id).lead!.repos.map((r) => `base ${r.baseBranch}\n`))].join('');
+    expect(refused()).toBe(bases);
+
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), ['fix/held-frame']);
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    await agents.boardRefreshed(project.id, [{ ...listed, branch: 'fix/held-frame' }]);
+    agents.prClosed(listed.repo, listed.number, true);
+    expect(refused()).toBe(`${bases}merged fix/held-frame\n`);
+  });
+
+  it('sends a lead’s own PR to QA once it’s marked ready, and the lead hears the verdict with their next message', async () => {
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    claude.turns[0].end({ ok: true, summary: 'Opened a side fix' });
+    await until(() => store.agent(lead.id).status === 'done');
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), ['fix/held-frame']);
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    const draft: PullRequest = { ...listed, branch: 'fix/held-frame', isDraft: true };
+    const refresh = async (pr: PullRequest) => {
+      await agents.boardRefreshed(project.id, [pr]);
+    };
+
+    await refresh(draft);
+    expect(store.reviews.get(prKey(draft.repo, draft.number))).toBeUndefined();
+
+    await refresh({ ...draft, isDraft: false });
+    await refresh({ ...draft, isDraft: false });
+    await until(() => claude.turns.length === 2);
+    expect(store.ledger.filter((e) => e.kind === 'pr-ready')).toEqual([expect.objectContaining({ repo: draft.repo, pr: draft.number, lead: lead.id, branch: 'fix/held-frame' })]);
+    const qa = claude.turns[1];
+    expect(qa.req.outputSchema).toBeDefined();
+    qa.end({ ok: true, summary: '', structured: { verdict: 'pass', summary: 'Works.', checks: [], commands: [], files: [] } });
+    await until(() => store.reviews.get(prKey(draft.repo, draft.number))?.status === 'passed');
+    expect(claude.turns).toHaveLength(2);
+
+    agents.message(lead.id, 'What next?');
+    await until(() => claude.turns.length === 3);
+    expect(claude.turns[2].req.prompt).toMatch(new RegExp(`^\\[QA officer [^\\]]+\\] QA passed ${draft.repo}#${draft.number}`));
   });
 
   it("changes one agent's autonomy, in their running session and on their later turns, and no one else's", async () => {
@@ -410,7 +594,7 @@ describe('AgentManager', () => {
   it('tests a goal’s PR with its slice’s other PRs checked out beside it, and clears them all away once it merges', async () => {
     const checkouts: string[] = [];
     const removed: string[] = [];
-    const { agents, claude, store, project } = focus({
+    const { agents, claude, store, project, github } = focus({
       ...demoWorkspace,
       checkoutPullRequest: async (repo, id, number) => {
         checkouts.push(`${repo}#${number} ${id}`);
@@ -420,7 +604,7 @@ describe('AgentManager', () => {
     });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
-    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     const prs = store.agent(lead.id).lead!.prs;
     expect(prs.map((p) => p.repo).sort()).toEqual(['demo/webshop-api', 'demo/webshop-frontend']);
     const front = prs.find((p) => p.repo === 'demo/webshop-frontend')!;
@@ -523,7 +707,8 @@ describe('AgentManager', () => {
   it('commits a closing goal’s uncommitted work as a WIP snapshot on its branch before its checkouts go', async () => {
     const steps: string[] = [];
     let saves = true;
-    let shipMidClose: Promise<unknown> | undefined;
+    let refusedAtSnapshot: string | undefined;
+    let leadId = '';
     const { agents, claude, store, project } = focus({
       ...demoWorkspace,
       // the API's checkout can't say whether it has changes: that counts as having them
@@ -534,14 +719,15 @@ describe('AgentManager', () => {
       branchState: async () => ({ onOrigin: false, unpushed: 2 }),
       snapshot: async (dir, message) => {
         if (!saves) throw new Error('disk full');
-        // the lead, still mid-turn, tries to ship while the goal closes: the snapshot must never reach a pull request
-        shipMidClose ??= claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'Last bits.' }).then(() => 'shipped', (err: Error) => err.message);
+        // the lead, still mid-turn, may push while the goal closes: the snapshot must never reach a pull request
+        refusedAtSnapshot ??= fs.readFileSync(refusedFile(leadId), 'utf8');
         steps.push(`snapshot ${dir.split('/').at(-1)}: ${message}`);
         return true;
       },
       remove: async (_repo, agentId) => void steps.push(`remove ${agentId.split('/').at(-1)}`),
     });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    leadId = lead.id;
     await until(() => claude.turns.length === 1);
     const branch = store.agent(lead.id).branch;
 
@@ -564,26 +750,8 @@ describe('AgentManager', () => {
     const wip = 'WIP: uncommitted work when the goal “Saved items” closed';
     expect(steps.indexOf('remove webshop-frontend')).toBeGreaterThan(steps.indexOf(`snapshot webshop-frontend: ${wip}`));
     expect(steps.indexOf('remove webshop-api')).toBeGreaterThan(steps.indexOf(`snapshot webshop-api: ${wip}`));
-    expect(await shipMidClose).toBe('The captain is closing the goal: nothing ships now');
+    expect(refusedAtSnapshot).toMatch(/^closing\n/);
     expect(project.goals![0]).toMatchObject({ id: lead.id, branch, sessionId: 'session-1', repos: [{ folder: 'webshop-frontend' }, { folder: 'webshop-api' }] });
-  });
-
-  // found by the goal's check for two things at once (goalInvariants.test.ts, docs/invariants.md#found-on-main)
-  it('won’t close a goal while its slice is shipping, so the pull requests it opens stay on the goal', async () => {
-    let pushed!: () => void;
-    const pushing = new Promise<void>((resolve) => (pushed = resolve));
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, push: () => pushing });
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-    const ship = claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'A slice.' });
-    await until(() => store.agent(lead.id).status === 'pushing');
-
-    await expect(agents.closeGoal(lead.id, true)).rejects.toThrow('is shipping their slice: close the goal once it’s shipped');
-    expect(store.agents.has(lead.id)).toBe(true);
-    pushed();
-    await ship;
-    expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
-    expect(project.goals![0].prs.map((p) => p.repo)).toEqual(['demo/webshop-frontend', 'demo/webshop-api']);
   });
 
   // found by the goal's check for two things at once (goalInvariants.test.ts, docs/invariants.md#found-on-main)
@@ -689,11 +857,11 @@ describe('AgentManager', () => {
 
   it('reopens a closed goal on its branch, with the same lead picking their conversation back up', async () => {
     const reopened: { id: string; branch: string }[] = [];
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
+    const { agents, claude, store, project, github } = focus({ ...demoWorkspace, reopen: async (_repo, id, branch) => (reopened.push({ id, branch }), `/demo/${id}`) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string; name: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
     await until(() => store.agent(lead.id).status === 'done');
     const { branch, lead: work } = store.agent(lead.id);
@@ -707,9 +875,8 @@ describe('AgentManager', () => {
     expect(project.goals).toEqual([]);
     expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/isn’t in the room’s log/);
     await until(() => leads().length === 2);
-    // each repo comes back on the branch it shipped from, named after the slice's work
-    expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch: r.branch })));
-    expect(work!.repos.map((r) => r.branch)).toEqual(work!.repos.map(() => expect.stringMatching(/^focus\/saved-items-first-slice-/) as unknown));
+    // each repo comes back on the branch it was left on: the goal's
+    expect(reopened).toEqual(work!.repos.map((r) => ({ id: `${lead.id}/${r.folder}`, branch })));
     expect(leads()[1].req.resumeSessionId).toBe('session-1');
     expect(leads()[1].req.prompt).toMatch(new RegExp(`^\\[Ops\\] The captain reopened this goal, .* checked out again on \`${branch}\`, as you left them: \\./webshop-frontend, \\./webshop-api\\. .* Still open on GitHub: `));
     expect(store.agent(lead.id).lead).toMatchObject({ repos: work!.repos, prs: work!.prs });
@@ -903,10 +1070,10 @@ describe('AgentManager', () => {
   });
 
   it('sends a PR back to QA at Ops’ merge of the base, so the verdict doesn’t stay on the commit before', async () => {
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha1234', from: 'old-sha' }) });
+    const { agents, claude, store, project, github } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha1234', from: 'old-sha' }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.length === 1);
-    await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     const [pr] = store.agent(lead.id).lead!.prs;
     const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
     store.reviewJournal(prKey(pr.repo, pr.number), { kind: 'imported', review: { projectId: project.id, repo: pr.repo, number: pr.number, title: 'PR', status: 'passed', sha: pr.sha, report, requestedAt: 1, finishedAt: 2 } });
@@ -917,11 +1084,11 @@ describe('AgentManager', () => {
 
   it('merges the base into a slice’s conflicting PR itself, and tells the lead to pull with the captain’s next message', async () => {
     const auto = ['CLAUDE.md', 'client/public/ship/holodeck-deck.glb'];
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
+    const { agents, claude, store, project, github } = focus({ ...demoWorkspace, mergeBase: async () => ({ kind: 'merged', sha: 'merge-sha', from: 'old-sha', auto }) });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     const [pr] = store.agent(lead.id).lead!.prs;
 
     const outcome = await agents.resolveConflicts(project.id, { repo: pr.repo, number: pr.number, branch: store.agent(lead.id).branch, baseBranch: 'main' } as PullRequest);
@@ -967,7 +1134,7 @@ describe('AgentManager', () => {
       const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
       const leads = () => o.claude.turns.filter((t) => t.req.agentId === lead.id);
       await until(() => leads().length === 1);
-      await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+      await leadOpensPrs(o, lead.id, 'Saved items, first slice');
       leads()[0].end({ ok: true, summary: 'Shipped' });
       await until(() => o.store.agent(lead.id).status === 'done');
       const [pr] = o.store.agent(lead.id).lead!.prs;
@@ -1036,14 +1203,14 @@ describe('AgentManager', () => {
 
   it('seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead', async () => {
     const created: { agentId: string; branch: string; local?: string }[] = [];
-    const { agents, claude, store, project } = focus({
+    const { agents, claude, store, project, github } = focus({
       ...demoWorkspace,
       create: async (_repo, agentId, branch, _start, _aboard, local) => (created.push({ agentId, branch, local }), `/demo/${agentId}`),
     });
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     const [pr] = store.agent(lead.id).lead!.prs;
     const branch = store.agent(lead.id).branch;
 
@@ -1068,195 +1235,41 @@ describe('AgentManager', () => {
     expect([leads()[1].req.prompt, ...leads()[1].sent].join('\n\n')).toContain(`${outcome.agent.name} merged \`main\` into \`${branch}\` and pushed it`);
   });
 
-  it('won’t ship a lead’s repo over commits Ops pushed to its branch', async () => {
-    let behind = false;
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, head: async () => 'lead-head', missingRemoteCommits: async () => behind });
+  it('moves the goal on to its next slice once the last of its pull requests lands, its checkouts as they are, and tells the lead with the captain’s next message', async () => {
+    const { agents, claude, store, project, github } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    await ship();
-    const work = store.agent(lead.id).lead!;
-    store.agent(lead.id).lead = { ...work, prs: work.prs.map((p) => ({ ...p, sha: 'merge-sha' })) };
-    behind = true;
-    await expect(ship()).rejects.toThrow(/^Nothing shipped: GitHub's `[^`]+` has commits \.\/webshop-/);
-  });
-
-  it('refuses a ship whose recap misses a file it changes, then puts the recap in its pull requests, and an update’s in place of it', async () => {
-    const opened: string[] = [];
-    const edited: string[] = [];
-    // the demo GitHub, keeping what each pull request opened with, and each comment
-    const recording = Layer.effect(GitHub, Effect.gen(function* () {
-      const gh = yield* GitHub;
-      return GitHub.of({
-        ...gh,
-        createPullRequest: (repo, pr) => Effect.suspend(() => (opened.push(pr.body), gh.createPullRequest(repo, pr))),
-        editPullRequestBody: (repo, number, body) => Effect.suspend(() => (edited.push(body), gh.editPullRequestBody(repo, number, body))),
-      });
-    })).pipe(Layer.provide(demoLayer));
-    let head = 'first';
-    // each repo's src/saved.ts imports the other repo's: the map's arrow between them stands on it
-    const { agents, claude, store, project } = focus({
-      ...demoWorkspace,
-      head: async () => head,
-      changedFiles: async () => ['src/saved.ts'],
-      runIn: async (_dir, args) => (args[0] === 'git' ? { code: 0, output: 'src/saved.ts\nREADME.md' } : { code: 1, output: '' }),
-      readIn: async (dir) => (dir.endsWith('webshop-frontend') ? "import { save } from '../../webshop-api/src/saved';" : ''),
-    }, recording);
-    agents.startGoal(project.id, 'Saved items');
-    await until(() => claude.turns.length === 1);
-    const primitive = (folder: string) => ({ id: `${folder}-saved`, group: folder, impact: 'adds' as const, change: 'New', paths: [`${folder}/`] });
-    const ship = (folders: string[]) => claude.turns[0].req.tools!.ship({ title: 'Saved items', summary: 'A thin first slice.', recap: { primitives: folders.map(primitive), map: [{ from: 'webshop-frontend-saved', to: 'webshop-api-saved', label: 'saves' }] } });
-
-    await expect(ship(['webshop-frontend'])).rejects.toThrow('Nothing shipped: the recap needs fixing first.\n\n- No primitive covers this changed file: add it to one’s paths, or name the primitive it belongs to\n- webshop-api/src/saved.ts');
-    expect(opened).toEqual([]);
-
-    await ship(['webshop-frontend', 'webshop-api']);
-    expect(opened).toHaveLength(2);
-    for (const body of opened) expect(body).toContain('<summary>System recap: <b>adds a primitive</b> (high risk)</summary>');
-    // the arrow stands on an import, so it's drawn solid
-    expect(opened[0]).toContain('n_webshop_frontend_saved -->|"saves"| n_webshop_api_saved');
-    const lead = [...store.agents.values()].find((a) => a.lead)!;
-    expect(lead.lead!.artifacts?.map((a) => a.id)).toContain('system-recap');
-
-    head = 'second';
-    await ship(['webshop-frontend', 'webshop-api']);
-    expect(edited).toHaveLength(2);
-    for (const body of edited) expect(body.match(/<!-- system-recap:start -->/g)).toHaveLength(1);
-    expect(edited[0].startsWith('A thin first slice.')).toBe(true);
-  });
-
-  it('refuses a lane below what the recap’s rollup allows, and keeps the one shipped on each pull request', async () => {
-    const { agents, claude, store, project } = focus({ ...demoWorkspace, changedFiles: async () => ['src/saved.ts'] });
-    agents.startGoal(project.id, 'Saved items');
-    await until(() => claude.turns.length === 1);
-    const ship = (impact: 'composes' | 'extends', lane: 'ship' | 'show') => claude.turns[0].req.tools!.ship({
-      title: 'Saved items',
-      summary: 'A thin first slice.',
-      recap: { primitives: [{ id: 'saved', group: 'shop', impact, change: 'Wired in', paths: ['webshop-frontend/', 'webshop-api/'] }], lane },
-    });
-
-    await expect(ship('extends', 'ship')).rejects.toThrow('goes in Show or higher, not Ship');
-    await ship('composes', 'ship');
-    const lead = [...store.agents.values()].find((a) => a.lead)!;
-    expect(lead.lead!.prs.map((p) => p.lane)).toEqual(['ship', 'ship']);
-    expect(agents.leadPrs(project.id).map((p) => p.lane)).toEqual(['ship', 'ship']);
-    // its merge keeps whose it was and its lane: what a Show merge's landed card is made of
-    const [pr] = lead.lead!.prs;
-    agents.recordLanding(pr.repo, pr.number, true, 'office');
-    expect(store.ledger.find((e) => e.kind === 'merged')).toMatchObject({ repo: pr.repo, pr: pr.number, by: 'office', lead: lead.id, lane: 'ship' });
-  });
-
-  it('ships through GitHub 5xx answers, trying the push and the PR again', async () => {
-    let pushFailures = 2;
-    let prFailures = 2;
-    // the demo GitHub, except that opening a PR answers 502 twice first
-    const flaky = Layer.effect(GitHub, Effect.gen(function* () {
-      const gh = yield* GitHub;
-      return GitHub.of({
-        ...gh,
-        createPullRequest: (repo, pr) =>
-          Effect.suspend(() =>
-            prFailures-- > 0 ? Effect.fail(new GhServerError({ args: ['pr', 'create'], stderr: 'HTTP 502: Bad Gateway (https://api.github.com/graphql)' })) : gh.createPullRequest(repo, pr),
-          ),
-      });
-    })).pipe(Layer.provide(demoLayer));
-    const { agents, claude, store, project } = focus({
-      ...demoWorkspace,
-      push: async (dir, branch) => {
-        if (pushFailures-- > 0) throw new Error("git push --force-with-lease failed: remote: Internal Server Error\nfatal: unable to access 'https://github.com/demo/webshop-frontend.git/': The requested URL returned error: 502");
-        return demoWorkspace.push(dir, branch);
-      },
-    }, flaky);
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-
-    const reply = await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    expect(JSON.stringify(reply)).toMatch(/Opened demo\/webshop-/);
-    expect(store.agent(lead.id).lead!.prs.length).toBeGreaterThan(0);
-    const said = store.recentLines(lead.id).map((l) => l.text);
-    expect(said).toContain('✻ GitHub answered the push in demo/webshop-frontend with HTTP 502: trying again (1 of 3)');
-    expect(said).toContain('✻ GitHub answered opening the pull request with HTTP 502: trying again (2 of 3)');
-  });
-
-  it('gives up shipping after GitHub answers 5xx four times, and never retries other failures', async () => {
-    let pushes = 0;
-    let failure = 'The requested URL returned error: 503';
-    const { agents, claude, project } = focus({
-      ...demoWorkspace,
-      push: async () => {
-        pushes++;
-        throw new Error(failure);
-      },
-    });
-    agents.startGoal(project.id, 'Saved items');
-    await until(() => claude.turns.length === 1);
-    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    await expect(ship()).rejects.toThrow('The requested URL returned error: 503');
-    expect(pushes).toBe(4);
-
-    pushes = 0;
-    failure = '! [rejected] (stale info)';
-    await expect(ship()).rejects.toThrow('stale info');
-    expect(pushes).toBe(1);
-  });
-
-  it('carries the goal into the next slice, as the captain put it, at the captain’s next message once the last one has landed', async () => {
-    const { agents, claude, store, project } = focus();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items\nShoppers keep a list across devices') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
+    const opened = await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
+    const { branch, lead: before } = store.agent(lead.id);
+    leads()[0].end({ ok: true, summary: 'Opened the pull requests' });
     await until(() => store.agent(lead.id).status === 'done');
 
-    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
+    agents.prClosed(opened[0].repo, opened[0].number, true);
+    expect(store.agent(lead.id).lead!.slice).toBe(1);
+    agents.prClosed(opened[1].repo, opened[1].number, true);
     // only the captain starts a goal lead's next turn: the landing is a note for then
     await new Promise((r) => setTimeout(r, 30));
     expect(leads()).toHaveLength(1);
-    expect(store.agent(lead.id).status).toBe('done');
-    expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/)]);
+    const after = store.agent(lead.id);
+    expect(after.status).toBe('done');
+    expect(after.lead).toMatchObject({ slice: 2, prs: [], repos: before!.repos });
+    expect(after.lead!.landed?.map((p) => p.number).sort()).toEqual(opened.map((p) => p.number).sort());
+    expect(after.branch).toBe(branch);
+    expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed: .*Your checkouts stay as they are/)]);
 
     agents.message(lead.id, 'Go on');
-    // the conversation carries on as it is: compacting is the captain's call
     await until(() => leads().length === 2);
-    const next = leads()[1].req;
-    expect(next.resumeSessionId).toBe('session-1');
-    expect(next.prompt).toMatch(/^Slice 2 starts on fresh code/);
-    expect(next.prompt).not.toContain('summarised');
-    expect(next.prompt).toContain('The goal: Saved items\n\nAs the captain first put it:\n> Saved items\n> Shoppers keep a list across devices');
-    expect(next.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\nGo on$/);
-  });
-
-  it('tells a lead whose slice lands mid-turn nothing until the captain’s next message, and moves their repos at the start of the next turn', async () => {
-    const { agents, claude, store, project } = focus();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
-    await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    const branch = store.agent(lead.id).branch;
-
-    // still in the turn they shipped from when the pull requests merge: nothing goes into it
-    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
-    expect(leads()[0].sent).toEqual([]);
-    expect(store.agent(lead.id).branch).toBe(branch);
-
-    // and its end doesn't carry them on
-    leads()[0].end({ ok: true, summary: 'Finished the next piece' });
-    await until(() => store.agent(lead.id).status === 'done');
-    await new Promise((r) => setTimeout(r, 30));
-    expect(leads()).toHaveLength(1);
-    agents.message(lead.id, 'Go ahead');
-    await until(() => leads().length === 2);
-    expect(leads()[1].req.prompt).toMatch(/^Slice 2 starts on fresh code/);
-    expect(leads()[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\nGo ahead$/);
+    expect(leads()[1].req.resumeSessionId).toBe('session-1');
+    expect(leads()[1].req.prompt).toMatch(/^\[Ops\] Slice 1 has landed: .*\n\nGo on$/s);
   });
 
   it('hands a lead mid-turn their notes with the captain’s message into the turn, ahead of it', async () => {
-    const { agents, claude, store, project } = focus();
+    const { agents, claude, store, project, github } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
     agents.message(lead.id, 'And the header');
     expect(leads()[0].sent).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed/), 'And the header']);
@@ -1265,11 +1278,11 @@ describe('AgentManager', () => {
   });
 
   it('counts a lead’s notes heard once they’re in, even when the message after them isn’t', async () => {
-    const { agents, claude, store, project } = focus();
+    const { agents, claude, store, project, github } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
     leads()[0].refusing.push('And the header');
     agents.message(lead.id, 'And the header');
@@ -1279,7 +1292,7 @@ describe('AgentManager', () => {
   });
 
   it('lets a plugin wake a goal’s lead for a note, which goes ahead of its message', async () => {
-    const { agents, claude, store, project } = focus();
+    const { agents, claude, store, project, github } = focus();
     const heard: { from: string; about: string; inTurn: boolean }[] = [];
     agents.startPlugins([{
       id: 'waker',
@@ -1293,7 +1306,7 @@ describe('AgentManager', () => {
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
     await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+    await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
     leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
     await until(() => store.agent(lead.id).status === 'done');
 
@@ -1301,120 +1314,6 @@ describe('AgentManager', () => {
     await until(() => leads().length === 2);
     expect(heard).toEqual([{ from: 'Ops', about: 'slice-landed', inTurn: false }]);
     expect(leads()[1].req.prompt).toMatch(/\[Ops\] Slice 1 has landed: .*\n\n\[Ops\] Carry on\.$/);
-  });
-
-  it('finishes the move to a new slice on their next message when its checkout failed', async () => {
-    let failNext = false;
-    const { agents, claude, store, project } = focus({
-      ...demoWorkspace,
-      create: async (...args) => {
-        // Focus restarted mid-move, killing git fetch
-        if (failNext) {
-          failNext = false;
-          throw new Error('git fetch origin --prune failed');
-        }
-        return demoWorkspace.create(...args);
-      },
-    });
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
-    await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
-    await until(() => store.agent(lead.id).status === 'done');
-
-    failNext = true;
-    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
-    agents.message(lead.id, 'Go on');
-    await until(() => store.agent(lead.id).status === 'error');
-    expect(leads()).toHaveLength(1);
-    expect(store.agent(lead.id).lead!.repos).toEqual([]);
-
-    agents.message(lead.id, 'Carry on');
-    await until(() => leads().length === 2);
-    const branch = store.agent(lead.id).branch;
-    expect(store.agent(lead.id).lead!.repos.map((r) => r.repo)).toEqual(project.repos);
-    const prompt = leads()[1].req.prompt;
-    expect(prompt).toMatch(/^Slice 2 starts on fresh code/);
-    expect(store.slice(lead.id)).toMatchObject({ phase: 'working', slice: 2, branch });
-    expect(prompt).toContain(`- ./webshop-frontend: demo/webshop-frontend, on branch \`${branch}\``);
-    expect(prompt).toContain('Carry on');
-  });
-
-  it('brings commits the lead hadn’t shipped along to the next slice', async () => {
-    const picked: { dir: string; commits: string[] }[] = [];
-    const { agents, claude, store, project } = focus({
-      ...demoWorkspace,
-      // the lead carried on after shipping: a commit in each repo, and the API's won't apply to fresh code
-      unshippedCommits: async (dir) => [dir.endsWith('/webshop-api') ? 'api-next' : 'web-next'],
-      cherryPick: async (dir, commits) => {
-        picked.push({ dir, commits });
-        if (dir.endsWith('/webshop-api')) throw new Error('conflict');
-      },
-    });
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    const leads = () => claude.turns.filter((t) => t.req.agentId === lead.id);
-    await until(() => leads().length === 1);
-    await leads()[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
-    leads()[0].end({ ok: true, summary: 'Shipped the first slice' });
-    await until(() => store.agent(lead.id).status === 'done');
-    const firstBranch = store.agent(lead.id).branch;
-
-    for (const pr of store.agent(lead.id).lead!.prs) agents.prClosed(pr.repo, pr.number, true);
-    agents.message(lead.id, 'Go on');
-    await until(() => leads().length === 2);
-    expect(picked.map((p) => p.commits)).toEqual([['web-next'], ['api-next']]);
-    const next = leads()[1].req.prompt;
-    expect(next).toContain("- ./webshop-frontend: the commit you hadn't shipped came along onto the new branch.");
-    expect(next).toContain(`- ./webshop-api: the commit you hadn't shipped didn't apply cleanly to fresh code, so it's only on \`${firstBranch}\`. Bring it over with \`git cherry-pick api-next\``);
-  });
-
-  it('never ships a repo again from a branch whose pull request merged: it gets a fresh branch with only the unshipped commits', async () => {
-    const fresh: { dir: string; branch: string; base: string }[] = [];
-    const picked: string[][] = [];
-    const opened: { repo: string; head: string }[] = [];
-    const recording = Layer.effect(GitHub, Effect.gen(function* () {
-      const gh = yield* GitHub;
-      return GitHub.of({ ...gh, createPullRequest: (repo, pr) => Effect.suspend(() => (opened.push({ repo, head: pr.head }), gh.createPullRequest(repo, pr))) });
-    })).pipe(Layer.provide(demoLayer));
-    const { agents, claude, store, project } = focus({
-      ...demoWorkspace,
-      push: async () => undefined,
-      // the lead carried on after shipping: one new commit in each repo
-      unshippedCommits: async (dir) => [dir.endsWith('/webshop-api') ? 'api-next' : 'web-next'],
-      freshBranch: async (dir, branch, base) => void fresh.push({ dir, branch, base }),
-      cherryPick: async (_dir, commits) => void picked.push(commits),
-    }, recording);
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
-    await until(() => claude.turns.length === 1);
-    const ship = () => claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' }) as Promise<unknown>;
-    await ship();
-    const working = store.agent(lead.id).branch;
-    const web = store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend')!;
-    // the first ship renamed the slice's working branch after its work
-    const first = web.branch!;
-    expect(first).toBe(`focus/saved-items-first-slice-${working.slice(-4)}`);
-    expect(store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!.branch).toBe(first);
-
-    // the frontend's pull request is squash-merged while the API's stays open: the slice hasn't landed
-    agents.prClosed(web.repo, web.number, true);
-    const reply = JSON.stringify(await ship());
-    expect(fresh).toEqual([{ dir: expect.stringMatching(/\/webshop-frontend$/) as unknown, branch: expect.not.stringMatching(first) as unknown, base: 'main' }]);
-    expect(picked).toEqual([['web-next']]);
-    // ...named after the slice's work, like the first
-    const next = fresh[0].branch;
-    expect(next).toMatch(/^focus\/saved-items-first-slice-/);
-    const repos = store.agent(lead.id).lead!.repos;
-    expect(repos.find((r) => r.repo === 'demo/webshop-frontend')!.branch).toBe(next);
-    expect(repos.find((r) => r.repo === 'demo/webshop-api')!.branch).toBe(`focus/saved-items-first-slice-${working.slice(-4)}`);
-    // a new pull request from the fresh branch; the API's open one is only updated
-    expect(opened.slice(2)).toEqual([{ repo: 'demo/webshop-frontend', head: next }]);
-    expect(reply).toContain(`./webshop-frontend's pull request from \`${first}\` has merged, so Ops moved it to a new branch, \`${next}\``);
-    expect(store.agent(lead.id).lead!.prs.find((p) => p.repo === 'demo/webshop-frontend' && !p.outcome)!.branch).toBe(next);
-
-    // shipping again leaves it on that branch, whose pull request is open
-    await ship();
-    expect(fresh).toHaveLength(1);
   });
 
   it('tells a lead whose conversation can’t be picked back up where the goal stands', async () => {
@@ -1894,11 +1793,11 @@ describe('AgentManager', () => {
     });
 
     it('tells plugins of a goal’s pull request merging, once the goal knows it has', async () => {
-      const { agents, claude, store, project } = focus();
+      const { agents, claude, store, project, github } = focus();
       const auditing = auditor(agents);
       const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
       await until(() => claude.turns.length === 1);
-      await claude.turns[0].req.tools!.ship({ title: 'Saved items, first slice', summary: 'A thin first slice.' });
+      await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first slice');
       const [pr] = store.agent(lead.id).lead!.prs;
       agents.prClosed(pr.repo, pr.number, true);
       expect(auditing.heard).toEqual([`closed #${pr.number}`]);

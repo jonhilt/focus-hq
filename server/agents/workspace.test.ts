@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { paths } from '../config';
-import { checkoutPullRequest, cherryPick, createWorktree, freshBranch, head, installDependencies, removeFolder, reopenWorktree, removeWorktree, unshippedCommits } from './workspace';
+import { checkoutPullRequest, createWorktree, head, installDependencies, removeFolder, reopenWorktree, removeWorktree } from './workspace';
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'focus-workspace-'));
 afterAll(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -20,74 +20,6 @@ function commit(dir: string, file: string, text: string): string {
   return git(dir, 'rev-parse', 'HEAD');
 }
 
-/** An origin, and a clone of it whose slice branch shipped one commit and carried on with another. */
-function sliceThatCarriedOn() {
-  const origin = fs.mkdtempSync(path.join(tmp, 'origin-'));
-  git(tmp, 'init', '-q', '--bare', '-b', 'main', origin);
-  const lead = `${origin}-lead`;
-  git(tmp, 'clone', '-q', origin, lead);
-  git(lead, 'config', 'user.email', 'lead@focus.test');
-  git(lead, 'config', 'user.name', 'Lead');
-  git(lead, 'checkout', '-qb', 'main');
-  commit(lead, 'readme.md', 'hello');
-  git(lead, 'push', '-q', 'origin', 'main');
-  git(lead, 'checkout', '-qb', 'focus/slice-1');
-  const shipped = commit(lead, 'saved.ts', 'save');
-  const next = commit(lead, 'saved.ts', 'save and list');
-  return { lead, shipped, next };
-}
-
-describe('the lead’s workspace', () => {
-  it('finds the commits that never shipped', async () => {
-    const { lead, shipped, next } = sliceThatCarriedOn();
-    expect(await unshippedCommits(lead, 'main', shipped)).toEqual([next]);
-    // nothing shipped from this repo: everything since the base branch
-    expect(await unshippedCommits(lead, 'main')).toEqual([shipped, next]);
-    expect(await unshippedCommits(lead, 'main', '0123456789abcdef0123456789abcdef01234567')).toEqual([shipped, next]);
-  });
-
-  it('brings them onto fresh code, or leaves the new branch as it was when they don’t apply', async () => {
-    const { lead, next } = sliceThatCarriedOn();
-    const fresh = `${lead}-slice-2`;
-    git(lead, 'worktree', 'add', '-q', '-b', 'focus/slice-2', fresh, 'origin/main');
-    const before = await head(fresh);
-    // the first commit hasn't landed, so the one after it can't apply
-    await expect(cherryPick(fresh, [next])).rejects.toThrow();
-    expect(await head(fresh)).toBe(before);
-    expect(git(fresh, 'status', '--porcelain')).toBe('');
-
-    // the slice landed (squashed into one commit on main): now it does
-    git(lead, 'checkout', '-q', 'main');
-    commit(lead, 'saved.ts', 'save');
-    git(lead, 'push', '-q', 'origin', 'main');
-    git(fresh, 'reset', '-q', '--hard', 'main');
-    await cherryPick(fresh, [next]);
-    expect(fs.readFileSync(path.join(fresh, 'saved.ts'), 'utf8')).toBe('save and list');
-  });
-
-  it('moves a repo whose pull request was squash-merged onto a fresh branch that carries only what never shipped', async () => {
-    const { lead, shipped, next } = sliceThatCarriedOn();
-    // the shipped commit lands on main squashed, as a commit of its own, pushed from somewhere else
-    const elsewhere = `${lead}-elsewhere`;
-    git(tmp, 'clone', '-q', '-b', 'main', lead.replace(/-lead$/, ''), elsewhere);
-    git(elsewhere, 'config', 'user.email', 'gh@focus.test');
-    git(elsewhere, 'config', 'user.name', 'GitHub');
-    const squashed = commit(elsewhere, 'saved.ts', 'save');
-    git(elsewhere, 'push', '-q', 'origin', 'main');
-
-    const unshipped = await unshippedCommits(lead, 'main', shipped);
-    await freshBranch(lead, 'focus/slice-1-b', 'main');
-    await cherryPick(lead, unshipped);
-    expect(git(lead, 'branch', '--show-current')).toBe('focus/slice-1-b');
-    // on the squash, with the unshipped commit and none of the shipped one's
-    expect(git(lead, 'rev-list', '--count', 'origin/main..HEAD')).toBe('1');
-    expect(git(lead, 'rev-parse', 'HEAD~1')).toBe(squashed);
-    expect(() => git(lead, 'merge-base', '--is-ancestor', shipped, 'HEAD')).toThrow();
-    expect(fs.readFileSync(path.join(lead, 'saved.ts'), 'utf8')).toBe('save and list');
-    // the old branch keeps its commits
-    expect(git(lead, 'rev-parse', 'focus/slice-1')).toBe(next);
-  });
-});
 
 describe('removing a folder', () => {
   it('moves it aside for the sweep when it can’t be deleted, so its path is free again', async () => {
@@ -197,15 +129,11 @@ describe('the local base branch', () => {
       expect(git(dir, 'rev-list', 'main..HEAD')).toBe(own);
       expect(git(dir, 'diff', '--name-only', 'main...HEAD')).toBe('mine.ts');
 
-      // a lead's next slice starts from fresh code
-      tip = merged();
-      await freshBranch(dir, 'focus/base-2', 'main');
-      expect(git(dir, 'rev-parse', 'main')).toBe(tip);
-
       // a goal reopened, and QA seated on a pull request, see main as GitHub has it
+      const branch = git(dir, 'branch', '--show-current');
       await removeWorktree('acme/base', 'agent_base');
       tip = merged();
-      await reopenWorktree('acme/base', 'agent_base', 'focus/base-2', () => false);
+      await reopenWorktree('acme/base', 'agent_base', branch, () => false);
       expect(git(mirror, 'rev-parse', 'main')).toBe(tip);
       tip = merged();
       git(dev, 'push', '-q', 'origin', 'HEAD:refs/pull/9/head');
@@ -216,7 +144,8 @@ describe('the local base branch', () => {
       const holder = path.join(paths.workspaces, 'holder');
       git(mirror, 'worktree', 'add', '-q', holder, 'main');
       merged();
-      await freshBranch(dir, 'focus/base-3', 'main');
+      git(dev, 'push', '-q', 'origin', 'HEAD:refs/pull/10/head');
+      await checkoutPullRequest('acme/base', 'qa_base/acme__base-pr10/base', 10);
       expect(git(holder, 'rev-parse', 'HEAD')).toBe(tip);
       expect(git(holder, 'status', '--porcelain')).toBe('');
     } finally {
