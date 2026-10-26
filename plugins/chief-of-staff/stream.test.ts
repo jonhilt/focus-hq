@@ -29,6 +29,7 @@ vi.mock('../../plugin-api/client', async () => {
 vi.mock('./here', () => ({ waitingNow: () => [] }));
 vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: [], landed: [], decided: [] }) } }));
 const { openStream } = await import('./stream');
+const { messageAgent } = await import('../../plugin-api/client');
 
 let cleanups: (() => void)[] = [];
 const ui = {
@@ -79,7 +80,6 @@ describe('the goals list', () => {
 describe('the foot of a goal’s thread', () => {
   it('sends a quick reply to the lead of the goal picked', async () => {
     localStorage.clear();
-    const { messageAgent } = await import('../../plugin-api/client');
     openStream(ui as never);
     await settle();
     [...document.querySelectorAll<HTMLElement>('.cos-st-quick button')].find((b) => b.textContent === 'Carry on')?.click();
