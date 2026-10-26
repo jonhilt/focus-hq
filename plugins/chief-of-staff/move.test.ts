@@ -16,15 +16,14 @@ describe('the chief of staff’s hold on a goal’s move', () => {
   });
 
   it('holds it while its words for the lead count down to sending themselves', () => {
-    expect(cosMove(lead({ at: 1, judged: verdict(1), sendsAt: 100_001 }), 1)).toEqual({ why: 'Carry on: Write the wishlist tests next — sends by itself unless you hold it', counter: '1:40' });
-    expect(cosMove(lead({ at: 1, judged: verdict(4), sendsAt: 10_000 }), 1)?.why).toMatch(/^Back to the lead: /);
+    expect(cosMove(lead({ at: 1, judged: verdict(4), sendsAt: 100_001 }), 1)).toEqual({ why: 'Back to the lead: Write the wishlist tests next — sends by itself unless you hold it', counter: '1:40' });
   });
 
   it('holds it at 0:00 while its words go, and hands it to the captain if they don’t', () => {
-    const sending = lead({ at: 1, judged: verdict(1), sendsAt: 10_000 });
-    expect(cosMove(sending, 10_000)).toEqual({ why: 'Carry on: Write the wishlist tests next — sending it now', counter: '0:00' });
+    const sending = lead({ at: 1, judged: verdict(4), sendsAt: 10_000 });
+    expect(cosMove(sending, 10_000)).toEqual({ why: 'Back to the lead: Write the wishlist tests next — sending it now', counter: '0:00' });
     expect(cosMove(sending, 10_000 + SENDING_MS - 1)?.captain).toBeUndefined();
-    expect(cosMove(sending, 10_000 + SENDING_MS)).toEqual({ why: 'Carry on: Write the wishlist tests next — ready for you to send from Comms', captain: true });
+    expect(cosMove(sending, 10_000 + SENDING_MS)).toEqual({ why: 'Back to the lead: Write the wishlist tests next — ready for you to send from Comms', captain: true });
   });
 
   it('hands the captain a card, an interrupt, and words they held or that don’t send themselves', () => {

@@ -49,7 +49,7 @@ const decision = (via: DecisionEvent['via'], answer: string): DecisionEvent =>
 
 const hand: Attention = { kind: 'hand', agent: agent('a', { status: 'waiting', permission: { id: 'r1', tool: 'Bash', summary: 'Run the tests', at: 900 } }) };
 const card: Attention = { kind: 'turn', agent: agent('b', {}, { at: 1000, judged: verdict(2) }) };
-const ready: Attention = { kind: 'turn', agent: agent('c', {}, { at: 1000, judged: verdict(1), sendsAt: Date.now() + 5 * 60_000 }) };
+const ready: Attention = { kind: 'turn', agent: agent('c', {}, { at: 1000, judged: verdict(4), sendsAt: Date.now() + 5 * 60_000 }) };
 const qa: Attention = { kind: 'qa', projectId: 'p', pr };
 
 let cleanups: (() => void)[] = [];
@@ -90,7 +90,7 @@ describe('Comms', () => {
   it('lists what needs the captain, picks the first, and reads a lead’s turn as it shows it', async () => {
     fake.waiting = [hand, card, ready, qa];
     fake.inbox = {
-      open: [item('hand:a:r1', { kind: 'hand' }), item('turn:b:1000', { cos: verdict(2) }), item('turn:c:1000', { lane: 'ready', cos: verdict(1) }), item('qa:p:acme/shop#7', { kind: 'qa' })],
+      open: [item('hand:a:r1', { kind: 'hand' }), item('turn:b:1000', { cos: verdict(2) }), item('turn:c:1000', { lane: 'ready', cos: verdict(4) }), item('qa:p:acme/shop#7', { kind: 'qa' })],
       landed: [],
       decided: [decision('office', 'Approved'), decision('chief-of-staff', 'Sent the chief of staff’s words')],
     };
@@ -151,7 +151,7 @@ describe('Comms', () => {
 
   it('opens its tray of ready words, each counting down to going by itself', async () => {
     fake.waiting = [ready];
-    fake.inbox = { open: [item('turn:c:1000', { lane: 'ready', cos: verdict(1) })], landed: [], decided: [] };
+    fake.inbox = { open: [item('turn:c:1000', { lane: 'ready', cos: verdict(4) })], landed: [], decided: [] };
     await open();
     expect(document.querySelector('.cos-card-clear')?.textContent).toContain('Nothing needs you.');
     document.querySelector<HTMLButtonElement>('.cos-tray-line')?.click();

@@ -120,7 +120,10 @@ export function verdictOf(v: unknown): Verdict | undefined {
   return { route: v.route, ask: v.ask, why: v.why, message: v.message, ...(replies.length && { replies }) };
 }
 
-/** A read, if `v` is one: what the lead's mark holds, from this plugin (or an older one of it). */
+/**
+ * A read, if `v` is one: what the lead's mark holds, from this plugin (or an older one of it). A countdown is only ever
+ * on words sending a turn back to the lead: one an older version set on a carry-on is dropped, so it never goes by itself.
+ */
 export function cosReadOf(v: unknown): CosRead | undefined {
   if (!isRecord(v) || typeof v.at !== 'number') return undefined;
   const judged = verdictOf(v.judged);
@@ -128,7 +131,7 @@ export function cosReadOf(v: unknown): CosRead | undefined {
   return {
     at: v.at,
     ...(judged && { judged }),
-    ...(judged && acked === undefined && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }),
+    ...(judged?.route === 4 && acked === undefined && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }),
     ...(acked !== undefined && { acked }),
   };
 }

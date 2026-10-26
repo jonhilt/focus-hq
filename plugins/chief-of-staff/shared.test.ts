@@ -2,19 +2,22 @@ import { describe, expect, it } from 'vitest';
 import { autoSendFor, cosReadOf, freshState, MAX_REPLY_LABEL, MAX_REPLY_TEXT, readOf, repliesOf, verdictOf } from './shared';
 
 const verdict = { route: 2, ask: 'Filters first?', why: 'A pick.', message: 'Filters.' };
+const back = { route: 4, ask: 'Test it first', why: 'No evidence.', message: 'Test it first.' };
 
 describe('its mark on a lead’s turn, read back', () => {
   it('is a read when it has the shape of one, its words’ time only once judged', () => {
     expect(cosReadOf({ at: 5 })).toEqual({ at: 5 });
-    expect(cosReadOf({ at: 5, judged: verdict, sendsAt: 9 })).toEqual({ at: 5, judged: verdict, sendsAt: 9 });
+    expect(cosReadOf({ at: 5, judged: back, sendsAt: 9 })).toEqual({ at: 5, judged: back, sendsAt: 9 });
     expect(cosReadOf({ at: 5, sendsAt: 9 })).toEqual({ at: 5 });
+    // only words sending a turn back count down: a carry-on's countdown from an older version is dropped
+    expect(cosReadOf({ at: 5, judged: { ...back, route: 1 }, sendsAt: 9 })).toEqual({ at: 5, judged: { ...back, route: 1 } });
     expect(cosReadOf({ at: 5, judged: { ...verdict, route: 7 } })).toEqual({ at: 5 });
     for (const not of [undefined, 'reading', {}, { at: '5' }]) expect(cosReadOf(not)).toBeUndefined();
   });
 
   it('keeps when the captain acknowledged the turn, and drops a countdown once they have', () => {
     expect(cosReadOf({ at: 5, acked: 7 })).toEqual({ at: 5, acked: 7 });
-    expect(cosReadOf({ at: 5, judged: verdict, sendsAt: 9, acked: 7 })).toEqual({ at: 5, judged: verdict, acked: 7 });
+    expect(cosReadOf({ at: 5, judged: back, sendsAt: 9, acked: 7 })).toEqual({ at: 5, judged: back, acked: 7 });
     expect(cosReadOf({ at: 5, acked: 'yes' })).toEqual({ at: 5 });
   });
 
