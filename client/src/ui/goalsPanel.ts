@@ -34,8 +34,10 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
   return h('div', { class: 'goal-card', style: `--tone:${UNIFORM[lead.avatar.division]}` },
     h('div', { class: 'goal-station', title: `Team station ${station}` }, String(station).padStart(2, '0')),
     h('div', { class: 'goal-main' },
-      h('div', { class: 'row' },
-        h('strong', { class: 'grow goal-title' }, work?.title ?? lead.issue.title),
+      h('strong', { class: 'goal-title' }, work?.title ?? lead.issue.title),
+      // what the lead is on, in words, beside what you can do about it
+      h('div', { class: 'row goal-doing' },
+        h('p', { class: 'grow', title: doing(lead) ? `Now: ${doing(lead)}` : undefined }, statusLine(lead)),
         h('button', { class: 'btn small', title: 'The goal’s star chart: its slices as waypoints on the way to what done looks like', onclick: () => openGoalChart(ui, lead.id) }, 'Chart'),
         close,
         h('button', { class: 'btn small primary', onclick: () => ui.openAgent(lead.id) }, 'Talk'),
@@ -44,7 +46,6 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
         readout('Lead', lead.name),
         readout('Status', lead.status, { tone: LCARS_STATUS[lead.status] }),
         ...goalTags(lead, 'card').map((tag) => readout(tag.label, tag.el)),
-        readout('Activity', statusLine(lead), { grow: true }),
         readout('Slice', String(work?.slice ?? 1)),
         readout('Effort', lead.effort ?? 'default'),
         lead.context ? readout('Context', `${lead.context.percent}%`, { tone: CONTEXT_TONE[contextLevel(lead.context.percent)] }) : null,
@@ -133,7 +134,8 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord, free: boolean): 
 export function openGoalsPanel(ui: Ui, projectId: string, station?: number): void {
   const project = state.project(projectId);
   if (!project) return;
-  const list = h('div', { class: 'cards' });
+  // the goals under way side by side, as many abreast as the panel has room for
+  const list = h('div', { class: 'cards goal-grid' });
   const queue = h('div', { class: 'cards', style: 'margin-top:14px' });
   const log = h('div', { class: 'cards' });
   const free = h('div', { class: 'readouts' });
@@ -146,7 +148,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   const hint = h('small', { class: 'muted' });
   const views = {
     goals: h('div', null, list, queue),
-    new: h('div', null, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, hint)),
+    new: h('div', { class: 'goal-new' }, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, hint)),
     log,
   };
   const body = h('div', null, ...Object.values(views));
@@ -235,7 +237,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     fill(log, ...done.map((g) => recordRow(ui, projectId, g, open > 0)));
   };
   // back out to a plugin's view of every goal on the ship, when one offers it
-  ui.panels.open({ title: `${project.name} · goals`, body, nav, accent: project.color, headerExtra: everyGoalButtons(ui) });
+  ui.panels.open({ title: `${project.name} · goals`, body, nav, wide: true, accent: project.color, headerExtra: everyGoalButtons(ui) });
   render();
   if (!views.new.hidden) text.focus();
   ui.panels.own(state.on('agent', (a) => a.projectId === projectId && (a.task === 'lead' || !!a.reviewFor) && render()));
