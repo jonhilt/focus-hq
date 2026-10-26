@@ -518,16 +518,29 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
   return parts.filter((p, i, all) => p !== '' || all[i - 1] !== '').join('\n');
 }
 
-/** QA's findings on a failed round, for whoever has to fix them. */
-export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }, cloud = false): string {
+/**
+ * QA's findings on a failed round, for whoever has to fix them. On a goal's pull request (`goal`), its lead isn't there to
+ * ask: the fixer hears what the goal is for, and leaves to the lead any finding that's a call about it rather than a defect.
+ */
+export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }, cloud = false, goal?: { title: string; brief?: string; lead: string }): string {
   return [
     `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
     '',
     ...qaFindings(review.report),
     ...proofsToKeep(review.report),
+    ...(goal ? ['', ...goalForFixer(pr, goal)] : []),
     '',
     fixAndPush('what QA found', pr.branch, cloud),
   ].join('\n');
+}
+
+function goalForFixer(pr: { number: number }, goal: { title: string; brief?: string; lead: string }): string[] {
+  return [
+    `#${pr.number} is part of a goal ${goal.lead} leads: "${goal.title}". ${goal.lead} isn't here to ask, so read the pull request's description (\`gh pr view ${pr.number}\`) to see what it's for before you change anything.`,
+    ...(goal.brief ? ['', 'The goal as it was put to them:', truncate(goal.brief, 4000)] : []),
+    '',
+    `Fix what's a defect: something broken, missing or untested that the pull request means to do. A finding that would change what the pull request does or is for (its scope, its design, a trade-off) is ${goal.lead}'s call: don't change it. If none of what QA found is yours to fix, commit nothing and say why, and it goes back to ${goal.lead}.`,
+  ];
 }
 
 /** For a PR QA passed whose checks on GitHub still fail after a re-run. */

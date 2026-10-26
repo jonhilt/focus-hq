@@ -1322,6 +1322,67 @@ describe('AgentManager', () => {
     });
   });
 
+  it('seats a fixer of its own on a slice’s PR QA failed while the lead is idle, and tells the lead to pull once it’s pushed', async () => {
+    const created: { agentId: string; branch: string; local?: string }[] = [];
+    const o = focus({
+      ...demoWorkspace,
+      create: async (_repo, agentId, branch, _start, _aboard, local) => (created.push({ agentId, branch, local }), `/demo/${agentId}`),
+    });
+    o.project.autoSendBack = true;
+    o.project.qaProof = false;
+    const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => o.claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leadOpensPrs(o, lead.id, 'Saved items, first slice');
+    leads()[0].end({ ok: true, summary: 'Shipped' });
+    await until(() => o.store.agent(lead.id).status === 'done');
+    const [pr] = o.store.agent(lead.id).lead!.prs;
+    const qa = () => o.claude.turns.find((t) => t.req.agentId.startsWith('qa_'));
+    await until(() => !!qa());
+    qa()!.end({ ok: true, summary: '', structured: { verdict: 'fail', summary: 'Empty list crashes', fixInstructions: 'Guard the empty case', checks: [{ name: 'Empty list', result: 'fail', details: 'Crashes' }], commands: [], captions: [] } });
+
+    const key = prKey(pr.repo, pr.number);
+    await until(() => o.store.reviews.get(key)?.followUp?.kind === 'fixing');
+    const followUp = o.store.reviews.get(key)!.followUp;
+    const fixerId = followUp?.kind === 'fixing' ? followUp.agentId : '';
+    const fixer = () => o.claude.turns.find((t) => t.req.agentId === fixerId);
+    await until(() => !!fixer());
+    // on a local branch of their own (the lead's checkout has the PR's), told what the goal is for
+    expect(o.store.agent(fixerId)).toMatchObject({ task: 'fix', branch: pr.branch });
+    expect(created.find((c) => c.agentId === fixerId)?.local).toBe(`${pr.branch}-fix-${fixerId.slice(-4)}`);
+    expect(fixer()!.req.prompt).toContain('Guard the empty case');
+    expect(fixer()!.req.prompt).toContain('part of a goal');
+
+    fixer()!.end({ ok: true, summary: 'Guarded the empty list' });
+    await until(() => o.store.agent(fixerId).status === 'done');
+    // the lead never took a turn for it: they hear it all with the captain's next message
+    await new Promise((r) => setTimeout(r, 30));
+    expect(leads()).toHaveLength(1);
+    o.agents.message(lead.id, 'Where are we?');
+    await until(() => leads().length === 2);
+    const heard = [leads()[1].req.prompt, ...leads()[1].sent].join('\n\n');
+    expect(heard).toContain(`${o.store.agent(fixerId).name} is fixing it on a branch of their own`);
+    expect(heard).toContain(`${o.store.agent(fixerId).name} fixed what QA found on ${pr.repo}#${pr.number} and pushed it`);
+  });
+
+  it('leaves a slice’s PR QA failed to its lead while they’re in a turn', async () => {
+    const o = focus();
+    o.project.autoSendBack = true;
+    o.project.qaProof = false;
+    const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => o.claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leadOpensPrs(o, lead.id, 'Saved items, first slice');
+    const [pr] = o.store.agent(lead.id).lead!.prs;
+    const qa = () => o.claude.turns.find((t) => t.req.agentId.startsWith('qa_'));
+    await until(() => !!qa());
+    qa()!.end({ ok: true, summary: '', structured: { verdict: 'fail', summary: 'Empty list crashes', fixInstructions: 'Guard the empty case', checks: [{ name: 'Empty list', result: 'fail', details: 'Crashes' }], commands: [], captions: [] } });
+    await until(() => o.store.reviews.get(prKey(pr.repo, pr.number))?.status === 'failed');
+    await new Promise((r) => setTimeout(r, 30));
+    expect(o.store.reviews.get(prKey(pr.repo, pr.number))?.followUp).toBeUndefined();
+    expect([...o.store.agents.values()].filter((a) => a.task === 'fix')).toEqual([]);
+  });
+
   it('seats an agent of its own on a slice’s PR when git can’t merge it, rather than interrupting the lead', async () => {
     const created: { agentId: string; branch: string; local?: string }[] = [];
     const { agents, claude, store, project, github } = focus({

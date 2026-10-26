@@ -37,4 +37,33 @@ describe('qaNextStep', () => {
     expect(qaNextStep(ours, { kind: 'fix-ended', by: 'Ada', outcome: 'failed' })).toEqual({ kind: 'needs-you', reason: 'Ada hit a problem fixing it' });
     expect(qaNextStep(ours, { kind: 'fix-ended', by: 'Ada', outcome: 'stopped' }).kind).toBe('needs-you');
   });
+
+  describe('a goal’s pull request', () => {
+    const idle = { openedByOffice: false, autoSendBack: true, lead: { idle: true } };
+    const working = { ...idle, lead: { idle: false } };
+
+    it('goes to a developer of its own while the lead is idle', () => {
+      expect(qaNextStep(idle, { kind: 'verdict', verdict: 'fail', failedRounds: 1 })).toEqual({ kind: 'send-back' });
+      expect(qaNextStep(idle, { kind: 'verdict', verdict: 'fail', failedRounds: MAX_FAILED_ROUNDS - 1 })).toEqual({ kind: 'send-back' });
+    });
+
+    it('is left to the lead while they’re at work, past the rounds, or on a commit they’ve shipped past', () => {
+      expect(qaNextStep(working, { kind: 'verdict', verdict: 'fail', failedRounds: 1 })).toEqual({ kind: 'nothing' });
+      expect(qaNextStep(idle, { kind: 'verdict', verdict: 'fail', failedRounds: MAX_FAILED_ROUNDS })).toEqual({ kind: 'nothing' });
+      expect(qaNextStep(idle, { kind: 'verdict', verdict: 'fail', failedRounds: 1, behind: true })).toEqual({ kind: 'nothing' });
+      expect(qaNextStep(idle, { kind: 'verdict', verdict: 'pass', failedRounds: 1 })).toEqual({ kind: 'nothing' });
+    });
+
+    it('does nothing when the project switched send-back off', () => {
+      expect(qaNextStep({ ...idle, autoSendBack: false }, { kind: 'verdict', verdict: 'fail', failedRounds: 1 })).toEqual({ kind: 'nothing' });
+      expect(qaNextStep({ ...idle, autoSendBack: false }, { kind: 'fix-ended', by: 'Ada', outcome: 'failed' })).toEqual({ kind: 'nothing' });
+    });
+
+    it('goes back to the lead when the fix doesn’t land, and to QA when it does', () => {
+      expect(qaNextStep(working, { kind: 'fix-ended', by: 'Ada', outcome: 'pushed' })).toEqual({ kind: 'nothing' });
+      expect(qaNextStep(working, { kind: 'fix-ended', by: 'Ada', outcome: 'pushed-nothing' })).toEqual({ kind: 'to-lead', reason: 'Ada pushed no fix' });
+      expect(qaNextStep(idle, { kind: 'fix-ended', by: 'Ada', outcome: 'failed' })).toEqual({ kind: 'to-lead', reason: 'Ada hit a problem fixing it' });
+      expect(qaNextStep(idle, { kind: 'fix-ended', by: 'Ada', outcome: 'stopped' }).kind).toBe('to-lead');
+    });
+  });
 });

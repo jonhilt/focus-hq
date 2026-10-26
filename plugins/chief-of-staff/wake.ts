@@ -10,13 +10,15 @@ export const LEAD_FIX_ROUNDS = 2;
 /**
  * What the chief of staff wakes the lead with for `note`, in a project that sends QA's fails back (`autoSendBack`), or
  * nothing, when the note waits for the captain: a QA fail goes back to the lead a couple of rounds at most (not one on
- * a commit they've shipped past: QA's on the latest already), and a slice that's landed carries them on.
+ * a commit they've shipped past: QA's on the latest already; nor one a developer of Ops' is fixing), and a slice that's
+ * landed carries them on.
  */
 export function wakeFor(note: Pick<LeadNote, 'about' | 'inTurn'>, project: { autoSendBack?: boolean }): string | undefined {
   const { about } = note;
   switch (about.kind) {
     case 'qa-verdict':
-      if (about.verdict !== 'fail' || about.behind || !autoSendBackFor(project) || about.failedRounds > LEAD_FIX_ROUNDS) return undefined;
+      // one Ops sent to a developer of its own isn't the lead's to fix, unless it comes back to them
+      if (about.verdict !== 'fail' || about.behind || about.fixer || !autoSendBackFor(project) || about.failedRounds > LEAD_FIX_ROUNDS) return undefined;
       return `Fix ${about.repo}#${about.number} and ship again (QA's verdict is just above), or tell the captain why not.`;
     case 'slice-landed':
       // a lead that stops after each landing leaves the goal waiting on the captain: what's agreed carries it on

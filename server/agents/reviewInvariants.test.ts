@@ -4,7 +4,7 @@ import { prKey } from '../../shared/qa';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { demoWorkspace } from './demoRunner';
-import { focus, restarted } from './fakeFocus';
+import { focus, leadOpensPrs, restarted, until } from './fakeFocus';
 import { Recordings } from './services';
 import type { WorkspaceOps } from './types';
 import { checkAtOnce, checkRestart, type Later, now, type Running, type Subject } from './invariants';
@@ -227,3 +227,57 @@ describe('what QA runs, as docs/qa.md promises', () => {
     await expect(o.agents.qaChat(project.id, [])).rejects.toThrow('Say something');
   });
 });
+
+describe('a goal’s pull request QA fails, as docs/qa.md promises', () => {
+  const failing = { verdict: 'fail', summary: 'Empty list crashes', fixInstructions: 'Guard the empty case', checks: [{ name: 'Empty list', result: 'fail', details: 'Crashes' }], commands: [], files: [], captions: [] };
+  /** A goal whose lead shipped a slice and went idle, QA failing its pull request; `head`, the fixer's checkout's commit. */
+  async function failedGoalPr(head?: () => string) {
+    const o = focus({ ...workspace(now), ...(head && { head: () => Promise.resolve(head()) }) });
+    const project = o.store.projects[0];
+    if (!project) throw new Error('the demo has no project');
+    o.store.updateProject(project.id, { autoSendBack: true, qaProof: false });
+    const { agent: lead } = o.agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const leads = () => o.claude.turns.filter((t) => t.req.agentId === lead.id);
+    await until(() => leads().length === 1);
+    await leadOpensPrs(o, lead.id, 'Saved items, first slice');
+    leads()[0].end({ ok: true, summary: 'Shipped' });
+    await until(() => o.store.agent(lead.id).status === 'done');
+    const [pr] = o.store.agent(lead.id).lead!.prs;
+    const key = prKey(pr.repo, pr.number);
+    const qa = () => o.claude.turns.find((t) => t.req.agentId.startsWith('qa_'));
+    await until(() => !!qa());
+    qa()!.end({ ok: true, summary: '', structured: failing });
+    await until(() => o.store.reviews.get(key)?.followUp?.kind === 'fixing');
+    const followUp = o.store.reviews.get(key)?.followUp;
+    const fixer = followUp?.kind === 'fixing' ? followUp.agentId : '';
+    return { ...o, lead: lead.id, leads, key, fixer, fixerTurn: () => o.claude.turns.find((t) => t.req.agentId === fixer) };
+  }
+
+  // "A goal's pull request goes to a fixer of Ops' own while its lead is idle … told what the goal is for"
+  it('goes to a fixer of its own while the lead is idle, without a turn of the lead’s', async () => {
+    const o = await failedGoalPr();
+    await until(() => !!o.fixerTurn());
+    expect(o.store.agent(o.fixer).task).toBe('fix');
+    expect(o.fixerTurn()!.req.prompt).toContain('part of a goal');
+    expect(o.leads()).toHaveLength(1);
+    o.agents.shutDown();
+  });
+
+  // "A fix that doesn't land goes back to the lead, not to you"
+  it('goes back to the lead when the fixer pushes nothing', async () => {
+    let tested = '';
+    const o = await failedGoalPr(() => tested);
+    tested = o.store.reviews.get(o.key)?.sha ?? 'tested';
+    await until(() => !!o.fixerTurn());
+    o.fixerTurn()!.end({ ok: true, summary: 'Nothing here is mine to fix: the empty list is out of scope' });
+    await until(() => o.store.agent(o.fixer).status === 'done');
+    await steady(() => o.store.reviews.get(o.key)?.followUp);
+    // not triaged, nor left for the captain: it's the lead's
+    expect(o.store.reviews.get(o.key)?.followUp).toBeUndefined();
+    o.agents.message(o.lead, 'Where are we?');
+    await until(() => o.leads().length === 2);
+    expect([o.leads()[1].req.prompt, ...o.leads()[1].sent].join('\n\n')).toContain('is yours again');
+    o.agents.shutDown();
+  });
+});
+

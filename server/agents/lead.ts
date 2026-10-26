@@ -418,8 +418,27 @@ export function qaVerdictNote(repo: string, number: number, report: Pick<QaRepor
   return `QA ${verdict} ${repo}#${number}: ${report.summary}${fix}${next}`;
 }
 
-/** Where a goal's lead stands once QA's fail is noted for them, for the captain's toast (`verdictToast`). */
-export type VerdictStands = 'idle' | 'working' | 'woken';
+/** What the lead hears with QA's fail when Ops sent it to `fixer`, a developer of its own, rather than to them. */
+export function fixingNote(fixer: string, repo: string, number: number): string {
+  return `${fixer} is fixing it on a branch of their own and Ops pushes their fix to ${repo}#${number}, so there's nothing for you to do: you'll hear when it's pushed, or if it comes back to you. Leave that branch be until then.`;
+}
+
+/** A fix Ops sent one of the lead's failed pull requests to didn't land (`reason`): QA's findings are the lead's again. */
+export function fixHandedBackNote(repo: string, number: number, report: Pick<QaReport, 'summary' | 'fixInstructions'>, reason: string): string {
+  const fix = report.fixInstructions ? `\n\nWhat to fix: ${report.fixInstructions}` : '';
+  return `QA's fail on ${repo}#${number} is yours again: ${reason}. QA said: ${report.summary}${fix}`;
+}
+
+/** A developer Ops sent one of the lead's failed pull requests to pushed their fix (`sha`) to it, and QA tests it again. */
+export function fixPushedNote(pr: { repo: string; number: number; branch: string }, folder: string, who: string, sha: string): string {
+  return [
+    `${who} fixed what QA found on ${pr.repo}#${pr.number} and pushed it (${sha.slice(0, 7)}) to \`${pr.branch}\`, so ./${folder} is behind GitHub. QA is testing it again, and you'll hear that verdict.`,
+    `Before you touch ./${folder} again, pull it with \`git -C ${folder} pull --no-rebase origin ${pr.branch}\` (commit or set aside anything in progress first). Until you do, Ops won't ship that repo.`,
+  ].join(' ');
+}
+
+/** Where a goal's lead stands once QA's fail is noted for them, for the captain's toast (`verdictToast`): `fixing`, a developer of Ops' has it. */
+export type VerdictStands = 'idle' | 'working' | 'woken' | 'fixing';
 
 /**
  * Where a goal's lead stands once QA's verdict is noted for them: `woken` when someone's message (a plugin's) has them
@@ -436,11 +455,11 @@ export function verdictStands(s: { wasIdle: boolean; finished: boolean; heard: b
 /**
  * The captain's toast for QA failing one of a goal's pull requests, by where its lead stands now that it's noted
  * (`verdictStands`): `idle`, waiting on the captain; `working`, in a turn, hearing it with their next message (and if
- * the turn ends without it, `idle` then); `woken`, which says nothing more. None for a pass, or a verdict they've
+ * the turn ends without it, `idle` then); `fixing`, sent to a developer instead, whose own toast says so; `woken`, which says nothing more. None for a pass, or a verdict they've
  * shipped past (QA's on their latest commit already).
  */
 export function verdictToast(v: { repo: string; number: number; verdict: QaReport['verdict']; failedRounds: number; behind: boolean }, lead: string, stands: VerdictStands): { level: 'error' | 'info'; text: string } | undefined {
-  if (v.verdict !== 'fail' || v.behind || stands === 'woken') return undefined;
+  if (v.verdict !== 'fail' || v.behind || stands === 'woken' || stands === 'fixing') return undefined;
   const failed = `QA failed ${v.repo.split('/')[1]}#${v.number}${v.failedRounds > 1 ? ` ${v.failedRounds} times` : ''}`;
   return stands === 'idle' ? { level: 'error', text: `🙋 ${failed}: ${lead} waits on you` } : { level: 'info', text: `🔧 ${failed}: ${lead} hears it with their next message` };
 }

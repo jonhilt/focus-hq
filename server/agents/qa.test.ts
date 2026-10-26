@@ -338,6 +338,14 @@ describe('fixPrompt', () => {
     expect(text).toContain('git push origin HEAD:focus/7-save-for-later-ab12');
     expect(text).not.toContain('Ops pushes');
   });
+
+  it('tells a developer fixing a goal’s pull request what the goal is for, and to leave its calls to the lead', () => {
+    const text = fixPrompt(pr, { sha: 'fed9876543', report: failed }, false, { title: 'Save for later', brief: 'Let shoppers park items', lead: 'Lt. Okafor' });
+    expect(text).toContain('#12 is part of a goal Lt. Okafor leads: "Save for later".');
+    expect(text).toContain('Let shoppers park items');
+    expect(text).toContain('commit nothing and say why, and it goes back to Lt. Okafor');
+    expect(fixPrompt(pr, { sha: 'fed9876543', report: failed })).not.toContain('part of a goal');
+  });
 });
 
 describe('repoChecks', () => {

@@ -53,9 +53,11 @@ export class AgentSessions extends Part {
       const startPoint = agent.task === 'issue' || agent.task === 'brief' ? agent.baseBranch : agent.branch;
       this.print(agent, [{ kind: 'system', text: `✻ Setting up a worktree for ${agent.repo} on ${agent.branch}` }]);
       this.update(agent, { activity: 'Cloning the repository' });
-      // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts works on a
-      // local branch of their own, which Ops pushes to the PR's
-      const local = agent.task === 'conflicts' ? `${agent.branch}-conflicts-${agent.id.slice(-4)}` : undefined;
+      // the PR's branch may be checked out in its goal's lead's workspace: someone resolving its conflicts, or fixing what
+      // QA found on a goal's PR, works on a local branch of their own, which Ops pushes to the PR's
+      const local = agent.task === 'conflicts' ? `${agent.branch}-conflicts-${agent.id.slice(-4)}`
+        : agent.task === 'fix' && this.core.goalPrs.ownerOf(agent.repo, agent.issue.number) ? `${agent.branch}-fix-${agent.id.slice(-4)}`
+        : undefined;
       yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id), local);
       // a cloud session works in a clone of its own, so it installs there
       if (!agent.cloud) yield* this.install(agent, workspace.dir(agent.id));

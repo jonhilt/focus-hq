@@ -1,12 +1,12 @@
 import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
-import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaScreenshot, QueuedGoal } from '../../../shared/types';
+import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaReview, QaScreenshot, QueuedGoal } from '../../../shared/types';
 import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
+import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, fixingNote, fixHandedBackNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
@@ -359,19 +359,39 @@ export class Leads extends Part {
    * captain starts a lead's next turn. A fail tells the captain, unless whoever heard of the note woke the lead for it;
    * one that comes mid-turn tells them again if the turn ends without the lead hearing it (`leadWentIdle`).
    */
-  leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind): void {
+  leadHearsVerdict(repo: string, number: number, from: string, report: QaReport, failedRounds: number, behind?: VerdictBehind, fixer?: string): void {
     const lead = this.core.goalPrs.ownerOf(repo, number);
     if (!lead) return;
+    const text = fixer ? `${qaVerdictNote(repo, number, report, behind)}\n\n${fixingNote(fixer, repo, number)}` : qaVerdictNote(repo, number, report, behind);
+    this.leadHearsFail(lead, from, text, { repo, number, verdict: report.verdict, failedRounds, behind: !!behind, advisory: !!report.advisory, ...(fixer && { fixer }) });
+  }
+
+  /**
+   * The developer Ops sent one of the lead's failed pull requests to didn't land a fix (`reason`): it's the lead's
+   * again, as a QA fail with no one fixing it, so whoever wakes a lead for one wakes them for this.
+   */
+  fixHandedBack(lead: Agent, review: Pick<QaReview, 'repo' | 'number' | 'failedRounds'>, report: QaReport, reason: string): void {
+    const { repo, number } = review;
+    this.leadHearsFail(lead, 'Ops', fixHandedBackNote(repo, number, report, reason), { repo, number, verdict: 'fail', failedRounds: review.failedRounds ?? 1, behind: false, advisory: false });
+  }
+
+  /** A QA verdict for the lead, as a note, and the captain's toast for where they stand once it's noted. */
+  private leadHearsFail(lead: Agent, from: string, text: string, about: Omit<Extract<LeadNews, { kind: 'qa-verdict' }>, 'kind'>): void {
     const wasIdle = FINISHED.includes(lead.status);
-    const verdict = { repo, number, verdict: report.verdict, failedRounds, behind: !!behind };
-    const note = this.noteForLead(lead, from, qaVerdictNote(repo, number, report, behind), { kind: 'qa-verdict', ...verdict, advisory: !!report.advisory });
+    const note = this.noteForLead(lead, from, text, { kind: 'qa-verdict', ...about });
     const now = this.store.agents.get(lead.id) ?? lead;
     const rt = this.rt(lead.id);
-    const stands = verdictStands({ wasIdle, finished: FINISHED.includes(now.status), heard: !rt.inbox.notes.includes(note), queued: rt.inbox.length > 0, held: !!now.held });
-    const toast = verdictToast(verdict, lead.name, stands);
+    const stands = about.fixer ? 'fixing' : verdictStands({ wasIdle, finished: FINISHED.includes(now.status), heard: !rt.inbox.notes.includes(note), queued: rt.inbox.length > 0, held: !!now.held });
+    const toast = verdictToast(about, lead.name, stands);
     if (toast) this.hub.toast(toast.level, toast.text, lead.id);
-    const waiting = stands === 'working' && verdictToast(verdict, lead.name, 'idle');
+    const waiting = stands === 'working' && verdictToast(about, lead.name, 'idle');
     rt.failNoted = waiting ? { note, toast: waiting.text } : undefined;
+  }
+
+  /** A goal's lead between turns, with nothing under way: a developer fixing their branch now gets in no one's way. */
+  idle(lead: Agent): boolean {
+    const rt = this.rt(lead.id);
+    return FINISHED.includes(lead.status) && !rt.busy && !rt.session && !rt.inbox.length;
   }
 
   /** A goal's lead's turn ended with nothing to carry them on: a QA fail noted mid-turn that they haven't heard waits on the captain. */

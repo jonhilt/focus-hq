@@ -20,6 +20,11 @@ describe('wakeFor', () => {
     expect(wakeFor(idle(fail()), {})).toBeDefined();
   });
 
+  it('leaves a fail Ops sent to a developer of its own, and wakes the lead once it comes back to them', () => {
+    expect(wakeFor(idle(fail({ fixer: 'Ensign Kim' })), { autoSendBack: true })).toBeUndefined();
+    expect(wakeFor(idle(fail()), { autoSendBack: true })).toBeDefined();
+  });
+
   it('carries a lead on once their slice has landed, where they are if they’re in a turn', () => {
     expect(wakeFor(idle({ kind: 'slice-landed', slice: 2 }), {})).toBe("Slice 2 has landed: carry on with what's next if it's within what the captain has agreed; if it isn't, say what you'd do and stop for them.");
     expect(wakeFor({ about: { kind: 'slice-landed', slice: 2 }, inTurn: true }, {})).toBe('Slice 2 has landed: carry on where you are.');

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { verdictStands, verdictToast, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, landedNote, leadSystemAppend, moveQueued, nextGoal, reopenable, reopenedNote, reopenedWork, reposBackNote, pickStation, qaVerdictNote, queuedStart, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
+import { verdictStands, verdictToast, answerInChat, answerQuestion, pageErrorsNote, ARTIFACT_LIMITS, askQuestion, QUESTION_LIMITS, showArtifact, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, fixingNote, fixPushedNote, fixHandedBackNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, goalOf, goalReviewerId, reviewsToStart, sliceSiblings, closeCheck, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, hasLeadWork, landedNote, leadSystemAppend, moveQueued, nextGoal, reopenable, reopenedNote, reopenedWork, reposBackNote, pickStation, qaVerdictNote, queuedStart, sliceBranch, sliceLanded, upgradeLead, workspaceNote } from './lead';
 
 const work: LeadWork = {
   station: 1,
@@ -198,6 +198,10 @@ describe('verdictToast', () => {
   it('says a lead in a turn hears it with their next message, and nothing of one a plugin woke for it', () => {
     expect(verdictToast(fail, 'Lt. Okafor', 'working')).toEqual({ level: 'info', text: '🔧 QA failed web#12: Lt. Okafor hears it with their next message' });
     expect(verdictToast(fail, 'Lt. Okafor', 'woken')).toBeUndefined();
+  });
+
+  it('says nothing of a fail Ops sent to a developer instead: their own toast does', () => {
+    expect(verdictToast(fail, 'Lt. Okafor', 'fixing')).toBeUndefined();
   });
 
   it('says nothing of a pass, or a verdict on a commit the lead has shipped past', () => {
@@ -596,6 +600,23 @@ describe('a slice’s merge conflicts', () => {
     expect(note).toMatch(/^acme\/web#12 had merge conflicts with `main`: Ensign Kim merged `main` into `focus\/goal-1` and pushed it, so \.\/web is behind GitHub\./);
     expect(note).toContain('`git -C web pull --no-rebase origin focus/goal-1`');
     expect(note).toContain("Ops won't ship that repo");
+  });
+
+  it('tells the lead a developer is fixing QA’s fail without them, and to leave the branch be', () => {
+    const note = fixingNote('Ensign Kim', 'acme/web', 12);
+    expect(note).toMatch(/^Ensign Kim is fixing it on a branch of their own/);
+    expect(note).toContain('Leave that branch be');
+  });
+
+  it('tells the lead the fix is pushed and to pull before touching the repo', () => {
+    const note = fixPushedNote({ repo: 'acme/web', number: 12, branch: 'focus/goal-1' }, 'web', 'Ensign Kim', 'abcdef1234');
+    expect(note).toMatch(/^Ensign Kim fixed what QA found on acme\/web#12 and pushed it \(abcdef1\) to `focus\/goal-1`, so \.\/web is behind GitHub\./);
+    expect(note).toContain('`git -C web pull --no-rebase origin focus/goal-1`');
+  });
+
+  it('hands QA’s findings back to the lead with why the fix didn’t land', () => {
+    expect(fixHandedBackNote('acme/web', 12, { summary: 'The cart forgets items', fixInstructions: 'Persist them' }, 'Ensign Kim pushed no fix'))
+      .toBe("QA's fail on acme/web#12 is yours again: Ensign Kim pushed no fix. QA said: The cart forgets items\n\nWhat to fix: Persist them");
   });
 
 });

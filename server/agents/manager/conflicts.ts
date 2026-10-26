@@ -3,7 +3,7 @@ import { autoQaFor, prKey } from '../../../shared/qa';
 import type { Agent, ConflictsOutcome, PullRequest } from '../../../shared/types';
 import { errorMessage, newId } from '../../util';
 import { conflictsAgentModel, conflictsRecord } from '../conflicts';
-import { conflictsResolvedNote } from '../lead';
+import { conflictsResolvedNote, fixPushedNote } from '../lead';
 import { conflictsPrompt } from '../prompts';
 import { Workspace } from '../services';
 import { type BaseMerge } from '../types';
@@ -30,7 +30,7 @@ export class Conflicts extends Part {
     if (merge.kind === 'up-to-date') return merge;
     this.core.ledger.record(projectId, { kind: 'conflicts', repo: pr.repo, pr: pr.number, goal: lead?.lead?.title, ...conflictsRecord(merge) });
     if (merge.kind === 'merged') {
-      if (lead) this.mergedForLead(lead, pr, merge.sha, 'Ops');
+      if (lead) this.pushedForLead(lead, pr, merge.sha, 'Ops');
       else if (owner) await this.runtime.runPromise(this.catchUp(owner, merge));
       this.verdictCatchesUp(projectId, pr, merge.sha);
       return { kind: 'merged', ...(merge.auto ? { auto: merge.auto } : {}) };
@@ -96,15 +96,15 @@ export class Conflicts extends Part {
   }
 
   /**
-   * Ops pushed a merge to one of a lead's pull requests: the slice records the PR's new head, and the lead hears
-   * to pull it before touching that repo again, as a note with the next message they get.
+   * Ops pushed a merge (or a fix for what QA found, by `who`) to one of a lead's pull requests: the slice records the
+   * PR's new head, and the lead hears to pull it before touching that repo again, as a note with the next message they get.
    */
-  mergedForLead(lead: Agent, pr: Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | 'branch'>, sha: string, who: string): void {
+  pushedForLead(lead: Agent, pr: Pick<PullRequest, 'repo' | 'number' | 'baseBranch' | 'branch'>, sha: string, who: string, what: 'merge' | 'fix' = 'merge'): void {
     const work = lead.lead;
     if (!work) return;
     const folder = work.repos.find((r) => r.repo === pr.repo)?.folder ?? pr.repo.split('/')[1];
     const prs = work.prs.map((p) => (p.repo === pr.repo && p.number === pr.number ? { ...p, sha } : p));
     this.update(lead, { lead: { ...work, prs } });
-    this.core.leads.noteForLead(lead, 'Ops', conflictsResolvedNote(pr, folder, who));
+    this.core.leads.noteForLead(lead, 'Ops', what === 'fix' ? fixPushedNote(pr, folder, who, sha) : conflictsResolvedNote(pr, folder, who));
   }
 }

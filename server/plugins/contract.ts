@@ -111,9 +111,10 @@ export interface LeadNote {
 export type LeadNews =
   /**
    * QA's verdict on one of their pull requests: `failedRounds` it has failed so far, this one included; `behind`, a
-   * verdict on a commit they've shipped past, with QA on the latest already.
+   * verdict on a commit they've shipped past, with QA on the latest already; `fixer`, the developer Ops sent a fail
+   * to instead of them (they hear again if it comes back).
    */
-  | { kind: 'qa-verdict'; repo: string; number: number; verdict: 'pass' | 'fail'; advisory: boolean; failedRounds: number; behind: boolean }
+  | { kind: 'qa-verdict'; repo: string; number: number; verdict: 'pass' | 'fail'; advisory: boolean; failedRounds: number; behind: boolean; fixer?: string }
   /** Every pull request of slice `slice` merged or closed: their repos move to fresh code as their next turn starts. */
   | { kind: 'slice-landed'; slice: number }
   /** Someone reviewed one of their pull requests on GitHub (`author`, the review's `state`): what they said and their comments on the code. */

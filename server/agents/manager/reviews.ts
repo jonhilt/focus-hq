@@ -458,12 +458,15 @@ export class Reviews extends Part {
       if (agent) this.reviewerDone(agent, pass, number, report.checks.length);
       this.hub.toast(pass ? 'success' : 'error', `${pass ? '✅' : '❌'} ${officer} ${report.advisory ? 'passed, with advice,' : pass ? 'passed' : 'failed'} ${repo.split('/')[1]}#${number}: ${truncate(report.summary, 120)}`, agent?.id);
       this.boardChanged(projectId);
-      if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: verdict.verdict, failedRounds });
-      yield* this.core.leads.leadShielded(projectId, repo, number, report, failedRounds, screenshots);
       // the lead shipped again while QA tested: the verdict stands for the commit QA had, and QA goes on to the latest
       // (from GitHub's head, which has caught up by now, so a PR someone else pushed past the ship doesn't loop)
       const behind = done?.sha ? shippedSinceTested(done) : undefined;
-      this.core.leads.leadHearsVerdict(repo, number, `QA officer ${officer}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined);
+      if (done) yield* this.qaNext(done, { kind: 'verdict', verdict: verdict.verdict, failedRounds, behind: !!behind });
+      yield* this.core.leads.leadShielded(projectId, repo, number, report, failedRounds, screenshots);
+      // a goal's PR qaNext sent to a developer of its own: the lead hears who's fixing it, and isn't woken for it
+      const followUp = this.store.reviews.get(prKey(repo, number))?.followUp;
+      const fixer = !pass && followUp?.kind === 'fixing' ? followUp.agentName : undefined;
+      this.core.leads.leadHearsVerdict(repo, number, `QA officer ${officer}`, report, failedRounds, behind && done?.sha ? { tested: done.sha, shipped: behind } : undefined, fixer);
       this.record(prKey(repo, number), { kind: 'announced' });
       if (done && behind) this.requestReview(done.projectId, done.repo, done.number, done.title);
       this.nextReview(projectId);
@@ -551,7 +554,8 @@ export class Reviews extends Part {
     return Effect.gen({ self: this }, function* () {
       const project = this.store.projects.find((p) => p.id === review.projectId);
       if (!project) return;
-      const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project) }, event);
+      const lead = this.core.goalPrs.ownerOf(review.repo, review.number);
+      const step = qaNextStep({ openedByOffice: !!review.openedByOffice, autoSendBack: autoSendBackFor(project), ...(lead && { lead: { idle: this.core.leads.idle(lead) } }) }, event);
       switch (step.kind) {
         case 'nothing':
           if (review.followUp) this.record(prKey(review.repo, review.number), { kind: 'follow-up' });
@@ -560,6 +564,10 @@ export class Reviews extends Part {
           return yield* this.sendBack(review, { kind: 'qa' });
         case 'needs-you':
           return this.core.triages.stuck(review, step.reason);
+        case 'to-lead':
+          this.record(prKey(review.repo, review.number), { kind: 'follow-up' });
+          if (lead && review.report) this.core.leads.fixHandedBack(lead, review, review.report, step.reason);
+          return;
       }
     });
   }
@@ -606,16 +614,24 @@ export class Reviews extends Part {
       this.hub.toast('info', `🔧 ${where} ${why} – ${agent.name} sits down to fix it`, agent.id);
     }).pipe(
       // a full room throws from seat(): it's the manager's call then, like any other failure to send it back
-      Effect.catchDefect((defect) => Effect.sync(() => this.core.triages.needsYou(review, `it couldn't be sent back (${errorMessage(defect)})`))),
-      Effect.catch((err) => Effect.sync(() => this.core.triages.needsYou(review, `it couldn't be sent back (${err.message})`))),
+      Effect.catchDefect((defect) => Effect.sync(() => this.couldntSendBack(review, errorMessage(defect)))),
+      Effect.catch((err) => Effect.sync(() => this.couldntSendBack(review, err.message))),
     );
+  }
+
+  /** A goal's pull request no one could sit down to fix stays its lead's, who hears QA's verdict with no fixer named; anyone else's is the manager's. */
+  private couldntSendBack(review: QaReview, why: string): void {
+    if (!this.core.goalPrs.ownerOf(review.repo, review.number)) this.core.triages.needsYou(review, `it couldn't be sent back (${why})`);
   }
 
   fixPromptFor(agent: Agent, review: QaReview, report: QaReport, fixes: FixFor): string {
     const pr = { number: review.number, branch: agent.branch };
     switch (fixes.kind) {
-      case 'qa':
-        return fixPrompt(pr, { sha: review.sha, report }, agent.cloud);
+      case 'qa': {
+        const lead = this.core.goalPrs.ownerOf(review.repo, review.number);
+        const goal = lead?.lead && { title: lead.lead.title, brief: lead.lead.brief, lead: lead.name };
+        return fixPrompt(pr, { sha: review.sha, report }, agent.cloud, goal || undefined);
+      }
       case 'checks':
         return checksFixPrompt(pr, review.sha, fixes.checks, agent.cloud);
     }
