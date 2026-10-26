@@ -153,7 +153,6 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-st-done b { font: 600 12px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
 .cos-st-chips { display: flex; flex-wrap: wrap; gap: 6px; font-size: 12px; }
 .cos-st-chip { background: var(--surface-2); border-radius: 999px; padding: 3px 10px; color: var(--text); text-decoration: none; }
-.cos-st-chip.decided { color: #9cc4ff; }
 a.cos-st-chip { color: var(--lcars-sky); }
 .cos-st-bundle { max-width: 72ch; margin: 2px 0; }
 .cos-st-bundle > summary { list-style: none; cursor: pointer; display: inline-flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); background: var(--surface-2); border-radius: 999px; padding: 3px 12px; }

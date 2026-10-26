@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { age, agreed, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, seenOf, threadKey, threadRows } from './streamList';
+import { age, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 
 describe('new since the captain last looked', () => {
@@ -117,22 +117,20 @@ describe('quiet lines bundled', () => {
     const rows = [{ entry: q(1) }, { entry: q(2) }, { entry: said(3) }, { entry: q(4) }, { newSince: true as const }, { entry: q(5) }, { entry: q(6) }];
     expect(bundleRows(rows)).toEqual([{ bundle: [q(1), q(2)] }, { entry: said(3) }, { entry: q(4) }, { newSince: true }, { bundle: [q(5), q(6)] }]);
   });
-  it('says what a bundle amounts to: merges, QA passes, decisions, send-backs and flags', () => {
+  it('says what a bundle amounts to: merges, QA passes, send-backs and flags', () => {
     expect(bundleSays([
       { kind: 'merged', at: 1, repo: 'a/b', number: 689 },
       { kind: 'ops', at: 2, from: 'QA officer Lt. Nakamura', text: 'QA passed a/b#689: fine.' },
       { kind: 'ops', at: 3, from: 'QA officer Lt. Nakamura', text: 'QA is reviewing a/b#690.' },
-      { kind: 'decided', at: 4, question: 'Font?', chosen: 'Sans' },
       { kind: 'cos', at: 5, route: 4, why: 'No check.' },
       { kind: 'cos', at: 6, route: 3, why: 'Stuck.' },
-    ])).toEqual(['merged #689', 'QA passed', 'decided: Sans', 'sent back once', 'flagged to you']);
+    ])).toEqual(['merged #689', 'QA passed', 'sent back once', 'flagged to you']);
     expect(bundleSays([{ kind: 'ops', at: 1, from: 'Ops', text: 'Following it.' }])).toEqual([]);
   });
 });
 
-describe('what’s agreed, for a goal’s header', () => {
-  it('counts its pull requests merged, leaves out the closed, and lists what was decided', () => {
-    expect(agreed([{ outcome: 'merged' }, {}, { outcome: 'closed' }], [{ kind: 'decided', at: 1, question: 'Layout?', chosen: 'B' }, { kind: 'lead', at: 2, text: 'ok' }]))
-      .toEqual({ merged: 1, prs: 2, decided: [{ question: 'Layout?', chosen: 'B' }] });
+describe('a goal’s pull requests, for its header', () => {
+  it('counts those merged, and leaves out the closed', () => {
+    expect(prCount([{ outcome: 'merged' }, {}, { outcome: 'closed' }])).toEqual({ merged: 1, prs: 2 });
   });
 });

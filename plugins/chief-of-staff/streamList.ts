@@ -139,27 +139,21 @@ export function bundleRows(rows: readonly ({ entry: ThreadEntry } | { newSince: 
   return out;
 }
 
-/** What a bundle of quiet lines amounts to, in brief: what merged, what QA passed, what was decided, what went back or was flagged. */
+/** What a bundle of quiet lines amounts to, in brief: what merged, what QA passed, what went back or was flagged. */
 export function bundleSays(entries: readonly ThreadEntry[]): string[] {
   const says: string[] = [];
   const merged = entries.flatMap((e) => (e.kind === 'merged' ? [`#${e.number}`] : []));
   if (merged.length) says.push(`merged ${merged.join(', ')}`);
   const passed = entries.filter((e) => e.kind === 'ops' && /^QA/.test(e.from) && /\bpassed\b/.test(e.text)).length;
   if (passed) says.push(passed > 1 ? `QA passed ${passed}` : 'QA passed');
-  const decided = entries.flatMap((e) => (e.kind === 'decided' ? [e.chosen] : []));
-  if (decided.length) says.push(`decided: ${decided.join('; ')}`);
   const back = entries.filter((e) => e.kind === 'cos' && e.route === 4).length;
   if (back) says.push(back > 1 ? `sent back ${back}×` : 'sent back once');
   if (entries.some((e) => e.kind === 'cos' && e.route === 3)) says.push('flagged to you');
   return says;
 }
 
-/** What's agreed on a goal, for its header: its pull requests (how many merged), and the decisions made in its thread. */
-export function agreed(prs: readonly { outcome?: 'merged' | 'closed' }[], entries: readonly ThreadEntry[]): { merged: number; prs: number; decided: { question: string; chosen: string }[] } {
+/** A goal's pull requests, for its header: how many merged of those not closed. */
+export function prCount(prs: readonly { outcome?: 'merged' | 'closed' }[]): { merged: number; prs: number } {
   const live = prs.filter((p) => p.outcome !== 'closed');
-  return {
-    merged: live.filter((p) => p.outcome === 'merged').length,
-    prs: live.length,
-    decided: entries.flatMap((e) => (e.kind === 'decided' ? [{ question: e.question, chosen: e.chosen }] : [])),
-  };
+  return { merged: live.filter((p) => p.outcome === 'merged').length, prs: live.length };
 }

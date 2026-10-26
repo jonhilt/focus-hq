@@ -7,7 +7,7 @@ import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import { needCard } from './needCard';
 import { CHIEF_OF_STAFF } from './shared';
-import { agreed, type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, pickGoal, seenOf, threadKey, threadRows } from './streamList';
+import { type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 
 // The stream (README.md#a-thread-per-goal): Comms as a thread per goal. On the left every shown project's goals in one
@@ -66,10 +66,10 @@ function bundleEl(entries: ThreadEntry[], lead: string): HTMLElement {
     h('div', { class: 'cos-st-bundle-lines' }, ...entries.map((e) => entryEl(e, lead))));
 }
 
-/** A thread's title, and under it what's agreed: done looks like, its pull requests merged, its decisions, and a way into the lead's room. */
-function headEls(lead: Agent, entries: readonly ThreadEntry[], openRoom: () => void): HTMLElement[] {
+/** A thread's title, and under it what's agreed: done looks like, its pull requests merged, and a way into the lead's room. */
+function headEls(lead: Agent, openRoom: () => void): HTMLElement[] {
   const work = lead.lead;
-  const { merged, prs, decided } = agreed([...(work?.landed ?? []), ...(work?.prs ?? [])], entries);
+  const { merged, prs } = prCount([...(work?.landed ?? []), ...(work?.prs ?? [])]);
   const live = lead.status === 'error' ? 'error' : ['working', 'testing', 'pushing', 'setting-up'].includes(lead.status) ? 'working' : 'quiet';
   const room = h('a', { href: '#', class: 'cos-st-chip', onclick: (e: Event) => { e.preventDefault(); openRoom(); } }, 'Their room ›');
   const done = work?.note?.done;
@@ -80,7 +80,6 @@ function headEls(lead: Agent, entries: readonly ThreadEntry[], openRoom: () => v
     ...(done ? [h('div', { class: 'cos-st-done' }, h('b', null, 'Done looks like'), done)] : []),
     h('div', { class: 'cos-st-chips' },
       prs ? h('span', { class: 'cos-st-chip' }, `${merged} of ${prs} pull request${prs === 1 ? '' : 's'} merged`) : null,
-      ...decided.map((d) => h('span', { class: 'cos-st-chip decided', title: d.question }, `✓ ${d.chosen}`)),
       room),
   ];
 }
@@ -176,7 +175,7 @@ export function openStream(ui: CommsUi): void {
     const key = threadKey(lead.id, lead.status, entries);
     if (key === shownThread) return;
     shownThread = key;
-    fill(head, ...headEls(lead, entries, () => openAgent(lead.id)));
+    fill(head, ...headEls(lead, () => openAgent(lead.id)));
     fill(thread, ...threadEls(entries, lead), ask);
     const to = thread.querySelector<HTMLElement>('.cos-st-new');
     thread.scrollTop = to ? to.offsetTop - thread.offsetTop - 8 : thread.scrollHeight;
