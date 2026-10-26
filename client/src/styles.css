@@ -23,9 +23,11 @@
   --radius: 14px;
   --ui: 'Antonio', 'Arial Narrow', 'Roboto Condensed', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
-  /* text to read, as the agents' sessions show it: Antonio is for headings, labels and buttons, not paragraphs */
-  --read-size: 13px;
-  --read-leading: 1.45;
+  /* text to read, as the chief of staff's stream shows it: Antonio is for headings, labels and buttons, not paragraphs,
+     and mono is for code, paths and tool calls, not prose */
+  --read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --read-size: 15px;
+  --read-leading: 1.55;
   color-scheme: dark;
   accent-color: var(--lcars-gold);
   scrollbar-color: var(--line) transparent;
@@ -702,9 +704,11 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .crew-member .muted { font-family: var(--mono); font-size: 12px; letter-spacing: 0; }
 .terminal {
   background: var(--bg); color: #e6edf3; border: 2px solid var(--line); border-radius: 12px; padding: 12px;
-  font-family: var(--mono); font-size: 13px; line-height: 1.45; letter-spacing: 0; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  font-family: var(--read); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0; overflow: auto; white-space: pre-wrap; word-break: break-word;
   min-height: 240px;
 }
+/* what the session did rather than said (tool calls, their output, system lines) stays in mono, a step smaller */
+.terminal .system, .terminal .output, .terminal .tool, .terminal .error, .terminal .success, .terminal code, .terminal pre { font-family: var(--mono); font-size: 13px; }
 .terminal .system, .terminal .output { color: #8b949e; }
 .terminal .thinking { color: #d2a8ff; font-style: italic; }
 .terminal .tool { color: #79c0ff; }
@@ -914,12 +918,12 @@ body.recording .hud, body.recording .toast:not(.error) { display: none; }
 .personal-entry .personal-text { margin: 0 0 8px; white-space: pre-wrap; }
 .personal-entry.closed .personal-text { opacity: 0.6; }
 
-/* Text to read (a lead's words, notes, reports, chat, help): in the agents' sessions' font, size and weight, however
-   it's laid out around it. Headings, labels, buttons and one-line rows stay in Antonio. A plugin's own reading text
-   takes the same: font-family var(--mono), font-size var(--read-size), line-height var(--read-leading). */
+/* Text to read (a lead's words, notes, reports, chat, help): in the reading font, size and weight, however it's laid
+   out around it. Headings, labels, buttons and one-line rows stay in Antonio. A plugin's own reading text takes the
+   same: font-family var(--read), font-size var(--read-size), line-height var(--read-leading). */
 .panel-body p, .panel-body li, .panel-body blockquote, .panel-body textarea, .compose input, .compose textarea, .briefing-note,
 .question-context, .goal-note, .goal-queued-text, .chart-log section,
 .field small, .toast > span, .dialog-message, .splash p, .personal-text, .qa-report details {
-  font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0;
+  font-family: var(--read); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0;
 }
 

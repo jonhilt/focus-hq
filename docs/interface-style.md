@@ -30,7 +30,7 @@ To keep LCARS's energy without its trade dress:
 
 ## Text to read
 
-Whatever the look, text to read (a lead's words, goal notes, reports, chat, toasts, help) is in the agents' sessions' font, size and weight: JetBrains Mono, 13px, line height 1.45, no letter spacing, as the terminal shows Claude's replies. The captain asked for it: condensed capitals are hard going for more than a line. Headings, labels, buttons and one-line rows keep the display face. The rule is at the end of `client/src/styles.css` (`--read-size`, `--read-leading`), and a plugin's own reading text takes the same variables. The explainer's captions are in it too, larger for the screen.
+Whatever the look, text to read (a lead's words, goal notes, reports, chat, toasts, help) is in the reading font, size and weight: the system sans (`--read`), 15px, line height 1.55, no letter spacing, as the chief of staff's stream shows it and the terminal shows Claude's replies. The user asked for it: condensed capitals are hard going for more than a line, and JetBrains Mono at 13px was hard going too. Mono stays for code, paths and what a session did (tool calls and their output). Headings, labels, buttons and one-line rows keep the display face. The rule is at the end of `client/src/styles.css` (`--read`, `--read-size`, `--read-leading`), and a plugin's own reading text takes the same variables. The explainer's captions are in it too, larger for the screen.
 
 ## The designs
 

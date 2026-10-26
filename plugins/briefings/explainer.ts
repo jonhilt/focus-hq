@@ -267,7 +267,7 @@ ${stageScript}
 // of the player's, and the lead's css, coming after it, overrides it.
 const KIT_CSS = String.raw`
   :root { --orange:#ff9966; --lilac:#cc99cc; --peri:#9999ff; --peach:#ffcc99; --red:#cc6666; --gold:#ff9900; --sky:#99ccff; --green:#99cc66;
-    --text:#f1eaff; --muted:#a49db4; --line:#3a3352; --ui:'Antonio','Arial Narrow',sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; }
+    --text:#f1eaff; --muted:#a49db4; --line:#3a3352; --ui:'Antonio','Arial Narrow',sans-serif; --mono:'JetBrains Mono',ui-monospace,Menlo,monospace; --read:system-ui,-apple-system,'Segoe UI',Roboto,sans-serif; }
   * { box-sizing:border-box; }
   html, body { margin:0; width:1280px; height:800px; position:relative; overflow:hidden; background:#000; color:var(--text); font-family:var(--ui); }
   .kit-frame { position:absolute; left:0; top:0; }
@@ -282,7 +282,7 @@ const KIT_CSS = String.raw`
   .kit-stage { position:absolute; left:200px; top:58px; width:1050px; height:500px; }
   .kit-caption { position:absolute; left:200px; top:584px; width:1050px; }
   .kit-bt { font:600 30px/1.1 var(--ui); color:var(--gold); text-transform:uppercase; letter-spacing:.04em; margin-bottom:8px; }
-  .kit-bx { font:400 19px/1.45 var(--mono); color:var(--text); letter-spacing:0; max-width:1020px; }
+  .kit-bx { font:400 20px/1.5 var(--read); color:var(--text); letter-spacing:0; max-width:1020px; }
   .kit-btn { flex:none; height:34px; border-radius:17px; border:0; padding:0 20px; color:#000; font:600 19px/34px var(--ui); text-transform:uppercase; letter-spacing:.06em; cursor:pointer; }
   .kit-btn:hover { filter:brightness(1.15); }
   .kit-seg { position:relative; height:34px; background:#241e38; cursor:pointer; overflow:hidden; }
@@ -307,7 +307,7 @@ const KIT_CSS = String.raw`
   .kit-rest .kit-receipts { opacity:.35; }
   .kit-quoted { position:absolute; left:200px; top:398px; width:1050px; border:3px solid var(--sky); border-radius:22px; background:#000; overflow:hidden; z-index:4; }
   .kit-quoted .kit-hd { background:var(--sky); color:#000; font:600 17px/30px var(--mono); padding:0 16px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-  .kit-quoted .kit-bd { padding:10px 16px; font:400 16px/1.45 var(--mono); color:var(--text); white-space:pre-wrap; max-height:110px; overflow:auto; }
+  .kit-quoted .kit-bd { padding:10px 16px; font:400 16px/1.5 var(--read); color:var(--text); white-space:pre-wrap; max-height:110px; overflow:auto; }
 
   /* the stage kit, for the lead's stage and only there */
   ${STAGE_SCOPE} {
