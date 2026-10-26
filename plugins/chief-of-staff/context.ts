@@ -1,10 +1,10 @@
 import type { Agent, LedgerEvent, TermLine } from '../../plugin-api/shared';
-import { goalDecisions, projectIntents } from '../../plugin-api/shared';
+import { projectIntents } from '../../plugin-api/shared';
 import { clip } from '../../plugin-api/server';
 import { messageEntries } from './thread';
 
 // What the chief of staff reads a lead's turn against (README.md#what-it-reads-a-turn-against): what's agreed for the
-// goal (the captain's first words, what done looks like, the decisions on record), the project's compass, and the
+// goal (the captain's first words, what done looks like), the project's compass, and the
 // captain's own words to the lead. Without them it can't tell a step inside what's agreed from overreach: the backtest
 // that gave it them (25 October 2026) kept a fifth fewer turns from the captain at the same share they engaged with,
 // and its send-backs were the right ones. Pure, so it's tested (context.test.ts).
@@ -27,9 +27,6 @@ export interface TurnContext {
   project?: { what: string; guardrails: string[] };
   /** The project's intents, the outcomes its work is for. */
   intents: string[];
-  /** The goal's decisions: made (agreed), and open (not agreed yet). */
-  decided: { question: string; chosen: string }[];
-  open: { question: string; proposed?: string }[];
   /** The captain's latest messages to the lead, oldest first. */
   captainSaid: string[];
 }
@@ -48,7 +45,6 @@ export function captainWords(lines: readonly TermLine[], firstWords?: string, co
 export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
   const intents = projectIntents([...ledger], lead.projectId);
   const about = intents.find((e) => !e.id);
-  const { open, decided } = goalDecisions([...ledger], lead.id);
   const done = lead.lead?.note?.done?.trim();
   return {
     goal: lead.lead?.title || '(untitled)',
@@ -56,8 +52,6 @@ export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { t
     ...(done && { done: clip(done, DONE) }),
     ...(about && { project: { what: about.what, guardrails: [...about.constraints] } }),
     intents: intents.filter((e) => e.id).map((e) => e.what),
-    decided: decided.flatMap((d) => (d.chosen ? [{ question: d.question, chosen: d.chosen }] : [])),
-    open: open.map((d) => ({ question: d.question, ...(d.proposed && { proposed: d.proposed }) })),
     captainSaid: captainWords(lines, lead.lead?.brief),
   };
 }
@@ -72,8 +66,6 @@ export function contextText(c: TurnContext): string {
     c.done && `What done looks like:\n${c.done}`,
     c.project && `THE PROJECT: ${c.project.what}${c.project.guardrails.length ? `\nGuardrails:\n${list(c.project.guardrails)}` : ''}`,
     c.intents.length && `The project's intents:\n${list(c.intents)}`,
-    c.decided.length && `DECIDED (agreed):\n${list(c.decided.map((d) => `${d.question} → ${d.chosen}`))}`,
-    c.open.length && `OPEN DECISIONS (not agreed yet):\n${list(c.open.map((d) => `${d.question}${d.proposed ? ` (the lead proposes: ${d.proposed})` : ''}`))}`,
     c.captainSaid.length && `THE CAPTAIN'S LATEST WORDS TO THE LEAD (oldest first):\n${list(c.captainSaid.map((s) => s.replace(/\s+/g, ' ')))}`,
   ];
   return parts.filter(Boolean).join('\n\n');

@@ -84,12 +84,10 @@ export class Inbox {
     if (refusal) throw new Error(refusal);
     const { a, item } = found;
     if (!('agent' in a)) throw new Error('A pull request is decided on the board');
-    // the decision a picked question settles, read before answering it closes the question
-    const decision = 'option' in d ? openQuestion(a.agent)?.decision : undefined;
     const reply = await this.act(a.agent, d, item.cos?.message ?? '', how);
     // Ops asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
     if (!landed(reply)) return reply;
-    this.record(a.agent, item, d, via, decision);
+    this.record(a.agent, item, d, via);
     return { ok: true };
   }
 
@@ -100,14 +98,14 @@ export class Inbox {
    */
   answered(before: Agent, answer: CaptainAnswer): void {
     const found = this.items([before]).find(({ a, item }) => 'agent' in a && a.agent.id === before.id && !decideRefusal(item, answer));
-    if (found) this.record(before, found.item, answer, 'office', 'option' in answer ? openQuestion(before)?.decision : undefined);
+    if (found) this.record(before, found.item, answer, 'office');
   }
 
-  private record(agent: Agent, item: InboxItem, d: Decide, via: DecidedVia, decision?: string): void {
+  private record(agent: Agent, item: InboxItem, d: Decide, via: DecidedVia): void {
     const answer = answerText(d);
     if (!answer) return;
     const goal = agent.lead?.title;
-    this.host.record(agent.projectId, { kind: 'captain-decision', agent: agent.name, ...(goal && { goal }), item: { id: item.id, kind: item.kind, what: item.what }, answer, via, ...(decision && { decision }) });
+    this.host.record(agent.projectId, { kind: 'captain-decision', agent: agent.name, ...(goal && { goal }), item: { id: item.id, kind: item.kind, what: item.what }, answer, via });
   }
 
   /**

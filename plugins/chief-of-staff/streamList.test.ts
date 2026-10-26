@@ -21,7 +21,6 @@ describe('how a thread’s entries read', () => {
     expect(entryView({ kind: 'you', at: 1, text: 'Ship it', via: 'phone' })).toEqual({ as: 'you', text: 'Ship it', via: 'phone' });
     expect(entryView({ kind: 'lead', at: 1, text: 'Done.' })).toEqual({ as: 'lead', text: 'Done.' });
     expect(entryView({ kind: 'ops', at: 1, from: 'Ops', text: 'Slice 1 landed.' })).toEqual({ as: 'line', tone: 'quiet', text: 'Ops: Slice 1 landed.' });
-    expect(entryView({ kind: 'decided', at: 1, question: 'List or grid?', chosen: 'List' })).toEqual({ as: 'line', tone: 'decided', text: 'Decided: List or grid? → List' });
     expect(entryView({ kind: 'merged', at: 1, repo: 'acme/shop', number: 3 })).toEqual({ as: 'line', tone: 'merged', text: 'Merged acme/shop#3' });
     expect(entryView({ kind: 'cos', at: 1, route: 4, why: 'No test behind it.', message: 'Test it first.' })).toEqual({ as: 'line', tone: 'sent-back', text: 'The chief of staff would send this back to the lead: No test behind it.', more: 'Test it first.' });
     expect(entryView({ kind: 'cos', at: 1, route: 2, why: 'A pick.' })).toMatchObject({ tone: 'cos', text: 'The chief of staff put this to you: A pick.' });

@@ -16,7 +16,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
-export const OPS_TOOL_NAMES = ['recap', 'show', 'ask', 'propose_close', 'decision'] as const;
+export const OPS_TOOL_NAMES = ['recap', 'show', 'ask', 'propose_close'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
 /** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
@@ -30,8 +30,8 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, show, ask,
- * propose_close and decision, and those the plugins switched on add.
+ * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, show, ask
+ * and propose_close, and those the plugins switched on add.
  */
 export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
   return createSdkMcpServer({
@@ -71,7 +71,6 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
             detail: z.string().optional().describe('What this option means and what it trades off, in a sentence or three (at most 500 characters): shown beside its page.'),
             html: z.string().describe('A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.'),
           })).describe('2 to 4 options: the captain sees them lettered A, B, C, D in this order.'),
-          decision: z.string().optional().describe('An open decision of your goal\'s (its id, from the decision tool) that the captain\'s pick decides: label each option as one of its options, word for word.'),
         },
         (input) => answer(() => tools.ask(input), "Couldn't ask"),
       ),
@@ -80,17 +79,6 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
         "Tell the captain you think the goal is done (what done looks like is met), or that nothing worthwhile is left. They close it or carry on. Then tell them why, and stop.",
         { reason: z.string().describe('Why, in a sentence or two.') },
         ({ reason }) => answer(() => tools.proposeClose({ reason }), "Couldn't propose closing"),
-      ),
-      tool(
-        'decision',
-        'Raise a decision your goal needs, so it\'s on record and can\'t go quiet or be reopened: the question, its options, and the one you\'d pick (proposed). Send its id to change one still open. You never decide one: the captain does (ask with its id puts it to them), or the chief of staff where the captain lets it. Once decided it stands; it isn\'t raised again.',
-        {
-          question: z.string().describe('What has to be decided, in a sentence.'),
-          options: z.array(z.string()).describe('2 to 6 options, each in a few words.'),
-          proposed: z.string().optional().describe('The option you\'d pick, word for word.'),
-          id: z.string().optional().describe('An open decision of your goal\'s to change, by its id.'),
-        },
-        (input) => answer(() => tools.decision(input), "Couldn't raise the decision"),
       ),
       ...extraTools(tools.extra ?? []).map((t) => tool(t.name, t.description, t.input, (input) => answer(() => t.run(input), `${t.name} failed`))),
     ],

@@ -44,7 +44,7 @@ describe('captainWords', () => {
 });
 
 describe('turnContext', () => {
-  it('reads what’s agreed for the goal, the project’s compass and the captain’s words', () => {
+  it('reads what’s agreed for the goal, the project’s compass and the captain’s words, and not decision lines an older Focus left', () => {
     const ledger = [
       line({ kind: 'intent', by: 'the user', what: 'A webshop shoppers trust', constraints: ['Never break checkout'] }),
       line({ kind: 'intent', id: 'fast', by: 'the user', what: 'Checkout in seconds', constraints: [] }),
@@ -63,8 +63,6 @@ describe('turnContext', () => {
       done: 'A shopper saves an item and finds it next visit.',
       project: { what: 'A webshop shoppers trust', guardrails: ['Never break checkout'] },
       intents: ['Checkout in seconds'],
-      decided: [{ question: 'd1?', chosen: 'A' }],
-      open: [{ question: 'd2?', proposed: 'B' }],
       captainSaid: ['Use a list.'],
     });
     expect(contextText(c)).toBe(
@@ -74,8 +72,6 @@ describe('turnContext', () => {
         'What done looks like:\nA shopper saves an item and finds it next visit.',
         'THE PROJECT: A webshop shoppers trust\nGuardrails:\n- Never break checkout',
         'The project\'s intents:\n- Checkout in seconds',
-        'DECIDED (agreed):\n- d1? → A',
-        'OPEN DECISIONS (not agreed yet):\n- d2? (the lead proposes: B)',
         'THE CAPTAIN\'S LATEST WORDS TO THE LEAD (oldest first):\n- Use a list.',
       ].join('\n\n'),
     );

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LeadWork } from '../../shared/types';
-import { BRIEF_LIMITS, briefedGoal, briefForPrompt, briefMovedNote, decisionLines, editsBrief, keptBrief, needsBrief, noteAsBrief, readBrief } from './briefFile';
+import { BRIEF_LIMITS, briefedGoal, briefForPrompt, briefMovedNote, editsBrief, keptBrief, needsBrief, noteAsBrief, readBrief } from './briefFile';
 
 const BRIEF = `# Saved items, anywhere
 
@@ -113,22 +113,14 @@ describe('a goal from before brief.md', () => {
 });
 
 describe('the brief for the lead', () => {
-  it('is the goal as the captain put it, the brief as it stands, and the decisions on record', () => {
+  it('is the goal as the captain put it, and the brief as it stands', () => {
     const goal = { ...work, brief: 'Let shoppers save items for later', briefMd: '# Saved items\n\n## Next\n\n- Header\n' };
-    expect(briefForPrompt(goal, ['d1, decided: Cards or a list? → A plain list'])).toBe(
-      'The goal: Saved items\n\nAs the captain first put it:\n> Let shoppers save items for later\n\nYour brief, ./brief.md, as it stands:\n\n# Saved items\n\n## Next\n\n- Header\n\nThe goal\'s decisions on record:\n- d1, decided: Cards or a list? → A plain list',
+    expect(briefForPrompt(goal)).toBe(
+      'The goal: Saved items\n\nAs the captain first put it:\n> Let shoppers save items for later\n\nYour brief, ./brief.md, as it stands:\n\n# Saved items\n\n## Next\n\n- Header',
     );
     // a one-liner is its own title, and a brief not written yet says so
     expect(briefForPrompt({ title: 'Saved items', brief: 'Saved items' })).toBe('The goal: Saved items\n\nYou haven\'t written ./brief.md yet.');
     expect(briefForPrompt({ title: 'Saved items', note: { done: 'Works', learned: [], next: [] } })).toContain('Your note as it stood (write it to ./brief.md):\n\n# Saved items\n\n## Done looks like\n\nWorks');
-  });
-
-  it('puts each decision in a line: what was chosen, or the options of one still open', () => {
-    const d = { goalId: 'g', goal: 'G', owner: 'captain', by: 'Lt. Okafor', options: ['Cards', 'A list'] };
-    expect(decisionLines({
-      decided: [{ ...d, id: 'd1', status: 'decided', question: 'Which layout?', chosen: 'A list', rationale: 'Denser' }],
-      open: [{ ...d, id: 'd2', status: 'open', question: 'Page size?', options: ['20', '50'] }],
-    })).toEqual(['d1, decided: Which layout? → A list (Denser)', 'd2, open: Page size? (20 / 50)']);
   });
 });
 

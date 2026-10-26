@@ -1,15 +1,14 @@
 import { Effect, Option } from 'effect';
 import type { Agent, MessageReply, ResumeHow } from '../../../shared/types';
 import { answerMessage, openQuestion } from '../../../shared/artifacts';
-import { askProblem, goalDecisions, type RaiseInput, raiseDecision, settleDecision } from '../../../shared/decisions';
 import { answerInChat, pageErrorsNote } from '../lead';
 import { answerQuestion, type ArtifactInput, askQuestion, type QuestionInput, showArtifact } from '../leadRules';
-import { BRIEF_FILE, briefedGoal, briefForPrompt, briefMovedNote, decisionLines, needsBrief } from '../briefFile';
+import { BRIEF_FILE, briefedGoal, briefForPrompt, briefMovedNote, needsBrief } from '../briefFile';
 import { type Frame, type Frames, type Picture, Renderer, Workspace } from '../services';
 import { type Answers, type AskedQuestion, optionPage } from '../questions';
 import { Part, Refused } from './core';
 
-/** The lead's `office` MCP tools besides recap: show, ask (and the captain's answer), propose_close and decision. */
+/** The lead's `office` MCP tools besides recap: show, ask (and the captain's answer) and propose_close. */
 export class GoalTools extends Part {
   /**
    * Reads the lead's brief, ./brief.md in their workspace, and takes what it says onto the goal (`briefedGoal`): as an
@@ -40,10 +39,10 @@ export class GoalTools extends Part {
     return briefMovedNote(lead.lead);
   }
 
-  /** What the lead hears once their conversation's compacted: the goal, their brief and its decisions (`briefForPrompt`). */
+  /** What the lead hears once their conversation's compacted: the goal and their brief (`briefForPrompt`). */
   afterCompact(leadId: string): string {
     const work = this.store.agents.get(leadId)?.lead;
-    return work ? briefForPrompt(work, decisionLines(goalDecisions(this.store.ledger, leadId))) : '';
+    return work ? briefForPrompt(work) : '';
   }
 
   /**
@@ -108,8 +107,6 @@ export class GoalTools extends Part {
   askCaptain(agent: Agent, input: QuestionInput): Effect.Effect<string, Refused, Renderer> {
     return Effect.gen({ self: this }, function* () {
       if (!agent.lead) return yield* new Refused({ message: 'There’s no goal to ask about' });
-      const undecidable = input.decision && askProblem(this.store.ledger, agent.id, input.decision, input.options.map((o) => o.label));
-      if (undecidable) return yield* new Refused({ message: undecidable });
       const checked = askQuestion(agent.lead.questions ?? [], input, Date.now());
       if ('error' in checked) return yield* new Refused({ message: checked.error });
       // the pictures first, in memory: the question's id, and which files are whose, are settled once they're taken
@@ -213,7 +210,6 @@ export class GoalTools extends Part {
       const { resolve } = rt.asking;
       rt.asking = undefined;
       this.update(agent, { activity: 'Reading your answer', lead: { ...work, questions: answered.questions } });
-      if (answered.question.decision) this.decide(agent, answered.question.decision, answered.question.options.find((o) => o.id === option)?.label ?? option, note);
       resolve([answered.question.options.find((o) => o.id === option)?.label ?? option, note?.trim()].filter(Boolean).join(': '));
       return agent;
     }
@@ -221,32 +217,7 @@ export class GoalTools extends Part {
     if ('costly' in reply) return reply;
     // read again: sending it may have changed the goal (a proposal to close dropped)
     if (agent.lead) this.update(agent, { lead: { ...agent.lead, questions: answered.questions } });
-    if (answered.question.decision) this.decide(agent, answered.question.decision, answered.question.options.find((o) => o.id === option)?.label ?? option, note);
     return agent;
-  }
-
-  /** The captain's pick on a question that asked them to make a decision: it's decided, as they picked. */
-  private decide(agent: Agent, id: string, chosen: string, note?: string): void {
-    const settled = settleDecision(this.store.ledger, id, 'captain', chosen, note);
-    if ('problem' in settled) console.warn(`[decisions] ${agent.name}’s ${id} wasn’t decided: ${settled.problem}`);
-    else this.core.ledger.record(agent.projectId, settled.entry);
-  }
-
-  /**
-   * The lead's decision tool: a decision raised on their goal, or one of its open ones changed, for the captain (or
-   * the chief of staff where the captain lets it) to decide. The lead never decides one.
-   */
-  raiseDecision(agent: Agent, input: RaiseInput): Effect.Effect<string, Refused> {
-    return Effect.gen({ self: this }, function* () {
-      const work = agent.lead;
-      if (!work) return yield* new Refused({ message: 'There’s no goal to raise a decision on' });
-      const raised = raiseDecision(this.store.ledger, { id: agent.id, title: work.title }, agent.name, input);
-      if ('problem' in raised) return yield* new Refused({ message: raised.problem });
-      const refused = this.core.ledger.record(agent.projectId, raised.entry);
-      if (refused) return yield* new Refused({ message: `The decision ${refused}` });
-      const { id } = raised.entry;
-      return `${input.id ? 'Changed' : 'Raised'} ${id}: “${raised.entry.question}”. It stays open until the captain decides it (or the chief of staff, where the captain lets it): to put it to the captain now, ask with decision "${id}" and each option labelled as one of its options.`;
-    });
   }
 
   /**

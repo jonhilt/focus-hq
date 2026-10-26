@@ -1,5 +1,4 @@
 import path from 'node:path';
-import type { DecisionRecord } from '../../shared/ledger';
 import type { GoalNote, LeadWork } from '../../shared/types';
 import { threadContacts } from './contacts';
 import { turnedWaypoint } from './waypoints';
@@ -151,22 +150,13 @@ export function briefMovedNote(work: Pick<LeadWork, 'title' | 'note' | 'contacts
 
 /**
  * The goal as the lead needs it where their conversation may have been summarised or lost: the goal as the captain put it,
- * the brief as Ops last read it (or, before brief.md, the note), and the decisions on record.
+ * and the brief as Ops last read it (or, before brief.md, the note).
  */
-export function briefForPrompt(work: Pick<LeadWork, 'title' | 'brief' | 'briefMd' | 'note' | 'contacts'>, decisions: string[] = []): string {
+export function briefForPrompt(work: Pick<LeadWork, 'title' | 'brief' | 'briefMd' | 'note' | 'contacts'>): string {
   const parts = [`The goal: ${work.title}`];
   if (work.brief && work.brief !== work.title) parts.push(`As the captain first put it:\n${work.brief.split('\n').map((l) => `> ${l}`.trimEnd()).join('\n')}`);
   if (work.briefMd !== undefined) parts.push(`Your brief, ./${BRIEF_FILE}, as it stands:\n\n${work.briefMd.trim() || '(empty)'}`);
   else if (work.note || work.contacts?.length) parts.push(`Your note as it stood (write it to ./${BRIEF_FILE}):\n\n${noteAsBrief(work)}`);
   else parts.push(`You haven't written ./${BRIEF_FILE} yet.`);
-  if (decisions.length) parts.push(`The goal's decisions on record:\n${decisions.map((d) => `- ${d}`).join('\n')}`);
   return parts.join('\n\n');
-}
-
-/** A goal's decisions as lines for its lead: each one decided with what was chosen, each open one with its options. */
-export function decisionLines(d: { open: readonly DecisionRecord[]; decided: readonly DecisionRecord[] }): string[] {
-  return [
-    ...d.decided.map((x) => `${x.id}, decided: ${x.question} → ${x.chosen ?? '?'}${x.rationale ? ` (${x.rationale})` : ''}`),
-    ...d.open.map((x) => `${x.id}, open: ${x.question} (${x.options.join(' / ')})`),
-  ];
 }

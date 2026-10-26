@@ -50,7 +50,7 @@ describe('leadEntries', () => {
 });
 
 describe('ledgerEntries', () => {
-  it('keeps the goal’s decisions where they were made, its merges and the verdicts on its turns', () => {
+  it('keeps the goal’s merges and the verdicts on its turns, and not decision lines an older Focus left', () => {
     const lead = { id: 'g1', sessionId: 's1' };
     const decision = (at: number, o: Record<string, unknown>) => line({ kind: 'decision', at, id: 'd1', goalId: 'g1', goal: 'G', owner: 'L', by: 'L', question: 'List or grid?', options: ['List', 'Grid'], status: 'open', ...o });
     const ledger = [
@@ -66,7 +66,6 @@ describe('ledgerEntries', () => {
     expect(ledgerEntries(lead, ledger)).toEqual([
       { kind: 'merged', at: 5, repo: 'acme/shop', number: 3 },
       { kind: 'cos', at: 7, route: 4, why: 'No test.', message: 'Test it.', check: 'evidence' },
-      { kind: 'decided', at: 2, question: 'List or grid?', chosen: 'List' },
     ]);
   });
 });

@@ -3,8 +3,8 @@ import { blocks, clip, messageFrom, transcriptLines } from '../../plugin-api/ser
 
 // A goal's thread (README.md#a-thread-per-goal): the goal's conversation as the captain would read it in one place, in
 // order. What they said to the lead, what the lead said as each turn ended, and, as quieter lines between them, what
-// Ops, QA and the chief of staff told the lead, the decisions made, the pull requests that merged, and where the chief
-// of staff sent each turn. Built from what's kept already: the messages to the lead from its log (each whole, and who
+// Ops, QA and the chief of staff told the lead, the pull requests that merged, and where the chief of staff sent each
+// turn. Built from what's kept already: the messages to the lead from its log (each whole, and who
 // it's from: in its transcript, Ops' news is joined to the captain's next message), its words from its transcript,
 // and the rest from the ledger. Pure, so it's tested (thread.test.ts).
 
@@ -19,8 +19,6 @@ export type ThreadEntry =
   | { kind: 'lead'; at: number; text: string }
   /** What someone else told the lead (Ops, QA, the chief of staff, the scheduler), in brief. */
   | { kind: 'ops'; at: number; from: string; text: string }
-  /** A decision on the goal, made. */
-  | { kind: 'decided'; at: number; question: string; chosen: string }
   /** One of the goal's pull requests merged. */
   | { kind: 'merged'; at: number; repo: string; number: number }
   /** Where the chief of staff sent a turn of the lead's, and why. */
@@ -76,19 +74,15 @@ export function leadEntries(jsonl: string): ThreadEntry[] {
   return out;
 }
 
-/** The ledger's lines that belong in a lead's thread: its decisions made, its pull requests merged, its turns judged. */
+/** The ledger's lines that belong in a lead's thread: its pull requests merged, its turns judged. */
 export function ledgerEntries(lead: Pick<Agent, 'id' | 'sessionId'>, ledger: readonly LedgerEvent[]): ThreadEntry[] {
-  const decided = new Map<string, ThreadEntry>();
   const out: ThreadEntry[] = [];
   for (const e of ledger) {
-    if (e.kind === 'decision' && e.goalId === lead.id) {
-      // each change to a decision is a new line: it's in the thread once, where it was decided
-      if (e.status === 'decided' && e.chosen && !decided.has(e.id)) decided.set(e.id, { kind: 'decided', at: e.at, question: e.question, chosen: e.chosen });
-    } else if (e.kind === 'merged' && e.lead === lead.id) out.push({ kind: 'merged', at: e.at, repo: e.repo, number: e.pr });
+    if (e.kind === 'merged' && e.lead === lead.id) out.push({ kind: 'merged', at: e.at, repo: e.repo, number: e.pr });
     else if (e.kind === 'cos-verdict' && lead.sessionId && e.sessionId === lead.sessionId)
       out.push({ kind: 'cos', at: e.at, route: e.route, why: e.why, ...(e.message && { message: e.message }), ...(e.check && { check: e.check }) });
   }
-  return [...out, ...decided.values()];
+  return out;
 }
 
 /** A lead's thread: the messages to them, their words and the ledger's lines about it, in order, the latest `THREAD_LIMITS.entries`. */

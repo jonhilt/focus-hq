@@ -1,6 +1,5 @@
 import express, { type NextFunction, type Request, type Response } from 'express';
 import { isAutonomy } from '../shared/autonomy';
-import { goalDecisions } from '../shared/decisions';
 import { closedGoals } from '../shared/ledger';
 import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
@@ -171,8 +170,6 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
   r.delete('/projects/:id/goals/queue/:qid', h((req) => focus.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.get('/agents/:id/run', h((req) => replay(store.journalEntries(param(req, 'id')))));
-  // a goal's decisions, kept in the ledger, shown beside its lead's brief
-  r.get('/agents/:id/decisions', h((req) => goalDecisions(store.ledger, param(req, 'id'))));
   r.get('/agents/:id/background/:task/output', h((req) => focus.agents.backgroundOutput(param(req, 'id'), param(req, 'task'))));
   r.post('/agents/:id/background/:task/stop', h((req) => focus.agents.stopBackground(param(req, 'id'), param(req, 'task'))));
   r.get('/agents/:id/workflows/:workflow/script', h((req) => focus.agents.workflowScript(param(req, 'id'), param(req, 'workflow'))));

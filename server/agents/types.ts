@@ -1,4 +1,3 @@
-import type { RaiseInput } from '../../shared/decisions';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
@@ -136,8 +135,6 @@ export interface OpsTools {
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
-  /** Raises a decision on the lead's goal, or changes an open one: the captain (or the chief of staff) decides it. */
-  decision(input: RaiseInput): Promise<string>;
   /** Tools the plugins switched on add (plugins/contract.ts `leadTools`), bound to this lead. */
   extra?: ExtraTool[];
 }

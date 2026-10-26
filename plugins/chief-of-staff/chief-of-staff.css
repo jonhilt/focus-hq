@@ -177,7 +177,6 @@ a.cos-st-chip { color: var(--lcars-sky); }
 .cos-st-md ul, .cos-st-md ol { margin: 0 0 0.7em; padding-left: 1.3em; }
 .cos-st-line { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 13px; line-height: 1.45; max-width: 72ch; padding: 3px 0; }
 .cos-st-line small { flex: none; font-size: 12px; }
-.cos-st-line.decided { color: #9cc4ff; border-left: 3px solid var(--lcars-sky); padding-left: 10px; }
 .cos-st-line.merged { color: var(--lcars-green, #7fd17f); }
 .cos-st-line.cos { color: var(--lcars-peach); }
 .cos-st-line.flagged { color: var(--lcars-red); }

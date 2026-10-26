@@ -251,7 +251,7 @@ export class AgentSessions extends Part {
       brief: agent.task === 'lead' ? { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) } : undefined,
       scripted: this.core.plugins.brief(agent.brief)?.demo,
       tools: agent.task === 'lead'
-        ? { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), decision: (input) => tool(this.core.goalTools.raiseDecision(agent, input)), extra: this.leadTools(agent, cwd) }
+        ? { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), extra: this.leadTools(agent, cwd) }
         : undefined,
     };
   }

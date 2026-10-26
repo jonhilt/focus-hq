@@ -1,7 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
 import type { Agent, Autonomy, Board, BotChange, BotStatus, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
-import type { GoalDecisions } from '../../../shared/decisions';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -103,8 +102,6 @@ export const api = {
   hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
     call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
-  /** A goal's decisions on record, by its lead's id: those still open, and those decided. */
-  decisions: (leadId: string) => call<GoalDecisions>('GET', `/agents/${leadId}/decisions`),
   /** An agent's run journal replayed: each fact in words, and where the run was after it. */
   run: (id: string) => call<ReplayStep[]>('GET', `/agents/${id}/run`),
   /** The tail of what a lead's background command (or monitor) has written, read again each call. */

@@ -284,8 +284,6 @@ export interface GoalQuestion {
   /** a, b, c, d in the order the lead gave them, each with what it means and trades off (`detail`). */
   options: { id: string; label: string; detail?: string; image?: boolean }[];
   at: number;
-  /** The open decision it asks the captain to make (`shared/decisions.ts`): their pick decides it. */
-  decision?: string;
   /**
    * How it was asked: with Ops' ask tool (missing), whose pick reaches the lead as a message; or with Claude Code's own
    * AskUserQuestion ('question-tool'), whose turn waits on the answer, and which comes down if that turn ends first.

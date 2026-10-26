@@ -57,7 +57,7 @@ export function doing(status: string): string {
 export type EntryView =
   | { as: 'you'; text: string; via?: string }
   | { as: 'lead'; text: string }
-  | { as: 'line'; tone: 'quiet' | 'decided' | 'merged' | 'cos' | 'sent-back' | 'flagged'; text: string; more?: string };
+  | { as: 'line'; tone: 'quiet' | 'merged' | 'cos' | 'sent-back' | 'flagged'; text: string; more?: string };
 
 const ROUTE_LINE: Record<number, { tone: 'quiet' | 'cos' | 'sent-back' | 'flagged'; says: string }> = {
   1: { tone: 'quiet', says: 'The chief of staff would let it carry on' },
@@ -74,8 +74,6 @@ export function entryView(e: ThreadEntry): EntryView {
       return { as: 'lead', text: e.text };
     case 'ops':
       return { as: 'line', tone: 'quiet', text: `${e.from}: ${e.text}` };
-    case 'decided':
-      return { as: 'line', tone: 'decided', text: `Decided: ${e.question} → ${e.chosen}` };
     case 'merged':
       return { as: 'line', tone: 'merged', text: `Merged ${e.repo}#${e.number}` };
     case 'cos': {
