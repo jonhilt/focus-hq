@@ -89,6 +89,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     },
     agents: () => lend([...core.store.agents.values()]),
     recentLines: (agentId, count) => lend(core.store.recentLines(agentId, count)),
+    allLines: async (agentId) => lend(await core.store.allLines(agentId)),
     boardPrs: (projectId) => {
       const project = core.store.projects.find((p) => p.id === projectId);
       return project ? lend(columns(project, core.store.boards.get(projectId), core.store.agentsIn(projectId), lent.githubLogin?.()).prs) : [];

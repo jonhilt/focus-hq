@@ -243,6 +243,8 @@ export interface PluginHost {
   agent(id: string): Readonly<Agent> | undefined;
   /** An agent's last `count` terminal lines, oldest first. */
   recentLines(agentId: string, count: number): readonly Readonly<TermLine>[];
+  /** An agent's terminal lines from its log, oldest first, as its panel reads them: the latest few thousand. */
+  allLines(agentId: string): Promise<readonly Readonly<TermLine>[]>;
   /**
    * The pull requests a project's board shows (its "only my PRs" filter applied), each with whose it is (`agent`) and
    * who's resolving its conflicts (`resolver`), as Focus last read them from GitHub.

@@ -219,7 +219,7 @@ describe('the chief of staff’s words, sent by themselves where the captain let
 });
 
 describe('the chief of staff plugin’s setting for sending its words by itself', () => {
-  const said = (uuid: string, text: string) => JSON.stringify({ type: 'assistant', uuid, message: { content: [{ type: 'text', text }] } });
+  const said = (uuid: string, text: string) => JSON.stringify({ type: 'assistant', uuid, timestamp: new Date().toISOString(), message: { content: [{ type: 'text', text }] } });
 
   /** Focus with the plugin itself switched on (the demo's judge, which carries on a turn that asks nothing), and a lead at work. */
   async function aboard(legacy: boolean) {
@@ -272,6 +272,15 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     o.route('/auto-send')({ projectId: o.project.id, on: true });
     expect(o.state()).toEqual({ autoSend: { [o.project.id]: true }, jev: { [o.project.id]: true } });
     expect(() => o.route('/jev')({ on: true })).toThrow(/projectId/);
+  });
+
+  it('serves a goal’s thread by its lead’s id: what the lead said and what the chief of staff made of it', async () => {
+    const o = await aboard(false);
+    o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
+    await until(() => !!o.read()?.judged);
+    const { entries } = (await o.route('/thread/:id')({}, { id: o.id })) as { entries: { kind: string }[] };
+    expect(entries.map((e) => e.kind)).toEqual(expect.arrayContaining(['lead', 'cos']));
+    await expect(o.route('/thread/:id')({}, { id: 'nobody' })).rejects.toThrow(/isn’t aboard/);
   });
 
   it('serves the inbox on its routes, an item answered by its id', async () => {

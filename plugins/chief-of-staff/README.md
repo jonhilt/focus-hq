@@ -17,6 +17,13 @@ Over a goal's pod, the team screen shows it holding the goal's move while it rea
 
 Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 
+## A thread per goal
+
+Comms is moving to one stream per project, a thread per goal in it: the captain picked that layout (B of three mockups, 25 October 2026) because one project interleaves several goals' conversations, and a thread keeps each one readable while what needs them stays pinned. A goal's thread (`thread.ts`, served at `/thread/:id` by its lead's id) is its conversation in order: what the captain said to the lead, what the lead said as each turn ended, and, as quieter lines, what Ops, QA and the chief of staff told the lead, its decisions made, its pull requests merged, and where the chief of staff sent each turn.
+
+- **Nothing new is kept:** it's read from the lead's log, transcript and the ledger as it's asked for (`thread.test.ts`).
+- **The captain's words come from the lead's log, not the transcript:** there, Ops' news waiting for the lead is joined to the captain's next message, so their words would be lost under it; the log keeps each message whole, with who sent it.
+
 ## Raising a pull request's lane
 
 A goal's lead puts each of their pull requests in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges) with the recap they put on it: Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):

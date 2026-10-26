@@ -14,7 +14,7 @@ import { ClaudeJudge } from './claudeJudge';
 import { CREW } from './crew';
 import { DemoJudge } from './demoJudge';
 import { STANDING_ORDERS } from './judge';
-import { inboxRoutes } from './routes';
+import { inboxRoutes, threadRoute } from './routes';
 import { JevRouter } from './jevRouter';
 import { AUTO_SEND_EVERY, autoSendFor, CHIEF_OF_STAFF, freshState, jevFor } from './shared';
 
@@ -59,7 +59,7 @@ const chiefOfStaff: FocusPlugin = {
       mergeHeld: (pr) => chief.mergeHeld(pr),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
-      routes: inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl),
+      routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), threadRoute(host)],
     };
   },
 };

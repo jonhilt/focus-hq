@@ -1,10 +1,11 @@
-import type { PluginRoute, PluginState } from '../../plugin-api/server';
+import type { PluginHost, PluginRoute, PluginState } from '../../plugin-api/server';
 import { resumeHow } from '../../plugin-api/server';
 import { itemWithLinks } from './botHook';
 import type { Inbox } from './captainsInbox';
 import { decideOf } from './inbox';
 import { landedAnswerOf } from './landed';
 import type { CosState } from './shared';
+import { goalThread } from './thread';
 
 // The chief of staff's routes (docs/ledger.md#the-captains-inbox-api): the captain's inbox under
 // /api/plugins/chief-of-staff, the same for a bot speaking for the captain at /api/bot/inbox (its public contract, so
@@ -61,4 +62,17 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
       },
     },
   ];
+}
+
+/** A goal's thread (README.md#a-thread-per-goal), by its lead's id: its messages from their log, their words from their transcript, the rest from the ledger. */
+export function threadRoute(host: Pick<PluginHost, 'agent' | 'transcript' | 'allLines' | 'ledger'>): PluginRoute {
+  return {
+    method: 'get', path: '/thread/:id',
+    handle: async ({ params }) => {
+      const lead = host.agent(params.id ?? '');
+      if (lead?.task !== 'lead') throw new Error('That goal isn’t aboard');
+      const [jsonl, lines] = await Promise.all([lead.sessionId ? host.transcript(lead.sessionId) : undefined, host.allLines(lead.id)]);
+      return { entries: goalThread(lead, { ledger: host.ledger(), lines, jsonl: jsonl ?? '' }) };
+    },
+  };
 }
