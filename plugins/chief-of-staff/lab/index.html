@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Stream lab: the chief of staff's stream, twenty-eight ways</title>
+<style>
+/* The ship's colours (client/src/styles.css) */
+:root {
+  --lcars-orange: #ff9966; --lcars-lilac: #cc99cc; --lcars-periwinkle: #9999ff; --lcars-peach: #ffcc99;
+  --lcars-red: #cc6666; --lcars-gold: #ff9900; --lcars-sky: #99ccff; --lcars-green: #99cc66;
+  --ink: #000; --text: #f1eaff; --muted: #a49db4; --surface: #110e1c; --surface-2: #1b1630; --line: #3a3352; --radius: 14px;
+  --ui: 'Antonio', 'Arial Narrow', 'Roboto Condensed', sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, Menlo, Consolas, monospace;
+  --read: system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: #07060c; color: var(--text); font: 14px/1.4 var(--read); }
+button { font: inherit; color: inherit; }
+
+/* ---------- the lab's own chrome ---------- */
+.lab { display: grid; grid-template-columns: 300px 1fr; height: 100vh; }
+.lab-side { overflow-y: auto; border-right: 1px solid var(--line); padding: 14px; background: #0c0a14; }
+.lab-side h1 { font: 600 22px/1 var(--ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--lcars-orange); margin: 0 0 4px; }
+.lab-side p { color: var(--muted); margin: 0 0 12px; font-size: 13px; }
+.vgroup { margin-bottom: 14px; }
+.vgroup-h { font: 600 12px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lcars-lilac); margin-bottom: 6px; }
+.vchip { display: grid; grid-template-columns: 26px 1fr; gap: 0 6px; width: 100%; text-align: left; background: var(--surface-2); border: 1px solid transparent; border-radius: 8px; padding: 6px 8px; margin-bottom: 4px; cursor: pointer; }
+.vchip b { grid-row: 1 / 3; color: var(--lcars-gold); font: 600 15px/1.2 var(--ui); }
+.vchip span { font-weight: 600; }
+.vchip small { color: var(--muted); font-size: 12px; }
+.vchip:hover { border-color: var(--line); }
+.vchip.on { border-color: var(--lcars-gold); background: color-mix(in srgb, var(--surface-2) 80%, var(--lcars-gold) 12%); }
+.lab-main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.lab-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; padding: 10px 14px; border-bottom: 1px solid var(--line); background: #0c0a14; }
+.slot { display: flex; flex-direction: column; gap: 2px; font-size: 11px; color: var(--muted); }
+.slot span { font: 600 11px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; }
+.slot.changed span { color: var(--lcars-gold); }
+.slot select { max-width: 190px; background: var(--surface-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 4px; }
+.slot.changed select { border-color: var(--lcars-gold); }
+.lab-btn { background: var(--surface-2); border: 1px solid var(--line); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+.lab-btn.on { border-color: var(--lcars-sky); color: var(--lcars-sky); }
+.lab-row2 { display: flex; gap: 8px; align-items: center; padding: 6px 14px; color: var(--muted); font-size: 12px; border-bottom: 1px solid var(--line); }
+#combo { flex: 1; color: var(--lcars-peach); }
+#widths { display: flex; gap: 4px; }
+.lab-stage-wrap { flex: 1; overflow: auto; padding: 18px; display: flex; min-height: 0; }
+.lab-stage-wrap > .panel { margin: 0 auto; }
+/* the Comms panel as the ship frames it */
+.panel { border: 12px solid var(--lcars-orange); border-radius: 28px 28px 28px 28px; border-right-width: 4px; background: #000; padding: 16px 18px; height: min(780px, calc(100vh - 140px)); display: flex; flex-direction: column; flex: none; }
+.panel-title { align-self: flex-end; font: 600 26px/1 var(--ui); letter-spacing: 0.06em; text-transform: uppercase; color: var(--lcars-orange); margin: -8px 0 8px; }
+#stage { flex: 1; min-height: 0; transition: width 0.2s; }
+
+/* ---------- the baseline: plugins/chief-of-staff/chief-of-staff.css, .cos-st-* as .st-* ---------- */
+.st-root { height: 100%; }
+.st-frame { display: grid; grid-template-columns: var(--left-w, minmax(220px, 300px)) 1fr; grid-template-rows: auto 1fr; gap: 14px 22px; height: 100%; min-height: 0; }
+.st-frame.has-side { grid-template-columns: var(--left-w, minmax(220px, 300px)) 1fr var(--side-w, 320px); }
+.st-split { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) var(--side-w, 320px); gap: 0 22px; min-height: 0; height: 100%; }
+.st-tabs { grid-column: 1 / -1; display: flex; gap: 6px; flex-wrap: wrap; }
+.st-tab { --tone: var(--lcars-orange); font: 600 15px/1 var(--ui); letter-spacing: 0.04em; background: var(--surface-2); border: 2px solid transparent; border-radius: 999px; padding: 6px 12px; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.st-tab.on { border-color: var(--tone); color: var(--tone); }
+.st-tab b { background: var(--tone); color: var(--ink); border-radius: 999px; padding: 1px 6px; font-size: 13px; }
+.st-tab.inbox { margin-left: auto; }
+.st-root h3 { margin: 0 0 10px; font: 600 13px/1 var(--ui); text-transform: uppercase; letter-spacing: 0.14em; color: var(--lcars-lilac); }
+.st-left, .st-right, .st-side { min-height: 0; overflow-y: auto; }
+.st-left { display: flex; flex-direction: column; gap: 18px; padding-right: 6px; }
+.st-goals { display: flex; flex-direction: column; gap: 6px; }
+.st-goal { display: flex; flex-direction: column; gap: 2px; text-align: left; font: 15px/1.4 var(--read); color: var(--text); background: var(--surface-2); border: 0; border-left: 4px solid transparent; border-radius: 0 10px 10px 0; padding: 10px 12px; cursor: pointer; }
+.st-goal small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-goal.needs { border-left-color: var(--lcars-gold); }
+.st-goal.needs small { color: var(--lcars-gold); }
+.st-goal.new small { color: var(--lcars-sky); }
+.st-goal.sel { background: color-mix(in srgb, var(--surface-2) 70%, var(--lcars-sky) 12%); }
+.st-goal-title { font-weight: 600; }
+.st-shelf-item { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font: 15px/1.4 var(--read); }
+.st-shelf-item small { color: var(--muted); }
+.st-right { display: flex; flex-direction: column; gap: 12px; overflow: hidden; min-height: 0; font: 16px/1.55 var(--read); }
+.st-head { border-bottom: 1px solid var(--line); padding-bottom: 10px; flex: none; }
+.st-title { font-size: 20px; font-weight: 600; }
+.st-head small { color: var(--muted); font-size: 13px; }
+.st-head a { color: var(--lcars-sky); }
+/* what needs the user, or the box to talk, at the foot: never more than its share */
+.st-right > :not(.st-head, .st-thread, .agreed, .pinned) { flex: none; max-height: 42%; overflow-y: auto; }
+.st-thread { position: relative; flex: 1; display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 120px; padding-right: 10px; }
+.st-lead, .st-you { max-width: 72ch; }
+.st-lead small, .st-you small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+.st-lead { padding: 10px 0; }
+.st-you { align-self: flex-end; max-width: 60ch; background: #24304d; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 0; }
+.st-you small { color: #9ab3e0; }
+.st-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.st-md p { margin: 0 0 0.7em; }
+.st-md ul, .st-md ol { margin: 0 0 0.7em; padding-left: 1.3em; }
+.st-md code, .st-card code { font: 0.9em var(--mono); background: #ffffff14; padding: 0 4px; border-radius: 4px; }
+.st-line { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 13px; line-height: 1.45; max-width: 72ch; padding: 3px 0; }
+.st-line small { flex: none; font-size: 12px; }
+.st-line.decided { color: #9cc4ff; border-left: 3px solid var(--lcars-sky); padding-left: 10px; }
+.st-line.merged { color: var(--lcars-green); }
+.st-line.cos { color: var(--lcars-peach); }
+.st-line.flagged { color: var(--lcars-red); }
+.st-line.sent-back { color: var(--lcars-lilac); }
+.st-fold summary { list-style: none; cursor: pointer; }
+.st-fold summary::-webkit-details-marker { display: none; }
+.st-fold summary .st-line span::after { content: ' ›'; }
+.st-fold[open] summary .st-line span::after { content: ' ⌄'; }
+.st-more { font-size: 14px; border-left: 2px solid var(--lcars-lilac); padding: 4px 12px; margin: 2px 0 8px; max-width: 72ch; }
+.st-new { display: flex; align-items: center; gap: 12px; color: var(--lcars-red); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin: 14px 0 4px; }
+.st-new::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--lcars-red) 55%, transparent); }
+.st-needs { color: var(--lcars-gold); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 6px; }
+.st-talk { display: flex; gap: 10px; align-items: flex-end; flex: none; }
+.st-talk textarea { flex: 1; font: 15px/1.5 var(--read); color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; resize: vertical; }
+.st-talk textarea:focus { outline: none; border-color: var(--lcars-sky); }
+.st-send { font: 600 14px/1 var(--read); background: var(--lcars-orange); color: var(--ink); border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+/* the card Comms shows (needCard.ts) */
+.st-card { --tone: var(--lcars-orange); display: flex; flex-direction: column; gap: 10px; background: var(--surface-2); border-left: 14px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 14px 18px; }
+.st-card-goal { color: var(--muted); font-size: 13px; }
+.st-card-what { font-size: 19px; font-weight: 600; line-height: 1.25; }
+.st-card-context { line-height: 1.45; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 10px 14px; font-size: 15px; }
+.st-card-context p { margin: 0; }
+.st-card-answers { display: flex; flex-wrap: wrap; gap: 8px; }
+.st-answer { background: var(--tone); color: var(--ink); border: 0; border-radius: 999px; padding: 7px 14px; font-weight: 600; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.st-answer.proposed { box-shadow: 0 0 0 2px #000, 0 0 0 4px var(--tone); }
+.st-answer.ghost { background: transparent; color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.st-answer kbd { font: 600 12px/1 var(--mono); background: #0003; border-radius: 4px; padding: 2px 4px; }
+.muted { color: var(--muted); }
+/* folding the side panels (lab.js foldable) */
+.foldable { position: relative; }
+.fold-btn { position: absolute; top: 0; z-index: 3; width: 24px; height: 24px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; line-height: 1; padding: 0; }
+.fold-btn.left { right: 2px; }
+.fold-btn.right { right: 0; }
+.st-left.foldable > h3:first-of-type, .foldable > .ws > .ws-h { padding-right: 30px; }
+.foldable.folded { overflow: hidden; padding: 0 !important; border: 0 !important; }
+.foldable.folded > :not(.fold-btn, .fold-strip) { display: none !important; }
+.foldable.folded .fold-btn { position: static; margin: 0 auto 8px; display: block; }
+.fold-strip { display: block; width: 32px; margin: 0 auto; height: calc(100% - 40px); background: var(--surface-2); border: 0; border-radius: 8px; cursor: pointer; color: var(--muted); }
+.fold-strip span { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 13px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
+.fold-strip:hover { color: var(--text); }
+.st-card-note { font-size: 14px; color: var(--muted); border-left: 3px solid var(--tone); padding-left: 10px; }
+.st-write { display: block; margin-top: 10px; flex: none; background: var(--surface-2); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; cursor: pointer; color: var(--lcars-sky); }
+</style>
+<script src="fixture.js"></script>
+<script src="fixture-workspace.js"></script>
+<script src="lab.js"></script>
+<script src="variations.js"></script>
+<script src="voices.js"></script>
+<script src="workspace.js"></script>
+<script src="talk.js"></script>
+</head>
+<body>
+<div class="lab">
+  <aside class="lab-side">
+    <h1>Stream lab</h1>
+    <p>Twenty-eight variations of the chief of staff's stream, each in one slot. Voice (21–27) tells the thread through the chief of staff, with the lead's words a glance away. Pick one per slot to combine them; press one again for the baseline. <b>← →</b> tours them one at a time. Answers and messages are played back on sample data.</p>
+    <div id="variations"></div>
+  </aside>
+  <main class="lab-main">
+    <div class="lab-bar" id="slots"></div>
+    <div class="lab-row2">
+      <button class="lab-btn" id="prev">← Tour</button><button class="lab-btn" id="next">Tour →</button>
+      <button class="lab-btn" id="shuffle">Shuffle</button>
+      <button class="lab-btn" id="picked" title="3 + 6 + 8 + 13 + 18 + 26 + 28">Your pick</button>
+      <button class="lab-btn" id="baseline">Baseline</button>
+      <button class="lab-btn" id="reset" title="Put the sample data back as it was">Reset data</button>
+      <span id="combo"></span>
+      <span id="widths"><button class="lab-btn" data-w="1240">Wide</button><button class="lab-btn" data-w="980">Laptop</button><button class="lab-btn" data-w="720">Narrow</button><button class="lab-btn" data-w="400">Phone</button></span>
+    </div>
+    <div class="lab-stage-wrap">
+      <div class="panel"><div class="panel-title">Comms</div><div id="stage"></div></div>
+    </div>
+  </main>
+</div>
+</body>
+</html>
