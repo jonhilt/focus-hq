@@ -22,3 +22,13 @@
 .terminal .md th { background: rgba(110, 118, 129, 0.15); }
 .terminal .md hr { border: 0; border-top: 1px solid #30363d; margin: 0.6em 0; }
 .terminal .md input[type='checkbox'] { margin: 0 0.5ch 0 0; vertical-align: middle; }
+/* What a session did between the things it said, folded under one line; open, its lines read as they always have. */
+.terminal .fold { margin: 2px 0 6px; }
+.terminal .fold > summary { cursor: pointer; list-style: none; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.6 var(--mono); color: #8b949e; background: rgba(110, 118, 129, 0.12); border-radius: 999px; padding: 1px 10px; }
+.terminal .fold > summary::-webkit-details-marker { display: none; }
+.terminal .fold > summary::before { content: '▸ '; }
+.terminal .fold[open] > summary::before { content: '▾ '; }
+.terminal .fold > summary:hover { color: #e6edf3; }
+.terminal .fold > summary.failed { color: #ff7b72; }
+.terminal .fold[open] { border-left: 2px solid #30363d; padding-left: 8px; }
+.terminal .fold[open] > summary { margin-bottom: 4px; }

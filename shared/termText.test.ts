@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { lastReply, plainMarkdown, plainTermLine, replyPart } from './termText';
+import { foldSummary, lastReply, plainMarkdown, plainTermLine, replyPart, saysLine } from './termText';
 
 describe('replyPart', () => {
   it('starts a reply at the marker and carries it on through indented text lines', () => {
@@ -57,5 +57,39 @@ describe('lastReply', () => {
 
   it('is empty before Claude has said anything', () => {
     expect(lastReply([{ t: 0, kind: 'manager', text: '▶ Captain: hello' }])).toBe('');
+  });
+});
+
+describe('saysLine', () => {
+  it("keeps Claude's replies and the messages it was sent out of the fold, and folds the rest", () => {
+    const kinds = ['text', 'manager', 'system', 'thinking', 'tool', 'output', 'error', 'success'] as const;
+    expect(kinds.filter((kind) => saysLine({ t: 0, kind, text: '' }))).toEqual(['text', 'manager']);
+  });
+});
+
+describe('foldSummary', () => {
+  it('counts the tool calls and names the latest step', () => {
+    expect(foldSummary([
+      { t: 0, kind: 'tool', text: '⏺ Read(CLAUDE.md)' },
+      { t: 1, kind: 'output', text: '  ⎿  Read 78 lines' },
+      { t: 2, kind: 'thinking', text: '✻ Thinking…' },
+      { t: 3, kind: 'tool', text: '⏺ Write(brief.md)' },
+      { t: 4, kind: 'success', text: '  + # Brief' },
+    ])).toBe('2 steps · Write(brief.md)');
+  });
+
+  it('says how many failed', () => {
+    expect(foldSummary([
+      { t: 0, kind: 'tool', text: '⏺ Bash(pnpm build)' },
+      { t: 1, kind: 'error', text: '  ⎿  Declined' },
+    ])).toBe('1 step · 1 failed · Bash(pnpm build)');
+  });
+
+  it('counts lines when there is no tool call among them, and clips a long step', () => {
+    expect(foldSummary([{ t: 0, kind: 'system', text: `✻ ${'x'.repeat(120)}` }])).toBe(`1 line · ${'x'.repeat(89)}…`);
+  });
+
+  it("reads as the latest line when there's no step among them", () => {
+    expect(foldSummary([{ t: 0, kind: 'output', text: '  ⎿  Your question is on your screen' }, { t: 1, kind: 'output', text: '' }])).toBe('2 lines · Your question is on your screen');
   });
 });

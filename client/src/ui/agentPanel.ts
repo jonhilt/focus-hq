@@ -55,6 +55,9 @@ function views(a: Agent, frame: BrowserFrame | undefined): NavItem<View>[] {
   return items.filter((i) => i !== false);
 }
 
+/** Where Focus keeps whether you hid the pane beside the terminal: hidden stays hidden, panel to panel, until you show it. */
+const PANE_HIDDEN = 'focus.agentPaneHidden';
+
 /** Full-size view of an agent's laptop: terminal on the left, their browser (or a lead's goal, tasks, crew) on the right. */
 let shown: string | null = null;
 /** Whether this agent's panel is showing (so Focus doesn't toast what you can already see). */
@@ -81,10 +84,18 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
 
   // the view you picked (or opened it on) stays put; until you pick one, it's the first with something in it
   let picked: View | undefined = view;
+  // hiding the pane leaves the session alone, at a width it still reads at; picking a view (or opening on one) shows it
+  let paneHidden = !view && localStorage.getItem(PANE_HIDDEN) === '1';
+  const hidePane = (hidden: boolean) => {
+    paneHidden = hidden;
+    localStorage.setItem(PANE_HIDDEN, hidden ? '1' : '0');
+    renderViews();
+  };
   const nav = new SideNav<View>((view) => {
     picked = view;
-    renderViews();
+    hidePane(false);
   });
+  const paneToggle = h('button', { class: 'btn small', onclick: () => hidePane(!paneHidden) });
 
   const input = h('input', { type: 'text', placeholder: `Message ${agent.name}… (they'll read it at their next step)`, autofocus: true });
   const send = h('button', { class: 'btn primary' }, 'Send');
@@ -208,6 +219,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
           ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, 'Preview')
           : null,
         movable(a) ? moveToCloud : null,
+        paneToggle,
       ),
     );
     fill(closing, a.lead?.closing ? h('p', { class: 'goal-closing' }, `${a.name} thinks this goal is ready to wrap up: ${a.lead.closing.reason}. Close it, or tell them what's next.`) : null);
@@ -250,9 +262,11 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     const a = state.agents.get(id);
     if (!a) return;
     const items = views(a, state.browser.get(id));
-    const view = shownView(items, picked);
+    const view = paneHidden ? undefined : shownView(items, picked);
     nav.show(items, view);
     grid.classList.toggle('single', !view);
+    paneToggle.textContent = paneHidden ? 'Show pane' : 'Hide pane';
+    paneToggle.title = paneHidden ? 'Show the pane beside the session again' : 'Just the session: hide the pane beside it';
     browser.style.display = view === 'browser' ? '' : 'none';
     replay.el.style.display = view === 'run' ? '' : 'none';
     info.style.display = view && view !== 'browser' && view !== 'run' ? '' : 'none';

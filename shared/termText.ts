@@ -52,3 +52,23 @@ export function lastReply(lines: readonly TermLine[]): string {
   }
   return said.join('\n').trim();
 }
+
+/** What a session said, which a terminal always shows: Claude's replies and the messages it was sent. */
+export const saysLine = (line: TermLine): boolean => line.kind === 'text' || line.kind === 'manager';
+
+/** A step's line: a tool call or a system line, as the server starts them. */
+const STEP = /^[⏺✻] /;
+
+/**
+ * The one line a folded run of what a session did reads as, between what it said: how many steps (or lines, with no
+ * tool call among them), how many failed, and the latest step, so a working session still shows what it's on.
+ */
+export function foldSummary(lines: readonly TermLine[]): string {
+  const steps = lines.filter((l) => l.kind === 'tool' && l.text.startsWith(REPLY)).length;
+  const failed = lines.filter((l) => l.kind === 'error').length;
+  // the latest step, or with none among them the latest line, without its marker
+  const latest = (lines.findLast((l) => STEP.test(l.text)) ?? lines.findLast((l) => l.text.trim()))?.text.replace(/^\s*[⏺✻⎿]?\s*/, '').trim() ?? '';
+  const count = steps ? `${steps} ${steps === 1 ? 'step' : 'steps'}` : `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`;
+  const clipped = latest.length > 90 ? `${latest.slice(0, 89)}…` : latest;
+  return [count, failed ? `${failed} failed` : '', clipped].filter(Boolean).join(' · ');
+}

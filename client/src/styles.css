@@ -700,7 +700,8 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 /* an agent's panel: readouts, then the terminal on the left and, on the right, whichever view the sidebar has picked */
 .agent-body { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .agent-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
-.agent-grid.single { grid-template-columns: minmax(0, 1fr); }
+/* alone, the terminal keeps to a width its lines still read at, in the middle */
+.agent-grid.single { grid-template-columns: minmax(0, 820px); justify-content: center; }
 .pane { border: 2px solid var(--line); border-radius: 12px; background: var(--bg); min-height: 0; overflow: auto; }
 .pane:not(.browser-view) { padding: 12px 14px; }
 .pane > .goal-note { margin-top: 0; }
