@@ -1,15 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { doing, entryView, footOf, goalLine, headLine, latestNews, newSince, pickGoal, seenOf, threadKey, threadRows } from './streamList';
+import { age, agreed, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
-
-describe('a goal’s line in the stream', () => {
-  it('leads with what needs the captain, then what’s new since they looked, then what the lead is doing', () => {
-    expect(goalLine([{ what: 'Plan to review' }, { what: 'Merge #3' }], 10, 20, 'working')).toEqual({ tone: 'needs', text: 'Needs you · Plan to review (+1)' });
-    expect(goalLine([], 30, 20, 'working')).toEqual({ tone: 'new', text: 'New since you looked' });
-    expect(goalLine([], 10, 20, 'working')).toEqual({ tone: 'quiet', text: 'working' });
-    expect(goalLine([], 10, undefined, 'done')).toEqual({ tone: 'quiet', text: 'done' });
-  });
-});
 
 describe('new since the captain last looked', () => {
   const thread: ThreadEntry[] = [
@@ -77,11 +68,6 @@ describe('a thread as it’s drawn', () => {
     expect(threadRows(thread, 2).map((r) => ('entry' in r ? r.entry.at : 'new'))).toEqual([1, 2, 'new', 3]);
     expect(threadRows(thread, 3).map((r) => ('entry' in r ? r.entry.at : 'new'))).toEqual([1, 2, 3]);
   });
-
-  it('says who leads it, what they’re doing and what done looks like', () => {
-    expect(headLine('Lt. Vale', 'done', 'It ships.')).toBe('Lt. Vale · between turns · Done looks like: It ships.');
-    expect(headLine('Lt. Vale', 'working')).toBe('Lt. Vale · working');
-  });
 });
 
 describe('the foot of a goal’s thread', () => {
@@ -99,5 +85,55 @@ describe('when something last came into a thread', () => {
     expect(latestNews([{ kind: 'lead', at: 3, text: 'x' }, { kind: 'merged', at: 5, repo: 'r', number: 1 }, { kind: 'you', at: 9, text: 'y' }])).toBe(5);
     expect(latestNews([{ kind: 'you', at: 9, text: 'y' }])).toBeUndefined();
     expect(latestNews([])).toBeUndefined();
+  });
+});
+
+describe('the goals on the left, every project in one list', () => {
+  const projects = [{ id: 'p1', name: 'Focus' }, { id: 'p2', name: 'Shop' }, { id: 'p3', name: 'Empty' }];
+  const goals = [{ id: 'a', projectId: 'p1' }, { id: 'b', projectId: 'p2' }, { id: 'c', projectId: 'p1' }, { id: 'd', projectId: 'p2' }];
+  it('puts what needs the captain first, from any project, then each project’s others under its name, and no empty project', () => {
+    expect(goalSections(goals, projects, (id) => id === 'd' || id === 'c').map((s) => [s.key, s.goals.map((g) => g.id)])).toEqual([['needs', ['c', 'd']], ['p1', ['a']], ['p2', ['b']]]);
+    expect(goalSections(goals, projects, () => false).map((s) => s.name)).toEqual(['Focus', 'Shop']);
+  });
+});
+
+describe('a goal’s compact row', () => {
+  const now = 10 * 3_600_000;
+  it('dots what needs the captain, then what’s new, then a lead stopped or at work, else quiet', () => {
+    expect(goalRow(2, now - 60_000, now, 'error', now)).toEqual({ dot: 'needs', right: '2 for you' });
+    expect(goalRow(0, now - 60_000, now - 120_000, 'working', now)).toEqual({ dot: 'new', right: '1m' });
+    expect(goalRow(0, now - 3 * 3_600_000, now, 'error', now)).toEqual({ dot: 'error', right: '3h' });
+    expect(goalRow(0, undefined, undefined, 'testing', now)).toEqual({ dot: 'working', right: '' });
+    expect(goalRow(0, now - 50 * 3_600_000, undefined, 'done', now)).toEqual({ dot: 'quiet', right: '2d' });
+  });
+  it('says how long ago in a few characters', () => {
+    expect([age(0), age(-5), age(59 * 60_000), age(90 * 60_000), age(36 * 3_600_000)]).toEqual(['now', 'now', '59m', '2h', '2d']);
+  });
+});
+
+describe('quiet lines bundled', () => {
+  const q = (at: number): ThreadEntry => ({ kind: 'ops', at, from: 'Ops', text: 'Following it.' });
+  const said = (at: number): ThreadEntry => ({ kind: 'lead', at, text: 'Done.' });
+  it('bundles two or more quiet lines in a row, leaves one alone, and keeps the new-since line where it was', () => {
+    const rows = [{ entry: q(1) }, { entry: q(2) }, { entry: said(3) }, { entry: q(4) }, { newSince: true as const }, { entry: q(5) }, { entry: q(6) }];
+    expect(bundleRows(rows)).toEqual([{ bundle: [q(1), q(2)] }, { entry: said(3) }, { entry: q(4) }, { newSince: true }, { bundle: [q(5), q(6)] }]);
+  });
+  it('says what a bundle amounts to: merges, QA passes, decisions, send-backs and flags', () => {
+    expect(bundleSays([
+      { kind: 'merged', at: 1, repo: 'a/b', number: 689 },
+      { kind: 'ops', at: 2, from: 'QA officer Lt. Nakamura', text: 'QA passed a/b#689: fine.' },
+      { kind: 'ops', at: 3, from: 'QA officer Lt. Nakamura', text: 'QA is reviewing a/b#690.' },
+      { kind: 'decided', at: 4, question: 'Font?', chosen: 'Sans' },
+      { kind: 'cos', at: 5, route: 4, why: 'No check.' },
+      { kind: 'cos', at: 6, route: 3, why: 'Stuck.' },
+    ])).toEqual(['merged #689', 'QA passed', 'decided: Sans', 'sent back once', 'flagged to you']);
+    expect(bundleSays([{ kind: 'ops', at: 1, from: 'Ops', text: 'Following it.' }])).toEqual([]);
+  });
+});
+
+describe('what’s agreed, for a goal’s header', () => {
+  it('counts its pull requests merged, leaves out the closed, and lists what was decided', () => {
+    expect(agreed([{ outcome: 'merged' }, {}, { outcome: 'closed' }], [{ kind: 'decided', at: 1, question: 'Layout?', chosen: 'B' }, { kind: 'lead', at: 2, text: 'ok' }]))
+      .toEqual({ merged: 1, prs: 2, decided: [{ question: 'Layout?', chosen: 'B' }] });
   });
 });

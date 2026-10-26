@@ -7,18 +7,19 @@ import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import { needCard } from './needCard';
 import { CHIEF_OF_STAFF } from './shared';
-import { doing, entryView, footOf, goalLine, headLine, latestNews, pickGoal, seenOf, threadKey, threadRows } from './streamList';
+import { agreed, type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, pickGoal, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 
-// The stream (README.md#a-thread-per-goal): Comms as one stream per project, a thread per goal. Along the top the
-// projects, each with what needs the captain there; on the left the project's goals, each with what needs them, what's
-// new since they last looked, or what its lead is doing, and the pull requests and closes waiting on them; on the right
-// the goal picked, as a thread: the conversation in order, the rest as quiet lines, a line where what's new since they
-// last looked begins, and at the foot what needs them there (the card Comms would show) or a box to talk to the lead.
+// The stream (README.md#a-thread-per-goal): Comms as a thread per goal. On the left every shown project's goals in one
+// list, what needs the captain first and then each project's others under its name, a compact row each (a dot for its
+// state, how long since anything came in), and what waits on them outside any goal's conversation; the list folds away
+// to a strip. On the right the goal picked: what's agreed on it up top (done looks like, its pull requests, its
+// decisions), then its thread (the conversation in order, quiet lines between messages bundled, a line where what's new
+// since they last looked begins, and what needs them there asked at its end), and at the foot quick replies and a box
+// to talk to the lead.
 
-/** The goal picked, and the project, when the stream last closed: it opens on them again. */
+/** The goal picked when the stream last closed: it opens on it again. */
 let keptGoal: string | null = null;
-let keptProject: string | null = null;
 
 /** When the captain last looked at each goal's thread (its latest entry's time), kept in this browser. */
 const SEEN = 'cos-stream-seen';
@@ -32,8 +33,14 @@ const seenAll = (): Record<string, number> => {
 const seenAt = (goal: string): number | undefined => seenAll()[goal];
 const markSeen = (goal: string, at: number) => localStorage.setItem(SEEN, JSON.stringify({ ...seenAll(), [goal]: at }));
 
-/** When something last came into each goal's thread from anyone but the captain, as last fetched: the goals' lines say what's new by it. */
+/** Whether the goals list is folded to a strip, kept in this browser. */
+const FOLDED = 'cos-stream-goals-folded';
+
+/** When something last came into each goal's thread from anyone but the captain, as last fetched: the goals' rows say what's new by it. */
 const latestOf = new Map<string, number>();
+
+/** What the quick replies say to the lead, a press each. */
+const QUICK = ['Carry on', 'Show me first', 'Hold off for now', 'Why?'];
 
 const time = (at: number) => new Date(at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
@@ -51,15 +58,41 @@ function entryEl(e: ThreadEntry, lead: string): HTMLElement {
   return h('details', { class: `cos-st-fold ${v.tone}` }, h('summary', null, line), h('div', { class: 'cos-st-more' }, v.more));
 }
 
-/** A thread's title, and under it who leads it, what they're doing, what done looks like, and a way into their room. */
-function headEls(lead: Agent, openRoom: () => void): HTMLElement[] {
-  const room = h('a', { href: '#', onclick: (e: Event) => { e.preventDefault(); openRoom(); } }, 'Open their room');
-  return [h('div', { class: 'cos-st-title' }, lead.lead?.title ?? lead.name), h('small', null, `${headLine(lead.name, lead.status, lead.lead?.note?.done)} · `, room)];
+/** Two or more quiet lines in a row, as one: how many, and what they amount to (`bundleSays`); opened, the lines. */
+function bundleEl(entries: ThreadEntry[], lead: string): HTMLElement {
+  const says = bundleSays(entries);
+  return h('details', { class: 'cos-st-bundle' },
+    h('summary', null, h('b', null, `${entries.length} updates`), says.length ? h('span', null, says.join(' · ')) : null, '›'),
+    h('div', { class: 'cos-st-bundle-lines' }, ...entries.map((e) => entryEl(e, lead))));
 }
 
-/** A thread's rows, with the line where what's new since the captain last looked begins (`threadRows`). */
+/** A thread's title, and under it what's agreed: done looks like, its pull requests merged, its decisions, and a way into the lead's room. */
+function headEls(lead: Agent, entries: readonly ThreadEntry[], openRoom: () => void): HTMLElement[] {
+  const work = lead.lead;
+  const { merged, prs, decided } = agreed([...(work?.landed ?? []), ...(work?.prs ?? [])], entries);
+  const live = lead.status === 'error' ? 'error' : ['working', 'testing', 'pushing', 'setting-up'].includes(lead.status) ? 'working' : 'quiet';
+  const room = h('a', { href: '#', class: 'cos-st-chip', onclick: (e: Event) => { e.preventDefault(); openRoom(); } }, 'Their room ›');
+  const done = work?.note?.done;
+  return [
+    h('div', { class: 'cos-st-head-top' },
+      h('div', { class: 'cos-st-title' }, work?.title ?? lead.name),
+      h('span', { class: 'cos-st-who' }, h('i', { class: `cos-st-dot ${live}` }), `${lead.name} · ${doing(lead.status)}`)),
+    ...(done ? [h('div', { class: 'cos-st-done' }, h('b', null, 'Done looks like'), done)] : []),
+    h('div', { class: 'cos-st-chips' },
+      prs ? h('span', { class: 'cos-st-chip' }, `${merged} of ${prs} pull request${prs === 1 ? '' : 's'} merged`) : null,
+      ...decided.map((d) => h('span', { class: 'cos-st-chip decided', title: d.question }, `✓ ${d.chosen}`)),
+      room),
+  ];
+}
+
+/** A thread's rows: its entries with quiet lines bundled, and the line where what's new since the captain last looked begins. */
 function threadEls(entries: readonly ThreadEntry[], lead: Agent): HTMLElement[] {
-  const rows = threadRows(entries, seenAt(lead.id)).map((r) => ('entry' in r ? entryEl(r.entry, lead.name) : h('div', { class: 'cos-st-new' }, 'New since you last looked')));
+  const rowEl = (r: BundledRow): HTMLElement => {
+    if ('bundle' in r) return bundleEl(r.bundle, lead.name);
+    if ('entry' in r) return entryEl(r.entry, lead.name);
+    return h('div', { class: 'cos-st-new' }, 'New since you last looked');
+  };
+  const rows = bundleRows(threadRows(entries, seenAt(lead.id))).map(rowEl);
   return rows.length ? rows : [h('p', { class: 'muted' }, 'Nothing said here yet.')];
 }
 
@@ -68,26 +101,25 @@ function seen(goal: string, latest: number | undefined): void {
   if (latest !== undefined) markSeen(goal, latest);
 }
 
+/** Every shown project's goals: the leads under way in each. */
+const allLeads = (): Agent[] => focus.shown.flatMap((p) => focus.leadsIn(p.id));
+
 /** Opens the stream on the goal picked last, or the first that needs the captain. */
 export function openStream(ui: CommsUi): void {
-  let project = keptProject && focus.shown.some((p) => p.id === keptProject) ? keptProject : (focus.shown[0]?.id ?? null);
   let goal: string | null = keptGoal;
   let open: InboxItem[] = [];
   let entries: ThreadEntry[] = [];
   let shownThread = '';
-  let shownFoot = '';
+  let shownAsk = '';
 
-  const tabs = h('div', { class: 'cos-comms-tabs' });
   const goals = h('div', { class: 'cos-st-goals' });
-  const shelf = h('div', { class: 'cos-st-shelf' });
+  const left = h('div', { class: 'cos-st-left' });
   const head = h('div', { class: 'cos-st-head' });
   const thread = h('div', { class: 'cos-st-thread' });
+  // what needs the captain on the goal, asked at the end of its thread
+  const ask = h('div', { class: 'cos-st-ask' });
   const foot = h('div', { class: 'cos-st-foot' });
-  const body = h('div', { class: 'cos-stream' },
-    tabs,
-    h('div', { class: 'cos-st-left' }, h('h3', null, 'Goals'), goals, shelf),
-    h('div', { class: 'cos-st-right' }, head, thread, foot),
-  );
+  const body = h('div', { class: 'cos-stream' }, left, h('div', { class: 'cos-st-right' }, head, thread, foot));
   const back = () => ui.panels.backTo('Comms', () => openStream(ui));
   const openAgent = (id: string) => {
     ui.openAgent(id);
@@ -96,88 +128,116 @@ export function openStream(ui: CommsUi): void {
 
   const flaggedFor = (leadId: string) => open.filter((i) => i.lane === 'needs-you' && i.agentId === leadId);
 
-  const renderTabs = () => {
-    const counts = new Map<string, number>();
-    for (const i of lanes(open, null).flagged) counts.set(i.projectId, (counts.get(i.projectId) ?? 0) + 1);
-    fill(tabs,
-      ...focus.shown.map((p) => h('button', { class: `cos-comms-tab${project === p.id ? ' on' : ''}`, style: `--tone:${p.color}`, onclick: () => { project = keptProject = p.id; goal = null; render(); } },
-        p.name, counts.get(p.id) ? h('b', null, String(counts.get(p.id))) : null)),
-      h('button', { class: 'cos-comms-tab goals', title: 'The inbox as it was: everything waiting on you, in one list', onclick: () => openComms(ui) }, 'Inbox ›'),
-    );
+  // the goals list, or the strip it folds to
+  const renderLeft = (leads: Agent[]) => {
+    const folded = localStorage.getItem(FOLDED) === '1';
+    body.classList.toggle('folded', folded);
+    const fold = (to: boolean) => () => {
+      localStorage.setItem(FOLDED, to ? '1' : '0');
+      render();
+    };
+    if (folded) {
+      const needing = leads.filter((l) => flaggedFor(l.id).length).length;
+      fill(left, h('button', { class: 'cos-st-strip', title: 'Show the goals', onclick: fold(false) }, h('span', null, `Goals${needing ? ` · ${needing} need you` : ''}`)));
+      return;
+    }
+    fill(left,
+      h('div', { class: 'cos-st-left-top' },
+        h('button', { class: 'cos-st-inbox', title: 'The inbox as it was: everything waiting on you, in one list', onclick: () => openComms(ui) }, 'Inbox ›'),
+        h('button', { class: 'cos-st-foldbtn', title: 'Fold the goals away', onclick: fold(true) }, '‹')),
+      goals);
+    renderGoals(leads);
   };
 
   const renderGoals = (leads: Agent[]) => {
-    fill(goals, ...(leads.length ? leads.map((l) => {
-      const line = goalLine(flaggedFor(l.id), latestOf.get(l.id), seenAt(l.id), doing(l.status));
-      return h('button', { class: `cos-st-goal ${line.tone}${l.id === goal ? ' sel' : ''}`, onclick: () => { goal = keptGoal = l.id; render(); } },
-        h('span', { class: 'cos-st-goal-title' }, l.lead?.title ?? l.name),
-        h('small', null, `${l.name.replace(/^Lt\. /, '')} · ${line.text}`));
-    }) : [h('p', { class: 'muted' }, 'No goals under way here.')]));
-    // what waits on the captain that isn't a goal's conversation: pull requests with nobody's lead on them
-    const loose = lanes(open, project).flagged.filter((i) => !i.agentId);
-    shelf.hidden = !loose.length;
-    fill(shelf, h('h3', null, `Ready for you · ${loose.length}`), ...loose.map((i) => h('div', { class: 'cos-st-shelf-item' }, h('span', null, i.what), h('small', null, i.who))));
+    const now = Date.now();
+    const sections = goalSections(leads, focus.shown, (id) => flaggedFor(id).length > 0);
+    // what waits on the captain that isn't a goal's conversation: pull requests with nobody's lead on them, by project
+    const loose = lanes(open, null).flagged.filter((i) => !i.agentId);
+    const row = (l: Agent) => {
+      const r = goalRow(flaggedFor(l.id).length, latestOf.get(l.id), seenAt(l.id), l.status, now);
+      return h('button', { class: `cos-st-row ${r.dot}${l.id === goal ? ' sel' : ''}`, title: `${l.lead?.title ?? l.name}\n${l.name} · ${doing(l.status)}`, onclick: () => { goal = keptGoal = l.id; render(); } },
+        h('i', { class: 'cos-st-dot' }),
+        h('span', { class: 'cos-st-row-title' }, l.lead?.title ?? l.name),
+        h('small', null, r.right));
+    };
+    const looseIn = (projectId: string) => loose.filter((i) => i.projectId === projectId).map((i) => h('div', { class: 'cos-st-loose' }, h('span', null, i.what), h('small', null, `Ready for you · ${i.who}`)));
+    const els = sections.flatMap((s) => {
+      const project = focus.project(s.key);
+      return [h('h3', { class: `cos-st-section${s.key === 'needs' ? ' needs' : ''}`, style: project ? `--tone:${project.color}` : '' }, s.name), ...s.goals.map(row), ...(project ? looseIn(project.id) : [])];
+    });
+    // a project with nothing under way may still have something ready for the captain
+    const listed = new Set(sections.map((s) => s.key));
+    for (const p of focus.shown) if (!listed.has(p.id) && looseIn(p.id).length) els.push(h('h3', { class: 'cos-st-section', style: `--tone:${p.color}` }, p.name), ...looseIn(p.id));
+    fill(goals, ...(els.length ? els : [h('p', { class: 'muted' }, 'No goals under way.')]));
   };
 
   const renderThread = (lead: Agent) => {
     const key = threadKey(lead.id, lead.status, entries);
     if (key === shownThread) return;
     shownThread = key;
-    fill(head, ...headEls(lead, () => openAgent(lead.id)));
-    fill(thread, ...threadEls(entries, lead));
-    (thread.querySelector('.cos-st-new') ?? thread.lastElementChild)?.scrollIntoView({ block: 'start' });
+    fill(head, ...headEls(lead, entries, () => openAgent(lead.id)));
+    fill(thread, ...threadEls(entries, lead), ask);
+    const to = thread.querySelector<HTMLElement>('.cos-st-new');
+    thread.scrollTop = to ? to.offsetTop - thread.offsetTop - 8 : thread.scrollHeight;
     seen(lead.id, entries.at(-1)?.at);
   };
 
-  // at the foot, what needs the captain on this goal (the card Comms shows), or a box to talk to its lead
-  const renderFoot = (lead: Agent) => {
+  // what needs the captain on this goal (the card Comms shows), asked at the end of its thread
+  const renderAsk = (lead: Agent) => {
     const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
     const { card, key } = footOf(lead.id, flaggedFor(lead.id), (id) => local.has(id));
-    if (key === shownFoot) return;
-    shownFoot = key;
+    if (key === shownAsk) return;
+    shownAsk = key;
     const a = card ? local.get(card) : undefined;
-    if (a) {
-      if (a.kind === 'turn') focus.markRead(a.agent);
-      fill(foot, h('div', { class: 'cos-st-needs' }, 'Needs you'), needCard(ui, a, openAgent));
-      return;
-    }
-    fill(foot, talkBox(lead));
+    if (!a) return fill(ask);
+    if (a.kind === 'turn') focus.markRead(a.agent);
+    fill(ask, h('div', { class: 'cos-st-needs' }, 'The chief of staff · needs you'), needCard(ui, a, openAgent));
   };
 
-  // a box to talk to the lead, their thread asked for again once it's sent
-  const talkBox = (lead: Agent) => {
-    const box = h('textarea', { rows: 3, placeholder: `Talk to ${lead.name}…` });
+  // at the foot, quick replies and a box to talk to the lead, their thread asked for again once it's sent
+  const renderFoot = (lead: Agent) => {
+    if (foot.dataset.lead === lead.id) return;
+    foot.dataset.lead = lead.id;
+    const say = (words: string, el: HTMLButtonElement) => void busy(el, () => messageAgent(lead.id, lead.name, words).then(() => refreshThread()), ui.error);
+    const box = h('textarea', { rows: 2, placeholder: `Talk to ${lead.name}…` });
     const send = h('button', { class: 'cos-st-send', onclick: () => {
       const words = box.value.trim();
       if (words) void busy(send, () => messageAgent(lead.id, lead.name, words).then(() => { box.value = ''; refreshThread(); }), ui.error);
     } }, 'Send');
-    return h('div', { class: 'cos-st-talk' }, box, send);
+    fill(foot,
+      h('div', { class: 'cos-st-quick' }, ...QUICK.map((q) => {
+        const b = h('button', { onclick: () => say(q, b) }, q);
+        return b;
+      })),
+      h('div', { class: 'cos-st-talk' }, box, send));
   };
 
   const render = () => {
-    const leads = project ? focus.leadsIn(project) : [];
+    const leads = allLeads();
     goal = pickGoal(goal, leads, (id) => flaggedFor(id).length > 0);
     for (const l of leads) if (!asked.has(l.id) && l.id !== goal) refreshLatest(l.id);
-    renderTabs();
-    renderGoals(leads);
+    renderLeft(leads);
     if (goal !== fetched) picked();
     const lead = goal ? focus.agent(goal) : undefined;
     if (!lead) return noGoal();
     renderThread(lead);
+    renderAsk(lead);
     renderFoot(lead);
   };
 
   const noGoal = () => {
     fill(head);
-    fill(thread, h('p', { class: 'muted' }, 'Pick a goal.'));
+    fill(thread, h('p', { class: 'muted' }, 'No goals under way.'));
     fill(foot);
+    delete foot.dataset.lead;
   };
 
   // a goal newly picked, by the captain or for them, has its thread asked for
   const picked = () => {
     fetched = goal;
     entries = [];
-    shownThread = shownFoot = '';
+    shownThread = shownAsk = '';
     refreshThread();
   };
 
@@ -199,7 +259,7 @@ export function openStream(ui: CommsUi): void {
     }, fetched === goal && entries.length ? 1000 : 0);
   }
   // the goals not picked have their threads asked for too, once as they're shown and again as their lead's turn ends,
-  // for when something last came in: their lines say whether it's new since the captain looked
+  // for when something last came in: their rows say whether it's new since the captain looked
   const asked = new Set<string>();
   const noteLatest = (id: string, list: readonly ThreadEntry[]) => {
     const at = latestNews(list);

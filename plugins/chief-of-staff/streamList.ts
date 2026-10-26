@@ -1,24 +1,8 @@
 import type { InboxItem } from './inbox';
 import type { ThreadEntry } from './thread';
 
-// The stream's decisions (stream.ts, README.md#a-thread-per-goal): what each goal's line on the left says, where "new
-// since you last looked" falls in a thread, and how each entry reads. Pure, so it's tested (streamList.test.ts).
-
-/** A goal's line on the left: what needs the captain there, what's new since they last looked, or neither. */
-export interface GoalLine {
-  tone: 'needs' | 'new' | 'quiet';
-  text: string;
-}
-
-/**
- * What a goal's line says: the first thing that needs the captain there (and how many more), else how much is new
- * since they last looked at its thread (`seenAt`; never looked counts nothing new), else what its lead is doing.
- */
-export function goalLine(flagged: readonly Pick<InboxItem, 'what'>[], latest: number | undefined, seenAt: number | undefined, status: string): GoalLine {
-  if (flagged.length) return { tone: 'needs', text: `Needs you · ${flagged[0].what}${flagged.length > 1 ? ` (+${flagged.length - 1})` : ''}` };
-  if (latest !== undefined && seenAt !== undefined && latest > seenAt) return { tone: 'new', text: 'New since you looked' };
-  return { tone: 'quiet', text: status };
-}
+// The stream's decisions (stream.ts, README.md#a-thread-per-goal): how the goals on the left are listed and what each
+// row says, where "new since you last looked" falls in a thread, how each entry reads and how quiet lines bundle. Pure, so it's tested (streamList.test.ts).
 
 /**
  * Where "new since you last looked" goes in a thread: before the first entry after `seenAt` that isn't the captain's
@@ -63,9 +47,6 @@ export function footOf(leadId: string, flagged: readonly Pick<InboxItem, 'id' | 
   return item ? { card: item.id, key: `${item.id}|${item.cos?.route ?? ''}` } : { key: `talk|${leadId}` };
 }
 
-/** The line under a thread's title: who leads it, what they're doing, and what done looks like when it's said. */
-export const headLine = (lead: string, status: string, done?: string): string => `${lead} · ${doing(status)}${done ? ` · Done looks like: ${done}` : ''}`;
-
 /** What a goal's lead is doing, in plain words. */
 export function doing(status: string): string {
   const words: Record<string, string> = { done: 'between turns', working: 'working', testing: 'testing', waiting: 'waiting on a permission', pushing: 'pushing', 'setting-up': 'setting up', queued: 'about to start', error: 'stopped on an error', stopped: 'stopped' };
@@ -102,4 +83,85 @@ export function entryView(e: ThreadEntry): EntryView {
       return { as: 'line', tone, text: `${says}: ${e.why}`, ...(e.message && { more: e.message }) };
     }
   }
+}
+
+/** The goals on the left, every shown project's in one list: those that need the captain first, then each project's others under its name. */
+export function goalSections<G extends { id: string; projectId: string }>(
+  goals: readonly G[],
+  projects: readonly { id: string; name: string }[],
+  needs: (id: string) => boolean,
+): { key: string; name: string; goals: G[] }[] {
+  const needing = goals.filter((g) => needs(g.id));
+  const rest = projects.map((p) => ({ key: p.id, name: p.name, goals: goals.filter((g) => g.projectId === p.id && !needs(g.id)) }));
+  return [...(needing.length ? [{ key: 'needs', name: 'Needs you', goals: needing }] : []), ...rest.filter((s) => s.goals.length)];
+}
+
+/** How long ago, in a few characters: `now`, `12m`, `3h`, `2d`. */
+export function age(ms: number): string {
+  const m = Math.max(0, Math.round(ms / 60_000));
+  if (m < 1) return 'now';
+  if (m < 60) return `${m}m`;
+  if (m < 60 * 24) return `${Math.round(m / 60)}h`;
+  return `${Math.round(m / 1440)}d`;
+}
+
+const WORKING = new Set(['working', 'testing', 'pushing', 'setting-up']);
+
+/**
+ * A goal's compact row: its dot (what needs the captain, what's new since they looked, a lead at work or stopped on an
+ * error, else quiet) and, at its right, how many things wait on them there or how long since anything came in.
+ */
+export function goalRow(flagged: number, latest: number | undefined, seenAt: number | undefined, status: string, now: number): { dot: 'needs' | 'new' | 'working' | 'error' | 'quiet'; right: string } {
+  const right = flagged ? `${flagged} for you` : latest !== undefined ? age(now - latest) : '';
+  if (flagged) return { dot: 'needs', right };
+  if (latest !== undefined && seenAt !== undefined && latest > seenAt) return { dot: 'new', right };
+  if (status === 'error') return { dot: 'error', right };
+  return { dot: WORKING.has(status) ? 'working' : 'quiet', right };
+}
+
+/** A thread's rows with the quiet lines between messages bundled: two or more in a row become one, said in brief (`bundleSays`). */
+export type BundledRow = { entry: ThreadEntry } | { newSince: true } | { bundle: ThreadEntry[] };
+
+export function bundleRows(rows: readonly ({ entry: ThreadEntry } | { newSince: true })[]): BundledRow[] {
+  const out: BundledRow[] = [];
+  let run: ThreadEntry[] = [];
+  const flush = () => {
+    if (run.length > 1) out.push({ bundle: run });
+    else out.push(...run.map((entry) => ({ entry })));
+    run = [];
+  };
+  for (const r of rows) {
+    if ('entry' in r && entryView(r.entry).as === 'line') run.push(r.entry);
+    else {
+      flush();
+      out.push(r);
+    }
+  }
+  flush();
+  return out;
+}
+
+/** What a bundle of quiet lines amounts to, in brief: what merged, what QA passed, what was decided, what went back or was flagged. */
+export function bundleSays(entries: readonly ThreadEntry[]): string[] {
+  const says: string[] = [];
+  const merged = entries.flatMap((e) => (e.kind === 'merged' ? [`#${e.number}`] : []));
+  if (merged.length) says.push(`merged ${merged.join(', ')}`);
+  const passed = entries.filter((e) => e.kind === 'ops' && /^QA/.test(e.from) && /\bpassed\b/.test(e.text)).length;
+  if (passed) says.push(passed > 1 ? `QA passed ${passed}` : 'QA passed');
+  const decided = entries.flatMap((e) => (e.kind === 'decided' ? [e.chosen] : []));
+  if (decided.length) says.push(`decided: ${decided.join('; ')}`);
+  const back = entries.filter((e) => e.kind === 'cos' && e.route === 4).length;
+  if (back) says.push(back > 1 ? `sent back ${back}×` : 'sent back once');
+  if (entries.some((e) => e.kind === 'cos' && e.route === 3)) says.push('flagged to you');
+  return says;
+}
+
+/** What's agreed on a goal, for its header: its pull requests (how many merged), and the decisions made in its thread. */
+export function agreed(prs: readonly { outcome?: 'merged' | 'closed' }[], entries: readonly ThreadEntry[]): { merged: number; prs: number; decided: { question: string; chosen: string }[] } {
+  const live = prs.filter((p) => p.outcome !== 'closed');
+  return {
+    merged: live.filter((p) => p.outcome === 'merged').length,
+    prs: live.length,
+    decided: entries.flatMap((e) => (e.kind === 'decided' ? [{ question: e.question, chosen: e.chosen }] : [])),
+  };
 }
