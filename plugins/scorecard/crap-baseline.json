@@ -1,6 +1,4 @@
 {
   "plugins/number-one/callView.ts": 1,
-  "server/agents/manager/sessions.ts": 2,
-  "server/agents/shipStatus.ts": 1,
-  "server/previews.ts": 1
+  "server/agents/shipStatus.ts": 1
 }

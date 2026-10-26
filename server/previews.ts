@@ -507,7 +507,8 @@ export class Previews {
       return true;
     });
     const every = Schedule.spaced('10 seconds');
-    this.background(run, Effect.delay(check, '10 seconds').pipe(Effect.repeat({ schedule: every, while: (more) => more })));
+    // the first check 10 seconds in, then one every 10 seconds (a delay inside the repeat would wait twice each time)
+    this.background(run, Effect.delay(check.pipe(Effect.repeat({ schedule: every, while: (more) => more })), '10 seconds'));
   }
 
   private exited(run: Run, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {

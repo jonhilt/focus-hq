@@ -182,4 +182,57 @@ describe('Previews', () => {
     expect(t.machine.what().filter((w) => w.startsWith('SIGTERM'))).toHaveLength(2);
     expect(t.machine.alive.size).toBe(0);
   });
+
+  describe('once it is running', () => {
+    const url = 'http://localhost:4100/';
+    /** Moves the clock on a second at a time: each check the watch forks only sleeps once the one before has run. */
+    const pass = async (t: ReturnType<typeof setup>, ms: number) => {
+      for (let waited = 0; waited < ms; waited += 1000) await t.wait(1000);
+    };
+
+    it('shows a site that stops answering, and fails the preview after three checks once its command has gone', async () => {
+      const t = setup(() => ({ lines: [url], exitAfter: 2000 }));
+      t.machine.answering.add(url);
+      await t.start('p1', devServer);
+      await pass(t, 3000);
+      expect(t.preview('p1')?.status).toBe('running');
+      expect(t.previews.log('p1').lines).toContain('▸ The command finished; the sites keep running on their own');
+
+      t.machine.answering.delete(url);
+      await pass(t, 10_000);
+      expect(t.preview('p1')).toMatchObject({ status: 'running', links: [{ url, health: 'down' }] });
+      await pass(t, 10_000);
+      expect(t.preview('p1')?.status).toBe('running');
+      await pass(t, 10_000);
+      expect(t.preview('p1')).toMatchObject({ status: 'failed', error: 'The site stopped answering' });
+      expect(t.previews.log('p1').lines.at(-1)).toBe('✘ The site stopped answering');
+    });
+
+    it('follows the stack’s own status in its warning, and fails the preview once the stack leaves the list', async () => {
+      // the progress command lists every stack; ours is the one naming our checkout
+      let stacks = (dir: string): Record<string, string>[] => [{ dir, status: 'ready' }];
+      const t = setup((command) => {
+        if (!command.startsWith('stack status ')) return { lines: [url] };
+        const dir = command.slice('stack status '.length).replace(/^'|'$/g, '');
+        return { lines: [JSON.stringify({ sessions: stacks(dir) })], exitAfter: 100 };
+      });
+      t.machine.answering.add(url);
+      await t.start('p1', { command: 'stack up', statusCommand: 'stack status {dir}' });
+      await t.wait(1000);
+      expect(t.preview('p1')?.status).toBe('running');
+      expect(t.preview('p1')?.warning).toBeUndefined();
+
+      stacks = (dir) => [{ dir, status: 'unhealthy', error: 'the database is down' }];
+      await pass(t, 10_000);
+      expect(t.preview('p1')).toMatchObject({ status: 'running', warning: 'The stack reports itself as unhealthy: the database is down' });
+
+      stacks = (dir) => [{ dir, status: 'ready' }];
+      await pass(t, 10_000);
+      expect(t.preview('p1')?.warning).toBeUndefined();
+
+      stacks = () => [{ dir: '/somewhere/else', status: 'ready' }];
+      await pass(t, 20_000);
+      expect(t.preview('p1')).toMatchObject({ status: 'failed', error: 'The stack went away: it is no longer in the progress command’s list' });
+    });
+  });
 });

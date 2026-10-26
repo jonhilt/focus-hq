@@ -1,7 +1,8 @@
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { Effect, Layer } from 'effect';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { randomAvatar } from '../../shared/crew';
 import * as demoGitHub from '../github/demo';
 import { prKey } from '../../shared/qa';
@@ -24,6 +25,8 @@ import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
 import { CARRYING_ON_HERE } from './manager/cloudMoves';
 import { leadWorktreeId } from './lead';
 import { refusedFile } from './pushGuard';
+import { BACKGROUND_LINGER_MS } from './backgroundTasks';
+import { WORKFLOW_LINGER_MS } from './workflows';
 
 // Ops falls back on an API key while the plan's usage limit is reached (only the last tests reach it)
 vi.hoisted(() => {
@@ -1856,6 +1859,86 @@ describe('AgentManager', () => {
       agents.message(id, 'And the next');
       await until(() => claude.turns.length === 4);
       expect(claude.turns[3].req.prompt).toBe('And the next');
+    });
+  });
+
+  describe('a lead’s background commands and workflows', () => {
+    /** A goal's lead mid-turn, and that turn's hooks. */
+    async function leading() {
+      const o = focus();
+      const { agent: lead } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: { id: string } };
+      await until(() => o.claude.turns.length === 1);
+      return { ...o, id: lead.id, hooks: o.claude.turns[0].hooks };
+    }
+
+    /** A QA officer mid-review, who has nowhere for either to show. */
+    async function reviewing() {
+      const o = focus();
+      const [pr] = await Effect.runPromise(Effect.gen(function* () {
+        return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+      }).pipe(Effect.provide(demoLayer)));
+      o.agents.requestReview(o.project.id, pr.repo, pr.number, pr.title);
+      await until(() => o.claude.turns.length === 1);
+      return { ...o, id: o.claude.turns[0].req.agentId, hooks: o.claude.turns[0].hooks };
+    }
+
+    // an ended one lingers on Effect's clock, which the fake timers move on
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('floats a lead’s background command by their chair with its output, and lets it linger a moment once it ends', async () => {
+      const { agents, store, id, hooks } = await leading();
+      const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'focus-background-')), 'b1.output');
+      fs.writeFileSync(output, 'compiled\nwatching for changes\n');
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      hooks.background!({ kind: 'started', id: 'b1', task: 'shell', description: 'pnpm dev' });
+      hooks.background!({ kind: 'output', id: 'b1', file: output });
+      expect(store.agent(id).background).toMatchObject([{ id: 'b1', kind: 'shell', description: 'pnpm dev', status: 'running' }]);
+      expect(agents.backgroundOutput(id, 'b1').map((l) => l.text)).toEqual(['compiled', 'watching for changes']);
+
+      hooks.background!({ kind: 'ended', id: 'b1', status: 'failed', summary: 'exit 1' });
+      expect(store.agent(id).background).toMatchObject([{ id: 'b1', status: 'failed', summary: 'exit 1' }]);
+      await vi.advanceTimersByTimeAsync(BACKGROUND_LINGER_MS - 1);
+      expect(store.agent(id).background).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.agent(id).background).toEqual([]);
+      expect(agents.backgroundOutput(id, 'b1')).toEqual([]);
+    });
+
+    it('beams a lead’s workflow into their briefing room, keeps its script, and lets it linger a moment once it ends', async () => {
+      const { agents, store, id, hooks } = await leading();
+      const script = "export const meta = { name: 'review', phases: [{ title: 'Review' }, { title: 'Verify' }] }";
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      hooks.workflow!({ kind: 'started', id: 'w1', name: 'review', description: 'Review the change', script });
+      expect(store.agent(id).workflows).toMatchObject([{ id: 'w1', name: 'review', status: 'running', plan: [{ title: 'Review' }, { title: 'Verify' }] }]);
+      expect(agents.workflowScript(id, 'w1').source).toBe(script);
+      expect(store.recentLines(id).at(-1)?.text).toBe(`✻ Workflow review: its away team beams into ${store.agent(id).name}'s briefing room a phase at a time`);
+      // only about where its files are: nothing on the lead changes
+      hooks.workflow!({ kind: 'transcripts', id: 'w1', dir: '/nowhere/subagents/workflows/w1' });
+
+      hooks.workflow!({ kind: 'ended', id: 'w1', ok: true });
+      expect(store.agent(id).workflows).toMatchObject([{ id: 'w1', status: 'done' }]);
+      await vi.advanceTimersByTimeAsync(WORKFLOW_LINGER_MS - 1);
+      expect(store.agent(id).workflows).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(store.agent(id).workflows).toEqual([]);
+      expect(agents.workflowScript(id, 'w1')).toEqual({ source: '', logs: [], results: [] });
+    });
+
+    it('leaves out anyone else’s, who has nowhere to show them', async () => {
+      const { agents, store, id, hooks } = await reviewing();
+      const lines = store.recentLines(id).length;
+      const output = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'focus-background-')), 'b1.output');
+      fs.writeFileSync(output, 'ran 12 tests\n');
+      hooks.background!({ kind: 'started', id: 'b1', task: 'shell', description: 'pnpm test' });
+      hooks.background!({ kind: 'output', id: 'b1', file: output });
+      hooks.workflow!({ kind: 'started', id: 'w1', name: 'review', description: 'Review the change', script: 'src' });
+      expect(store.agent(id).background).toBeUndefined();
+      expect(store.agent(id).workflows).toBeUndefined();
+      expect(agents.backgroundOutput(id, 'b1')).toEqual([]);
+      expect(agents.workflowScript(id, 'w1').source).toBe('');
+      expect(store.recentLines(id)).toHaveLength(lines);
     });
   });
 
