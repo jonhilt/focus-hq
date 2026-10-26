@@ -2,13 +2,13 @@ import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-a
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
 import { contextText, turnContext } from './context';
 import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, verdictSchema } from './judge';
-import { type GoalPr, heldForRead, laneJudgeVersion, lostRaises, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane, unreadShip } from './laneJudge';
+import { laneJudgeVersion, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
-import { judged, reading, waking } from './lanes';
-import { capped, unattendedRounds } from './rounds';
+import { type GoalPr, heldForRead, judged, lostRaises, reading, unreadShip, waking } from './laneRules';
+import { capped, unattendedRounds } from './roundRules';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
-import { wakeFor } from './wake';
+import { wakeFor } from './wakeRules';
 
 // The chief of staff (README.md): as a goal's lead ends a turn, in a project it's switched on for, it marks the turn
 // as being read, judges where it goes, writes its verdict in the ledger and marks the turn with it (`lead.marks`), so
@@ -166,7 +166,7 @@ export class ChiefOfStaff {
         ...(routing && { router: { by: 'jev', ...routing.how } }),
         ...(failed && { routerFailed: failed }),
       });
-      // after a few rounds in a row without the captain, a turn it would carry on is theirs (rounds.ts)
+      // after a few rounds in a row without the captain, a turn it would carry on is theirs (roundRules.ts)
       const filed = capped(verdict, unattendedRounds(this.host.ledger(), agent));
       const read = judged(readOf(this.host.agent(agent.id)), filed, since, this.autoSends(agent.projectId), Date.now());
       if (read && this.host.goals.mark(agent.id, read, since)) this.wakeDeferred(agent.id);

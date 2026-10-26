@@ -28,11 +28,11 @@ import { clampSpeed } from '../shared/demoPace';
 import { setDemoPace } from './demoPace';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
-import { allowedHosts, refusal } from './hostGuard';
+import { allowedHosts, refusal } from './hostGuardRules';
 import { Hub } from './hub';
 import { flowRecorder } from './flows';
 import { loadPlugins, pluginCatalog } from './plugins/load';
-import { pluginChoice } from '../shared/shipPlugins';
+import { pluginChoice } from '../shared/shipPluginRules';
 import { Focus } from './focus';
 import { mirrorHosts, PreviewMirrors } from './previewMirrors';
 import { demoPreviewPage, Previews } from './previews';
@@ -211,8 +211,9 @@ function seedDemoShip(store: Store, agents: AgentManager): void {
 /** The API, behind the host guard, and in the demo the routes that pretend what GitHub and its previews would do. */
 function httpApp(focus: Focus, store: Store, previews: Previews): { app: express.Express; refuse: (req: http.IncomingMessage) => string | undefined } {
   const app = express();
-  // Focus has no login: it only answers the captain's own browser (server/hostGuard.ts)
-  const hosts = allowedHosts(config.host, process.env.FOCUS_ALLOWED_HOSTS);
+  // Focus has no login: it only answers the captain's own browser (server/hostGuardRules.ts)
+  const addresses = Object.values(os.networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address));
+  const hosts = allowedHosts(config.host, process.env.FOCUS_ALLOWED_HOSTS ?? '', { hostname: os.hostname(), addresses });
   const refuse = (req: http.IncomingMessage) => refusal({ host: req.headers.host, origin: req.headers.origin }, hosts);
   app.use((req, res, next) => {
     const why = refuse(req);

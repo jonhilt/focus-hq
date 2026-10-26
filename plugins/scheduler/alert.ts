@@ -24,14 +24,6 @@ export const signature = (token: string, timestamp: string, body: string): strin
 
 type Post = (url: string, init: { method: 'POST'; headers: Record<string, string>; body: string; signal: AbortSignal }) => Promise<{ ok: boolean; status: number }>;
 
-/** The closest two of one lead's own alerts (the alert tool) may be: an alert is for what can't wait, not a running commentary. */
-export const ALERT_GAP_MS = 10 * 60_000;
-
-/** Whether a lead may raise an alert now, given when they last did; or, if not, how long until they may. */
-export function alertWait(last: number | undefined, now: number): number {
-  return last === undefined ? 0 : Math.max(0, last + ALERT_GAP_MS - now);
-}
-
 /** The bot's webhook's Authorization header, as Settings has it (a pasted `Authorization:` prefix taken off). */
 const authHeader = (raw: string | undefined) => raw?.trim().replace(/^Authorization:\s*/, '') || undefined;
 

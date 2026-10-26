@@ -1,6 +1,6 @@
 // `pnpm run fence:lower`: lowers the ratchet's baseline to where each file's type assertions now are. It never raises one.
 import { fenceCounts, readBaseline, writeBaseline } from './fenceFiles';
-import { fenceDrift, lowered } from './fenceRatchet';
+import { fenceDrift, lowered } from './fenceRatchetRules';
 
 const baseline = readBaseline();
 const counts = fenceCounts();

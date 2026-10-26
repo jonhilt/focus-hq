@@ -2,7 +2,8 @@
 // sessions write the brief's scored shortlist twice over: the control with the log as it is, the treatment with one
 // more climb in it, closed by the captain: the very gap the control took first, turned down. It counts only if that gap
 // is a real contender (the control's other sessions list it too); then the memory works if the treatment never takes it.
-import { gapScore, ranked, type ClimbRecord, type ShortlistEntry } from '../climb';
+import type { ClimbRecord, ShortlistEntry } from '../climb';
+import { gapScore, ranked } from '../climbRules';
 
 /** What a session would climb, as it answers the replay: its scored shortlist, the one it takes, its target and hypothesis. */
 export interface ClimbPick {

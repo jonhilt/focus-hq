@@ -2,7 +2,7 @@
 
 import type { ReportCard } from '../ledger';
 import type { PersonalEntry } from '../personalLog';
-import type { AvailablePlugin, PluginsPinnedBy } from '../shipPlugins';
+import type { AvailablePlugin, PluginsPinnedBy } from '../shipPluginRules';
 import type { Agent, BrowserFrame, TermLine } from './agents';
 import type { BotStatus } from './bot';
 import type { IssueDraft } from './drafts';

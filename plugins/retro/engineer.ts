@@ -6,7 +6,8 @@ import {
 } from '../../plugin-api/server';
 import { batchesOf, extractionInput, parseRead, readerPrompt } from './frictions';
 import { parseDrafts, PATTERN_SESSIONS, renderFrictions, renderGoals, renderLedger } from './retro';
-import { freshRetro, type Retro, type RetroDraft, retroAfterRestart, running } from './shared';
+import { retroAfterRestart, undecided } from './retroRules';
+import { freshRetro, type Retro, type RetroDraft, running } from './shared';
 
 export interface RetroRequest {
   /** The folder Ops gathered the evidence in: the engineer's current directory. */
@@ -205,14 +206,6 @@ export class ChiefEngineer {
     this.slot.set({ drafts: this.current().drafts.map((d) => (d.id === id ? done : d)) });
     return done;
   }
-}
-
-/** The draft `id` of `retro`, while it waits for the captain's decision. */
-export function undecided(retro: Retro, id: string): RetroDraft {
-  const draft = retro.drafts.find((d) => d.id === id);
-  if (!draft) throw new Error('That draft isn’t in the latest retro');
-  if (draft.decision) throw new Error(`That draft was already ${draft.decision.accepted ? 'accepted' : 'rejected'}`);
-  return draft;
 }
 
 /** An accepted draft's issue as it's filed: its body, signed by the chief engineer. */

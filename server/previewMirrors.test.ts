@@ -3,7 +3,7 @@ import type { NetworkInterfaceInfo } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
 import { WebSocket, WebSocketServer } from 'ws';
 import type { Preview, PreviewLink } from '../shared/types';
-import { certHost, localHeaders, mirroredLocation, mirrorHosts, mirrorPlan, PreviewMirrors, tailnetAddresses, wantedPorts } from './previewMirrors';
+import { certHost, localHeaders, mirroredLocation, mirrorHosts, PreviewMirrors, tailnetAddresses, wantedPorts } from './previewMirrors';
 
 const nic = (address: string): NetworkInterfaceInfo =>
   address.includes(':') ? { address, netmask: '', family: 'IPv6', mac: '', internal: false, cidr: null, scopeid: 0 } : { address, netmask: '', family: 'IPv4', mac: '', internal: false, cidr: null };
@@ -40,13 +40,6 @@ describe('wantedPorts', () => {
 
   it('lets go of previews being stopped or that failed', () => {
     expect(wantedPorts([preview('stopping', [{ url: 'http://localhost:5173/', health: 'up' }]), preview('failed', [{ url: 'http://localhost:5174/', health: 'up' }])]).size).toBe(0);
-  });
-});
-
-describe('mirrorPlan', () => {
-  it('opens what’s wanted and missing, and closes what’s no longer wanted', () => {
-    expect(mirrorPlan([5173, 8080], [8080, 3000])).toEqual({ open: [3000], close: [5173] });
-    expect(mirrorPlan([], [])).toEqual({ open: [], close: [] });
   });
 });
 

@@ -6,10 +6,11 @@ import type { Agent, Effort, Planner } from '../../../shared/types';
 import { ACTIVE_STATUSES, AWAY_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
-import { offTheFloor, pickDesk } from '../desks';
-import { deskless, whoStarts } from '../schedule';
+import { offTheFloor, pickDesk } from '../deskRules';
+import { deskless, whoStarts } from '../scheduleRules';
 import { Workspace } from '../services';
-import { FINISHED, Part, Refused } from './core';
+import { Part, Refused } from './core';
+import { FINISHED } from './sessionRules';
 
 /** Hiring and seating agents, starting them as slots free up, and sending them home. */
 export class Seating extends Part {

@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { CRAP_LINE, changedLines, changedSummary, fromIstanbul, functionsIn, isDemo, overByFile, score, summary, table, type Scored } from './crapScore';
 import { CRAP_BASELINE_FILE, readBaseline, writeBaseline } from './fenceFiles';
-import { CRAP_WORDS, fenceDrift, lowered, ratchetMessage, ratchetMode, type RatchetMode } from './fenceRatchet';
+import { CRAP_WORDS, fenceDrift, lowered, ratchetMessage, ratchetMode, type RatchetMode } from './fenceRatchetRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const git = (...args: string[]) => execFileSync('git', args, { cwd: ROOT, encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });

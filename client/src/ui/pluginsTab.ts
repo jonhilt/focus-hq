@@ -3,7 +3,7 @@
 // settings for each project.
 import { pluginOn } from '../../../shared/projectPlugins';
 import { isHidden } from '../../../shared/hidden';
-import { restartPending, switchShipPlugin } from '../../../shared/shipPlugins';
+import { restartPending, switchShipPlugin } from '../../../shared/shipPluginRules';
 import type { PluginSecretStatus, Project, ServerInfo } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';

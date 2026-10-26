@@ -1,10 +1,11 @@
 import { Effect, Fiber, FiberMap, Option, Schedule } from 'effect';
 import type { Agent, CloudHandover } from '../../../shared/types';
 import { cloudSessionUrl } from '../../../shared/cloud';
-import { cantMoveToCloud, terminalDescription } from '../cloud';
+import { cantMoveToCloud } from '../cloudRules';
 import { carryOnPrompt } from '../prompts';
 import { Sessions, Workspace } from '../services';
 import { cloudSessionId } from '../terminal';
+import { terminalDescription } from '../terminalText';
 import { STOPPED_BY_CAPTAIN } from '../types';
 import { type ManagerServices, Part, Refused, withNotes, type WorkError } from './core';
 

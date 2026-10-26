@@ -1,6 +1,7 @@
 import type { FileAccount, PullRequest, QaFile, QaRecording, QaReport, QaReview, QaSpotCheck, Settings } from './types';
 
-// QA decisions shared by the server and the board. Pure, so they're unit tested (shared/qa.test.ts).
+// What the server and the board show about QA, and how they key and link it. Pure, so they're unit tested
+// (shared/qa.test.ts); the decisions are in qaRules.ts.
 
 export type QaBadgeState = 'none' | 'queued' | 'testing' | 'passed' | 'failed' | 'fixing' | 'triaging' | 'needs-you' | 'stale' | 'error';
 
@@ -50,18 +51,6 @@ export function sameCommit(a: string, b: string): boolean {
 }
 
 /**
- * Whether a PR goes back to QA because its head moved past QA's verdict without Ops pushing it (CI committing
- * to the branch, the captain pushing by hand): only Ops' own PRs, with auto-QA on, and not while someone
- * Ops sent is fixing it or the operations officer is looking, since they hand it back to QA themselves.
- */
-export function verdictBehindHead(review: QaReview | undefined, pr: Pick<PullRequest, 'headSha'>, ctx: { ours: boolean; autoQa: boolean }): boolean {
-  if (!review?.sha || !pr.headSha || !ctx.ours || !ctx.autoQa) return false;
-  if (review.status !== 'passed' && review.status !== 'failed') return false;
-  if (review.followUp?.kind === 'fixing' || review.followUp?.kind === 'triaging') return false;
-  return !sameCommit(review.sha, pr.headSha);
-}
-
-/**
  * The model a QA officer or goal reviewer works on, stamped on them each time they sit down to a review, so a change to
  * the setting applies from the next review: Focus's QA model, else its `model` setting. Missing = Claude Code's default.
  */
@@ -71,26 +60,6 @@ export function qaAgentModel(settings: Pick<Settings, 'model' | 'qaModel'>): str
 
 /** The longest QA brief a project keeps, in characters. */
 export const QA_BRIEF_MAX = 4000;
-
-/** Whether QA should pick up a PR Ops just opened or pushed to: on unless the project switched it off. */
-export function autoQaFor(project: { autoQa?: boolean }): boolean {
-  return project.autoQa !== false;
-}
-
-/** Whether a failed PR Ops opened goes back to a developer: on unless the project switched it off. */
-/** Whether QA blocks this project's pull requests only with proof (missing = on). */
-export function qaProofFor(project: { qaProof?: boolean }): boolean {
-  return project.qaProof !== false;
-}
-
-/** Whether QA records its browser session for this project's pull requests (missing = off). */
-export function qaVideoFor(project: { qaVideo?: boolean }): boolean {
-  return project.qaVideo === true;
-}
-
-export function autoSendBackFor(project: { autoSendBack?: boolean }): boolean {
-  return project.autoSendBack !== false;
-}
 
 /** Key for a pull request across a project's repos. */
 export const prKey = (repo: string, number: number) => `${repo}#${number}`;

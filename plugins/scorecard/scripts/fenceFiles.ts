@@ -1,8 +1,8 @@
-// The ratchets' I/O (fenceRatchet.ts has the rules): the fence's files as the scorecard counts them, and the baselines.
+// The ratchets' I/O (fenceRatchetRules.ts has the rules): the fence's files as the scorecard counts them, and the baselines.
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import type { FenceCounts } from './fenceRatchet';
+import type { FenceCounts } from './fenceRatchetRules';
 import { scanSource } from './scorecardRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');

@@ -15,7 +15,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { isRecord } from '../../../plugin-api/shared';
 import { answersOf, JEV_QUESTIONS_VERSION, jevRoute, type Label, PROPOSED_POLICY, type RoutePolicy, scoreBlind, scoreRoutes } from '../jevRoute';
-import { parseJsonLines, routesOf, scoreLine } from '../jevRun';
+import { parseJsonLines, routesOf, scoreLine } from '../jevRunRules';
 import type { CosRoute } from '../shared';
 
 const args = process.argv.slice(2);

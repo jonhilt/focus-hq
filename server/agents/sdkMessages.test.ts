@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { BrowserFrame, TermLine } from '../../shared/types';
-import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, newCloudId, resultText, screenshotActivity, switchesToKey, systemNote, turnResult, type RunContext } from './sdkMessages';
+import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, newCloudId, resultText, screenshotActivity, systemNote, turnResult, type RunContext } from './sdkMessages';
 import { BackgroundTracker, type BackgroundEvent } from './backgroundTasks';
 import type { RunHooks } from './types';
 
@@ -119,19 +119,6 @@ describe('screenshotActivity', () => {
 });
 
 describe('your plan’s usage limit', () => {
-  it('moves a local session on your plan to the key, once Ops says so', () => {
-    expect(switchesToKey({ onKey: false, cloud: false }, () => true)).toBe(true);
-    expect(switchesToKey({ onKey: false, cloud: false }, () => false)).toBe(false);
-  });
-
-  it('never moves a session already on the key, or a cloud one, and doesn’t ask then', () => {
-    const ask = () => {
-      throw new Error('asked');
-    };
-    expect(switchesToKey({ onKey: true, cloud: false }, ask)).toBe(false);
-    expect(switchesToKey({ onKey: false, cloud: true }, ask)).toBe(false);
-  });
-
   it('says whether it’s switching or waiting for the reset', () => {
     const until = Date.now() + 3_600_000;
     expect(limitNotice(until, true)).toMatchObject({ line: { kind: 'error', text: expect.stringMatching(/reached until .+ – switching to your API key$/) }, activity: 'Switching to your API key' });

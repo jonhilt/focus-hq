@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Agent, FocusPlugin, PluginHost } from '../../plugin-api/server';
 import { focus, until } from '../../plugin-api/testing';
 import { Inbox } from './captainsInbox';
-import { judged, reading } from './lanes';
+import { judged, reading } from './laneRules';
 import chiefOfStaff from './server';
 import { AUTO_SEND_MS, CHIEF_OF_STAFF, type CosState, readOf, type Verdict } from './shared';
 

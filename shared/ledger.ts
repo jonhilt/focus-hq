@@ -1,5 +1,5 @@
 import { type DecisionStatus, lineProblem } from './decisions';
-import type { Lane } from './mergeLane';
+import type { Lane } from './mergeLaneRules';
 import type { QaBadgeState } from './qa';
 import { isRecord } from './records';
 import type { AgentTask, ArchivedGoal, Effort, GoalRecord, TriageAction } from './types';

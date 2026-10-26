@@ -3,8 +3,9 @@
 // FOCUS_PLUGINS=threads, then switched on per project.
 import os from 'node:os';
 import { demoPace, errorMessage, type FocusPlugin, type PluginGoals, type PluginHost, type PluginParts, sleep } from '../../plugin-api/server';
-import { acceptances, afterLine, closedThreads, decision, freshThreads, lastSort, lastSorts, spunOffEntry, type Thread, THREADS, type ThreadsState, toSpinOff } from './shared';
-import { demoAnswer, proposalsFrom, SORT_MODEL, SORT_SCHEMA, SORT_SYSTEM, sortPrompt, sortRecord, toSort } from './sort';
+import { afterLine, closedThreads, freshThreads, lastSort, lastSorts, spunOffEntry, type Thread, THREADS, type ThreadsState } from './shared';
+import { acceptances, decision, toSort, toSpinOff } from './threadsRules';
+import { demoAnswer, proposalsFrom, SORT_MODEL, SORT_SCHEMA, SORT_SYSTEM, sortPrompt, sortRecord } from './sort';
 
 /** What the threads plugin asks of Focus: starting a goal is all it does with the ship's goals, and Sort for me asks a model. */
 export type ThreadsHost = Pick<PluginHost, 'state' | 'ledger' | 'record' | 'agents' | 'on' | 'demo' | 'settings' | 'readOnlySession' | 'toast'> & {

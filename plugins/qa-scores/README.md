@@ -6,7 +6,8 @@ How good QA's real work is, measured. A model grades some of QA's reports agains
 
 ## Where it lives
 
-- `scoring.ts`: which reports are graded (`reportsDue`, `sampled`), what the model is told of each (`scorePrompt`, `scoreSchema`), and the line its grade is written as (`scoreEntry`).
+- `scoringRules.ts`: which reports are graded (`reportsDue`, `sampled`).
+- `scoring.ts`: what the model is told of each (`scorePrompt`, `scoreSchema`), and the line its grade is written as (`scoreEntry`).
 - `server.ts`: sweeps QA's review journals an hour apart (and five minutes after Focus starts), reads each report's diff from Focus's clone of its repo, asks the model, and writes the line; `POST /sweep` sweeps now.
 - `.focus/scorers/qa-report.md`: the rubric the model is told, and the scale: its labels and their scores, the score that passes, how many in every hundred reports are graded, and the model.
 

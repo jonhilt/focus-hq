@@ -12,7 +12,7 @@ import { type DemoStep, demoKind, demoScript } from './previewDemoScript';
 import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
 import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
-import { exitVerdict, linksVerdict, stackVerdict } from './previewVerdicts';
+import { exitVerdict, linksVerdict, stackVerdict } from './previewRules';
 import { errorMessage, truncate } from './util';
 import { withoutSecrets } from './secrets';
 

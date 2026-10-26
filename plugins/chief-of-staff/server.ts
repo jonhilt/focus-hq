@@ -16,7 +16,8 @@ import { DemoJudge } from './demoJudge';
 import { STANDING_ORDERS } from './judge';
 import { inboxRoutes, threadRoute } from './routes';
 import { JevRouter } from './jevRouter';
-import { AUTO_SEND_EVERY, autoSendFor, CHIEF_OF_STAFF, freshState, jevFor } from './shared';
+import { autoSendFor, jevFor } from './cosRules';
+import { AUTO_SEND_EVERY, CHIEF_OF_STAFF, freshState } from './shared';
 
 /** How often the bot hears what changed. */
 const BOT_EVERY = 3000;

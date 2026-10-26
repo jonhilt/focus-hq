@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { autoSendFor, cosReadOf, freshState, MAX_REPLY_LABEL, MAX_REPLY_TEXT, readOf, repliesOf, verdictOf } from './shared';
+import { cosReadOf, MAX_REPLY_LABEL, MAX_REPLY_TEXT, readOf, repliesOf, verdictOf } from './shared';
 
 const verdict = { route: 2, ask: 'Filters first?', why: 'A pick.', message: 'Filters.' };
 const back = { route: 4, ask: 'Test it first', why: 'No evidence.', message: 'Test it first.' };
@@ -49,23 +49,5 @@ describe('its mark on a lead’s turn, read back', () => {
   it('is read from the lead’s marks, under the plugin’s id', () => {
     expect(readOf({ lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], marks: { 'chief-of-staff': { at: 3 }, other: 'x' } } })).toEqual({ at: 3 });
     expect(readOf({ lead: undefined })).toBeUndefined();
-  });
-});
-
-describe('sending its words by itself', () => {
-  const project = { id: 'p' };
-
-  it('is off until the captain says, and goes by what they said', () => {
-    expect(autoSendFor(freshState(), project)).toBe(false);
-    expect(autoSendFor({ autoSend: { p: true } }, project)).toBe(true);
-    expect(autoSendFor({ autoSend: { p: true } }, undefined)).toBe(false);
-  });
-
-  it('carries over what Focus kept on the project before the setting was its own, until the captain says otherwise', () => {
-    const before = { ...project, cosAutoSend: true };
-    expect(autoSendFor(freshState(), before)).toBe(true);
-    expect(autoSendFor({ autoSend: { p: false } }, before)).toBe(false);
-    const unsure = { ...project, cosAutoSend: 'yes' };
-    expect(autoSendFor(freshState(), unsure)).toBe(false);
   });
 });

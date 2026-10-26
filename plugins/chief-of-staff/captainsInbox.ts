@@ -1,8 +1,9 @@
 import type { Agent, Attention, CaptainAnswer, PluginGoals, PluginHost, ResumeHow } from '../../plugin-api/server';
 import { errorMessage, landed, openQuestion, shownProjects } from '../../plugin-api/server';
-import { answerText, type Decide, decideRefusal, type DecidedVia, type Inbox as InboxView, type InboxItem, inboxItem, recentDecisions, waiting } from './inbox';
+import { answerText, type Decide, type DecidedVia, type Inbox as InboxView, type InboxItem, inboxItem, recentDecisions } from './inbox';
+import { decideRefusal, waiting } from './inboxRules';
 import { type LandedAnswer, landedAnswerText, type LandedItem, landedItems, landedMessage, landedWhere } from './landed';
-import { acked, held } from './lanes';
+import { acked, held } from './laneRules';
 import { readOf, SENDER } from './shared';
 
 // The captain's inbox, as the API serves it (docs/ledger.md#the-captains-inbox-api): what needs them across the shown

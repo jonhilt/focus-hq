@@ -1,4 +1,4 @@
-import type { SinceVerdict } from './agents/retest';
+import type { SinceVerdict } from './agents/retestRules';
 import { randomHex } from './util';
 
 // The demo's pretend git history of pull requests: the commits pushed to them after they were opened, so the demo

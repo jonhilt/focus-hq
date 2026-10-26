@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { type FrictionGroup, PUBLIC_WORDS_RULE, SHIP_WORDS } from '../../plugin-api/shared';
 import { filedBody } from './engineer';
 import { engineerSystemPrompt, parseDrafts, renderFrictions } from './retro';
-import { draftDecision, fileInChoices, freshRetro, type Retro, retroAfterRestart, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
+import { draftDecision, fileInChoices, freshRetro, type Retro, retroCardLine, type RetroDraft, retroPage, retroStanding, startReading, stationLine, windowInput } from './shared';
 
 const DAY = 24 * 60 * 60 * 1000;
 const group = (key: string, sessions: number): FrictionGroup => {
@@ -44,18 +44,6 @@ describe('parseDrafts', () => {
     expect(parseDrafts([{ summary: 's', drafts: [draft(['G1'])] }], groups, id)).toBeUndefined();
     expect(parseDrafts({ summary: 's', drafts: [null, 'G1', [draft(['G1'])], draft(['G1'])] }, groups, id)?.drafts.map((d) => d.signatures)).toEqual([[groups[0].key]]);
     expect(parseDrafts({ drafts: [] }, groups, id)).toBeUndefined();
-  });
-});
-
-describe('retroAfterRestart', () => {
-  it('ends a retro that was under way when Focus shut down', () => {
-    expect(retroAfterRestart({ ...freshRetro(), status: 'thinking' })).toMatchObject({ status: 'failed', activity: 'Interrupted' });
-    expect(retroAfterRestart({ ...freshRetro(), status: 'done' }).status).toBe('done');
-  });
-
-  it('gives a retro saved before drafts none', () => {
-    const { drafts: _d, ...old } = freshRetro();
-    expect(retroAfterRestart({ ...old, status: 'done' } as never).drafts).toEqual([]);
   });
 });
 

@@ -18,7 +18,7 @@ import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
 import type { WorkspaceOps } from './types';
-import { CLOUD_UNAVAILABLE } from './cloud';
+import { CLOUD_UNAVAILABLE } from './cloudRules';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
 import { CARRYING_ON_HERE } from './manager/cloudMoves';

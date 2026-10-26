@@ -1,18 +1,18 @@
 // The state rules' reach: runs the descriptions' checks alone (`*Invariants.test.ts`, plugins' `invariants.test.ts`)
-// with coverage, on seed 1 so two runs agree, and prints how much of each file that keeps state they reach
-// (rulesCoverage.ts). It exits 0 unless it couldn't measure, or `--ratchet` finds a file off its baseline
-// (README.md#the-ratchets).
+// with coverage, on seed 1 so two runs agree, and prints how much of each file that keeps state they reach, and how
+// many lines they don't (reachRules.ts). It exits 0 unless it couldn't measure, or `--ratchet` finds a file off its
+// baseline (README.md#the-ratchets).
 //
-//   pnpm run rules                     each file that keeps state, and how much of it the rules reach
-//   pnpm run rules --ratchet           also fails (exit 1) when a file's reach went down, or up without its baseline
-//                                      raised, or a new file keeps state that no description reaches
-//   pnpm run rules --raise             raises the baseline to where each file is now; it never lowers one
+//   pnpm run rules                     each file that keeps state, how much of it the rules reach, and what they don't
+//   pnpm run rules --ratchet           also fails (exit 1) when a file has more lines unreached, or fewer without its
+//                                      baseline lowered, or a new file keeps state that no description reaches
+//   pnpm run rules --lower             lowers the baseline to where each file is now; it never raises one
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { readBaseline, writeBaseline } from './fenceFiles';
-import { heldFile, keepsState, percent, raised, type Reach, reachTable, ratchetVerdict, rulesMode } from './rulesCoverage';
+import { heldFile, keepsState, lowered, type Reach, reachTable, ratchetVerdict, rulesMode } from './reachRules';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 export const RULES_BASELINE_FILE = path.join(ROOT, 'plugins/scorecard/rules-baseline.json');
@@ -44,19 +44,25 @@ function runRules(): Record<string, Lines> {
   return summary;
 }
 
+/** A file's lines as coverage counts them, near enough for one no check loads: its non-blank lines. */
+function lineCount(file: string): number {
+  return readFileSync(path.join(ROOT, file), 'utf8').split('\n').filter((l) => l.trim()).length;
+}
+
 function reach(files: string[], summary: Record<string, Lines>): Reach {
   return Object.fromEntries(files.map((file) => {
     const entry = summary[path.join(ROOT, file)];
-    return [file, entry ? percent(entry.lines.covered, entry.lines.total) : 0];
+    // a file no check loads at all isn't in the summary: none of its lines reached
+    return [file, entry ? { total: entry.lines.total, covered: entry.lines.covered } : { total: lineCount(file), covered: 0 }];
   }));
 }
 
 function main() {
   const mode = rulesMode(process.argv.slice(2));
   const now = reach(heldFiles(), runRules());
-  console.log(`\nHow much of each file that keeps state the state rules reach (seed 1):\n${reachTable(now)}`);
+  console.log(`\nHow much of each file that keeps state the state rules reach, and the lines they don't (seed 1):\n${reachTable(now)}`);
   if (mode === 'report') return;
-  if (mode === 'raise') writeBaseline(raised(readBaseline(RULES_BASELINE_FILE), now), RULES_BASELINE_FILE);
+  if (mode === 'lower') writeBaseline(lowered(readBaseline(RULES_BASELINE_FILE), now), RULES_BASELINE_FILE);
   const verdict = ratchetVerdict(readBaseline(RULES_BASELINE_FILE), now);
   console.log(`\n${verdict.text}`);
   if (!verdict.holds) process.exitCode = 1;

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LANES } from '../../shared/mergeLane';
+import { LANES } from '../../shared/mergeLaneRules';
 import { IMPACTS } from './recap';
 
 // The ship tool's recap, as the lead sends it (recap.ts says what each part is for).
@@ -16,7 +16,7 @@ export const RECAP_SCHEMA = z.object({
     group: z.string().describe('What part of the system it belongs to, in a word or two (“chief of staff”, “QA”).'),
     impact: z.enum(IMPACTS).describe('composes: used as it is (wiring, call sites); extends: its behaviour or contract changed; adds: a new primitive.'),
     change: z.string().describe('What the slice does to it, in a line.'),
-    paths: z.array(z.string()).describe('Where it is, as your workspace has it, repo folder first: files, or folders ending in / (“focus/shared/mergeGate.ts”, “focus/plugins/chief-of-staff/”). Every file the slice changes must be under one, tests and docs too.'),
+    paths: z.array(z.string()).describe('Where it is, as your workspace has it, repo folder first: files, or folders ending in / (“focus/shared/mergeGateRules.ts”, “focus/plugins/chief-of-staff/”). Every file the slice changes must be under one, tests and docs too.'),
   })).describe('Each building block the slice touches, riskiest first.'),
   invariants: z.array(z.string()).optional().describe('The promises the slice could break, in plain words (“A card the user owes never leaves their queue unanswered”). They go in the pull request, as the rest does.'),
   map: z.array(step).optional().describe('How the touched primitives connect: each an arrow on the system map.'),

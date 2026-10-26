@@ -1,6 +1,6 @@
 // What `pnpm run claude-streams` keeps of a real Claude Code session's SDK messages: their shapes, never their words.
 // Pure: the script feeds it each message as it comes.
-import { isRecord } from '../server/agents/transcript';
+import { isRecord } from '../shared/records';
 
 /** One SDK message, as Focus's code reads it: kinds, flags, tool names and counts, with ids made up in order. */
 export type Shape = Record<string, string | number | boolean | string[] | null>;

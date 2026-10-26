@@ -13,7 +13,7 @@ It sends nothing itself unless the captain lets it, project by project (but for 
 - **Merging from the card.** A lead's turn, or their goal ready to close, lists their pull requests still open, each with QA's word on it and the board's merge button (M presses the first), and a pull request QA needs the captain on has it too: the captain lands what they've just read without going to the board. Above them is the slice's [system recap](../../docs/goals.md#the-system-recap), what to review them by, whatever the lead or QA said since it went up. Unlike the board's, it asks first only when there's a reason to (QA hasn't passed its head, or a merge check refused it): a press is already the captain deciding, and Ops' [merge check](../../docs/merging.md) still runs before anything merges.
 - **Its read of a turn ends as the lead's next turn starts.** A verdict that comes after that, or one on an earlier turn, is dropped (it's still in the ledger), and a turn Ops stopped as it went down isn't read: it carries on after the restart.
 
-Over a goal's pod, the team screen shows it holding the goal's move while it reads the turn, and while its words count down to sending themselves (`move.ts`); a card, an interrupt, words held (or that didn't go once their time came) or a read that took too long it hands to the captain, ahead of QA testing what the lead shipped, since only it knows they're waiting on the captain.
+Over a goal's pod, the team screen shows it holding the goal's move while it reads the turn, and while its words count down to sending themselves (`moveRules.ts`); a card, an interrupt, words held (or that didn't go once their time came) or a read that took too long it hands to the captain, ahead of QA testing what the lead shipped, since only it knows they're waiting on the captain.
 
 Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 
@@ -28,7 +28,7 @@ Comms is moving to one stream per project, a thread per goal in it: the captain 
 
 ## Raising a pull request's lane
 
-A goal's lead puts each of their pull requests in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges) with the recap they put on it: Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneJudge.test.ts` and `chief.test.ts`):
+A goal's lead puts each of their pull requests in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges) with the recap they put on it: Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneRules.ts`, their tests and `chief.test.ts`):
 
 - **It reads each pull request once,** as the project's board refreshes after the lead's recap: the goal, the pull request's title and description, the lead's pick and its recap, by the lane rules and the captain's standing orders, with the model it judges a turn with. Its answer is a `cos-lane` ledger line, kept or raised, with why and its prompt's version, to check against what the captain did with it.
 - **Nothing in Ship or Show merges by itself before it has read it** at the commit its recap was put on at (`mergeHeld`): a new recap is read again. Ask is as high as it goes, so it isn't read.
@@ -46,7 +46,7 @@ A slice the lead (or the chief of staff) put in Show merges by itself once QA pa
 
 ## The lead's news it wakes them for
 
-Only the captain starts a goal lead's next turn in the core: Ops' and QA's news for the lead is a note, heard with the next message they get ([goals](../../docs/goals.md)). Where the chief of staff is on, it wakes the lead for the news that needs no captain, as whoever the note is from, and the note goes ahead of its words (`wake.ts`):
+Only the captain starts a goal lead's next turn in the core: Ops' and QA's news for the lead is a note, heard with the next message they get ([goals](../../docs/goals.md)). Where the chief of staff is on, it wakes the lead for the news that needs no captain, as whoever the note is from, and the note goes ahead of its words (`wakeRules.ts`):
 
 - **QA fails their pull request**, in a project that sends fails back (**Send failed PRs back**): back to the lead to fix it and ship again, or tell the captain why not, twice at most (`LEAD_FIX_ROUNDS`). Past that it's the captain's, and Ops' toast says the lead waits on them. A fail on a commit they've shipped past isn't sent back, and isn't the captain's either: QA is reviewing their latest already, so there's no toast. Nor is one Ops sent to a fixer of its own (the note names them): it wakes the lead for that fail only if the fix comes back to them.
 - **Their slice lands**: they carry on with what's next if it's within what the captain has agreed (what done looks like for the goal, and the calls they've made), and otherwise say what they'd do and stop for them (waiting for a go-ahead after each slice was the biggest wait on the captain: [where goals' time goes](../flow/README.md)). In the middle of a turn, they carry on where they are.
@@ -55,9 +55,9 @@ It never wakes a lead the captain owes an answer: a turn it judged a card or an 
 
 ## A cap on rounds without the captain
 
-Its words sending themselves and its wakes each start a lead's next turn without the captain, so a goal could go back and forth for hours unseen. After a few such rounds in a row (`UNATTENDED_ROUNDS`, `rounds.ts`), as `LEAD_FIX_ROUNDS` caps QA's send-backs, the next turn it would carry on or send back is a card instead: its words for the lead are offered as a reply (**Send its words**), not sent, and since the captain owes the lead an answer, Ops' news waits too. The `cos-verdict` line keeps what it judged.
+Its words sending themselves and its wakes each start a lead's next turn without the captain, so a goal could go back and forth for hours unseen. After a few such rounds in a row (`UNATTENDED_ROUNDS`, `roundRules.ts`), as `LEAD_FIX_ROUNDS` caps QA's send-backs, the next turn it would carry on or send back is a card instead: its words for the lead are offered as a reply (**Send its words**), not sent, and since the captain owes the lead an answer, Ops' news waits too. The `cos-verdict` line keeps what it judged.
 
-- **A round** is a lead's turn it judged, but the one the captain started: counted from the ledger, back to the captain's last `captain-decision` on that lead (its own sends don't count), so a restart loses nothing (`rounds.test.ts`, `chief.test.ts`).
+- **A round** is a lead's turn it judged, but the one the captain started: counted from the ledger, back to the captain's last `captain-decision` on that lead (its own sends don't count), so a restart loses nothing (`roundRules.test.ts`, `chief.test.ts`).
 - **Anything the captain decides** starts the count again: a reply, Got it, a suggested reply, sending its words themselves. A message to a lead at work isn't a decision the inbox records, so it doesn't; the cap only comes sooner for it, the side P7 picks.
 
 ## The four routes, from its principles

@@ -1,29 +1,11 @@
 // Each open goal's flow as it goes (README.md): worked out again from its lead's transcript and the ledger as the
 // lead's turns start and end, QA gives a verdict and its pull requests land, and kept in the plugin's state for the
-// goal's screens. The rules are in flow.ts; this is when to run them.
+// goal's screens. The rules are in flow.ts, and which goal a line moves and which flows are kept in flowsRules.ts; this
+// is when to run them.
 import { type Agent, errorMessage, goalRecord, hasLeadWork, type LedgerEvent, type PluginHost, type PluginState } from '../../plugin-api/server';
 import { goalFlow, leadFlow, transcriptMoments } from './flow';
-import type { FlowPluginState, LeadFlow } from './shared';
-
-/** The ledger's lines that move a goal from one state to another: QA's verdict on one of its pull requests, and one landing. */
-const MOVES: ReadonlySet<LedgerEvent['kind']> = new Set(['qa-verdict', 'merged', 'closed']);
-
-/** The goal a line in the ledger moves on, by its lead's id: the open goal with that pull request in its slice. */
-export function goalMoved(event: LedgerEvent, agents: Agent[]): string | undefined {
-  if (!MOVES.has(event.kind) || !('repo' in event) || !('pr' in event)) return undefined;
-  return agents.find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === event.repo && p.number === event.pr))?.id;
-}
-
-/** The goals' flows with `id`'s new one, leaving out any whose goal isn't open any more (`open` says). */
-export function withFlow(leads: Record<string, LeadFlow>, id: string, flow: LeadFlow, open: (id: string) => boolean): Record<string, LeadFlow> {
-  return Object.fromEntries([...Object.entries(leads).filter(([lead]) => lead !== id && open(lead)), [id, flow]]);
-}
-
-/** The goals' flows without those whose goal isn't open any more (`open` says), or undefined when every one still is. */
-export function withoutClosed(leads: Record<string, LeadFlow>, open: (id: string) => boolean): Record<string, LeadFlow> | undefined {
-  const kept = Object.entries(leads).filter(([lead]) => open(lead));
-  return kept.length === Object.keys(leads).length ? undefined : Object.fromEntries(kept);
-}
+import { goalMoved, withFlow, withoutClosed } from './flowsRules';
+import type { FlowPluginState } from './shared';
 
 export class Flows {
   /** The leads in the middle of a turn: a transcript can't tell a long tool call from a turn that's over. */

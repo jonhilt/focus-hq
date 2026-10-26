@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { prKey } from '../../shared/qa';
 import { demoWorkspace } from './demoRunner';
 import { focus, until } from './fakeFocus';
-import type { CommandRun } from './qaProof';
+import type { CommandRun } from './qaProofRules';
 import type { Triager } from './triage';
 import type { WorkspaceOps } from './types';
 

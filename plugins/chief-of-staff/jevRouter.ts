@@ -1,9 +1,10 @@
-import { JEV_BACKTEST_MODEL, JEV_QUESTIONS_VERSION, JEV_USD_PER_INPUT_TOKEN, type JevAnswer, jevRoute, PROPOSED_POLICY, interruptSignal, routeQuestions, type RoutePolicy } from './jevRoute';
-import { readReply } from './jevRun';
+import { JEV_BACKTEST_MODEL, routeQuestions } from './jevRoute';
+import { routingOf } from './jevRouterRules';
+import { readReply } from './jevRunRules';
 import type { CosRoute } from './shared';
 
 // The live judge's route from Jev (README.md#how-it-judges-a-turn), in a project the captain has switched Route with Jev
-// on for: the backtest's questions and its proposed policy, asked of TypeSafe's API. Haiku still writes the words, for
+// on for: the backtest's questions asked of TypeSafe's API, routed by its proposed policy (jevRouterRules.ts). Haiku still writes the words, for
 // the route Jev picked; when Jev can't answer, Haiku routes as it always has.
 
 export const JEV_URL = process.env.FOCUS_JEV_URL || 'https://api.typesafe.ai/v1/systemone';
@@ -32,22 +33,6 @@ export interface JevRouting {
 /** Who routes a turn before Haiku writes its words: Jev, or a fake in a test. */
 export interface Router {
   route(state: string, standingOrders: string | undefined): Promise<JevRouting>;
-}
-
-/** Jev's answers made a route under `policy`, with what the verdict keeps of them. */
-export function routingOf(answers: Readonly<Record<string, JevAnswer>>, inputTokens: number, policy: RoutePolicy = PROPOSED_POLICY): JevRouting {
-  const route = answers.route;
-  return {
-    route: jevRoute(answers, policy),
-    how: {
-      model: JEV_BACKTEST_MODEL,
-      version: JEV_QUESTIONS_VERSION,
-      interrupt: interruptSignal(answers, policy.captainsCall),
-      ...(route?.choice !== undefined && { choice: route.choice }),
-      ...(route?.confidence !== undefined && { confidence: route.confidence }),
-      costUsd: inputTokens * JEV_USD_PER_INPUT_TOKEN,
-    },
-  };
 }
 
 type Fetch = (url: string, init: RequestInit) => Promise<Pick<Response, 'ok' | 'status' | 'text'>>;

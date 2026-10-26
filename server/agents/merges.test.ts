@@ -1,6 +1,6 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
+import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
 import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { Hub } from '../hub';

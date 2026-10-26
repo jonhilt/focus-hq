@@ -1,32 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import type { GoalRecord, LedgerEvent } from '../../plugin-api/shared';
 import type { Thread } from './shared';
-import { closedGoals, demoAnswer, proposalsFrom, SORT_LIMIT, sortPrompt, sortRecord, toSort } from './sort';
+import { closedGoals, demoAnswer, proposalsFrom, sortPrompt, sortRecord } from './sort';
 
 const at = (d: number) => Date.UTC(2026, 9, d);
 const thread = (contact: string, more: Partial<Thread> = {}): Thread =>
   ({ goal: 'g1', goalTitle: 'Checkout', leadName: 'Lt. Reyes', contact, text: `thread ${contact}`, at: at(10), slice: 1, closedAt: at(12), ...more });
 const record = (id: string, closedAt: number, more: Partial<GoalRecord> = {}): GoalRecord =>
   ({ id, title: `Goal ${id}`, slices: 1, prs: [], leadName: 'Lt. Reyes', openedAt: 0, closedAt, ...more });
-
-describe('which threads a sort asks about', () => {
-  it('asks about a closed goal’s threads still to decide, the ones never proposed first, then the oldest', () => {
-    const threads = [
-      thread('c1', { at: at(5), proposed: { as: 'dropped', note: 'stale', at: at(13) } }),
-      thread('c2', { at: at(9) }),
-      thread('c3', { at: at(7) }),
-      thread('c4', { decided: { as: 'parked', note: 'later', at: at(13) } }),
-      thread('c5', { goal: 'g9' }),
-    ];
-    expect(toSort(threads, new Set(['g9'])).map((t) => t.contact)).toEqual(['c3', 'c2', 'c1']);
-  });
-
-  it('asks about every thread to decide in one call, up to a limit', () => {
-    const many = Array.from({ length: SORT_LIMIT + 5 }, (_, i) => thread(`c${i}`, { at: i }));
-    expect(toSort(many, new Set())).toHaveLength(SORT_LIMIT);
-    expect(toSort(undefined, new Set())).toEqual([]);
-  });
-});
 
 describe('what the model is told', () => {
   it('reads each goal as it last closed, the latest first, of the project asked about', () => {

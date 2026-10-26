@@ -4,14 +4,15 @@ import path from 'node:path';
 import { paths } from '../config';
 import { INSTALL_STAMP, installable, installCommand, installFailedNote, installStamp, lockfilesIn, mergeCheckCommands, missingPackageManager, type PackageFacts, packageJsonScripts, packageManagerFor, packageManagerIn, packageScriptsIn } from '../packageManager';
 import { CommandError, errorMessage, KeyedLock, run, sleep } from '../util';
-import { type MergeHeads, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheck';
+import { type MergeHeads, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheckRules';
 import { sameCommit } from '../../shared/qa';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
-import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retest';
-import type { CommandRun } from './qaProof';
+import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retestRules';
+import type { CommandRun } from './qaProofRules';
 import { reflogBranches } from './prRules';
 import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
-import { claimBranch, heldMessage, orphanedWorkspaces, parseWorktrees, retryLockRace, trashName } from './worktrees';
+import { heldMessage, parseWorktrees, retryLockRace, trashName } from './worktrees';
+import { claimBranch, orphanedWorkspaces } from './worktreeRules';
 
 const lock = new KeyedLock();
 /** One run of the checks at a time in each repo's checks folder. */

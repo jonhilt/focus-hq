@@ -43,14 +43,14 @@ The scorecard only measures; the ratchets hold the line. Two numbers may only go
 - a file above its count, a new file with any at all among them. Narrow a cast instead (a type guard, `in`/`typeof`, an Effect Schema decode, a type that says what the value is); move a complex function's decisions into small pure functions with tests, or test it. Don't raise the baseline to pass;
 - a file below its count: lower the baseline and commit it, so the gain can't be spent again.
 
-A third only goes up: how much of each file that keeps state the [state rules](../../docs/invariants.md#describing-a-part)' checks reach (`rules-baseline.json`, whole percent of its lines). It fails a file reached less than its count, and a new file that keeps state with none of it reached: describe the part instead.
+A third goes down too: the lines of each file that keeps state the [state rules](../../docs/invariants.md#describing-a-part)' checks don't reach (`rules-baseline.json`). It fails a file with more of them than its count, and a new file that keeps state with none of it reached: describe the part instead. It counted the share of each file reached at first, but a share drops when well-reached code moves out of the file (a decision into its `*Rules.ts` file) though no check reaches any less, so it sent back exactly the moves it should welcome; lines left unreached only grow when code nothing checks is added.
 
 | | checked by | a gain locked in by |
 | --- | --- | --- |
-| type assertions | a test in the gate (`fenceRatchet.test.ts`), so `pnpm test` | `pnpm run fence:lower` |
-| the state rules' reach of each file that keeps state (only goes up) | `pnpm run rules --ratchet` (a coverage run of the descriptions' checks alone, on seed 1), before an agent finishes and in QA's review | `pnpm run rules --raise` |
+| type assertions | a test in the gate (`fenceRatchetRules.test.ts`), so `pnpm test` | `pnpm run fence:lower` |
+| the lines of each file that keeps state the state rules don't reach | `pnpm run rules --ratchet` (a coverage run of the descriptions' checks alone, on seed 1), before an agent finishes and in QA's review | `pnpm run rules --lower` |
 | functions over CRAP 30 | `pnpm run crap --ratchet` (it needs a coverage run, which `pnpm test` doesn't do), before an agent finishes and in QA's review | `pnpm run crap --lower` |
 
 It counts per file, so a gain in one file can't pay for a loss in another, and two pull requests only meet in a baseline when they change the same file's count. The lowering commands only ever lower a count; raising one is a hand edit that shows in the diff. A function's CRAP is counted per file, not per function, since names repeat (two `(callback to Effect.gen)` in one file) and lines move; so a function that gets worse but was already over 30 isn't caught, nor is one that goes over while another in its file comes under. The count over 30 held still across test seeds, so the CRAP ratchet doesn't flake on coverage.
 
-Renaming or moving a file carries no count across: its old line drops to 0 and its new path counts as new, so move its line in the baseline by hand. The rules are in `scripts/fenceRatchet.ts` (pure, tested beside it), the I/O in `scripts/fenceFiles.ts` and `scripts/crap.ts`.
+Renaming or moving a file carries no count across: its old line drops to 0 and its new path counts as new, so move its line in the baseline by hand. The rules are in `scripts/fenceRatchetRules.ts` (pure, tested beside it), the I/O in `scripts/fenceFiles.ts` and `scripts/crap.ts`.

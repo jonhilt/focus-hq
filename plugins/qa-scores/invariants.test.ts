@@ -21,14 +21,20 @@ const scorer = { ...loadScorer('qa-report'), samplingRate: 100 };
 const PRS = [1, 2, 3];
 const ANSWER: ReadOnlyResult = { text: '', structured: { label: 'thorough', why: 'Checked the risky path.' }, model: 'haiku', costUsd: 0.05 };
 
+/**
+ * When QA's verdicts were journaled: one moment for them all, inside the sweep's look back. A sweep grades the newest
+ * first, so a clock read as each journal is lent would order them by which millisecond the lending fell in.
+ */
+const AT = Date.now();
+
 /** A review journal with QA's verdicts on each of `shas`. */
 const journalOf = (pr: number, shas: string[]): LentJournal<ReviewEntry> => ({
   key: `acme/shop#${pr}`,
   entries: [
-    { kind: 'requested', projectId: 'shop', repo: 'acme/shop', number: pr, title: `PR ${pr}`, v: 1, seq: 1, t: Date.now() },
+    { kind: 'requested', projectId: 'shop', repo: 'acme/shop', number: pr, title: `PR ${pr}`, v: 1, seq: 1, t: AT },
     ...shas.map((sha, i) => ({
       kind: 'reported' as const, verdict: 'pass' as const, officer: 'Lt. Varga', body: '', failedRounds: 0, sha, screenshots: [],
-      report: { verdict: 'pass' as const, summary: 'Fine.', checks: [], commands: [], captions: [] }, v: 1 as const, seq: i + 2, t: Date.now(),
+      report: { verdict: 'pass' as const, summary: 'Fine.', checks: [], commands: [], captions: [] }, v: 1 as const, seq: i + 2, t: AT,
     })),
   ],
 });

@@ -5,9 +5,10 @@ import './chief-of-staff.css';
 import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, LCARS, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
 import { openStream } from './stream';
 import { hailing } from './here';
-import { type TurnStage, turnNews, turnStage } from './inbox';
-import { cosMove } from './move';
-import { AUTO_SEND_MS, autoSendFor, CHIEF_OF_STAFF, cosStateOf, jevFor } from './shared';
+import { type TurnStage, turnNews, turnStage } from './inboxRules';
+import { cosMove } from './moveRules';
+import { autoSendFor, jevFor } from './cosRules';
+import { AUTO_SEND_MS, CHIEF_OF_STAFF, cosStateOf } from './shared';
 
 /** Comms on the HUD: whatever waits on the captain, anywhere on the ship, lit up and counted; C opens Comms to answer it. */
 function badge(hails: number): HTMLElement {

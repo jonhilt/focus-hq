@@ -1,12 +1,14 @@
 import type { Board, BotChange, BotStatus, ConflictsOutcome, PluginSecretStatus, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM } from '../shared/types';
-import { freshBoard, prsOffBoard, type RepoListing, staleClosedPrs } from '../shared/board';
+import { freshBoard, type RepoListing } from '../shared/board';
+import { prsOffBoard, staleClosedPrs } from '../shared/boardRules';
 import { chosenSet, previewPrsGone } from '../shared/previewSet';
-import { issuesToAssign } from '../shared/dependencies';
+import { issuesToAssign } from '../shared/dependencyRules';
 import type { Closer } from '../shared/ledger';
-import { autoMergedSaid, autoMergeFor, boardMergeSaid, checkMergesFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, requestedMergeSaid, stepMark } from '../shared/mergeGate';
+import { autoMergedSaid, autoMergeFor, boardMergeSaid, checkMergesFor, conflictsSaid, forgottenMarks, type GateMark, mergeMethodFor, mergeStep, type MergeStep, requestedMerge, requestedMergeSaid, stepMark } from '../shared/mergeGateRules';
 import { entryIn, entryText, type LogFrom, type PersonalEntry, type PersonalMark } from '../shared/personalLog';
-import { autoQaFor, autoSendBackFor, prKey, verdictBehindHead } from '../shared/qa';
+import { prKey } from '../shared/qa';
+import { autoQaFor, autoSendBackFor, verdictBehindHead } from '../shared/qaRules';
 import type { AgentManager } from './agents/manager';
 import { BotSetup } from './bot';
 import type { Lent } from './agents/manager/pluginHost';
@@ -21,7 +23,7 @@ import type { Store } from './store';
 import { Secrets, secretSetBy } from './secrets';
 import { changeSettings, pinnedSettings, settingsInForce } from './settings';
 import { projectChangeFollowUps } from './projectChange';
-import { issueRefusal, previewTarget } from './focusRequests';
+import { issueRefusal, previewTarget } from './focusRequestRules';
 import { errorMessage, newId } from './util';
 import type { Voice } from './voice';
 

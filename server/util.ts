@@ -4,6 +4,9 @@ import path from 'node:path';
 import { seededRandom } from '../shared/random';
 import { withoutSecrets } from './secrets';
 
+// pure, so a decision can use them without this file's processes and dice (docs/architecture.md#decisions)
+export { errorMessage, slugify, truncate } from '../shared/text';
+
 export class CommandError extends Error {
   constructor(
     message: string,
@@ -87,15 +90,6 @@ export function newId(prefix: string): string {
   return `${prefix}_${randomHex(5)}`;
 }
 
-export function slugify(text: string, max = 40): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, max)
-    .replace(/-+$/g, '');
-}
-
 /** Serializes async work per key (e.g. git operations on one mirror). */
 export class KeyedLock {
   private tails = new Map<string, Promise<unknown>>();
@@ -112,15 +106,7 @@ export class KeyedLock {
   }
 }
 
-export function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
-}
-
 export const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
-
-export function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
-}
 
 /**
  * `name`'s file in `dir`. Names come from requests (`/api/agents/:id/...`), so one that isn't a plain file name, like

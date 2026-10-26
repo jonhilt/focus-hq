@@ -1,7 +1,7 @@
 import { Effect } from 'effect';
 import type { Closer, LedgerEntry } from '../../../shared/ledger';
-import { gateStep, type MergeHeads, mergeCheckOn, type MergeTrial, mergeVerdict, refusalComment, trialOutcome } from '../../../shared/mergeCheck';
-import { checkMergesFor } from '../../../shared/mergeGate';
+import { gateStep, type MergeHeads, mergeCheckOn, type MergeTrial, mergeVerdict, refusalComment, trialOutcome } from '../../../shared/mergeCheckRules';
+import { checkMergesFor } from '../../../shared/mergeGateRules';
 import { prKey } from '../../../shared/qa';
 import type { MergeCheck, MergeMethod, PullRequest } from '../../../shared/types';
 import { GitHub } from '../../github/service';

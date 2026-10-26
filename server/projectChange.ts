@@ -1,6 +1,6 @@
 // A project's settings, as the captain's change to them leaves them.
 
-import { mergeCheckNames } from '../shared/mergeCheck';
+import { mergeCheckNames } from '../shared/mergeCheckRules';
 import { switchPlugin } from '../shared/projectPlugins';
 import { QA_BRIEF_MAX } from '../shared/qa';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, type PreviewConfig, type Project, ROOM_THEMES } from '../shared/types';

@@ -141,6 +141,8 @@ A turn the captain stops, whether it ends or a restart finds it, leaves what was
 
 An agent sent home has a `reset` in their journal, so an id that comes back (a reopened goal, QA's next review) starts from nothing.
 
+**Who's aboard is kept** in `state.json` (the store; `agentAfterRestart` in `server/agentRestartRules.ts`). Everyone aboard when Focus went down is aboard when it starts again, on the same project, task and issue and at the same desk, and no one sent home comes back. Whoever was at work stops, saying they were interrupted, and waits for a message, as above (`server/storeInvariants.test.ts`).
+
 ## Scratch dirs
 
 Every local session gets a scratch dir for throwaway files, exported to it as `FOCUS_SCRATCH`. Ops empties it when a run starts and deletes it when the run ends, so their prompts tell them to put probe scripts, scratch repos and test output there and never clean up after themselves. Cloud agents work on a machine of their own and don't get one.

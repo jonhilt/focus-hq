@@ -24,13 +24,16 @@ export { type CaptainAnswer, landed } from '../shared/captainAnswer';
 /** A lead's open question, what an agent said last, and what a lead showed on their screen this turn. */
 export { openQuestion } from '../shared/artifacts';
 export { lastWords, shownThisTurn } from '../shared/leadWords';
-export { autoSendBackFor, prKey, qaBadge } from '../shared/qa';
+export { prKey, qaBadge } from '../shared/qa';
+export { autoSendBackFor } from '../shared/qaRules';
 /** What a pull request's merge button does now, as the board's does, and how a repo's pull requests merge. */
-export { type MergeAction, mergeAction } from '../shared/mergeGate';
-export { higherLane, type Lane, LANE_SAID, LANES, laneName } from '../shared/mergeLane';
+export { type MergeAction, mergeAction } from '../shared/mergeGateRules';
+export { higherLane, type Lane, LANE_SAID, LANES, laneName } from '../shared/mergeLaneRules';
 export { PUBLIC_WORDS_RULE, SHIP_WORDS } from '../shared/wording';
 export type { SliceRecap } from '../shared/recap';
 export { goalTitle } from '../shared/goalTitle';
+/** Reading an agent: whether it's a goal's lead (a `LeadAgent`); and the team station a new goal would get. */
+export { hasLeadWork, pickStation } from '../server/agents/leadRules';
 /** The ledger as Focus reads it out: a line of it, and lines grouped by day. */
 export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';
 /** The crew's voices, and what a reply says aloud. */

@@ -1,7 +1,8 @@
 import { Effect } from 'effect';
 import { type Agent, errorMessage, GitHub, newId, type PluginHost, type PluginState } from '../../plugin-api/server';
 import type { ScorecardService } from '../scorecard/api';
-import { climbBrief, climbHome, climbLog, climbStep } from './climb';
+import { climbBrief, climbLog } from './climb';
+import { climbHome, climbStep } from './climbRules';
 import { CLIMB_BRANCH, CLIMB_ENDS_KEPT, CLIMBER_ID, climbingEngineer, freshClimb, type Climb } from './shared';
 
 /** How many of main's latest scorecards a brief looks through, to see whether past gains held. */

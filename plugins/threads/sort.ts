@@ -1,27 +1,14 @@
-// Sort for me (README.md): the threads plugin asking a model where a project's threads still to decide end. Pure: which
-// threads it asks about, what it tells the model, and the proposals it takes from the answer; the server does the asking.
+// Sort for me (README.md): the threads plugin asking a model where a project's threads still to decide end. Pure: what
+// it tells the model, and the proposals it takes from the answer (which threads it asks about is threadsRules.ts');
+// the server does the asking.
 import { type Agent, type GoalRecord, type LedgerEvent, projectIntents, type ThreadProposal } from '../../plugin-api/shared';
 import { NOTE_LIMIT, THREAD_ENDS, type Thread } from './shared';
 
 /** The model that sorts: Claude Code's alias for the latest Sonnet. A judgement over the project's record, a few cents a sort. */
 export const SORT_MODEL = 'sonnet';
 
-/**
- * At most this many threads a sort: every one a project has to decide, in one call, so a thread said twice is seen
- * twice and a press doesn't ask about the same oldest ones again (Focus's own had about 200 at the first press).
- */
-export const SORT_LIMIT = 300;
-
 /** How many of a project's closed goals, the latest, the model reads of: every one since the oldest thread, so it can say which did it. */
 const GOALS_READ = 200;
-
-/** The threads a sort asks about: a closed goal's (not one under way, of `underWay`), still to decide; never proposed first, then oldest first. */
-export function toSort(threads: readonly Thread[] | undefined, underWay: ReadonlySet<string>): Thread[] {
-  return (threads ?? [])
-    .filter((t) => !t.decided && !underWay.has(t.goal))
-    .sort((a, b) => Number(!!a.proposed) - Number(!!b.proposed) || a.at - b.at)
-    .slice(0, SORT_LIMIT);
-}
 
 /** Project `projectId`'s closed goals, as each last closed, the latest first. */
 export function closedGoals(events: readonly LedgerEvent[], projectId: string): GoalRecord[] {

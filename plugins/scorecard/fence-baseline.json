@@ -29,7 +29,7 @@
   "plugins/climber/scripts/climbReplay.ts": 4,
   "plugins/flow/scripts/beforeAfter.ts": 1,
   "plugins/flow/scripts/flowRework.ts": 1,
-  "plugins/number-one/call/calls.ts": 1,
+  "plugins/number-one/call/callRules.ts": 1,
   "plugins/number-one/call/live.ts": 1,
   "plugins/number-one/call/machine.ts": 2,
   "plugins/number-one/chat.ts": 1,

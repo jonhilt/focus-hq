@@ -1,6 +1,6 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import type { MergeHeads, MergeTrial } from '../shared/mergeCheck';
+import type { MergeHeads, MergeTrial } from '../shared/mergeCheckRules';
 import { prKey } from '../shared/qa';
 import type { PullRequest, QaReview } from '../shared/types';
 import { DemoDrafter, demoWorkspace } from './agents/demoRunner';
@@ -16,7 +16,7 @@ import { Voice } from './voice';
 
 // What a board refresh does with each PR on its way to merged (docs/merging.md, docs/qa.md): auto-merge following
 // `mergeStep`, and the captain's "Merge when QA passes" following `requestedMerge`. The decisions are tested in
-// shared/mergeGate.test.ts; these hold Ops to carrying them out, on the demo GitHub and the fake crew.
+// shared/mergeGateRules.test.ts; these hold Ops to carrying them out, on the demo GitHub and the fake crew.
 
 const REPO = 'demo/webshop-frontend';
 /** One of Ops' demo PRs in REPO, open and passing. */

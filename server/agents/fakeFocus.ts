@@ -6,10 +6,13 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import type { Triager } from './triage';
 import { Hub } from '../hub';
-import { agentAfterRestart, Store } from '../store';
+import { agentAfterRestart } from '../agentRestartRules';
+import { randomAvatar } from '../../shared/crew';
+import { Store } from '../store';
 import type { Autonomy, PullRequest } from '../../shared/types';
 import { demoSawBranch, demoWorkspace } from './demoRunner';
-import { hasLeadWork, leadWorktreeId, repoBranch } from './lead';
+import { leadWorktreeId, repoBranch } from './lead';
+import { hasLeadWork } from './leadRules';
 import { AgentManager } from './manager';
 import { type Frames, type Picture, QaChat, Recordings, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import { DemoQaChat } from './demoQaChat';
@@ -72,7 +75,7 @@ export function focus(workspace: WorkspaceOps = demoWorkspace, github: Layer.Lay
  * were), and a new manager and Claude Code, which haven't recovered anyone yet (`agents.recover()`).
  */
 export function restarted(store: Store, workspace: WorkspaceOps = demoWorkspace, github: Layer.Layer<GitHub> = demoLayer, render?: Render, recordings?: Layer.Layer<Recordings>) {
-  for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop'));
+  for (const agent of [...store.agents.values()]) store.putAgent(agentAfterRestart(agent, 'Shop', randomAvatar));
   return crew(store, workspace, github, noOfficer, render, recordings);
 }
 

@@ -14,7 +14,7 @@ Docs hold only what the code can't: why it's built this way (and what was reject
 
 ## Rules
 
-- Keep decisions (what happens next, can this merge) in small pure functions with a test next to them; the I/O stays in the caller.
+- A decision (what happens next, can this merge) goes in a `*Rules.ts` file with its test beside it: pure, narrow inputs, `now` as a parameter, the next step as a `{ kind }` union; the I/O stays in the caller (`docs/architecture.md#decisions`).
 - A part that keeps something across a restart (a journal, a saved file, the store) or waits on Claude Code, git or GitHub is described to Focus's two rules, with its docs page's promises as tests (`docs/invariants.md#describing-a-part`). Adding or changing one, add or change its description.
 - Only a goal's lead pushes or opens PRs itself, and Ops claims those as the goal's (`server/agents/manager/goalPrs.ts`). Other agents never do: the manager does (`server/agents/manager/delivery.ts`). Only Ops or the captain merges.
 - Type assertions and functions over CRAP 30 only go down, file by file (`plugins/scorecard/README.md#the-ratchets`). Narrow instead of casting; split or test a complex function. After removing some, `pnpm run fence:lower` or `pnpm run crap --lower`. Never raise a baseline.
@@ -27,4 +27,4 @@ Docs hold only what the code can't: why it's built this way (and what was reject
 
 Run `pnpm run crap --changed origin/<base branch> --ratchet` and report the touched functions as an advisory check, **CRAP (advisory)** (`plugins/scorecard/crap.md`). The ratchet is not advisory: fail a PR whose file gained a function over CRAP 30, or that lowered one without lowering the baseline.
 
-Run `pnpm run rules --ratchet` too, and fail a PR it fails: a file that keeps state the state rules now reach less of, or a new one no description reaches (`docs/invariants.md#describing-a-part`).
+Run `pnpm run rules --ratchet` too, and fail a PR it fails: a file that keeps state with more lines the state rules don't reach, or a new one no description reaches (`docs/invariants.md#describing-a-part`).

@@ -5,7 +5,7 @@ import { type Agent, type Attention, focus, h, needsYou, type PhoneHost, type Ph
 import { hailing } from './here';
 import { hailKey } from './inbox';
 import { inbox } from './inboxApi';
-import { laneOf, lineOf } from './lanes';
+import { laneOf, lineOf } from './laneRules';
 import { type CosRead, CHIEF_OF_STAFF, readOf } from './shared';
 
 /** When its words go by themselves, to the minute: the phone's screen is drawn again every few seconds. */

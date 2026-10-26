@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { errorMessage } from '../util';
-import type { AvailablePlugin } from '../../shared/shipPlugins';
+import type { AvailablePlugin } from '../../shared/shipPluginRules';
 import type { FocusPlugin } from './contract';
 
 /**

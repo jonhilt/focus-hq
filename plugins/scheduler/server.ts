@@ -5,8 +5,8 @@
 import { z } from 'zod';
 import type { FocusPlugin, LeadTool, PluginHost } from '../../plugin-api/server';
 import { Book } from './book';
-import { alertCaptain, alertWait } from './alert';
-import { answeredLateText, describeTimes, lateBy, slotTime, unansweredText } from './rules';
+import { alertCaptain } from './alert';
+import { alertWait, answeredLateText, describeTimes, lateBy, slotTime, unansweredText } from './schedulerRules';
 import { type Delivery, Scheduler } from './scheduler';
 import { freshScheduler, type RunRecord, SCHEDULER, type Schedule, type SchedulerState } from './shared';
 

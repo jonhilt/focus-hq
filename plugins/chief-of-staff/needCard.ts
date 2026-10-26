@@ -3,8 +3,8 @@ import type { Agent, Attention } from '../../plugin-api/shared';
 import { decidedBy, waited } from './commsList';
 import { type DecisionEvent, hailKey as keyOf } from './inbox';
 import { inbox } from './inboxApi';
-import { lineOf } from './lanes';
-import { type BoardPr, mergePress, openPrsOf } from './merging';
+import { lineOf } from './laneRules';
+import { type BoardPr, mergePress, openPrsOf } from './mergingRules';
 import { readOf } from './shared';
 import { openZoom, type Zoomable } from './zoom';
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createActor, fromPromise, SimulatedClock, type StateValueFrom, waitFor } from 'xstate';
 import type { Topic } from './brief';
 import { callMachine, EXPIRY_MS, type Reply, type RouteInput, SETTLE_MS } from './machine';
-import type { Act, Routing, StartGoal } from './route';
+import type { Act, Routing, StartGoal } from './routeRules';
 
 const start: StartGoal = { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode', station: 1 };
 const act: Act = { kind: 'start-queued', start };

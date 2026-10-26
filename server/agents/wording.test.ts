@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { leadSystemAppend } from './lead';
 import { qaPlaybook } from './qa';
-import { LANES, raisedSaid } from '../../shared/mergeLane';
-import { type MergeTrial, mergeVerdict, refusalComment } from '../../shared/mergeCheck';
-import { stuckClosedComment } from '../../shared/triage';
+import { LANES, raisedSaid } from '../../shared/mergeLaneRules';
+import { type MergeTrial, mergeVerdict, refusalComment } from '../../shared/mergeCheckRules';
+import { stuckClosedComment } from '../../shared/triageRules';
 import { plannerSystemPrompt } from './planner';
 import { pullRequestBody } from './prompts';
 import { qaComment } from './qa';
 import { recapMarkdown } from './recap';
-import { carriedComment } from './retest';
+import { carriedComment } from './retestRules';
 import { triageSystemPrompt } from './triage';
 import { PUBLIC_WORDS_RULE, SHIP_WORDS } from '../../shared/wording';
 

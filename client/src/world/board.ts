@@ -1,9 +1,9 @@
 import { columns, goalState } from '../../../shared/board';
 import { UNIFORM } from '../../../shared/crew';
-import { waitsLabel } from '../../../shared/dependencies';
+import { waitsLabel } from '../../../shared/dependencyRules';
 import * as THREE from 'three';
 import { prKey, qaBadge } from '../../../shared/qa';
-import { triageLabel } from '../../../shared/triage';
+import { triageLabel } from '../../../shared/triageRules';
 import type { Agent, Board, Project } from '../../../shared/types';
 import { state } from '../net/state';
 import { canvasTexture, fitText, makeCanvas, wrap } from './canvas';

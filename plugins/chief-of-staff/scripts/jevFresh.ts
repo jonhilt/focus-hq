@@ -17,7 +17,7 @@ import path from 'node:path';
 import { focusLedger } from '../../../plugin-api/server';
 import { answersById, freshTurns, labelCards, liveRoutes, pickSample } from '../jevFresh';
 import { JEV_QUESTIONS_VERSION, jevRoute, PROPOSED_POLICY, type RoutePolicy, scoreBlind } from '../jevRoute';
-import { parseJsonLines } from '../jevRun';
+import { parseJsonLines } from '../jevRunRules';
 import type { CosRoute } from '../shared';
 
 const args = process.argv.slice(2);

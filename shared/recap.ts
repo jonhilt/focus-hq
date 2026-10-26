@@ -1,4 +1,4 @@
-import type { Lane } from './mergeLane';
+import type { Lane } from './mergeLaneRules';
 
 // A slice's system recap, as the lead ships it (docs/goals.md#the-system-recap): its shape, shared so the browser and
 // plugins can read the one a lead last shipped (`LeadWork.recap`). What's done with it is server/agents/recap.ts's.
@@ -36,6 +36,6 @@ export interface SliceRecap {
   map?: RecapStep[];
   /** What happens, in order: the change flow, as a sequence. */
   flow?: RecapStep[];
-  /** How the lead would have it merge once QA passes it (shared/mergeLane.ts): none is Ask. */
+  /** How the lead would have it merge once QA passes it (shared/mergeLaneRules.ts): none is Ask. */
   lane?: Lane;
 }

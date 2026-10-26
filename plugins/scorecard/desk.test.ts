@@ -3,7 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { describe, expect, it, vi } from 'vitest';
-import { checkoutHead, measureNewCommit, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './desk';
+import { checkoutHead, readScorecard, SavedScorecards, ScorecardDesk, SHOWN, type ScorecardSource } from './desk';
 import type { Scorecard, Scorecards } from './types';
 
 // checkoutHead's test runs real git: a budget fit for a busy machine
@@ -72,18 +72,6 @@ describe('ScorecardDesk', () => {
     await settle();
     expect(d.current()).toMatchObject({ status: 'failed', error: 'pnpm: not found', history: [card(1)] });
     expect(d.measure().status).toBe('measuring');
-  });
-});
-
-describe('measureNewCommit', () => {
-  it('measures a clean commit with no scorecard yet, the first one included', () => {
-    expect(measureNewCommit([card(1)], { commit: 'c2', dirty: false })).toBe(true);
-    expect(measureNewCommit([], { commit: 'c2', dirty: false })).toBe(true);
-  });
-
-  it('leaves a commit it measured already, and uncommitted work, alone', () => {
-    expect(measureNewCommit([card(1), card(2)], { commit: 'c2', dirty: false })).toBe(false);
-    expect(measureNewCommit([card(1)], { commit: 'c2', dirty: true })).toBe(false);
   });
 });
 

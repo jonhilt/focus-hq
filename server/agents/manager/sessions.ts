@@ -9,8 +9,11 @@ import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } fr
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
-import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, compactsFirst, freshSessionPrompt, hasLeadWork, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
-import { mismatchError, recovery, signInMismatch, turnEnding, type TurnKind } from '../runJournal';
+import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
+import { compactsFirst, hasLeadWork } from '../leadRules';
+import { mismatchError, turnEnding, type TurnKind } from '../runJournal';
+import { recovery, signInMismatch } from '../runJournalRules';
+import { compactRefusal } from './sessionRules';
 import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { type Recordings, Sessions, Workspace } from '../services';
@@ -18,7 +21,7 @@ import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGE
 import { committedWaypoint, probedWaypoints } from '../waypoints';
 import { BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
 import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
-import { EmptyRepository, FINISHED, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
+import { EmptyRepository, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
 /** Running an agent's Claude Code session: launching their task, each turn and its hooks, compacting, and what follows a turn. */
 export class AgentSessions extends Part {
@@ -275,7 +278,6 @@ export class AgentSessions extends Part {
         ),
     }));
   }
-
 
   /**
    * One turn of the agent's session, start to finish. Messages waiting for them go in as it starts (`withInbox`). The
@@ -561,7 +563,6 @@ export class AgentSessions extends Part {
     if (run.open?.prompt === COMMIT_NUDGE) this.rt(agent.id).nudged = true;
   }
 
-
   /** Focus is shutting down: every agent's session stops, and their turns are left to carry on when it starts again. */
   shutDown(): void {
     this.core.closing = true;
@@ -589,14 +590,6 @@ interface TurnEnd {
   attaching?: Runtime['attaching'];
   /** How Claude Code signed in, when it wasn't the way Focus meant. */
   mismatch?: string;
-}
-
-/** Why the captain's Compact now is refused (`running`: a turn of theirs is under way), or undefined when it isn't. */
-export function compactRefusal(agent: Pick<Agent, 'name' | 'task' | 'sessionId' | 'cloud' | 'status'>, running: boolean): string | undefined {
-  if (agent.task === 'review') return 'QA starts each review afresh, so there’s nothing to compact';
-  if (!agent.sessionId || agent.cloud) return `${agent.name} has no conversation here to compact`;
-  if (!FINISHED.includes(agent.status) || running) return `${agent.name} is working: compact once their turn ends`;
-  return undefined;
 }
 
 /** The id Claude Code gives a workflow agent: nothing that could climb out of its transcripts' folder. */

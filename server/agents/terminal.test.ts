@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cloudSessionId, safeDescription, shQuote, terminalLaunchers, terminalScript } from './terminal';
+import { cloudSessionId, shQuote, terminalLaunchers, terminalScript } from './terminal';
 
 const script = { cwd: "/work/it's here", claude: '/sdk/claude', description: 'Focus HQ: Ada on acme/shop#12.', agentName: 'Ada', log: '/data/ct/a1/terminal.log' };
 
@@ -8,17 +8,6 @@ describe('shQuote', () => {
     expect(shQuote('plain')).toBe("'plain'");
     expect(shQuote("it's")).toBe("'it'\\''s'");
     expect(shQuote('$HOME `x` "y"')).toBe("'$HOME `x` \"y\"'");
-  });
-});
-
-describe('safeDescription', () => {
-  it('keeps plain words and punctuation, and drops what a shell or cmd.exe would read', () => {
-    expect(safeDescription('Focus HQ: Ada on acme/shop#12 (dark mode).')).toBe('Focus HQ: Ada on acme/shop#12 (dark mode).');
-    expect(safeDescription('a "quoted" 100% & | <b> $x `y` ^z it\'s')).toBe('a quoted 100 b x y z it s');
-  });
-
-  it('is cut to length', () => {
-    expect(safeDescription('word '.repeat(100), 20)).toBe('word word word word');
   });
 });
 

@@ -26,7 +26,7 @@ export const config = {
   /**
    * FOCUS_PLUGINS, the plugins to switch on (docs/plugins.md): names of folders under plugins/, paths to plugin folders
    * anywhere, or `all` for every one under plugins/. Where it's set, it overrides the captain's choice in the ready room
-   * (`pluginChoice` in shared/shipPlugins.ts).
+   * (`pluginChoice` in shared/shipPluginRules.ts).
    */
   pluginsEnv: process.env.FOCUS_PLUGINS,
 };

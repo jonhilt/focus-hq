@@ -1,9 +1,10 @@
 import { statusIcon, statusLine } from '../../../shared/agentStatus';
-import { columns, goalState, resolvingAlready } from '../../../shared/board';
+import { columns, goalState } from '../../../shared/board';
+import { resolvingAlready } from '../../../shared/boardRules';
 import { UNIFORM } from '../../../shared/crew';
-import { assignWarning, waitsLabel } from '../../../shared/dependencies';
-import { mergeAction, mergeMethodFor } from '../../../shared/mergeGate';
-import { mergeCheckLine } from '../../../shared/mergeCheck';
+import { assignWarning, waitsLabel } from '../../../shared/dependencyRules';
+import { mergeAction, mergeMethodFor } from '../../../shared/mergeGateRules';
+import { mergeCheckLine } from '../../../shared/mergeCheckRules';
 import { prKey, qaBadge } from '../../../shared/qa';
 import { type Attention, inFlight, needLine, needsYou } from '../../../shared/tricorder';
 import type { Agent, Issue, Project, PullRequest, QaReview } from '../../../shared/types';

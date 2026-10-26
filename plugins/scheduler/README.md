@@ -10,7 +10,7 @@ croner's timers look at the wall clock at least every 30 seconds, so a Mac wakin
 
 ## Promises
 
-Each is a test in `invariants.test.ts`, `scheduler.test.ts` or `rules.test.ts`.
+Each is a test in `invariants.test.ts`, `scheduler.test.ts` or `schedulerRules.test.ts`.
 
 - **A schedule holds through Focus restarting, and each slot wakes the lead once.** A slot is claimed in the book, written whole and flushed to disk, before the lead hears of it, so a restart, even straight after a run, never runs it again. (state.json waits a moment before it saves and isn't flushed, so a slot claimed there could run twice: the book is a file of its own.)
 - **What fell due while Focus was down: the latest slot runs once, marked late, and those before it are missed.** As Focus starts again (and as a machine wakes), only the latest slot that fell due runs, saying how late it is and which slots it missed; the missed ones never run. The captain is toasted for each late, missed or held run.

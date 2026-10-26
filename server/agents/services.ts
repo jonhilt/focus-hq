@@ -3,11 +3,11 @@ import { GhServerError, serverStatus } from '../github/runner';
 import { errorMessage } from '../util';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
 import type { QaChatAnswer, QaChatRequest, QaChatter } from './qaChat';
-import type { SinceVerdict } from './retest';
-import type { CommandRun } from './qaProof';
+import type { SinceVerdict } from './retestRules';
+import type { CommandRun } from './qaProofRules';
 import type { EditedRecording } from './recorder';
 import type { PackageFacts } from '../packageManager';
-import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
+import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
 import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code

@@ -7,6 +7,7 @@ import os from 'node:os';
 import type { Duplex } from 'node:stream';
 import type { Preview, PreviewLink, PreviewMirror } from '../shared/types';
 import { previewMirrors as settings } from './config';
+import { mirrorPlan } from './previewMirrorRules';
 import { errorMessage } from './util';
 
 const LOOPBACK = new Set(['localhost', '127.0.0.1', '[::1]']);
@@ -44,13 +45,6 @@ export function wantedPorts(previews: readonly Preview[]): Map<number, string> {
     }
   }
   return wanted;
-}
-
-/** Which mirrors to open and which to close, to go from the ones there are to the ones wanted. */
-export function mirrorPlan(open: Iterable<number>, wanted: Iterable<number>): { open: number[]; close: number[] } {
-  const have = new Set(open);
-  const want = new Set(wanted);
-  return { open: [...want].filter((p) => !have.has(p)), close: [...have].filter((p) => !want.has(p)) };
 }
 
 /**

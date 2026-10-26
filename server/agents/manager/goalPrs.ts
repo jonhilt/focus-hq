@@ -1,9 +1,11 @@
 import { Effect, Option } from 'effect';
-import { higherLane, type Lane, laneName, raisedPrs, raisedSaid } from '../../../shared/mergeLane';
-import { autoQaFor, prKey } from '../../../shared/qa';
+import { higherLane, type Lane, laneName, raisedPrs, raisedSaid } from '../../../shared/mergeLaneRules';
+import { prKey } from '../../../shared/qa';
+import { autoQaFor } from '../../../shared/qaRules';
 import type { Agent, LeadPr, PrReview, PullRequest, ReviewComment } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
-import { everyPr, hasLeadWork, landedNote, leadWorktreeId, sliceLanded } from '../lead';
+import { everyPr, landedNote, leadWorktreeId, sliceLanded } from '../lead';
+import { hasLeadWork } from '../leadRules';
 import { claims, filedClaims, readyPrs, retestAfterTurn, reviewNote, type SeenBranches, unheardReviews } from '../prRules';
 import { writeRefused } from '../pushGuard';
 import { diffFiles, type RecapInput, recapLane, recapMarkdown, recapPage, recapProblems, type SliceRecap, withRecap } from '../recap';

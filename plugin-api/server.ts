@@ -4,7 +4,7 @@
 export * from './shared';
 export type { BriefSpec, BriefWork, FocusPlugin, LeadNews, LeadNote, LeadTool, LeadToolContext, LeadToolReply, LentJournal, LentJournals, PageFrames, PluginGoals, PluginHost, PluginParts, PluginRoute, PluginState } from '../server/plugins/contract';
 /** The limits on a page a lead tool puts on the lead's screen (`LeadToolContext.show`): its id's and title's length. */
-export { ARTIFACT_LIMITS } from '../server/agents/lead';
+export { ARTIFACT_LIMITS } from '../server/agents/leadRules';
 /** Reads a file a lead cites, as the model tool checks a cite: its lines, or undefined if it's missing or outside `roots` (their checkouts). */
 export { sourceReader } from '../server/agents/sourceReader';
 export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/util';
@@ -39,8 +39,8 @@ export { loadScorer, type Scorer, ScorerFileError, scoreOf } from '../server/age
 export { pluginDataDir } from '../server/plugins/dataDir';
 /** Focus on this machine, for a plugin's scripts: its ledger, its agents' transcripts and its clones of repos. */
 export { focusLedger, focusMirror, focusRunJournals, focusSavedState, focusTranscript } from './focus';
-/** Reading an agent: whether it's a goal's lead (a `LeadAgent`), and its goal as the ledger would record it. */
-export { goalRecord, hasLeadWork, pickStation } from '../server/agents/lead';
+/** Reading an agent: its goal as the ledger would record it (whether it's a goal's lead is in shared.ts). */
+export { goalRecord } from '../server/agents/lead';
 /** The demo's made-up files, by repo, for a plugin's scripted stand-in to talk about. */
 export { FILES as DEMO_FILES } from '../server/agents/demoRunner';
 /** Reading a Claude Code session's transcript (`host.transcript`), a line at a time. */

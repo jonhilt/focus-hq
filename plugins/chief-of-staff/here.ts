@@ -1,7 +1,7 @@
 import { focus } from '../../plugin-api/browser';
 import type { Attention } from '../../plugin-api/shared';
-import { waiting } from './inbox';
-import { needingYou } from './lanes';
+import { waiting } from './inboxRules';
+import { needingYou } from './laneRules';
 
 // What waits on the captain as this browser has Focus (Comms, its badge, the phone's strips): the same lists as the
 // inbox Focus serves (`GET /api/plugins/chief-of-staff/inbox`), worked out from the agents and boards it mirrors.

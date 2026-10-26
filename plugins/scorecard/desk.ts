@@ -3,6 +3,7 @@ import path from 'node:path';
 import { DemoScorecards } from './demoScorecards';
 import { Option, Schema } from 'effect';
 import { pluginDataDir, run } from '../../plugin-api/server';
+import { type Head, measureNewCommit } from './deskRules';
 import { SCORECARD, type Scorecard, type ScorecardNoise, type Scorecards } from './types';
 
 /** How many of the latest scorecards main engineering shows: enough for a trend at a glance. */
@@ -58,19 +59,6 @@ export function readNoise(text: string): ScorecardNoise | undefined {
  * plugin's own folder, with what Focus kept in `~/.focus/scorecards/` before it was a plugin moved in.
  */
 export const scorecardsDir = (): string => pluginDataDir(SCORECARD, { movedFrom: 'scorecards' });
-
-/** The commit Focus runs from, and whether it has uncommitted changes. */
-export interface Head {
-  commit: string;
-  dirty: boolean;
-}
-
-/**
- * Whether Focus should measure the commit it runs from by itself: it's clean (a captain's work in progress isn't
- * measured behind their back) and has no scorecard yet. Auto update restarts Focus on each merge to main, so
- * this puts a scorecard on every one.
- */
-export const measureNewCommit = (history: Pick<Scorecard, 'commit'>[], head: Head) => !head.dirty && history.at(-1)?.commit !== head.commit;
 
 /** Where scorecards come from: the saved ones, and a way to measure another. */
 export interface ScorecardSource {

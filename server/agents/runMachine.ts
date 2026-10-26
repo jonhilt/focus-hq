@@ -1,5 +1,5 @@
 import { setup, type StateValue, transition } from 'xstate';
-import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloud';
+import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloudRules';
 import type { RunOutcome } from './types';
 
 // What follows an agent's turn, as a state machine (XState, `runMachine`): the state the turn ends in (where it ran),

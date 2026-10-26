@@ -1,13 +1,14 @@
 import { Effect, Exit, Fiber, FiberMap, PartitionedSemaphore, Scope } from 'effect';
 import { plannerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import { afterTriage, stuckClosedComment, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../../shared/triage';
+import { afterTriage, stuckClosedComment, triageLabel, type TriageResult, type TriageStep, whenStuck } from '../../../shared/triageRules';
 import type { FailedCheck, QaReview } from '../../../shared/types';
 import type { PullRequestDetail } from '../../github/provider';
 import { GitHub, type GitHubError } from '../../github/service';
 import { errorMessage, truncate } from '../../util';
 import { Triage, Workspace } from '../services';
-import { reviewRepoId, triageWorkspaceId } from '../worktrees';
+import { reviewRepoId } from '../worktrees';
+import { triageWorkspaceId } from '../worktreeRules';
 import { type Core, type ManagerServices, Part } from './core';
 
 /** Stuck pull requests: the room's operations officer looks at one and does one thing about it. */

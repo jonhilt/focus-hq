@@ -1,5 +1,5 @@
-import { autoMergeFor } from '../../../shared/mergeGate';
-import { autoQaFor, autoSendBackFor, qaProofFor, qaVideoFor } from '../../../shared/qa';
+import { autoMergeFor } from '../../../shared/mergeGateRules';
+import { autoQaFor, autoSendBackFor, qaProofFor, qaVideoFor } from '../../../shared/qaRules';
 import { type QaSwitch, qaSwitchSays, repoChecksLine } from '../../../shared/qaPlaybook';
 import type { Project, QaPlaybook } from '../../../shared/types';
 import { h } from './dom';

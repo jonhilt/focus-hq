@@ -4,7 +4,7 @@
 // while Focus was down runs as it starts again.
 import { Cron } from 'croner';
 import type { Kept } from './book';
-import { ANSWER_MS, answering, type Due, due, finished, MOST_PER_LEAD, nextDeadline, nextSlot, overdue, ranOutcome, runMessage, type ScheduleAsk, scheduleTimes } from './rules';
+import { ANSWER_MS, answering, type Due, due, finished, MOST_PER_LEAD, nextDeadline, nextSlot, overdue, ranOutcome, runMessage, type ScheduleAsk, scheduleTimes } from './schedulerRules';
 import type { RunOutcome, RunRecord, Schedule, SchedulerState } from './shared';
 
 /** How the lead's message went: sent (or waiting to be heard), held on the API key's cost, or there's no such lead any more. */

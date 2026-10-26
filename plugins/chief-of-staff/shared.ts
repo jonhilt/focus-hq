@@ -1,5 +1,5 @@
 // The chief of staff (README.md): what its server part and the browser share.
-import type { Agent, Project, VerdictRoute } from '../../plugin-api/shared';
+import type { Agent, VerdictRoute } from '../../plugin-api/shared';
 import { isOneOf, isRecord } from '../../plugin-api/shared';
 
 /** The plugin's id: in FOCUS_PLUGINS, and the switch in a project's settings. */
@@ -139,9 +139,6 @@ export function cosReadOf(v: unknown): CosRead | undefined {
 /** Its read of a lead's latest turn, from the lead's marks. */
 export const readOf = (agent: Pick<Agent, 'lead'> | undefined): CosRead | undefined => cosReadOf(agent?.lead?.marks?.[CHIEF_OF_STAFF]);
 
-/** Whether a verdict's words are for the lead (carry on, back to the lead): ready for the captain to send. */
-export const forLead = (v: Pick<Verdict, 'route'>): boolean => v.route === 1 || v.route === 4;
-
 /**
  * What it keeps across a restart, by project: whether it sends its words by itself (`autoSendFor`), and whether Jev
  * routes its turns (`jevFor`; missing from what was kept before there was the switch).
@@ -159,18 +156,4 @@ const switches = (v: unknown): Record<string, boolean> =>
 /** Its state as the browser has it (`state.plugins[CHIEF_OF_STAFF]`): fresh where it isn't one. */
 export function cosStateOf(v: unknown): CosState {
   return { autoSend: switches(isRecord(v) ? v.autoSend : undefined), jev: switches(isRecord(v) ? v.jev : undefined) };
-}
-
-/** Whether Jev picks the route for its turns in `project` (Haiku writing the words): only where the captain said so. */
-export const jevFor = (state: CosState, projectId: string | undefined): boolean => projectId !== undefined && state.jev?.[projectId] === true;
-
-/**
- * Whether it sends its words for a lead by itself in `project`: the captain's say on it here, or, before they've said,
- * what Focus kept on the project before the setting was the chief of staff's own (`cosAutoSend`), so it carries over.
- */
-export function autoSendFor(state: CosState, project: Pick<Project, 'id'> | undefined): boolean {
-  if (!project) return false;
-  const said = state.autoSend[project.id];
-  if (said !== undefined) return said;
-  return 'cosAutoSend' in project && project.cosAutoSend === true;
 }

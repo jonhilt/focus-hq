@@ -1,11 +1,12 @@
 import { autonomyChangeLine } from '../../../shared/autonomy';
-import { goneReply } from '../../../shared/mergeGate';
+import { goneReply } from '../../../shared/mergeGateRules';
 import type { Agent, Autonomy, Effort, MessageReply, ResumeHow } from '../../../shared/types';
 import { truncate } from '../../util';
-import { resumeChoice } from '../apiKey';
+import { resumeChoice } from '../apiKeyRules';
 import { backgroundStop } from '../lead';
 import { STOPPED_BY_CAPTAIN } from '../types';
-import { FINISHED, Part, Refused } from './core';
+import { Part, Refused } from './core';
+import { FINISHED } from './sessionRules';
 
 const SENT: MessageReply = { sent: true };
 

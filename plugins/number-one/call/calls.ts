@@ -1,13 +1,14 @@
 import { Effect, Layer, ManagedRuntime } from 'effect';
 import { type Actor, createActor, fromPromise } from 'xstate';
-import type { CallLine, CallState, CallStatus, CallStep } from '../shared';
+import type { CallLine, CallState, CallStatus } from '../shared';
+import { type CallKeys, callsMissing, stepOf } from './callRules';
 import { addCaption } from './captions';
 import { DemoJev, DemoLive } from './demo';
 import { Jev } from './jev';
 import { Live, type LiveEvent, type LiveSession, type Sideband } from './live';
 import { callMachine, type Reply, type RouteInput } from './machine';
 import { topics } from './brief';
-import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './route';
+import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './routeRules';
 import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type QueuedGoal, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
 // Calls to Number One: one at a time, each a gpt-live-1 session Ops is the backend of. The
@@ -24,24 +25,6 @@ export interface CallHost {
   startQueued(projectId: string, queueId: string, station: number): Agent;
   startGoal(projectId: string, text: string): { agent: Agent } | { queued: QueuedGoal };
   message(agentId: string, text: string): MessageReply;
-}
-
-export interface CallKeys {
-  openai?: string;
-  typesafe?: string;
-}
-
-/** Why Ops can't take a call, worded for the Call button; undefined when it can. */
-export function callsMissing(keys: CallKeys, demo: boolean): string | undefined {
-  if (demo) return undefined;
-  const missing = [!keys.openai && 'an OpenAI API key', !keys.typesafe && 'a TypeSafe API key'].filter(Boolean);
-  return missing.length ? `Calls need ${missing.join(' and ')}, set in the ready room's Plugins tab` : undefined;
-}
-
-/** The step the captain sees for the machine's state (`routing` has steps of its own inside). */
-export function stepOf(value: unknown): CallStep {
-  const top = typeof value === 'string' ? value : Object.keys(value as object)[0];
-  return top === 'routing' || top === 'confirming' || top === 'dictating' || top === 'acting' || top === 'ended' ? top : 'listening';
 }
 
 type Runtime = ManagedRuntime.ManagedRuntime<Jev | Live, never>;

@@ -4,7 +4,7 @@
 // shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
 import type { Agent, IssueDraft, Project, QaReview, TermLine } from '../shared/types';
-import { mergeMethodFor } from '../shared/mergeGate';
+import { mergeMethodFor } from '../shared/mergeGateRules';
 import { api } from '../client/src/net/api';
 import { markRead as markTurnRead, shownPrs } from '../client/src/net/attention';
 import { state } from '../client/src/net/state';

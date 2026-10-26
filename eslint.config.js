@@ -29,6 +29,29 @@ const WINDOW_CASTS = [
   { selector: "VariableDeclaration[declare=true] > VariableDeclarator[id.name='window']", message: `${WINDOW_MESSAGE} Don't declare a window of your own.` },
 ];
 
+// A *Rules.ts file holds decisions (docs/architecture.md#decisions): it reads no clock or dice, and does no I/O, so its
+// caller does, and its test needs nothing but values.
+const DECISION_MESSAGE = 'A *Rules.ts file decides; its caller does the I/O (docs/architecture.md#decisions).';
+const CLOCK_AND_DICE = [
+  { selector: "CallExpression[callee.object.name='Date'][callee.property.name='now']", message: `${DECISION_MESSAGE} Take \`now\` as a parameter.` },
+  { selector: "NewExpression[callee.name='Date'][arguments.length=0]", message: `${DECISION_MESSAGE} Take \`now\` as a parameter.` },
+  { selector: "CallExpression[callee.object.name='Math'][callee.property.name='random']", message: `${DECISION_MESSAGE} Take the roll as a parameter.` },
+  { selector: "CallExpression[callee.name=/^(setTimeout|setInterval|queueMicrotask)$/]", message: `${DECISION_MESSAGE} Return when to act; the caller sets the timer.` },
+  { selector: "MemberExpression[object.name=/^(process|console)$/]", message: `${DECISION_MESSAGE} Take what it reads from the environment as a parameter, and return what to say.` },
+];
+const IO_MODULES = ['fs', 'fs/promises', 'child_process', 'net', 'http', 'https', 'os', 'worker_threads'].flatMap((m) => [m, `node:${m}`]);
+const DECISION_IMPORTS = {
+  paths: [
+    ...[...IO_MODULES, 'express', 'ws', 'playwright', '@anthropic-ai/claude-agent-sdk'].map((name) => ({ name, message: DECISION_MESSAGE, allowTypeImports: true })),
+    { name: 'effect', importNames: ['Effect', 'Layer', 'Context', 'ManagedRuntime', 'Fiber', 'Clock', 'Random', 'Stream', 'Scope', 'Queue', 'Ref', 'Deferred', 'Schedule'], message: `${DECISION_MESSAGE} Effect's Schema and Option are fine; an Effect, a service or a Layer is the caller's.`, allowTypeImports: true },
+  ],
+  patterns: [
+    { regex: '(^|/)util$', importNames: ['run', 'sleep', 'newId', 'randomHex', 'seedIds', 'seedRandom', 'seedShip', 'KeyedLock'], message: DECISION_MESSAGE, allowTypeImports: true },
+    { regex: '(^|/)store$', message: `${DECISION_MESSAGE} Take the parts of the store it reads as a parameter.`, allowTypeImports: true },
+    { regex: '^effect/(Effect|Layer|Context|ManagedRuntime|Fiber|Clock|Random|Stream|Scope|Queue|Ref|Deferred|Schedule)$', message: DECISION_MESSAGE, allowTypeImports: true },
+  ],
+};
+
 export default tseslint.config(
   { ignores: ['dist/', 'node_modules/', 'data/'] },
   {
@@ -79,6 +102,15 @@ export default tseslint.config(
     ignores: ['**/*.test.ts'],
     rules: {
       'no-restricted-syntax': ['error', ...CASTS, ...WINDOW_CASTS],
+    },
+  },
+  {
+    // decisions (the casts above still apply: a rule here replaces the list, so they're repeated)
+    files: ['**/*Rules.ts'],
+    ignores: ['**/*.test.ts'],
+    rules: {
+      'no-restricted-syntax': ['error', ...CASTS, ...WINDOW_CASTS, ...CLOCK_AND_DICE],
+      '@typescript-eslint/no-restricted-imports': ['error', DECISION_IMPORTS],
     },
   },
 );

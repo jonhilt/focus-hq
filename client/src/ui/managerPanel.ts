@@ -1,7 +1,7 @@
 import { pluginOn } from '../../../shared/projectPlugins';
 import { projectPlugins, projectSettings } from '../plugins';
 import { isHidden } from '../../../shared/hidden';
-import { autoMergeFor } from '../../../shared/mergeGate';
+import { autoMergeFor } from '../../../shared/mergeGateRules';
 import type { Autonomy, Effort, MergeMethod, PinnedSettings, PreviewConfig, Project, RoomTheme, Settings, SpeechStatus, VoiceStatus } from '../../../shared/types';
 import { DESKS_PER_ROOM, EFFORT_LEVELS, MERGE_METHODS, ROOM_THEMES } from '../../../shared/types';
 import { voiceMissing, WHISPER_INSTALL } from '../../../shared/voice';

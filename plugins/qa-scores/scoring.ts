@@ -1,23 +1,10 @@
-import { createHash } from 'node:crypto';
-import type { LedgerEntry, LedgerEvent, LentJournal, ReviewEntry, Scorer } from '../../plugin-api/server';
+import type { LedgerEntry, LedgerEvent, Scorer } from '../../plugin-api/server';
 import { scoreOf } from '../../plugin-api/server';
+import type { Due } from './scoringRules';
 
-// Which of QA's reports the QA report scorer grades, what the model is told of each, and the line its grade is written
-// as. Pure, and tested beside it (scoring.test.ts); the server part reads the journals, the diffs and the model.
-
-type Reported = Extract<ReviewEntry, { kind: 'reported' }>;
-
-/** One of QA's reports to grade: its pull request, the commit QA tested, and the report as its verdict was journaled. */
-export interface Due {
-  /** `owner/repo#12@<sha>`: a report is graded once. */
-  key: string;
-  projectId: string;
-  repo: string;
-  pr: number;
-  title: string;
-  sha: string;
-  reported: Reported;
-}
+// What the model is told of each of QA's reports the QA report scorer grades, and the line its grade is written as
+// (which it grades is scoringRules.ts'). Pure, and tested beside it (scoring.test.ts); the server part reads the
+// journals, the diffs and the model.
 
 /** How far back a sweep looks, so reports QA made while the scorer was off or Focus was down are still graded once it's back. */
 export const LOOK_BACK_MS = 7 * 24 * 3_600_000;
@@ -27,33 +14,6 @@ export const MOST_PER_SWEEP = 12;
 
 /** The most of a diff the model is told: past it, the diff is cut and says so. */
 export const DIFF_MAX = 60_000;
-
-export const keyOf = (repo: string, pr: number, sha: string): string => `${repo}#${pr}@${sha}`;
-
-/** Whether `key` is among the `rate` in every hundred graded: by a hash of it, so the same reports always are. */
-export function sampled(key: string, rate: number): boolean {
-  return createHash('sha256').update(key).digest().readUInt32BE(0) / 2 ** 32 < rate / 100;
-}
-
-/**
- * The reports in the review journals, reported since `since`, that the scorer's sample takes and no `qa-score` line
- * has graded yet: newest first, each commit's latest report once.
- */
-export function reportsDue(journals: readonly LentJournal<ReviewEntry>[], ledger: readonly LedgerEvent[], rate: number, since: number): Due[] {
-  const graded = new Set(ledger.flatMap((e) => (e.kind === 'qa-score' ? [keyOf(e.repo, e.pr, e.sha)] : [])));
-  const due = new Map<string, Due & { at: number }>();
-  for (const journal of journals) {
-    let asked: Extract<ReviewEntry, { kind: 'requested' }> | undefined;
-    for (const entry of journal.entries) {
-      if (entry.kind === 'requested') asked = entry;
-      if (entry.kind !== 'reported' || !asked || !entry.sha || entry.t < since) continue;
-      const key = keyOf(asked.repo, asked.number, entry.sha);
-      if (graded.has(key) || !sampled(key, rate)) continue;
-      due.set(key, { key, projectId: asked.projectId, repo: asked.repo, pr: asked.number, title: asked.title, sha: entry.sha, reported: entry, at: entry.t });
-    }
-  }
-  return [...due.values()].sort((a, b) => b.at - a.at).map(({ at: _at, ...d }) => d);
-}
 
 /** What the model is told of one report: the pull request, QA's report as QA posted it, and the diff QA reviewed. */
 export function scorePrompt(d: Due, diff: string): string {

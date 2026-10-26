@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { Runtime } from './core';
 import { OUTPUT_TAIL } from '../backgroundTasks';
-import { backgroundOutputLines, compactRefusal, keepWorkflowFiles, workflowAgentLines, workflowScript } from './sessions';
+import { backgroundOutputLines, keepWorkflowFiles, workflowAgentLines, workflowScript } from './sessions';
 
 // a session's folder, as Claude Code lays it out: the run's agents under subagents/workflows/<runId>/, its script under
 // workflows/scripts/, and the run itself in workflows/<runId>.json once it's over
@@ -133,24 +133,3 @@ describe('backgroundOutputLines', () => {
   });
 });
 
-describe('compactRefusal', () => {
-  const agent = { name: 'Lt. Rhee', task: 'issue', sessionId: 's1', status: 'done' } as const;
-
-  it('compacts a conversation here between turns', () => {
-    for (const status of ['done', 'stopped', 'error'] as const) expect(compactRefusal({ ...agent, status }, false)).toBeUndefined();
-  });
-
-  it('refuses QA, whose reviews each start afresh, first', () => {
-    expect(compactRefusal({ ...agent, task: 'review', sessionId: undefined, status: 'working' }, true)).toBe('QA starts each review afresh, so there’s nothing to compact');
-  });
-
-  it('refuses an agent with no conversation here: none yet, or one in the cloud', () => {
-    expect(compactRefusal({ ...agent, sessionId: undefined }, false)).toBe('Lt. Rhee has no conversation here to compact');
-    expect(compactRefusal({ ...agent, cloud: true }, false)).toBe('Lt. Rhee has no conversation here to compact');
-  });
-
-  it('refuses while a turn is under way, whatever their status says', () => {
-    expect(compactRefusal({ ...agent, status: 'working' }, false)).toBe('Lt. Rhee is working: compact once their turn ends');
-    expect(compactRefusal(agent, true)).toBe('Lt. Rhee is working: compact once their turn ends');
-  });
-});

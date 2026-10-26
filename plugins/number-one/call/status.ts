@@ -1,4 +1,5 @@
-import { ACTIVE_STATUSES, type Agent, type Attention, columns, goalTitle, inFlight, needsYou, prKey, type Project, shownProjects, type Snapshot } from '../../../plugin-api/server';
+import type { Agent, Attention, Project, Snapshot } from '../../../plugin-api/server';
+import { ACTIVE_STATUSES, columns, goalTitle, inFlight, needsYou, prKey, shownProjects } from '../../../plugin-api/shared';
 
 // What the ship says when the captain asks how things stand on a call: plain sentences, no paths or symbols, for the
 // voice model to say in its own words. Read straight off the board, so it's exact and instant.

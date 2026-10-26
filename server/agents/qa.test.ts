@@ -4,7 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { QaReport } from '../../shared/types';
 import type { PullRequestDetail } from '../github/provider';
-import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, qaStamp, repoChecks, siblingList, skimmed, unaccounted, filesToRevisit, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
+import { diffAnchor, evidencePath, filesPrompt, filesSection, fixPrompt, keptCaptions, parseQaReport, QA_SCHEMA, qaAgentModel, qaComment, qaPlaybook, qaPrompt, qaSteps, qaSystemAppend, recordingPath, recordingSection, qaStamp, repoChecks, siblingList, openedFiles, toolCalls, postedAlready, verdictMark, MAX_SCREENSHOTS } from './qa';
 import { mustOpen } from '../../shared/qa';
 import { huntingSteps } from './qaProof';
 import { CREW_DIR, crewFile, crewWith } from './crewFiles';
@@ -496,13 +496,6 @@ describe('every changed file, accounted for', () => {
     expect(qaPrompt('acme/shop', pr, [], {}, many)).toContain('- …and 5 more (`git diff --name-only` lists them)');
   });
 
-  it('reads the report’s files, and finds the changed ones it leaves out', () => {
-    const parsed = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: './src/cart.ts', tests: 'cart.test.ts', checked: 'read' }, { tests: 'none' }] });
-    expect(parsed?.files).toEqual([{ file: './src/cart.ts', tests: 'cart.test.ts', checked: 'read' }]);
-    expect(parsed && unaccounted(parsed, ['src/cart.ts', 'scripts/sync.ts', 'web/src/cart.ts'])).toEqual(['scripts/sync.ts']);
-    expect(parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [] })?.files).toBeUndefined();
-  });
-
   it('sends QA back to the files it left out, or says it only skimmed, to report again in full', () => {
     const text = filesPrompt({ missing: ['scripts/sync.ts', 'schema.json'], unread: [], unopened: [] });
     expect(text).toMatch(/^Your report leaves out 2 of the files this pull request changes:\n- scripts\/sync\.ts\n- schema\.json\n/);
@@ -510,26 +503,6 @@ describe('every changed file, accounted for', () => {
     expect(filesPrompt({ missing: [], unread: ['server/crew.ts'], unopened: [] })).toMatch(/^Your report says you only skimmed, or didn't read, this file:\n- server\/crew\.ts\n\nReview each properly/);
     expect(filesPrompt({ missing: ['a.ts'], unread: ['b.ts', 'c.ts'], unopened: [] })).toContain('- a.ts\n\nYour report says you only skimmed, or didn\'t read, these 2 files:\n- b.ts\n- c.ts');
     expect(filesPrompt({ missing: [], unread: [], unopened: ['server/crew.ts'] })).toMatch(/^Your session never opened this file, whatever your report says about it:\n- server\/crew\.ts\n\nReview each properly/);
-  });
-
-  it('takes QA at its word on the files it only skimmed or didn’t read', () => {
-    const file = (f: string, checked: string) => ({ file: f, tests: 'none', checked });
-    const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [file('a.ts', 'Scene tools; skimmed.'), file('b.ts', 'Read every changed line'), file('c.ts', "Didn't read: generated"), file('d.ts', 'glanced at the diff'), file('e.ts', 'Not reviewed in depth')] });
-    expect(report && skimmed(report)).toEqual(['a.ts', 'c.ts', 'd.ts', 'e.ts']);
-  });
-});
-
-describe('filesToRevisit', () => {
-  const report = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'a.ts', tests: 'none', checked: 'skimmed' }, { file: 'b.ts', tests: 'none', checked: 'read every line' }] });
-  it('names what to go back to once a review, and nothing when there’s nothing or it was asked already', () => {
-    if (!report) throw new Error('no report');
-    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false })).toEqual({ missing: ['c.ts'], unread: ['a.ts'], unopened: [] });
-    // the evidence: b.ts was never opened, whatever the report says; a.ts and c.ts are already named
-    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: false }, new Set())).toEqual({ missing: ['c.ts'], unread: ['a.ts'], unopened: ['b.ts'] });
-    expect(filesToRevisit(report, { changed: ['a.ts', 'b.ts', 'c.ts'], askedAgain: true })).toBeUndefined();
-    expect(filesToRevisit(report, undefined)).toBeUndefined();
-    const clean = parseQaReport({ verdict: 'pass', summary: '', checks: [], commands: [], files: [{ file: 'b.ts', tests: 'none', checked: 'read' }] });
-    expect(clean && filesToRevisit(clean, { changed: ['b.ts'], askedAgain: false })).toBeUndefined();
   });
 });
 

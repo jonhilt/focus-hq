@@ -3,7 +3,8 @@ import { clock } from '../../shared/clock';
 import { cloudSessionUrl } from '../../shared/cloud';
 import type { TermKind, TermLine } from '../../shared/types';
 import { truncate } from '../util';
-import { keyFallback, limitReached, requestUsd } from './apiKey';
+import { keyFallback, requestUsd } from './apiKey';
+import { limitReached, switchesToKey } from './apiKeyRules';
 import { gitCommit } from './commits';
 import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
 import { scratchScript } from './scratch';
@@ -376,11 +377,6 @@ function rateLimit(msg: SDKRateLimitEvent, ctx: RunContext, hooks: RunHooks): vo
   const notice = limitNotice(until, switching);
   hooks.lines([notice.line]);
   hooks.activity(null, notice.activity);
-}
-
-/** Whether a session that's hit your plan's limit stops to carry on with the key: a local one on your plan, once Ops says so. */
-export function switchesToKey(ctx: Pick<RunContext, 'onKey' | 'cloud'>, keyNow: () => boolean): boolean {
-  return !ctx.onKey && !ctx.cloud && keyNow();
 }
 
 /** What the session shows when your plan's limit is reached: switching to the key, or waiting for the reset. */

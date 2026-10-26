@@ -17,7 +17,7 @@ import path from 'node:path';
 import { isRecord } from '../../../plugin-api/shared';
 import { judgePrompt } from '../judge';
 import { JEV_BACKTEST_MODEL, JEV_QUESTIONS_VERSION, JEV_USD_PER_INPUT_TOKEN, routeQuestions } from '../jevRoute';
-import { type JevReply, parseJsonLines, readReply, retryDelay, stopReason } from '../jevRun';
+import { type JevReply, parseJsonLines, readReply, retryDelay, stopReason } from '../jevRunRules';
 
 const JEV_URL = process.env.FOCUS_JEV_URL || 'https://api.typesafe.ai/v1/systemone';
 const BUDGET_USD = 1;

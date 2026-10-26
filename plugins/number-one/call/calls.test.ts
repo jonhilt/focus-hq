@@ -1,7 +1,7 @@
 import { Effect, Layer } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CallState, CallStatus } from '../shared';
-import { type CallHost, Calls, callsMissing, stepOf } from './calls';
+import { type CallHost, Calls } from './calls';
 import { Jev, type JevAnswers } from './jev';
 import { Live, type LiveClientEvent, type LiveEvent, type SidebandListener } from './live';
 import { SETTLE_MS } from './machine';
@@ -143,22 +143,5 @@ describe('Calls', () => {
     const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, () => ({ openai: 'sk' }), false);
     expect(calls.status()).toEqual({ missing: 'Calls need a TypeSafe API key, set in the ready room\'s Plugins tab', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TypeSafe API key');
-  });
-});
-
-describe('callsMissing', () => {
-  it('names each missing key, and needs none in the demo', () => {
-    expect(callsMissing({}, false)).toBe('Calls need an OpenAI API key and a TypeSafe API key, set in the ready room\'s Plugins tab');
-    expect(callsMissing({ openai: 'a', typesafe: 'b' }, false)).toBeUndefined();
-    expect(callsMissing({}, true)).toBeUndefined();
-  });
-});
-
-describe('stepOf', () => {
-  it("shows the machine's state as the step, routing whichever part of it", () => {
-    expect(stepOf('confirming')).toBe('confirming');
-    expect(stepOf({ routing: 'asking' })).toBe('routing');
-    expect(stepOf('ended')).toBe('ended');
-    expect(stepOf('something new')).toBe('listening');
   });
 });

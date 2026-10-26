@@ -5,7 +5,8 @@
 import os from 'node:os';
 import path from 'node:path';
 import { errorMessage, type FocusPlugin, focusMirror, loadScorer, type PluginHost, type PluginParts, run, type Scorer } from '../../plugin-api/server';
-import { type Due, goalOf, LOOK_BACK_MS, MOST_PER_SWEEP, reportsDue, scoreEntry, scorePrompt, scoreSchema } from './scoring';
+import { goalOf, LOOK_BACK_MS, MOST_PER_SWEEP, scoreEntry, scorePrompt, scoreSchema } from './scoring';
+import { type Due, reportsDue } from './scoringRules';
 
 export const QA_SCORES = 'qa-scores';
 

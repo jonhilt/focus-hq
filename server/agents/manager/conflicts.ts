@@ -1,5 +1,6 @@
 import { Effect } from 'effect';
-import { autoQaFor, prKey } from '../../../shared/qa';
+import { prKey } from '../../../shared/qa';
+import { autoQaFor } from '../../../shared/qaRules';
 import type { Agent, ConflictsOutcome, PullRequest } from '../../../shared/types';
 import { errorMessage, newId } from '../../util';
 import { conflictsAgentModel, conflictsRecord } from '../conflicts';
@@ -7,7 +8,8 @@ import { conflictsResolvedNote, fixPushedNote } from '../lead';
 import { conflictsPrompt } from '../prompts';
 import { Workspace } from '../services';
 import { type BaseMerge } from '../types';
-import { FINISHED, Part, Refused } from './core';
+import { Part, Refused } from './core';
+import { FINISHED } from './sessionRules';
 
 /** Resolving a pull request's merge conflicts: Ops' own merge of its base, or an agent seated on it. */
 export class Conflicts extends Part {

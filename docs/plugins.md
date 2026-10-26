@@ -4,7 +4,7 @@ Focus's core is what anyone who adds a project needs: rooms and boards, goal lea
 
 ## Switching plugins on
 
-The captain switches plugins on and off for the whole ship in the ready room's Plugins tab, which saves the choice (`Settings.plugins`). Focus can't start or stop a plugin while it runs (nothing unloads one), so a change applies from Focus's next start. The tab says so, and restarts Focus when asked, but only under its supervisor (`pnpm start`, `pnpm run dev`); anywhere else the captain stops it and starts it again. Switching a plugin on switches on what it requires, and switching one off switches off what requires it (`switchShipPlugin`, `shared/shipPlugins.test.ts`).
+The captain switches plugins on and off for the whole ship in the ready room's Plugins tab, which saves the choice (`Settings.plugins`). Focus can't start or stop a plugin while it runs (nothing unloads one), so a change applies from Focus's next start. The tab says so, and restarts Focus when asked, but only under its supervisor (`pnpm start`, `pnpm run dev`); anywhere else the captain stops it and starts it again. Switching a plugin on switches on what it requires, and switching one off switches off what requires it (`switchShipPlugin`, `shared/shipPluginRules.test.ts`).
 
 `FOCUS_PLUGINS`, where it's set (even empty), decides instead, and the tab's switches lock (`pluginChoice`). The first time Focus starts with it and no choice saved, what it switched on is saved as the captain's choice, so taking it away later changes nothing. It lists the plugins to switch on, comma-separated, in the order they start:
 

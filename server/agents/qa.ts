@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Agent, FailedCheck, FileAccount, Project, QaPlaybook, QaProof, QaRepoChecks, QaReport, QaRecording, QaReview, QaScreenshot, QaSpotCheck, QaStep } from '../../shared/types';
-import { filesCovered, mustOpen, qaProofFor, qaVideoFor, spotCheckUrl } from '../../shared/qa';
+import { filesCovered, spotCheckUrl } from '../../shared/qa';
+import { qaProofFor, qaVideoFor } from '../../shared/qaRules';
 import { fieldsOf, isRecord } from '../../shared/records';
 import type { IssueDetail, PullRequestDetail } from '../github/provider';
 import { mergeCheckCommands, type PackageFacts } from '../packageManager';
@@ -9,6 +10,7 @@ import { blocks, transcriptLines } from './transcript';
 import { huntingSteps, parseProofs, PROOFS_SCHEMA, proofsToKeep } from './qaProof';
 import { clock } from './recording';
 import { type CoreCrew, coreCrew, CREW_RULES } from './crewFiles';
+import type { Revisit } from './qaRevisitRules';
 import type { CrewStamp } from '../../shared/ledger';
 
 // The QA officer's instructions, their report's schema, and the PR comment Ops posts. Pure, so they're unit
@@ -145,18 +147,6 @@ export function parseQaReport(structured: unknown, text = ''): QaReport | null {
 /** How many changed files QA's prompt names, at most: a pull request bigger than that is named in part. */
 export const NAMED_FILES = 200;
 
-/** The files a pull request changes that QA's report doesn't account for. */
-export function unaccounted(report: QaReport, changed: string[]): string[] {
-  const named = (report.files ?? []).map((f) => f.file.replace(/^\.?\//, ''));
-  return changed.filter((c) => !named.some((n) => n === c || c.endsWith(`/${n}`) || n.endsWith(`/${c}`)));
-}
-
-/** What QA said it only skimmed, glanced at or didn't read, in its own words. */
-const UNREAD = /\b(skim(med|ming)?|glanced?|not (read|reviewed|opened)|didn['’]t (read|review|open)|did not (read|review|open)|unread|unreviewed)\b/i;
-
-/** The changed files QA's report says it only skimmed or didn't read: its own account, taken at its word. */
-export const skimmed = (report: QaReport): string[] => (report.files ?? []).filter((f) => UNREAD.test(f.checked)).map((f) => f.file);
-
 /** A tool call from QA's session: the tool and what it was given. */
 export interface ToolCall {
   name: string;
@@ -169,7 +159,6 @@ export function toolCalls(jsonl: string): ToolCall[] {
     line.type === 'assistant' ? blocks(line).flatMap((b) => (b.type === 'tool_use' && b.name ? [{ name: b.name, input: fieldsOf(b.input) }] : [])) : [],
   );
 }
-
 
 /** A command that shows only part of what it reads, or only where a pattern matches: it doesn't count as opening a file. */
 const PARTIAL = /\|\s*(head|tail|grep|rg|wc)\b|^\s*(grep|rg|ls|wc|stat|git\s+(log|blame|show\s+--stat))\b|--stat\b|--name-only\b|--name-status\b/;
@@ -190,26 +179,6 @@ export function openedFiles(calls: ToolCall[], changed: string[]): Set<string> {
     else if (/\bgit\s+diff\b[^|;&]*\.\.\./.test(command) && !/\s--\s/.test(command)) changed.forEach((f) => opened.add(f));
   }
   return opened;
-}
-
-/** The changed files to send QA back to: left out of its report, said to be only skimmed, or never opened at all. */
-export interface Revisit {
-  missing: string[];
-  unread: string[];
-  unopened: string[];
-}
-
-/**
- * The changed files a report should go back to QA for: those it leaves out, those it says it only skimmed, and the code
- * files its session never opened (`opened`, when Ops could read its tool calls). Nothing once QA has been sent
- * back already this review, or when Ops doesn't know the changed files.
- */
-export function filesToRevisit(report: QaReport, files: { changed: string[]; askedAgain: boolean } | undefined, opened?: Set<string>): Revisit | undefined {
-  if (!files || files.askedAgain) return undefined;
-  const missing = unaccounted(report, files.changed);
-  const unread = skimmed(report);
-  const unopened = opened ? files.changed.filter((f) => mustOpen(f) && !opened.has(f) && !missing.includes(f) && !unread.some((u) => u === f || f.endsWith(`/${u}`))) : [];
-  return missing.length || unread.length || unopened.length ? { missing, unread, unopened } : undefined;
 }
 
 /** What QA hears when its report leaves files out, says it only skimmed some, or its session never opened some: go back to them, then report again in full. Asked once a review. */

@@ -3,6 +3,7 @@ import type { SpeechEngine, SpeechStatus } from '../shared/types';
 import { KOKORO_VOICES, type KokoroVoice } from '../shared/voice';
 import { kokoro } from './config';
 import { cpuKokoro, type SpeechHelper, type SpeechProcess } from './speechHelpers';
+import { type LineUrgency, nextLine } from './speechRules';
 
 interface Line {
   id: number;
@@ -23,18 +24,6 @@ export type FromSpeechWorker =
   | { type: 'failed'; error: string }
   | { type: 'spoken'; id: number; wav: Uint8Array }
   | { type: 'unspoken'; id: number; error: string };
-
-/** How soon a line is wanted: now (an answer, someone talking), or ahead of time (a briefing's next beat, fetched early). */
-export type LineUrgency = 'now' | 'ahead';
-
-/**
- * Which waiting line Kokoro says next: the first wanted now, else the first wanted ahead of time. Kokoro says one line
- * at a time, and a briefing fetches its lines ahead, so an answer would otherwise wait behind the narration.
- */
-export function nextLine(waiting: readonly { urgency: LineUrgency }[]): number {
-  const now = waiting.findIndex((l) => l.urgency === 'now');
-  return now >= 0 ? now : waiting.length ? 0 : -1;
-}
 
 /** transformers.js reports each file it fetches; the download's progress is all of them added up. */
 export function downloadProgress(files: Map<string, { loaded: number; total: number }>): { bytes: number; total?: number } {

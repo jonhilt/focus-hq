@@ -1,6 +1,7 @@
-import { DEFAULT_MERGE_CHECKS, mergeCheckNames } from './mergeCheck';
-import { autoMergeFor } from './mergeGate';
-import { autoQaFor, autoSendBackFor, QA_BRIEF_MAX, qaProofFor } from './qa';
+import { DEFAULT_MERGE_CHECKS, mergeCheckNames } from './mergeCheckRules';
+import { autoMergeFor } from './mergeGateRules';
+import { QA_BRIEF_MAX } from './qa';
+import { autoQaFor, autoSendBackFor, qaProofFor } from './qaRules';
 import { EFFORT_LEVELS, type Effort, type Project, type QaChatTurn, type QaSettingsChange } from './types';
 
 // Talking to the QA officer at the Playbook: the talk Ops passes on, the change the officer may propose (only

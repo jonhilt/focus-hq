@@ -6,12 +6,14 @@ import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { closeCheck, hasLeadWork, fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, pickStation, qaVerdictNote, fixingNote, fixHandedBackNote, queuedStart, reopenable, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind, verdictStands, verdictToast } from '../lead';
+import { fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, qaVerdictNote, fixingNote, fixHandedBackNote, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
+import { closeCheck, hasLeadWork, pickStation, queuedStart, reopenable, verdictStands, verdictToast } from '../leadRules';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
 import type { LeadNews } from '../../plugins/contract';
-import { FINISHED, type ManagerServices, Part, Refused, type WorkError } from './core';
+import { type ManagerServices, Part, Refused, type WorkError } from './core';
+import { FINISHED } from './sessionRules';
 
 /** Goals and their leads: starting, queueing, reopening and closing goals, and what the lead hears about their pull requests. */
 export class Leads extends Part {

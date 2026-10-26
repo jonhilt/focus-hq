@@ -4,7 +4,7 @@
 // ship; Ops checks it covers every file the slice changes, then writes it into the pull requests (mermaid, which GitHub
 // draws) and onto the lead's station screen. Pure, so it's tested (recap.test.ts).
 
-import { LANE_SAID, LANE_SAID_PUBLIC, type Lane, laneName, laneProblem } from '../../shared/mergeLane';
+import { LANE_SAID, LANE_SAID_PUBLIC, type Lane, laneName, laneProblem } from '../../shared/mergeLaneRules';
 import { IMPACTS, type Impact, type RecapStep, type SliceRecap } from '../../shared/recap';
 
 export { IMPACTS, type Impact, type RecapPrimitive, type RecapStep, type SliceRecap } from '../../shared/recap';

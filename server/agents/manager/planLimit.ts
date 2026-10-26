@@ -1,7 +1,8 @@
 import { Duration, Effect } from 'effect';
 import { clock } from '../../../shared/clock';
 import type { Agent, ResumeCost } from '../../../shared/types';
-import { afterLimit, keyFallback, rereadUsd, UNKNOWN_RESET_MS } from '../apiKey';
+import { keyFallback, rereadUsd } from '../apiKey';
+import { afterLimit, UNKNOWN_RESET_MS } from '../apiKeyRules';
 import { type ManagerServices, Part, type WorkError } from './core';
 
 /** What an agent the plan's limit stopped mid-turn hears when they carry on, on the key or once it resets. */

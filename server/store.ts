@@ -1,17 +1,16 @@
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
-import { qaOfficerFor, randomAvatar } from '../shared/crew';
+import { randomAvatar } from '../shared/crew';
 import type { LedgerEntry, LedgerEvent } from '../shared/ledger';
 import { type LedgerHealth, LedgerLog } from './ledgerLog';
 import { prKey } from '../shared/qa';
 import type { Agent, Board, BrowserFrame, ClosedPr, PluginStates, Project, QaReview, Settings, TermLine } from '../shared/types';
-import { ACTIVE_STATUSES, DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
+import { DESKS_PER_ROOM, ROOM_THEMES, type RoomTheme } from '../shared/types';
 import { isOneOf } from '../shared/records';
 import { config, paths } from './config';
 import { takeLock } from './fileLock';
-import { fitDesks } from './agents/desks';
-import { upgradeLead } from './agents/lead';
+import { fitDesks } from './agents/deskRules';
 import { EMPTY_REVIEW, evolveReview, type ReviewEntry, type ReviewFact, type ReviewState, reviewView } from './agents/reviewJournal';
 import { EMPTY_RUN, evolve, type JournalEntry, type RunFact, type RunState, runView } from './agents/runJournal';
 import { Journals } from './journals';
@@ -22,29 +21,7 @@ import type { LentJournals } from './plugins/contract';
 import { fromBeforePlugins, type SavedBeforePlugins } from './plugins/migrate';
 import { fileIn, newId } from './util';
 import { changeProject } from './projectChange';
-
-/**
- * An agent as they pick up after a restart (`projectName` is their room's, for a lead saved before team stations): whoever was at
- * work stops, and waits for a message; what doesn't outlive Focus (a lead's subagents, workflows and background work, a hold
- * for the plan's usage limit) goes; and one saved before a field existed gets it.
- */
-export function agentAfterRestart(saved: Agent, projectName: string): Agent {
-  let agent: Agent = { ...saved, task: saved.task ?? 'issue', helpers: undefined, workflows: undefined, background: undefined };
-  if (agent.handover) {
-    // still waiting for the captain to start their cloud session; a terminal opened before isn't watched any more
-    agent = { ...agent, status: 'waiting', activity: 'Waiting for a cloud session', handover: { ...agent.handover, terminalAt: undefined } };
-  } else if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
-    agent = { ...agent, status: 'stopped', activity: 'Interrupted when Focus shut down. Send a message to pick it back up.', permission: undefined };
-  }
-  if (agent.held) {
-    // whatever waited for your plan's limit to reset waits for the captain now
-    agent = { ...agent, held: undefined, activity: 'Was waiting for your plan’s usage limit when Focus shut down. Send a message to pick it back up.' };
-  }
-  agent = upgradeLead(agent, projectName);
-  // saved before the crew wore uniforms
-  if (!('division' in agent.avatar)) agent = { ...agent, avatar: agent.task === 'review' ? qaOfficerFor(agent.projectId).avatar : randomAvatar() };
-  return agent;
-}
+import { agentAfterRestart } from './agentRestartRules';
 
 interface PersistedState {
   settings: Settings;
@@ -153,7 +130,7 @@ export class Store {
     }
     for (const closed of raw.closedPrs ?? []) this.closedPrs.set(prKey(closed.repo, closed.issue), closed);
     for (const saved of raw.agents ?? []) {
-      const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project');
+      const agent = agentAfterRestart(saved, this.projects.find((p) => p.id === saved.projectId)?.name ?? 'The project', randomAvatar);
       this.agents.set(agent.id, agent);
       this.lines.set(agent.id, this.readLog(agent.id, MEMORY_LINES));
       agent.run = runView(this.runs.state(agent.id));

@@ -36,7 +36,7 @@ They're not the chief engineer, Lt. Brennan: Brennan's retros (the retro plugin)
 - **Fix.** A check first when the bad pattern can come back, then the smallest change. A planted bug proves each new test can fail.
 - **Prove.** The [ratchets](../scorecard/README.md#the-ratchets)' baselines lowered to the gain, then the scorecard again; those numbers are the After. It runs the whole gate itself, so the climber doesn't run the gate first and pay for it twice.
 - **Never:** `--no-verify`, loosening a rule or test, changing a dependency version, or two reasons in one pull request (a sweep is one reason: the same fix in each place).
-- **QA and merging.** QA reviews it like any pull request Ops opened, and a fail goes back to the climber. It **never merges by itself**, whatever auto-merge says: the merge gate blocks any `focus/climb-` branch with "only the captain merges it" (`captainMerges` in `shared/mergeGate.ts`). The branch prefix keeps that true after the climber has gone home and after a restart. **Merge when QA passes** still works, since that's you saying so.
+- **QA and merging.** QA reviews it like any pull request Ops opened, and a fail goes back to the climber. It **never merges by itself**, whatever auto-merge says: the merge gate blocks any `focus/climb-` branch with "only the captain merges it" (`captainMerges` in `shared/mergeGateRules.ts`). The branch prefix keeps that true after the climber has gone home and after a restart. **Merge when QA passes** still works, since that's you saying so.
 
 ## Memory
 

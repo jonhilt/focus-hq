@@ -1,5 +1,5 @@
 // What the scheduler's panel shows, pure: each lead's schedules with their next run and how their latest runs went.
-import { describeTimes, lateBy, slotTime } from './rules';
+import { describeTimes, lateBy, slotTime } from './schedulerRules';
 import type { RunOutcome, RunRecord, SchedulerState } from './shared';
 
 export interface RunChip {

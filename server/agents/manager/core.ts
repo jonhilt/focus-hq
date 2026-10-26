@@ -90,8 +90,6 @@ export interface Runtime {
   attaching?: { tries: number; handover: CloudHandover };
 }
 
-export const FINISHED: AgentStatus[] = ['done', 'stopped', 'error'];
-
 /** The statuses that are a phase of the run's own, as the fact its journal records. */
 const PHASE_FACTS: Partial<Record<AgentStatus, RunFact>> = { queued: { kind: 'waiting' }, 'setting-up': { kind: 'setting-up' } };
 

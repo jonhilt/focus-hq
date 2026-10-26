@@ -79,7 +79,7 @@ export interface ReviewComment {
   body: string;
 }
 
-/** Where a PR's merge check stands, as its card on the board shows it (shared/mergeCheck.ts). */
+/** Where a PR's merge check stands, as its card on the board shows it (shared/mergeCheckRules.ts). */
 export interface MergeCheck {
   state: 'queued' | 'checking' | 'passed' | 'refused' | 'overridden';
   /** The PR's head it's about: a push makes it old news. */

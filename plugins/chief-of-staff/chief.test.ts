@@ -5,7 +5,7 @@ import { ChiefOfStaff, type Judge } from './chief';
 import type { Router } from './jevRouter';
 import { judgeVersion } from './judge';
 import { laneJudgeVersion } from './laneJudge';
-import { UNATTENDED_ROUNDS } from './rounds';
+import { UNATTENDED_ROUNDS } from './roundRules';
 import { CHIEF_OF_STAFF, readOf } from './shared';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');

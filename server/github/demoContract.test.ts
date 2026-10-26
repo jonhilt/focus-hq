@@ -90,7 +90,7 @@ describe('the demo GitHub keeps the GitHub contract', () => {
   });
 
   // GitHub says UNKNOWN while it works out whether a PR merges, after every push to it or its base (33dc5c2): the demo
-  // always knows. What Ops does with UNKNOWN is tested on its own (shared/board.test.ts).
+  // always knows. What Ops does with UNKNOWN is tested on its own (shared/boardRules.test.ts).
   it.fails('can report a pull request’s mergeability as UNKNOWN just after a push [simplified: the demo always knows]', async () => {
     const { gh, repo, pr } = await opened();
     demoPush?.(repo, pr.number, 'change');

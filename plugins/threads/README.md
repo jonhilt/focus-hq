@@ -6,8 +6,9 @@ A project's loose threads, kept past the goal that noticed them. A goal's lead l
 
 ## Where it lives
 
-- `shared.ts`: the register, in pure functions (`closedThreads`, `afterLine`, `register`), and what deciding a thread or accepting a proposal writes, or why it's refused (`decision`, `acceptances`).
-- `sort.ts`: Sort for me's threads, prompt and reading of the answer (`toSort`, `sortPrompt`, `proposalsFrom`), and the demo's stand-in for the model.
+- `shared.ts`: the register, in pure functions (`closedThreads`, `afterLine`, `register`).
+- `threadsRules.ts`: what deciding a thread, accepting a proposal or spinning a thread off writes, or why it's refused (`decision`, `acceptances`, `toSpinOff`), and Sort for me's threads (`toSort`).
+- `sort.ts`: Sort for me's prompt and reading of the answer (`sortPrompt`, `proposalsFrom`), and the demo's stand-in for the model.
 - `server.ts`: reads the ledger as Focus starts, and each goal closing, decision and sort as they're written, into state it sends the browser; writes the captain's decisions (`POST /decide`, `POST /accept`), starts the goals they spin threads off as (`POST /spin-off`), and asks the model (`POST /sort`).
 - `client.ts`: the goals panel's view (`goalsView`).
 

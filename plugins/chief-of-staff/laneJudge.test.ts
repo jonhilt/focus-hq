@@ -1,13 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, LedgerEvent } from '../../plugin-api/shared';
-import { heldForRead, lanePrompt, laneSystemPrompt, lostRaises, parseLane, unreadShip } from './laneJudge';
-
-type Pr = { repo: string; number: number; url: string; sha?: string; lane?: 'ship' | 'show' | 'ask'; outcome?: 'merged' | 'closed' };
-const pr = (number: number, more: Partial<Pr> = {}): Pr => ({ repo: 'acme/shop', number, url: '', sha: `sha${number}`, lane: 'ship', ...more });
-const lead = (prs: Pr[]): Pick<Agent, 'lead'> => ({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs } });
-const read = (prs: { pr: number; sha: string }[], to: 'ship' | 'show' | 'ask' = 'ship'): LedgerEvent => ({
-  kind: 'cos-lane', seq: 1, at: 1, projectId: 'p', agent: 'Lt. Vale', prs: prs.map((p) => ({ repo: 'acme/shop', ...p })), from: 'ship', to, why: to === 'ship' ? 'Safe.' : 'It changes a card.', model: 'haiku', version: 'lane-v1',
-});
+import { lanePrompt, laneSystemPrompt, parseLane } from './laneJudge';
 
 describe('the chief of staff’s answer on a ship’s lane', () => {
   it('raises the lead’s pick, or keeps it', () => {
@@ -22,32 +14,6 @@ describe('the chief of staff’s answer on a ship’s lane', () => {
   it('isn’t one without a lane it knows, or a reason', () => {
     expect(parseLane({ lane: 'merge', why: 'x' }, 'ship')).toBeUndefined();
     expect(parseLane({ lane: 'ask', why: ' ' }, 'ship')).toBeUndefined();
-  });
-});
-
-describe('the ships it has still to read', () => {
-  it('is a lead’s open pull requests in Ship or Show, until a read covers each at the commit it’s at', () => {
-    const prs = [pr(7), pr(8, { lane: 'show' }), pr(9, { lane: 'ask' }), pr(10, { outcome: 'merged' })];
-    expect(unreadShip(lead(prs), []).map((p) => p.number)).toEqual([7, 8]);
-    expect(unreadShip(lead(prs), [read([{ pr: 7, sha: 'sha7' }, { pr: 8, sha: 'sha8' }])])).toEqual([]);
-  });
-
-  it('is read again once the lead pushes a new commit and recaps it again', () => {
-    expect(unreadShip(lead([pr(7, { sha: 'newer' })]), [read([{ pr: 7, sha: 'sha7' }])]).map((p) => p.number)).toEqual([7]);
-  });
-
-  it('holds a pull request back from merging by itself until then, and only one a read could raise', () => {
-    expect(heldForRead(pr(7), [])).toBe('the chief of staff hasn’t read its lane yet');
-    expect(heldForRead(pr(7), [read([{ pr: 7, sha: 'sha7' }])])).toBeUndefined();
-    expect(heldForRead(pr(9, { lane: 'ask' }), [])).toBeUndefined();
-  });
-
-  it('keeps holding one a read raised, until the raise is in its lane (a restart lost it), and says which to take again', () => {
-    const ledger = [read([{ pr: 7, sha: 'sha7' }, { pr: 8, sha: 'sha8' }], 'show'), read([{ pr: 8, sha: 'sha8' }], 'ask')];
-    expect(heldForRead(pr(7), ledger)).toBe('the chief of staff raised it to Show');
-    expect(lostRaises(lead([pr(7), pr(8)]), ledger).map((r) => [r.pr.number, r.lane])).toEqual([[7, 'show'], [8, 'ask']]);
-    expect(heldForRead(pr(7, { lane: 'show' }), ledger)).toBeUndefined();
-    expect(lostRaises(lead([pr(7, { lane: 'show' }), pr(8, { lane: 'ask' })]), ledger)).toEqual([]);
   });
 });
 

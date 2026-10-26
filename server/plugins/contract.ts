@@ -4,7 +4,7 @@
 import type { Effect } from 'effect';
 import type { ZodType } from 'zod';
 import type { LedgerEntry, LedgerEvent } from '../../shared/ledger';
-import type { Lane } from '../../shared/mergeLane';
+import type { Lane } from '../../shared/mergeLaneRules';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';

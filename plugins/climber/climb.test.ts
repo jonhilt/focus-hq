@@ -1,47 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import type { Agent, LedgerEvent, PastPullRequest } from '../../plugin-api/server';
+import type { LedgerEvent, PastPullRequest } from '../../plugin-api/server';
 import type { Scorecard } from '../scorecard/api';
-import { freshClimb, type Climb } from './shared';
-import { CLIMB_SUMMARY, climbBrief, climbHome, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbStep, climbTarget, gapScore, openRetroIssues, ownWords, ranked, section, shortlistOf, SWEEP_LINES, SWEEP_PLACES } from './climb';
+import { CLIMB_SUMMARY, climbBrief, climbLog, type MainScorecards, climbLogText, climbPullRequest, climbTarget, openRetroIssues, ownWords, section, shortlistOf, SWEEP_LINES, SWEEP_PLACES } from './climb';
 
 const REPO = 'jonhilt/focus';
 let seq = 0;
 const event = (e: Record<string, unknown>, at = 1000): LedgerEvent => ({ at, projectId: 'p', seq: seq++, ...e }) as LedgerEvent;
-
-describe('climbStep', () => {
-  const on: Climb = { ...freshClimb(), keepClimbing: true };
-  const climber = (a: Partial<Agent>) => ({ status: 'working' as const, activity: 'Fixing', ...a });
-
-  it('starts a climb when climbing is on and none is open, and does nothing when it’s off', () => {
-    expect(climbStep(on, undefined)).toEqual({ kind: 'start' });
-    expect(climbStep(freshClimb(), undefined)).toEqual({ kind: 'idle' });
-  });
-
-  it('starts the next climb with the same engineer once they’ve finished the last, and waits while they’re still busy with it', () => {
-    expect(climbStep(on, climber({ status: 'done' }))).toEqual({ kind: 'start' });
-    expect(climbStep(on, climber({ status: 'error' }))).toEqual({ kind: 'start' });
-    expect(climbStep(on, climber({ status: 'working' }))).toEqual({ kind: 'wait' });
-    expect(climbStep(freshClimb(), climber({ status: 'working' }))).toEqual({ kind: 'idle' });
-  });
-
-  it('waits while the climber works, and while their pull request is open, even after they’ve gone home', () => {
-    expect(climbStep({ ...on, agentId: 'a' }, climber({}))).toEqual({ kind: 'wait' });
-    expect(climbStep({ ...on, agentId: 'a' }, climber({ status: 'done', pr: { number: 4, url: 'u' } }))).toEqual({ kind: 'wait' });
-    expect(climbStep({ ...on, pr: { number: 4, url: 'u' } }, undefined)).toEqual({ kind: 'wait' });
-  });
-
-  it('stops climbing, saying why, when the last climb ended without a pull request', () => {
-    expect(climbStep({ ...on, agentId: 'a' }, climber({ status: 'done', activity: 'Finished without committing changes' })))
-      .toEqual({ kind: 'stop', outcome: 'nothing', why: 'The last climb found nothing to change: Finished without committing changes' });
-    expect(climbStep({ ...on, agentId: 'a' }, climber({ status: 'error', error: 'Usage limit reached' })))
-      .toEqual({ kind: 'stop', outcome: 'failed', why: 'The last climb failed: Usage limit reached' });
-    expect(climbStep({ ...on, agentId: 'a' }, undefined)).toMatchObject({ kind: 'stop', outcome: 'failed' });
-  });
-
-  it('waits for a climb already under way even once climbing is switched off', () => {
-    expect(climbStep({ ...freshClimb(), agentId: 'a' }, climber({}))).toEqual({ kind: 'wait' });
-  });
-});
 
 describe('climbPullRequest', () => {
   it('takes the title from the write-up’s first line and the rest as the body', () => {
@@ -129,12 +93,6 @@ describe('the shortlist', () => {
     '**Hypothesis**',
     'Fewer merges counted.',
   ].join('\n');
-
-  it('scores harm double, then distance, and breaks a tie with the smaller change', () => {
-    expect(gapScore({ harm: 4, distance: 3 })).toBe(11);
-    const tie = [{ gap: 'big', harm: 3, distance: 4, size: 'L' as const }, { gap: 'small', harm: 4, distance: 2, size: 'S' as const }];
-    expect(ranked(tie).map((e) => e.gap)).toEqual(['small', 'big']);
-  });
 
   it('reads the table from a pull request, best first, skipping a row it can’t score', () => {
     expect(shortlistOf(body)).toEqual([
@@ -227,18 +185,5 @@ describe('the brief’s memory', () => {
     expect(climbBrief(agent, [], 2000, [], noise)).toContain('noise floor of 5 runs on abcdef12, and marks a change ▲ or ▼ only past it. Claim a gain only where it does. What wobbled: gate.seconds ±9.1.');
     expect(climbBrief(agent, [], 2000)).toContain('`pnpm run scorecard --repeat 3 --no-save`');
     expect(climbBrief(agent, [], 2000)).toContain('This is your first climb.');
-  });
-});
-
-describe('climbHome', () => {
-  const projects = [{ id: 'shop', repos: ['acme/shop'] }, { id: 'focus', repos: ['acme/api', REPO] }];
-
-  it('is the project with Focus’s own repo', () => {
-    expect(climbHome(projects, REPO, false)).toEqual({ projectId: 'focus', repo: REPO });
-  });
-
-  it('is nowhere when no project has it, except in the demo, which climbs its first repo', () => {
-    expect(climbHome(projects, 'other/repo', false)).toBeUndefined();
-    expect(climbHome(projects, undefined, true)).toEqual({ projectId: 'shop', repo: 'acme/shop' });
   });
 });

@@ -2,71 +2,16 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
-import { pushDenial } from './pushGuard';
+import { pushDenial } from './pushGuardRules';
 import { shellCommands } from './shell';
+import { SCRATCH_RM, SCRATCH_VAR, scratchRmDenial } from './scratchRules';
 
-/**
- * Each local session's scratch dir, for throwaway files: `$FOCUS_SCRATCH`. Ops makes it when a run starts and
- * deletes it when the run ends, and lets the session `rm -rf` inside it: dcg (the destructive command guard, a
- * PreToolUse hook in your own settings) is told to allow exactly that command shape (`dcgConfig`), and Ops'
- * own hook (`scratchRmDenial`) refuses any of those that would reach outside the dir.
- */
-export const SCRATCH_VAR = 'FOCUS_SCRATCH';
+// Each local session's scratch dir, for throwaway files: `$FOCUS_SCRATCH`. Ops makes it when a run starts and
+// deletes it when the run ends, and lets the session `rm -rf` inside it: dcg (the destructive command guard, a
+// PreToolUse hook in your own settings) is told to allow exactly that command shape (`dcgConfig`), and Ops'
+// own hook (`scratchRmDenial`) refuses any of those that would reach outside the dir.
 
 export const scratchDir = (agentId: string, tmp = os.tmpdir()): string => path.join(tmp, 'focus-scratch', agentId);
-
-// $FOCUS_SCRATCH or ${FOCUS_SCRATCH}, a slash, then a path with no quoting, globbing, expansion or command in it.
-// Written once for both JavaScript and dcg's Rust regexes: plain classes and groups, no lookarounds.
-const VAR = String.raw`(?:\$FOCUS_SCRATCH|\$\{FOCUS_SCRATCH\})/`;
-const QUOTED = String.raw`"${VAR}([^"$` + '`' + String.raw`\\*?\[\]{}~]+)"`;
-const BARE = VAR + String.raw`([^\s"'$` + '`' + String.raw`\\*?\[\]{}~;&|<>()!#]+)`;
-const TARGET = `(?:${QUOTED}|${BARE})`;
-
-/** A whole command that's only `rm` (any short flags) of paths in the scratch dir. Nothing chained before or after. */
-export const SCRATCH_RM = String.raw`^\s*rm(?:\s+-[a-zA-Z]+)*(?:\s+${TARGET})+\s*$`;
-
-/** The paths (relative to the scratch dir) a scratch `rm` removes, or null when `command` isn't one. */
-export function scratchRmTargets(command: string): string[] | null {
-  if (!new RegExp(SCRATCH_RM).test(command)) return null;
-  return [...command.matchAll(new RegExp(TARGET, 'g'))].map((m) => m[1] ?? m[2]);
-}
-
-/** Where `p` really is: symlinks followed as far as it exists, the rest appended as written. */
-function resolveReal(p: string, realpath: (p: string) => string): string {
-  const rest: string[] = [];
-  for (let dir = p; ; dir = path.dirname(dir)) {
-    try {
-      return path.join(realpath(dir), ...rest);
-    } catch {
-      if (path.dirname(dir) === dir) return p;
-      rest.unshift(path.basename(dir));
-    }
-  }
-}
-
-/**
- * Whether `rel` (as written after `$FOCUS_SCRATCH/`) is inside `scratch` and not the dir itself. Any `..` is refused
- * outright (the shell resolves it after symlinks, not as written), and so is a path whose symlinks lead outside.
- */
-export function insideScratch(rel: string, scratch: string, realpath: (p: string) => string = fs.realpathSync.native): boolean {
-  if (rel.split('/').includes('..')) return false;
-  let root: string;
-  try {
-    root = realpath(scratch);
-  } catch {
-    return false;
-  }
-  const real = resolveReal(path.join(scratch, rel), realpath);
-  return real.startsWith(root + path.sep) && real !== root;
-}
-
-/** Why Ops refuses a scratch `rm` that reaches outside the scratch dir; null for any other command, or a safe one. */
-export function scratchRmDenial(command: string, scratch: string, realpath?: (p: string) => string): string | null {
-  const targets = scratchRmTargets(command);
-  const outside = targets?.filter((t) => !insideScratch(t, scratch, realpath)) ?? [];
-  if (!outside.length) return null;
-  return `Refused by Ops: ${outside.map((t) => `$${SCRATCH_VAR}/${t}`).join(', ')} isn't inside your scratch dir (no "..", and no symlinks leading out of it). Delete only what's in $${SCRATCH_VAR}, and leave anything else where it is.`;
-}
 
 /** What every local session is told about its scratch dir (the developers', QA's and the leads' prompts). */
 export const SCRATCH_RULE =
@@ -98,7 +43,7 @@ export function openScratch(agentId: string, dcgFile: string, env: NodeJS.Proces
     hook: (input) => {
       const command = input.hook_event_name === 'PreToolUse' ? (input.tool_input as { command?: unknown } | undefined)?.command : undefined;
       // the push guard's too: a command that would skip the git hooks it rests on
-      const reason = typeof command === 'string' ? (scratchRmDenial(command, dir) ?? pushDenial(command)) : null;
+      const reason = typeof command === 'string' ? (scratchRmDenial(command, dir, fs.realpathSync.native) ?? pushDenial(command)) : null;
       return Promise.resolve(reason ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } } : {});
     },
     close: () => {

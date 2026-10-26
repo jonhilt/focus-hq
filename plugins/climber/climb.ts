@@ -1,11 +1,12 @@
 // Main engineering's climber (README.md), after ratstack's hill-climb prompt: each climb measures Focus with the
-// scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Pure: the
-// manager's Climbs part seats the climbing engineer and does the bookkeeping.
-import { type Agent, type AgentStatus, frictionGroups, type LedgerEvent, OPEN_FRICTION_DAYS, type PastPullRequest, type Project } from '../../plugin-api/server';
+// scorecard, takes the worst gap, fixes it, proves the fix with the same numbers, and ships one pull request. Its brief,
+// its log and its pull request; what to do next is climbRules.ts'. Pure: the manager's Climbs part seats the climbing
+// engineer and does the bookkeeping.
+import type { Agent, LedgerEvent, PastPullRequest } from '../../plugin-api/server';
+import { frictionGroups, OPEN_FRICTION_DAYS } from '../../plugin-api/shared';
 import type { Scorecard, ScorecardNoise, ScorecardService } from '../scorecard/api';
-import type { Climb, ClimbEnd } from './shared';
-
-const FINISHED: AgentStatus[] = ['done', 'error', 'stopped'];
+import { gapScore, ranked } from './climbRules';
+import type { ClimbEnd } from './shared';
 
 /** How far one sweep goes (the brief's step 2): enough to be worth its pull request, few enough to review as one. */
 export const SWEEP_PLACES = 6;
@@ -86,16 +87,6 @@ export interface ShortlistEntry {
   /** How far the code is from its standard, 1 to 5. */
   distance: number;
   size: 'S' | 'M' | 'L';
-}
-
-const SIZE_ORDER = { S: 0, M: 1, L: 2 } as const;
-
-/** A gap's score: harm counts double, then distance; size only breaks a tie (smaller first). */
-export const gapScore = (e: Pick<ShortlistEntry, 'harm' | 'distance'>) => 2 * e.harm + e.distance;
-
-/** A shortlist best first, by the brief's rule: score, then the smaller change. */
-export function ranked<T extends ShortlistEntry>(entries: T[]): T[] {
-  return [...entries].sort((a, b) => gapScore(b) - gapScore(a) || SIZE_ORDER[a.size] - SIZE_ORDER[b.size]);
 }
 
 /** The shortlist table from a climb's pull request (`| # | Gap | Harm | Distance | Size | Score |`), best first. */
@@ -254,36 +245,4 @@ export function climbPullRequest(summary: string): { title: string; body: string
   const first = /^#\s+(.+)\n?/.exec(text);
   if (!first) return { title: 'Climb: one step up the scorecard', body: text };
   return { title: first[1].trim().slice(0, 100), body: text.slice(first[0].length).trim() };
-}
-
-/**
- * What to do about the climb now: start one (climbing is on and none is open), wait for the one under way (its
- * climber is working, or its pull request is open), or stop climbing because the last one ended without a pull
- * request. `climber` is the climbing engineer while they're aboard: a new climb also waits while they're still
- * busy with the last (a pull request closed while they were fixing QA's findings), since every climb is theirs.
- */
-export type ClimbStep = { kind: 'start' } | { kind: 'wait' } | { kind: 'stop'; why: string; outcome: 'nothing' | 'failed' } | { kind: 'idle' };
-
-export function climbStep(climb: Climb, climber: Pick<Agent, 'status' | 'pr' | 'error' | 'activity'> | undefined): ClimbStep {
-  if (climb.pr) return { kind: 'wait' };
-  if (climb.agentId) {
-    if (!climber) return { kind: 'stop', why: 'The climber went home before opening a pull request', outcome: 'failed' };
-    if (!FINISHED.includes(climber.status)) return { kind: 'wait' };
-    if (climber.pr) return { kind: 'wait' };
-    if (climber.status === 'done') return { kind: 'stop', why: `The last climb found nothing to change: ${climber.activity}`, outcome: 'nothing' };
-    return { kind: 'stop', why: `The last climb ${climber.status === 'stopped' ? 'was stopped' : 'failed'}${climber.error ? `: ${climber.error}` : ''}`, outcome: 'failed' };
-  }
-  if (!climb.keepClimbing) return { kind: 'idle' };
-  return climber && !FINISHED.includes(climber.status) ? { kind: 'wait' } : { kind: 'start' };
-}
-
-/**
- * Where the climbs are: the project with Focus's own repo (`ownRepo`, from its checkout's remote). The demo ship
- * has no repo of its own, so it climbs its first project's first repo.
- */
-export function climbHome(projects: Pick<Project, 'id' | 'repos'>[], ownRepo: string | undefined, demo: boolean): { projectId: string; repo: string } | undefined {
-  const own = ownRepo && projects.find((p) => p.repos.includes(ownRepo));
-  if (own && ownRepo) return { projectId: own.id, repo: ownRepo };
-  const first = demo ? projects.find((p) => p.repos.length) : undefined;
-  return first && { projectId: first.id, repo: first.repos[0] };
 }

@@ -1,11 +1,11 @@
 import type { RaiseInput } from '../../shared/decisions';
-import type { MergeHeads, MergeTrial } from '../../shared/mergeCheck';
+import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
 import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
-import type { ArtifactInput, QuestionInput } from './lead';
+import type { ArtifactInput, QuestionInput } from './leadRules';
 import type { LeadTool } from '../plugins/contract';
-import type { SinceVerdict } from './retest';
-import type { CommandRun } from './qaProof';
+import type { SinceVerdict } from './retestRules';
+import type { CommandRun } from './qaProofRules';
 import type { PackageFacts } from '../packageManager';
 import type { BackgroundEvent } from './backgroundTasks';
 import type { RecapInput } from './recap';

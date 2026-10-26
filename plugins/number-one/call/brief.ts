@@ -1,4 +1,5 @@
-import { type Contact, frictionGroups, type GoalNote, type GoalRecord, hasLeadWork, type LeadAgent, type LedgerEvent, prKey, type Project, qaBadge, shownProjects, type Snapshot, trace, type Waypoint } from '../../../plugin-api/server';
+import type { Contact, GoalNote, GoalRecord, LeadAgent, LedgerEvent, Project, Snapshot, Waypoint } from '../../../plugin-api/server';
+import { frictionGroups, hasLeadWork, prKey, qaBadge, shownProjects, trace } from '../../../plugin-api/shared';
 
 // What the captain can talk through on a call, and the briefing the voice model talks from: the record (a goal's brief,
 // its lead's note, its slices, its pull requests, and what the ledger saw of it), not the code. Pure, so it's unit

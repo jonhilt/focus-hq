@@ -27,14 +27,6 @@ export function shQuote(text: string): string {
   return `'${text.replaceAll("'", `'\\''`)}'`;
 }
 
-/**
- * A description that's safe on any command line: letters, digits and plain punctuation, nothing a shell or cmd.exe
- * reads as syntax (quotes, `%`, `^`, `&`, `|`, redirects, `$`, backticks).
- */
-export function safeDescription(text: string, max = 300): string {
-  return text.replace(/[^A-Za-z0-9 #/.,:()_-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim();
-}
-
 /** The script the terminal runs, and the file name it needs to run as one (`.command` opens in Terminal on macOS). */
 export function terminalScript(platform: NodeJS.Platform, s: TerminalScript): { name: string; text: string } {
   const intro = [

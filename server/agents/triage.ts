@@ -8,7 +8,7 @@ import { crewPrompt } from './crewFiles';
 
 // The operations officer's look at a stuck pull request: their instructions, the decision's schema and parsing. Pure,
 // so they're unit tested (triage.test.ts). When triage happens and what Ops does with the decision is in
-// shared/triage.ts; manager.ts does it.
+// shared/triageRules.ts; manager.ts does it.
 
 export interface TriageRequest {
   projectId: string;

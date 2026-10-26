@@ -1,5 +1,5 @@
-import type { KeyMode } from './agents/apiKey';
-import { listensBeyondLoopback } from './hostGuard';
+import type { KeyMode } from './agents/apiKeyRules';
+import { listensBeyondLoopback } from './hostGuardRules';
 
 /** What Focus prints once it's listening: where to open it, its mode, how agents sign in, and a warning when anyone can reach it. */
 export function openLines(s: { host: string; port: number; demo: boolean; keyMode: KeyMode; budgetUsd: number; apiKeySet: boolean }): string[] {

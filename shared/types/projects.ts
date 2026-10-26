@@ -38,7 +38,7 @@ export interface Settings {
   leadCompactAt: number;
   /**
    * The plugins the captain switched on for the whole ship in the ready room's Plugins tab, by id, from Focus's next start
-   * (shared/shipPlugins.ts). Missing until they first choose. FOCUS_PLUGINS, where it's set, overrides it.
+   * (shared/shipPluginRules.ts). Missing until they first choose. FOCUS_PLUGINS, where it's set, overrides it.
    */
   plugins?: string[];
   /** Pull, rebuild and restart when Focus's checkout's upstream branch moves (server/updater.ts). Missing = on. */

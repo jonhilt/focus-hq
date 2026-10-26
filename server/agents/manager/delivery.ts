@@ -1,9 +1,10 @@
 import { Cause, Effect } from 'effect';
-import { autoQaFor, sameCommit } from '../../../shared/qa';
+import { sameCommit } from '../../../shared/qa';
+import { autoQaFor } from '../../../shared/qaRules';
 import type { Agent } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage } from '../../util';
-import { afterCloudRun } from '../cloud';
+import { afterCloudRun } from '../cloudRules';
 import type { RunFact } from '../runJournal';
 import { COMMIT_NUDGE, pullRequestBody, pushNudge } from '../prompts';
 import { Workspace } from '../services';

@@ -1,10 +1,10 @@
 import { statusLine } from '../../../shared/agentStatus';
 import { qaOfficerFor, UNIFORM } from '../../../shared/crew';
-import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheck';
-import { checkMergesFor } from '../../../shared/mergeGate';
+import { DEFAULT_MERGE_CHECKS } from '../../../shared/mergeCheckRules';
+import { checkMergesFor } from '../../../shared/mergeGateRules';
 import { filesCovered, pullUrl, qaBadge, spotCheckUrl } from '../../../shared/qa';
 import { qaWhoLine } from '../../../shared/qaPlaybook';
-import { triageLabel } from '../../../shared/triage';
+import { triageLabel } from '../../../shared/triageRules';
 import { qaSettingsNow } from '../../../shared/qaChat';
 import type { Project, QaReview, QaScreenshot } from '../../../shared/types';
 import { api } from '../net/api';

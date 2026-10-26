@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloud';
+import { ATTACH_TRIES, CLOUD_UNAVAILABLE } from './cloudRules';
 import { type RunContext, runMachine, step, type Target, turnEvent, type TurnEvent, type TurnState } from './runMachine';
 import type { RunOutcome } from './types';
 
