@@ -107,26 +107,28 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-decided.sel { outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }
 
 /* The stream (stream.ts): the projects along the top, the goals on the left, the goal picked as a thread on the right.
-   Its words are in Focus's one reading face (the agents' sessions' font, docs/interface-style.md), with a capped
-   measure; labels stay in the ship's face. */
+   Its words are set to read (the captain found the denser Comms hard going): a plain sans at 16px, roomy lines, a
+   capped measure; labels alone stay in the ship's face. */
 .cos-stream { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; grid-template-rows: auto 1fr; gap: 14px 22px; height: 100%; min-height: 0; }
 .cos-stream .cos-comms-tabs { grid-column: 1 / 3; }
 .cos-stream h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--lcars-lilac); }
 .cos-st-left, .cos-st-right { min-height: 0; overflow-y: auto; }
 .cos-st-left { display: flex; flex-direction: column; gap: 18px; padding-right: 6px; }
 .cos-st-goals { display: flex; flex-direction: column; gap: 6px; }
-.cos-st-goal { --dot: var(--muted); display: flex; flex-direction: column; gap: 2px; text-align: left; font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); color: var(--text); background: var(--surface-2); border: 0; border-left: 4px solid transparent; border-radius: 0 10px 10px 0; padding: 10px 12px; cursor: pointer; }
+.cos-st-goal { --dot: var(--muted); display: flex; flex-direction: column; gap: 2px; text-align: left; font: 15px/1.4 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--surface-2); border: 0; border-left: 4px solid transparent; border-radius: 0 10px 10px 0; padding: 10px 12px; cursor: pointer; }
 .cos-st-goal small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cos-st-goal.needs { border-left-color: var(--lcars-gold); }
 .cos-st-goal.needs small { color: var(--lcars-gold); }
 .cos-st-goal.new small { color: var(--lcars-sky); }
 .cos-st-goal.sel { background: color-mix(in srgb, var(--surface-2) 70%, var(--lcars-sky) 12%); }
 .cos-st-goal-title { font-weight: 600; }
-.cos-st-shelf-item { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); }
+.cos-st-shelf-item { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font: 15px/1.4 system-ui, -apple-system, sans-serif; }
 .cos-st-shelf-item small { color: var(--muted); }
-.cos-st-right { display: grid; grid-template-rows: auto minmax(160px, 1fr) auto; gap: 12px; overflow: hidden; min-height: 0; font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); }
+.cos-st-right { display: grid; grid-template-rows: auto minmax(160px, 1fr) auto; gap: 12px; overflow: hidden; min-height: 0; font: 16px/1.55 system-ui, -apple-system, sans-serif; }
+/* the panel sets reading text in the ship's mono face; the stream's words are set to read */
+.cos-stream .cos-st-right :is(p, li, blockquote, textarea) { font: inherit; }
 .cos-st-head { border-bottom: 1px solid var(--line, #262c3d); padding-bottom: 10px; }
-.cos-st-title { font: 600 22px/1.2 var(--ui); letter-spacing: 0.02em; color: var(--text); }
+.cos-st-title { font-size: 20px; font-weight: 600; color: var(--text); }
 .cos-st-head small { color: var(--muted); font-size: 13px; }
 .cos-st-head a { color: var(--lcars-sky); }
 .cos-st-thread { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; padding-right: 10px; }
@@ -156,6 +158,6 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-st-foot { max-height: 38vh; overflow-y: auto; padding-right: 10px; }
 .cos-st-needs { color: var(--lcars-gold); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 6px; }
 .cos-st-talk { display: flex; gap: 10px; align-items: flex-end; }
-.cos-st-talk textarea { flex: 1; font-family: var(--mono); font-size: var(--read-size); line-height: var(--read-leading); color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; resize: vertical; }
+.cos-st-talk textarea { flex: 1; font: 15px/1.5 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; resize: vertical; }
 .cos-st-talk textarea:focus { outline: none; border-color: var(--lcars-sky); }
-.cos-st-send { font: 600 15px/1 var(--ui); background: var(--lcars-orange); color: var(--ink); border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
+.cos-st-send { font: 600 14px/1 system-ui, sans-serif; background: var(--lcars-orange); color: var(--ink); border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
