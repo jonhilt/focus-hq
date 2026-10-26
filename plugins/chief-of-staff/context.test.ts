@@ -6,8 +6,6 @@ const msg = (t: number, text: string): TermLine => ({ t, kind: 'manager', text }
 
 let seq = 0;
 const line = (e: Record<string, unknown>): LedgerEvent => ({ projectId: 'p', at: ++seq, seq, ...e }) as LedgerEvent;
-const decision = (id: string, o: Record<string, unknown>) =>
-  line({ kind: 'decision', id, status: 'open', goalId: 'g1', goal: 'Saved items', owner: 'Lt. Vale', by: 'Lt. Vale', question: `${id}?`, options: ['A', 'B'], ...o });
 
 const lead = {
   id: 'g1',
@@ -44,16 +42,12 @@ describe('captainWords', () => {
 });
 
 describe('turnContext', () => {
-  it('reads what’s agreed for the goal, the project’s compass and the captain’s words, and not decision lines an older Focus left', () => {
+  it('reads what’s agreed for the goal, the project’s compass and the captain’s words', () => {
     const ledger = [
       line({ kind: 'intent', by: 'the user', what: 'A webshop shoppers trust', constraints: ['Never break checkout'] }),
       line({ kind: 'intent', id: 'fast', by: 'the user', what: 'Checkout in seconds', constraints: [] }),
       line({ kind: 'intent', id: 'gone', by: 'the user', what: 'Retired', constraints: [], retired: true }),
       line({ kind: 'intent', goalId: 'g1', by: 'the user', what: 'A goal’s own', constraints: [] }),
-      decision('d1', { proposed: 'A' }),
-      decision('d1', { status: 'decided', chosen: 'A' }),
-      decision('d2', { proposed: 'B' }),
-      decision('d3', { goalId: 'other' }),
       line({ kind: 'intent', projectId: 'q', by: 'the user', what: 'Another project', constraints: [] }),
     ];
     const c = turnContext(lead, ledger, [msg(1, '▶ Captain: Let shoppers save items for later.'), msg(2, '▶ Captain: Use a list.')]);

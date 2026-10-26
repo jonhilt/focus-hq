@@ -64,6 +64,13 @@ describe('checkLedger', () => {
     expect(checkLedger(text(1) + ledgerLine(event(2)).trimEnd()).events).toHaveLength(2);
   });
 
+  it('leaves out, quietly, a decision line an older Focus wrote, its number still taken', () => {
+    const decision = JSON.stringify({ v: 2, seq: 2, at: 2, projectId: 'p', kind: 'decision', id: 'g.d1', status: 'open', goalId: 'g', goal: 'G', owner: 'L', by: 'L', question: 'q?', options: ['a', 'b'] });
+    const check = checkLedger(`${text(1)}${decision}\n${text(3)}`);
+    expect(check).toMatchObject({ nextSeq: 4, problems: [] });
+    expect(check.events.map((e) => e.seq)).toEqual([1, 3]);
+  });
+
   it('reports damage in the middle rather than skipping it quietly', () => {
     expect(checkLedger(text(1, 2) + 'not json\n' + text(5, 5)).problems).toEqual(['line 3 isn’t readable', 'lines 3–4 are missing', 'line 5 repeats or goes back to number 5']);
   });

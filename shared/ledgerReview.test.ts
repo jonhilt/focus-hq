@@ -41,13 +41,9 @@ describe('ledgerRow', () => {
     expect(row).toMatchObject({ tone: 'bad', title: 'focus #233 · an agent resolved them · 2 files', detail: 'a.ts, b.md' });
   });
 
-  it('says what a goal is after, and where a decision on it stands', () => {
-    expect(ledgerRow(ev({ kind: 'intent', goalId: 'g1', goal: 'G', by: 'Lt. A', what: 'Typed decisions', constraints: ['no new UI'] }, 5))).toMatchObject({ group: 'goals', tag: 'Intent', title: 'Typed decisions', detail: 'no new UI · Lt. A · G', goal: 'G' });
+  it('says what a goal is after', () => {
+    expect(ledgerRow(ev({ kind: 'intent', goalId: 'g1', goal: 'G', by: 'Lt. A', what: 'Typed intents', constraints: ['no new UI'] }, 5))).toMatchObject({ group: 'goals', tag: 'Intent', title: 'Typed intents', detail: 'no new UI · Lt. A · G', goal: 'G' });
     expect(ledgerRow(ev({ kind: 'intent', by: 'threads', what: 'Ship small', constraints: [] }, 5)).detail).toBe('threads · the project');
-    const decision = { kind: 'decision', id: 'd1', goalId: 'g1', goal: 'G', owner: 'Lt. A', by: 'Lt. A', question: 'JSON or markdown?', options: ['JSON', 'markdown'] } as const;
-    expect(ledgerRow(ev({ ...decision, status: 'open', proposed: 'JSON' }, 6))).toMatchObject({ tone: 'warn', title: 'Open: JSON or markdown? (proposed: JSON)' });
-    expect(ledgerRow(ev({ ...decision, status: 'decided', chosen: 'JSON', rationale: 'overwritten less', by: 'captain', supersedes: 'd0' }, 7))).toMatchObject({ tone: 'info', title: 'Decided: JSON or markdown? → JSON', detail: 'overwritten less · replaces d0 · captain · G' });
-    expect(ledgerRow(ev({ ...decision, status: 'superseded', chosen: 'JSON' }, 8)).title).toBe('Superseded: JSON or markdown?');
   });
 
   it('sums up a session span: who, how long, cost and waste', () => {
@@ -233,12 +229,11 @@ describe('trace', () => {
     expect(trace([...events, decided(GOAL)], { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Captain')).toBe(false);
   });
 
-  it('includes the goal’s intent and decisions, and not another goal’s or a pull request’s', () => {
-    const intent = (goal: string) => ev({ kind: 'intent', goalId: goal, goal, by: 'Lt. A', what: 'Typed decisions', constraints: [] }, 8);
-    const decision = (goal: string) => ev({ kind: 'decision', id: `${goal}.d1`, status: 'open', goalId: goal, goal, owner: 'Lt. A', by: 'Lt. A', question: 'JSON?', options: ['yes', 'no'] }, 8);
-    const all = [...events, intent(GOAL), decision(GOAL), intent('Another goal'), decision('Another goal')];
-    expect(trace(all, { kind: 'goal', title: GOAL }).steps.filter((s) => s.tag === 'Intent' || s.tag === 'Decision').map((s) => s.tag)).toEqual(['Intent', 'Decision']);
-    expect(trace(all, { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Intent' || s.tag === 'Decision')).toBe(false);
+  it('includes the goal’s intent, and not another goal’s or a pull request’s', () => {
+    const intent = (goal: string) => ev({ kind: 'intent', goalId: goal, goal, by: 'Lt. A', what: 'Typed intents', constraints: [] }, 8);
+    const all = [...events, intent(GOAL), intent('Another goal')];
+    expect(trace(all, { kind: 'goal', title: GOAL }).steps.filter((s) => s.tag === 'Intent').map((s) => s.tag)).toEqual(['Intent']);
+    expect(trace(all, { kind: 'pr', repo: REPO, pr: 236 }).steps.some((s) => s.tag === 'Intent')).toBe(false);
   });
 
   it('includes the goal closing when it has', () => {

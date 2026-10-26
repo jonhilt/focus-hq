@@ -50,14 +50,9 @@ describe('leadEntries', () => {
 });
 
 describe('ledgerEntries', () => {
-  it('keeps the goal’s merges and the verdicts on its turns, and not decision lines an older Focus left', () => {
+  it('keeps the goal’s merges and the verdicts on its turns', () => {
     const lead = { id: 'g1', sessionId: 's1' };
-    const decision = (at: number, o: Record<string, unknown>) => line({ kind: 'decision', at, id: 'd1', goalId: 'g1', goal: 'G', owner: 'L', by: 'L', question: 'List or grid?', options: ['List', 'Grid'], status: 'open', ...o });
     const ledger = [
-      decision(1, {}),
-      decision(2, { status: 'decided', chosen: 'List' }),
-      decision(3, { status: 'decided', chosen: 'List', rationale: 'again' }),
-      line({ kind: 'decision', at: 4, id: 'd2', goalId: 'other', goal: 'O', owner: 'L', by: 'L', question: 'q', options: ['a', 'b'], status: 'decided', chosen: 'a' }),
       line({ kind: 'merged', at: 5, repo: 'acme/shop', pr: 3, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead: 'g1' }),
       line({ kind: 'merged', at: 6, repo: 'acme/shop', pr: 4, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead: 'g2' }),
       line({ kind: 'cos-verdict', at: 7, sessionId: 's1', agent: 'L', turnUuid: 'u', route: 4, check: 'evidence', why: 'No test.', message: 'Test it.', model: 'm', version: 'v' }),
