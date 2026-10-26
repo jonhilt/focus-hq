@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import type { LedgerEvent } from '../../plugin-api/shared';
+import type { LedgerEvent, TermLine } from '../../plugin-api/shared';
 import { CAPTAIN_WORDS, captainWords, contextText, turnContext } from './context';
 
-const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
-const said = (uuid: string, text: string) => ({ type: 'assistant', uuid, message: { content: [{ type: 'text', text }] } });
-const to = (uuid: string, text: string, isMeta = false) => ({ type: 'user', uuid, isMeta, message: { content: text } });
+const msg = (t: number, text: string): TermLine => ({ t, kind: 'manager', text });
 
 let seq = 0;
 const line = (e: Record<string, unknown>): LedgerEvent => ({ projectId: 'p', at: ++seq, seq, ...e }) as LedgerEvent;
@@ -18,23 +16,27 @@ const lead = {
 };
 
 describe('captainWords', () => {
-  it('keeps the captain’s own messages after the first, oldest first, leaving out Ops’, QA’s and the harness’s', () => {
-    const t = jsonl([
-      to('a', 'Build saved items'),
-      said('b', 'Plan?'),
-      to('c', 'Not yet: let me review the plan first.'),
-      to('d', '[Ops] Slice 1 landed.'),
-      to('e', '[QA officer] Passed.'),
-      to('f', '<system-reminder>todo</system-reminder>'),
-      to('g', 'meta', true),
-      to('h', 'Go with the list.'),
-    ]);
-    expect(captainWords(t)).toEqual(['Not yet: let me review the plan first.', 'Go with the list.']);
+  it('keeps the captain’s own messages from the lead’s log, oldest first, leaving out the goal as first put and everyone else’s', () => {
+    const lines = [
+      msg(1, '▶ Captain: Build saved items'),
+      { t: 2, kind: 'text' as const, text: 'Plan?' },
+      msg(3, '▶ Captain: Not yet: let me review the plan first.'),
+      msg(4, '▶ Ops: Slice 1 landed.'),
+      msg(5, '▶ QA officer Lt. Okafor: Passed.'),
+      msg(6, '▶ Captain, from phone: Go with the list.'),
+    ];
+    expect(captainWords(lines, 'Build saved items')).toEqual(['Not yet: let me review the plan first.', 'Go with the list.']);
+  });
+
+  it('keeps the captain’s reply that came with a QA note: in the transcript the two are one message', () => {
+    // the transcript had “[QA officer …] QA passed … \n\nok great, try B” as one user message, read as QA’s
+    const lines = [msg(1, '▶ QA officer Lt. Nakamura: QA passed acme/shop#3'), msg(2, '▶ Captain: ok great, try B')];
+    expect(captainWords(lines)).toEqual(['ok great, try B']);
   });
 
   it('keeps the latest few, each clipped', () => {
-    const t = jsonl([to('a', 'Start'), ...Array.from({ length: CAPTAIN_WORDS.count + 3 }, (_, i) => to(`m${i}`, `reply ${i}`)), to('z', 'x'.repeat(CAPTAIN_WORDS.chars + 10))]);
-    const words = captainWords(t);
+    const lines = [...Array.from({ length: CAPTAIN_WORDS.count + 3 }, (_, i) => msg(i, `▶ Captain: reply ${i}`)), msg(99, `▶ Captain: ${'x'.repeat(CAPTAIN_WORDS.chars + 10)}`)];
+    const words = captainWords(lines);
     expect(words).toHaveLength(CAPTAIN_WORDS.count);
     expect(words[0]).toBe('reply 4');
     expect(words.at(-1)).toBe(`${'x'.repeat(CAPTAIN_WORDS.chars)} …[+10]`);
@@ -54,7 +56,7 @@ describe('turnContext', () => {
       decision('d3', { goalId: 'other' }),
       line({ kind: 'intent', projectId: 'q', by: 'the user', what: 'Another project', constraints: [] }),
     ];
-    const c = turnContext(lead, ledger, jsonl([to('a', 'Build saved items'), to('b', 'Use a list.')]));
+    const c = turnContext(lead, ledger, [msg(1, '▶ Captain: Let shoppers save items for later.'), msg(2, '▶ Captain: Use a list.')]);
     expect(c).toEqual({
       goal: 'Saved items',
       firstWords: 'Let shoppers save items for later.',
@@ -80,7 +82,7 @@ describe('turnContext', () => {
   });
 
   it('leaves out what the goal doesn’t have', () => {
-    const c = turnContext({ id: 'g9', projectId: 'p', lead: { title: '' } }, [], '');
+    const c = turnContext({ id: 'g9', projectId: 'p', lead: { title: '' } }, [], []);
     expect(contextText(c)).toBe('GOAL: (untitled)');
   });
 });

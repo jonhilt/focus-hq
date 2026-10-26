@@ -25,7 +25,7 @@ export interface Judge {
 }
 
 /** What the chief of staff needs of the focus. */
-export type ChiefHost = Pick<PluginHost, 'on' | 'projects' | 'agent' | 'agents' | 'transcript' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'mark' | 'message' | 'raiseLane'> };
+export type ChiefHost = Pick<PluginHost, 'on' | 'projects' | 'agent' | 'agents' | 'transcript' | 'allLines' | 'record' | 'ledger' | 'settings'> & { goals: Pick<PluginHost['goals'], 'mark' | 'message' | 'raiseLane'> };
 
 export class ChiefOfStaff {
   /** The turns being judged now, by session and last line: a turn that ends twice is judged once. */
@@ -151,7 +151,7 @@ export class ChiefOfStaff {
     try {
       const orders = this.standingOrders();
       // it reads the turn against what's agreed (context.ts); Jev routes by the goal and the turn alone, as it was trained
-      const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), jsonl ?? '')));
+      const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), await this.host.allLines(agent.id))));
       const { routing, failed } = await this.routeWithJev(agent.projectId, judgePrompt(goal, tail.text), orders);
       const pinned = routing?.route;
       const result = await this.judge.judge({ system: judgeSystemPrompt(orders, pinned), prompt, settings: this.host.settings(), ...(pinned && { schema: verdictSchema(pinned) }) });

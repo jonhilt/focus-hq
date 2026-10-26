@@ -1,6 +1,7 @@
-import type { Agent, LedgerEvent } from '../../plugin-api/shared';
+import type { Agent, LedgerEvent, TermLine } from '../../plugin-api/shared';
 import { goalDecisions, projectIntents } from '../../plugin-api/shared';
-import { blocks, clip, messageFrom, transcriptLines } from '../../plugin-api/server';
+import { clip } from '../../plugin-api/server';
+import { messageEntries } from './thread';
 
 // What the chief of staff reads a lead's turn against (README.md#what-it-reads-a-turn-against): what's agreed for the
 // goal (the captain's first words, what done looks like, the decisions on record), the project's compass, and the
@@ -34,24 +35,17 @@ export interface TurnContext {
 }
 
 /**
- * The captain's own messages in a lead's transcript, oldest first, the latest `count` of them, each clipped: what Ops,
- * QA and the chief of staff sent (`messageFrom`) and the harness's reminders left out, and the first, which started the
- * goal (its first words).
+ * The captain's own messages to a lead, oldest first, the latest `count` of them, each clipped: from the lead's log,
+ * which keeps each message whole with who sent it (`messageEntries`). Their transcript doesn't: there, Ops' news waiting
+ * for the lead is joined to the captain's next message, so their words were read as Ops' and lost. The first message,
+ * the goal as they first put it (`firstWords`), is left out: the context has it already.
  */
-export function captainWords(jsonl: string, count: number = CAPTAIN_WORDS.count): string[] {
-  const said: string[] = [];
-  for (const line of transcriptLines(jsonl)) {
-    if (line.type !== 'user' || line.isMeta) continue;
-    const text = blocks(line).flatMap((b) => (b.type === 'text' && b.text?.trim() ? [b.text] : [])).join('\n');
-    // the harness's reminders come as the captain's too: what's left once they're taken out is theirs
-    const words = clip(text, CAPTAIN_WORDS.chars);
-    if (words && messageFrom(text) === 'captain') said.push(words);
-  }
-  return said.slice(1).slice(-count);
+export function captainWords(lines: readonly TermLine[], firstWords?: string, count: number = CAPTAIN_WORDS.count): string[] {
+  return messageEntries(lines, firstWords).flatMap((e) => (e.kind === 'you' ? [clip(e.text, CAPTAIN_WORDS.chars)] : [])).slice(-count);
 }
 
-/** What a lead's turn is read against, from the lead, the ledger and the lead's transcript. */
-export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], jsonl: string): TurnContext {
+/** What a lead's turn is read against, from the lead, the ledger and the lead's log. */
+export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
   const intents = projectIntents([...ledger], lead.projectId);
   const about = intents.find((e) => !e.id);
   const { open, decided } = goalDecisions([...ledger], lead.id);
@@ -64,7 +58,7 @@ export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { t
     intents: intents.filter((e) => e.id).map((e) => e.what),
     decided: decided.flatMap((d) => (d.chosen ? [{ question: d.question, chosen: d.chosen }] : [])),
     open: open.map((d) => ({ question: d.question, ...(d.proposed && { proposed: d.proposed }) })),
-    captainSaid: captainWords(jsonl),
+    captainSaid: captainWords(lines, lead.lead?.brief),
   };
 }
 

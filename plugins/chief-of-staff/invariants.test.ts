@@ -27,6 +27,7 @@ const chief: Subject<Kept> = {
         on: () => true,
         projects: () => [],
         transcript: () => Promise.resolve(transcript.join('\n')),
+        allLines: () => Promise.resolve([]),
         record: (projectId, entry) => void ledger.push({ ...entry, projectId, at: ledger.length, seq: ledger.length + 1 }),
         ledger: () => [...ledger],
         settings: () => settings,
