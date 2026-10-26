@@ -27,7 +27,7 @@ export class Leads extends Part {
    * goal), with every repo of the project checked out on the goal's first branch, who hears `text` first. `station`
    * picks the station; otherwise the goal takes the first free one. Later messages go to the lead like any agent's.
    */
-  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}): { agent: Agent } | { queued: QueuedGoal } {
+  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } | { queued: QueuedGoal } {
     const project = this.store.project(projectId);
     if (!project.repos.length) throw new Refused({ message: `Connect a repository to ${project.name} first` });
     if (!text.trim()) throw new Refused({ message: 'Tell them what you’re after' });
@@ -60,7 +60,7 @@ export class Leads extends Part {
       activity: `Coming over to team station ${station + 1}`,
       branch: sliceBranch(title, 1, newId('s').slice(-4)),
       baseBranch: 'main',
-      lead: { station, title, brief: goalBrief(text), repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: Date.now() }] },
+      lead: { station, title, brief: goalBrief(text), ...(how.shaping && { shaping: true }), repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: Date.now() }] },
       costUsd: 0,
       startedAt: Date.now(),
     };
@@ -68,7 +68,7 @@ export class Leads extends Part {
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
-      { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort)` },
+      { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort${how.shaping ? ', shaping it with the captain first' : ''})` },
       { kind: 'manager', text: `▶ ${how.from ? `Captain, from ${how.from}` : 'Captain'}: ${text.trim()}` },
     ]);
     this.core.seating.schedule();
@@ -138,9 +138,9 @@ export class Leads extends Part {
   }
 
   /** Puts a goal in line for the next free team station. It waits there for the captain to start it. */
-  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string } = {}): QueuedGoal {
+  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): QueuedGoal {
     const project = this.store.project(projectId);
-    const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, from: how.from, at: Date.now() };
+    const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, ...(how.shaping && { shaping: true }), from: how.from, at: Date.now() };
     const ahead = project.goalQueue?.length ?? 0;
     this.changeQueue(projectId, [...(project.goalQueue ?? []), queued]);
     this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line for a team station in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`, undefined, projectId);
@@ -153,12 +153,12 @@ export class Leads extends Part {
   }
 
   /** Starts a queued goal at a free team station, with the captain's last edits to it. */
-  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}): Agent {
     const project = this.store.project(projectId);
     const taken = this.store.agentsIn(projectId).filter((a) => a.task === 'lead').map((a) => a.lead?.station ?? 0);
     const start = queuedStart(project.goalQueue, queueId, taken, edits, project.name);
     if (start.kind === 'refused') throw new Refused({ message: start.message });
-    const started = this.startGoal(projectId, start.text, { station: start.station, effort: start.effort, from: start.from });
+    const started = this.startGoal(projectId, start.text, { station: start.station, effort: start.effort, from: start.from, shaping: start.shaping });
     if (!('agent' in started)) throw new Refused({ message: 'No team station was free after all' });
     this.changeQueue(projectId, (project.goalQueue ?? []).filter((g) => g.id !== queueId));
     return started.agent;

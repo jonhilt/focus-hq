@@ -33,6 +33,17 @@ export function leadEffortPicker(value: Effort = 'high'): { el: HTMLElement; sel
   return { el: h('span', { class: 'row' }, select, hint), select, picked };
 }
 
+/**
+ * Whether the lead shapes the goal with the captain before building it (`LeadWork.shaping`): they work out what to build
+ * in rounds, showing something real each time and keeping ./spec.md. Off by default, for goals that need it.
+ */
+export function shapingToggle(on = false): { el: HTMLElement; picked: () => boolean } {
+  const box = h('input', { type: 'checkbox', checked: on });
+  const el = h('label', { class: 'row', title: 'The lead works out what to build with you in rounds, showing you something real each time, before building it' },
+    box, h('span', null, 'Shape it with me first'));
+  return { el, picked: () => box.checked };
+}
+
 /** The goal's note as its lead's brief has it: what done looks like, what we learned, what's next. */
 export function noteView(note: GoalNote | undefined, compact = false): HTMLElement | null {
   if (!note || (!note.done && !note.learned.length && !note.next.length)) return null;

@@ -153,20 +153,21 @@ export const reopenable = (goal: GoalRecord): goal is ReopenableGoal => !!goal.b
 
 /** What starting a queued goal comes to: the station, words and effort it starts with, or why it can't start. */
 export type QueuedStart =
-  | { kind: 'start'; station: number; text: string; effort?: Effort; from?: string }
+  | { kind: 'start'; station: number; text: string; effort?: Effort; from?: string; shaping?: boolean }
   | { kind: 'refused'; message: string };
 
 /**
  * Starting goal `id` from the queue, with the captain's last edits to it: the station they started it from if it's still
- * free, else the first free one; their words and effort, else the ones it was queued with. `taken` holds the stations
+ * free, else the first free one; their words, effort and whether to shape it first, else the ones it was queued with. `taken` holds the stations
  * with a goal, and `room` names the project.
  */
-export function queuedStart(queue: QueuedGoal[] | undefined, id: string, taken: number[], edits: { text?: string; effort?: Effort; station?: number }, room: string): QueuedStart {
+export function queuedStart(queue: QueuedGoal[] | undefined, id: string, taken: number[], edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean }, room: string): QueuedStart {
   const queued = queue?.find((g) => g.id === id);
   if (!queued) return { kind: 'refused', message: 'That goal is no longer in line' };
   const station = (edits.station === undefined ? undefined : pickStation(taken, edits.station)) ?? pickStation(taken);
   if (station === undefined) return { kind: 'refused', message: `Every team station in ${room} still has a goal` };
-  return { kind: 'start', station, text: edits.text?.trim() || queued.text, effort: edits.effort ?? queued.effort, from: queued.from };
+  const shaping = edits.shaping ?? !!queued.shaping;
+  return { kind: 'start', station, text: edits.text?.trim() || queued.text, effort: edits.effort ?? queued.effort, from: queued.from, ...(shaping && { shaping }) };
 }
 
 /**

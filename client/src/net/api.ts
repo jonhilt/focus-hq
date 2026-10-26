@@ -58,11 +58,11 @@ export const api = {
    * Starts a goal at a team station (the first free one unless `station` says): a lead of its own hears `text` first.
    * With every station taken, the goal waits in line instead.
    */
-  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}) =>
+  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}) =>
     call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
   /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`), told to every tab. */
   demoSpeed: (speed: number) => call<{ speed: number }>('POST', '/demo/speed', { speed }),
-  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}) =>
+  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),
   dropQueued: (projectId: string, queueId: string) => call('DELETE', `/projects/${projectId}/goals/queue/${queueId}`),

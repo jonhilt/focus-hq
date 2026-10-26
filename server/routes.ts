@@ -152,6 +152,7 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
       station: typeof req.body.station === 'number' ? req.body.station : undefined,
       effort: effort(req.body.effort),
       from: str(req.body.from) || undefined,
+      shaping: req.body.shaping === true,
     }),
   ));
   // goals waiting for a free team station: started by the captain, never by themselves
@@ -160,6 +161,7 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
       text: str(req.body.text) || undefined,
       effort: effort(req.body.effort),
       station: typeof req.body.station === 'number' ? req.body.station : undefined,
+      shaping: typeof req.body.shaping === 'boolean' ? req.body.shaping : undefined,
     }),
   ));
   r.post('/projects/:id/goals/queue/:qid/move', h((req) => focus.agents.moveQueued(param(req, 'id'), param(req, 'qid'), Math.sign(Number(req.body.by)) || 0)));

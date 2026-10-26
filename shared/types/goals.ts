@@ -11,6 +11,8 @@ export interface QueuedGoal {
   id: string;
   text: string;
   effort?: Effort;
+  /** The captain asked to shape it with its lead before anything's built (`LeadWork.shaping`). */
+  shaping?: true;
   /** Who handed it over, when it wasn't the captain directly: the Ops station, or a plugin's crew. */
   from?: string;
   at: number;
@@ -161,6 +163,8 @@ export interface GoalRecord {
   brief?: string;
   /** The lead's brief.md as the goal closed, which a reopened goal's lead writes back. */
   briefMd?: string;
+  /** It was started to be shaped first (`LeadWork.shaping`), as a reopened goal's lead still is. */
+  shaping?: true;
   /** What its lead showed, and asked with pictures, kept to look back at (and for a reopened goal's screen). */
   artifacts?: GoalArtifact[];
   questions?: GoalQuestion[];
@@ -220,6 +224,12 @@ export interface LeadWork {
   briefMd?: string;
   /** A goal from before brief.md: the lead has been asked to write theirs, from the note they kept. */
   briefAsked?: true;
+  /**
+   * The captain started the goal to shape it with its lead first: the lead works out what to build with them in rounds
+   * (showing something real each time, keeping ./spec.md) before building it. Chosen as the goal starts, because it's
+   * in the lead's system prompt, which can't change mid-session.
+   */
+  shaping?: true;
   /** The ideas for next the captain spun off as goals of their own, until the lead takes them off their brief. */
   spunOffIdeas?: string[];
   /** The lead thinks the goal is done, or that nothing worthwhile is left: the captain closes it, or carries on. */

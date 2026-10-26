@@ -67,7 +67,7 @@ describe('slices', () => {
 
 describe('what the lead writes and hears', () => {
   it('works across every repo, opens its own pull requests with gh, ready when they’re ready, and never pushes a base branch', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
     expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
     expect(prompt).toContain('team station 2');
     expect(prompt).toMatch(/Other leads may be working in the same repos at the same time/);
@@ -86,13 +86,13 @@ describe('what the lead writes and hears', () => {
   });
 
   it('draws the star chart from what the lead does, not from a checklist in the note', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
     expect(prompt).toContain("The goal's star chart is drawn from what you do: your task list (Claude Code's task tools), your commits and your pull requests.");
     expect(prompt).not.toMatch(/checklist|heading/);
   });
 
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', 1);
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
     expect(prompt).not.toMatch(/focus\//);
     expect(prompt).not.toMatch(/^- \.\//m);
     expect(workspaceNote(work, 'focus/saved-items-2-ab')).toBe(
@@ -341,6 +341,12 @@ describe('reopening a closed goal', () => {
     // nothing shown: nothing kept
     expect(goalRecord(lead, closedAt)).not.toHaveProperty('artifacts');
     expect(reopenedWork(goalRecord(lead, closedAt), 1)).not.toHaveProperty('questions');
+  });
+
+  it('keeps a goal shaped first that way when it reopens, as its lead’s system prompt still is', () => {
+    const record = goalRecord({ ...lead, lead: { ...work, shaping: true } }, closedAt);
+    expect(reopenedWork(record, 1).shaping).toBe(true);
+    expect(goalRecord(lead, closedAt)).not.toHaveProperty('shaping');
   });
 
   it('keeps the lead’s brief with the closed goal, and has a reopened goal’s lead write it back', () => {

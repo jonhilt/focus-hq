@@ -137,7 +137,7 @@ export class AgentManager {
     return this.core.sessions.compactNow(id);
   }
 
-  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string } = {}): { agent: Agent } | { queued: QueuedGoal } {
+  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } | { queued: QueuedGoal } {
     return this.core.leads.startGoal(projectId, text, how);
   }
 
@@ -146,11 +146,11 @@ export class AgentManager {
   }
 
   /** Puts a goal in line at the project's team stations without starting it, even with a station free: the captain starts it. */
-  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string } = {}): QueuedGoal {
+  queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): QueuedGoal {
     return this.core.leads.queueGoal(projectId, text, how);
   }
 
-  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number } = {}): Agent {
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}): Agent {
     return this.core.leads.startQueued(projectId, queueId, edits);
   }
 

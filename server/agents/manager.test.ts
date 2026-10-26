@@ -937,6 +937,17 @@ describe('AgentManager', () => {
     expect(() => agents.startQueued(project.id, queued.id)).toThrow('That goal is no longer in line');
   });
 
+  it('starts a goal to be shaped first only when the captain asks, from a station or from the line', () => {
+    const { agents, store, project } = focus();
+    const plain = agents.startGoal(project.id, 'Saved items');
+    expect('agent' in plain && store.agent(plain.agent.id).lead).not.toHaveProperty('shaping');
+    const shaped = agents.startGoal(project.id, 'Wishlists', { shaping: true });
+    expect('agent' in shaped && store.agent(shaped.agent.id).lead?.shaping).toBe(true);
+    const queued = agents.queueGoal(project.id, 'Gift cards', { shaping: true });
+    expect(queued.shaping).toBe(true);
+    expect(agents.startQueued(project.id, queued.id).lead?.shaping).toBe(true);
+  });
+
   it('spins a goal’s open contact or idea for next off as a goal of its own, closing it and telling its lead', () => {
     const { agents, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

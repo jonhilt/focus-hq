@@ -73,8 +73,8 @@ export function workspaceList(work: LeadWork, branch: string): string {
  * keeps a session's first system prompt on every resume; where the repos are and which branch they're on (which change
  * from slice to slice) come in messages instead (`workspaceNote`, `newSliceNote`).
  */
-export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string, station: number): string {
-  return crewPrompt('lead', { name: agent.name, project: projectName, station: String(station + 1), ...CREW_RULES }).trim();
+export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string, work: Pick<LeadWork, 'station' | 'shaping'>): string {
+  return crewPrompt('lead', { name: agent.name, project: projectName, station: String(work.station + 1), shaping: !!work.shaping, ...CREW_RULES }).trim();
 }
 
 /**
@@ -132,7 +132,7 @@ export function goalRecord(agent: LeadAgent, now: number): GoalRecord {
   const work = agent.lead;
   return {
     id: agent.id, title: work.title, note: work.note, slices: work.prs.length ? work.slice : work.slice - 1, prs: everyPr(work), slice: work.slice, leadName: agent.name, sessionId: agent.sessionId,
-    brief: work.brief, ...(work.briefMd !== undefined && { briefMd: work.briefMd }), branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
+    brief: work.brief, ...(work.briefMd !== undefined && { briefMd: work.briefMd }), ...(work.shaping && { shaping: true }), branch: agent.branch, repos: work.repos, openedAt: agent.startedAt, closedAt: now,
     ...(work.artifacts?.length && { artifacts: work.artifacts }), ...(work.questions?.length && { questions: work.questions }),
     ...(work.waypoints?.length && { waypoints: work.waypoints }), ...(work.contacts?.length && { contacts: work.contacts }),
   };
@@ -148,7 +148,7 @@ export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
   const current = goal.slice === undefined ? goal.prs : goal.prs.filter((p) => p.slice === slice);
   const landed = goal.slice === undefined ? [] : goal.prs.filter((p) => p.slice !== slice);
   return {
-    station, title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
+    station, title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), ...(goal.shaping && { shaping: true }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
     ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
     ...(goal.waypoints && { waypoints: goal.waypoints }), ...(goal.contacts && { contacts: goal.contacts }),

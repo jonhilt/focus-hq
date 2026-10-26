@@ -36,8 +36,12 @@ const golden = (name: string) => `__golden__/${name}.md`;
 
 describe('a lead’s system prompt', () => {
   it('is word for word what it was', async () => {
-    await expect(leadSystemAppend({ name: 'Lt. Okafor' }, 'Focus', 2)).toMatchFileSnapshot(golden('lead'));
-    await expect(leadSystemAppend({ name: 'Lt. Haddad' }, 'Acme Shop', 0)).toMatchFileSnapshot(golden('lead-acme'));
+    await expect(leadSystemAppend({ name: 'Lt. Okafor' }, 'Focus', { station: 2 })).toMatchFileSnapshot(golden('lead'));
+    await expect(leadSystemAppend({ name: 'Lt. Haddad' }, 'Acme Shop', { station: 0 })).toMatchFileSnapshot(golden('lead-acme'));
+  });
+
+  it('shapes the goal with the captain first when they started it that way', async () => {
+    await expect(leadSystemAppend({ name: 'Lt. Okafor' }, 'Focus', { station: 2, shaping: true })).toMatchFileSnapshot(golden('lead-shaping'));
   });
 });
 

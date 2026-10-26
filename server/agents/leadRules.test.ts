@@ -92,6 +92,13 @@ describe('queuedStart', () => {
     expect(queuedStart(queued, 'a', [], { text: '   ' }, 'Shop')).toMatchObject({ text: 'Saved items' });
   });
 
+  it('starts a queued goal shaped first if it was queued that way, unless the captain unticks it as they start it', () => {
+    const queued = [{ id: 'a', text: 'Saved items', shaping: true as const, at: 0 }];
+    expect(queuedStart(queued, 'a', [], {}, 'Shop')).toMatchObject({ shaping: true });
+    expect(queuedStart(queued, 'a', [], { shaping: false }, 'Shop')).not.toHaveProperty('shaping');
+    expect(queuedStart([{ id: 'b', text: 'Wishlists', at: 0 }], 'b', [], { shaping: true }, 'Shop')).toMatchObject({ shaping: true });
+  });
+
   it('refuses a goal that has left the line', () => {
     expect(queuedStart(line, 'zz', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
     expect(queuedStart(undefined, 'a', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });

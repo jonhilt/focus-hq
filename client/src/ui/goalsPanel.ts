@@ -10,7 +10,7 @@ import { LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
-import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing } from './goals';
+import { CONTEXT_TONE, closeGoal, goalStarted, leadEffortPicker, noteView, prLink, reviewing, shapingToggle } from './goals';
 import { type NavItem, readout, shownView, SideNav } from './panels';
 import { openClosedGoalChart, openGoalChart } from './chartPanel';
 import { openClosedGoalShown } from './screenPanel';
@@ -48,6 +48,7 @@ function goalCard(ui: Ui, lead: Agent): HTMLElement {
         ...goalTags(lead, 'card').map((tag) => readout(tag.label, tag.el)),
         readout('Slice', String(work?.slice ?? 1)),
         readout('Effort', lead.effort ?? 'default'),
+        work?.shaping ? readout('Mode', 'Shaping first', { title: 'Started to be shaped with you before it’s built' }) : null,
         lead.context ? readout('Context', `${lead.context.percent}%`, { tone: CONTEXT_TONE[contextLevel(lead.context.percent)] }) : null,
         tasks.length ? readout('Tasks', `${tasks.filter((t) => t.status === 'completed').length}/${tasks.length}`, { title: doing(lead) ? `Now: ${doing(lead)}` : undefined }) : null,
       ),
@@ -71,7 +72,7 @@ function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, 
   const title = goalTitle(goal.text);
   const head = h('div', null,
     h('div', { class: 'row' }, h('strong', { class: 'grow' }, `${place === 0 ? 'Next up: ' : `${place + 1}. `}${title}`), up, down, drop),
-    h('small', { class: 'muted' }, `${goal.from ? `from ${goal.from} · ` : ''}${goal.effort ?? state.info?.settings.leadEffort ?? 'high'} effort · ${timeAgo(goal.at)}`),
+    h('small', { class: 'muted' }, `${goal.from ? `from ${goal.from} · ` : ''}${goal.effort ?? state.info?.settings.leadEffort ?? 'high'} effort${goal.shaping ? ' · shaped first' : ''} · ${timeAgo(goal.at)}`),
   );
   const words = goal.text.trim();
   const brief = words !== title ? h('p', { class: 'goal-queued-text', title: 'Show it all, or fold it away' }, words) : null;
@@ -80,13 +81,14 @@ function queuedCard(ui: Ui, projectId: string, goal: QueuedGoal, place: number, 
   // a station is free: the first goal in line starts with a press, as it stands or as the captain edits it
   const text = h('textarea', { class: 'planner-input', value: goal.text });
   const effort = leadEffortPicker(goal.effort ?? state.info?.settings.leadEffort);
+  const shaping = shapingToggle(goal.shaping);
   const start = h('button', { class: 'btn primary' }, 'Start it');
   start.onclick = () =>
     void busy(start, async () => {
-      const lead = await api.startQueued(projectId, goal.id, { text: text.value, effort: effort.picked(), station });
+      const lead = await api.startQueued(projectId, goal.id, { text: text.value, effort: effort.picked(), station, shaping: shaping.picked() });
       ui.openAgent(lead.id);
     }, ui.error);
-  return h('div', { class: 'card planner goal-queued' }, head, h('p', null, 'A team station is free. Start it as it is, or change it first:'), withMic(ui, text), h('div', { class: 'row' }, start, effort.el));
+  return h('div', { class: 'card planner goal-queued' }, head, h('p', null, 'A team station is free. Start it as it is, or change it first:'), withMic(ui, text), h('div', { class: 'row' }, start, effort.el, shaping.el));
 }
 
 /** A closed goal in the room's log: reopened, with a free station, on its branch and with its lead's conversation. */
@@ -141,6 +143,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   const free = h('div', { class: 'readouts' });
   const text = h('textarea', { class: 'planner-input', placeholder: 'What are we working on? e.g. shoppers can save items for later and find them again on any device' });
   const effort = leadEffortPicker(state.info?.settings.leadEffort);
+  const shaping = shapingToggle();
   const start = h('button', { class: 'btn primary' }, 'Start the goal');
   // with goals in line and a station free, a new one can still go ahead of them, at the first free station
   const jump = h('button', { class: 'btn', title: 'Start it at the first free team station, ahead of the goals in line' }, 'Start it now');
@@ -148,7 +151,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
   const hint = h('small', { class: 'muted' });
   const views = {
     goals: h('div', null, list, queue),
-    new: h('div', { class: 'goal-new' }, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, hint)),
+    new: h('div', { class: 'goal-new' }, free, intro, withMic(ui, text), h('div', { class: 'row', style: 'margin-top:8px' }, start, jump, effort.el, shaping.el, hint)),
     log,
   };
   const body = h('div', null, ...Object.values(views));
@@ -173,7 +176,7 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
 
   const submit = (button: HTMLButtonElement, at: () => number | undefined) =>
     void busy(button, async () => {
-      const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: at() });
+      const started = await api.startGoal(projectId, text.value, { effort: effort.picked(), station: at(), shaping: shaping.picked() });
       text.value = '';
       if ('agent' in started) {
         ui.openAgent(started.agent.id);
