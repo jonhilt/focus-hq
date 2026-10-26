@@ -134,6 +134,13 @@ a.cos-st-chip { color: var(--lcars-sky); }
 .cos-st-new::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--lcars-red) 55%, transparent); }
 .cos-st-foot { max-height: 38vh; overflow-y: auto; padding-right: 10px; }
 .cos-st-needs { color: var(--lcars-gold); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 6px; }
+/* words ready to send and what landed in Show are news, not a call to make: quieter than what needs the captain */
+.cos-st-needs.ready { color: var(--lcars-orange); }
+.cos-st-needs.landed { color: var(--lcars-lilac); margin-top: 14px; }
+.cos-st-loose a { color: inherit; text-decoration: none; }
+.cos-st-loose a:hover { text-decoration: underline; }
+.cos-st-loose small.cos-st-landed { color: var(--lcars-lilac); display: flex; gap: 8px; align-items: center; }
+.cos-st-got { font: 600 12px/1 var(--ui); letter-spacing: 0.04em; color: var(--ink); background: var(--lcars-lilac); border: 0; border-radius: 999px; padding: 3px 10px; cursor: pointer; }
 .cos-st-talk { display: flex; gap: 10px; align-items: flex-end; }
 .cos-st-talk textarea { flex: 1; font: 15px/1.5 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; resize: vertical; }
 .cos-st-talk textarea:focus { outline: none; border-color: var(--lcars-sky); }

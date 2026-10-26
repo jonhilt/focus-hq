@@ -3,9 +3,12 @@ import type { Agent, Attention } from '../../plugin-api/shared';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
+import type { LandedItem } from './landed';
+import { landedWhere as landedAt } from './landed';
+import { landedCard } from './landedCard';
 import { needCard } from './needCard';
 import { CHIEF_OF_STAFF } from './shared';
-import { type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
+import { type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, landedSplit, goalSections, latestNews, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 import { workspace } from './workspace';
 
@@ -110,6 +113,7 @@ export type CommsUi = Pick<Ui, 'openAgent' | 'openBoard' | 'openGoals' | 'openSc
 export function openStream(ui: CommsUi): void {
   let goal: string | null = keptGoal;
   let open: InboxItem[] = [];
+  let landed: LandedItem[] = [];
   let entries: ThreadEntry[] = [];
   let shownThread = '';
   let shownAsk = '';
@@ -153,6 +157,8 @@ export function openStream(ui: CommsUi): void {
   };
 
   const flaggedFor = (leadId: string) => open.filter((i) => i.lane === 'needs-you' && i.agentId === leadId);
+  // the slices that landed in Show: at the end of their goal's thread, or on the left once their lead's gone
+  const landedSplitNow = () => landedSplit(landed, (id) => !!focus.agent(id));
 
   // the goals list, or the strip it folds to
   const renderLeft = (leads: Agent[]) => {
@@ -186,7 +192,11 @@ export function openStream(ui: CommsUi): void {
         h('span', { class: 'cos-st-row-title' }, l.lead?.title ?? l.name),
         h('small', null, r.right));
     };
-    const looseIn = (projectId: string) => loose.filter((i) => i.projectId === projectId).map((i) => h('div', { class: 'cos-st-loose' }, h('span', null, i.what), h('small', null, `Ready for you · ${i.who}`)));
+    const landedLoose = landedSplitNow().loose;
+    const looseIn = (projectId: string) => [
+      ...loose.filter((i) => i.projectId === projectId).map((i) => h('div', { class: 'cos-st-loose' }, h('span', null, i.what), h('small', null, `Ready for you · ${i.who}`))),
+      ...landedLoose.filter((i) => i.projectId === projectId).map(landedLine),
+    ];
     const els = sections.flatMap((s) => {
       const project = focus.project(s.key);
       return [h('h3', { class: `cos-st-section${s.key === 'needs' ? ' needs' : ''}`, style: project ? `--tone:${project.color}` : '' }, s.name), ...s.goals.map(row), ...(project ? looseIn(project.id) : [])];
@@ -208,16 +218,29 @@ export function openStream(ui: CommsUi): void {
     seen(lead.id, entries.at(-1)?.at);
   };
 
-  // what needs the captain on this goal (the card Comms shows), asked at the end of its thread
+  // a slice that landed in Show with nobody's lead aboard to tell: a line on the left, heard with a press
+  const landedLine = (item: LandedItem) => {
+    const got = h('button', { class: 'cos-st-got', title: 'You’ve heard: off Comms, nothing sent' }, 'Got it');
+    got.onclick = () => void busy(got, () => inbox.decideLanded(item.id, { ack: true }).then(refreshInbox), ui.error);
+    return h('div', { class: 'cos-st-loose' },
+      h('a', { href: `https://github.com/${item.repo}/pull/${item.number}`, target: '_blank', rel: 'noopener' }, `${landedAt(item)} merged itself in Show`),
+      h('small', { class: 'cos-st-landed' }, `Landed · ${item.goal ?? item.who}`, got));
+  };
+
+  // what needs the captain on this goal (the card Comms shows), or words the chief of staff has ready for its lead, and
+  // what of theirs landed in Show, at the end of its thread
   const renderAsk = (lead: Agent) => {
     const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
-    const { card, key } = footOf(lead.id, flaggedFor(lead.id), (id) => local.has(id));
-    if (key === shownAsk) return;
-    shownAsk = key;
+    const { card, ready, key } = footOf(lead.id, open.filter((i) => i.agentId === lead.id), (id) => local.has(id));
+    const landedHere = landedSplitNow().byLead.get(lead.id) ?? [];
+    const keyed = `${key}|${landedHere.map((i) => i.id).join(',')}`;
+    if (keyed === shownAsk) return;
+    shownAsk = keyed;
     const a = card ? local.get(card) : undefined;
-    if (!a) return fill(ask);
-    if (a.kind === 'turn') focus.markRead(a.agent);
-    fill(ask, h('div', { class: 'cos-st-needs' }, 'The chief of staff · needs you'), needCard(ui, a, openAgent));
+    if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
+    fill(ask,
+      ...(a ? [h('div', { class: `cos-st-needs${ready ? ' ready' : ''}` }, ready ? 'The chief of staff · ready to send' : 'The chief of staff · needs you'), needCard(ui, a, openAgent)] : []),
+      ...landedHere.flatMap((item) => [h('div', { class: 'cos-st-needs landed' }, 'Landed in Show'), landedCard(ui, item, refreshInbox)]));
   };
 
   // at the foot, quick replies to the lead, their thread asked for again once one's sent; the box to talk to them is in their workspace
@@ -293,10 +316,13 @@ export function openStream(ui: CommsUi): void {
       render();
     }, () => undefined);
   };
-  const refreshInbox = () => void inbox.view().then((view) => {
-    open = view.open.filter((i) => !focus.isHidden(i.projectId));
-    render();
-  }, () => undefined);
+  function refreshInbox() {
+    void inbox.view().then((view) => {
+      open = view.open.filter((i) => !focus.isHidden(i.projectId));
+      landed = view.landed.filter((i) => !focus.isHidden(i.projectId));
+      render();
+    }, () => undefined);
+  }
 
   ui.panels.open({ title: 'Comms', body, wide: true, accent: LCARS.orange });
   render();

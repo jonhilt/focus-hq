@@ -40,11 +40,27 @@ export function threadRows(entries: readonly ThreadEntry[], seenAt: number | und
 
 /**
  * What a goal's thread has at its foot: the first thing that needs the captain there which this browser has too (the
- * card Comms shows for it), or a box to talk to its lead; `key` says when it changes, so a reply being written isn't wiped.
+ * card Comms shows for it), else a turn the chief of staff has words ready for (`ready`: sent with a press, or by
+ * themselves unless held), or a box to talk to its lead; `key` says when it changes, so a reply being written isn't wiped.
  */
-export function footOf(leadId: string, flagged: readonly Pick<InboxItem, 'id' | 'cos'>[], known: (id: string) => boolean): { card?: string; key: string } {
-  const item = flagged.find((i) => known(i.id));
-  return item ? { card: item.id, key: `${item.id}|${item.cos?.route ?? ''}` } : { key: `talk|${leadId}` };
+export function footOf(leadId: string, items: readonly Pick<InboxItem, 'id' | 'cos' | 'lane'>[], known: (id: string) => boolean): { card?: string; ready?: true; key: string } {
+  const item = items.find((i) => i.lane === 'needs-you' && known(i.id)) ?? items.find((i) => i.lane === 'ready' && known(i.id));
+  if (!item) return { key: `talk|${leadId}` };
+  return { card: item.id, ...(item.lane === 'ready' ? { ready: true as const } : {}), key: `${item.id}|${item.lane}|${item.cos?.route ?? ''}` };
+}
+
+/**
+ * The slices that landed in Show, split by where the stream shows them: at the end of their goal's thread while its lead
+ * is aboard (`byLead`), or on the left with what else waits outside any goal's conversation (`loose`).
+ */
+export function landedSplit<T extends { leadId?: string }>(landed: readonly T[], aboard: (leadId: string) => boolean): { byLead: Map<string, T[]>; loose: T[] } {
+  const byLead = new Map<string, T[]>();
+  const loose: T[] = [];
+  for (const item of landed) {
+    if (item.leadId && aboard(item.leadId)) byLead.set(item.leadId, [...(byLead.get(item.leadId) ?? []), item]);
+    else loose.push(item);
+  }
+  return { byLead, loose };
 }
 
 /** What a goal's lead is doing, in plain words. */

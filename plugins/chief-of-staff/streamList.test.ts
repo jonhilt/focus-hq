@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { activity, ACTIVITY_LINES, age, bundleRows, bundleSays, conversation, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, prCount, previewFor, seenOf, threadKey, threadRows } from './streamList';
+import { activity, ACTIVITY_LINES, age, bundleRows, bundleSays, conversation, doing, entryView, footOf, goalRow, landedSplit, goalSections, latestNews, newSince, pickGoal, prCount, previewFor, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 
 describe('new since the captain last looked', () => {
@@ -71,11 +71,26 @@ describe('a thread as it’s drawn', () => {
 
 describe('the foot of a goal’s thread', () => {
   it('has the first thing that needs the captain which this browser knows of, else a box to talk to the lead', () => {
-    const flagged = [{ id: 'turn:g:1', cos: { route: 2 as const, ask: 'a', why: 'w', message: '' } }, { id: 'hand:g:r1' }];
-    expect(footOf('g', flagged, () => true)).toEqual({ card: 'turn:g:1', key: 'turn:g:1|2' });
-    expect(footOf('g', flagged, (id) => id === 'hand:g:r1')).toEqual({ card: 'hand:g:r1', key: 'hand:g:r1|' });
+    const flagged = [{ id: 'turn:g:1', lane: 'needs-you' as const, cos: { route: 2 as const, ask: 'a', why: 'w', message: '' } }, { id: 'hand:g:r1', lane: 'needs-you' as const }];
+    expect(footOf('g', flagged, () => true)).toEqual({ card: 'turn:g:1', key: 'turn:g:1|needs-you|2' });
+    expect(footOf('g', flagged, (id) => id === 'hand:g:r1')).toEqual({ card: 'hand:g:r1', key: 'hand:g:r1|needs-you|' });
     expect(footOf('g', flagged, () => false)).toEqual({ key: 'talk|g' });
     expect(footOf('g', [], () => true)).toEqual({ key: 'talk|g' });
+  });
+
+  it('has words the chief of staff has ready when nothing needs the captain, and never ahead of what does', () => {
+    const ready = { id: 'turn:g:2', lane: 'ready' as const, cos: { route: 1 as const, ask: 'a', why: 'w', message: 'Carry on' } };
+    expect(footOf('g', [ready], () => true)).toEqual({ card: 'turn:g:2', ready: true, key: 'turn:g:2|ready|1' });
+    expect(footOf('g', [ready, { id: 'hand:g:r1', lane: 'needs-you' as const }], () => true)).toEqual({ card: 'hand:g:r1', key: 'hand:g:r1|needs-you|' });
+    expect(footOf('g', [{ id: 'turn:g:3', lane: 'judging' as const }], () => true)).toEqual({ key: 'talk|g' });
+  });
+});
+
+describe('where a slice that landed in Show goes', () => {
+  it('ends its goal’s thread while its lead is aboard, and waits on the left when they’re gone or it has none', () => {
+    const { byLead, loose } = landedSplit([{ id: 'a', leadId: 'g' }, { id: 'b', leadId: 'gone' }, { id: 'c' }, { id: 'd', leadId: 'g' }], (id) => id === 'g');
+    expect([...byLead].map(([lead, items]) => [lead, items.map((i) => i.id)])).toEqual([['g', ['a', 'd']]]);
+    expect(loose.map((i) => i.id)).toEqual(['b', 'c']);
   });
 });
 
