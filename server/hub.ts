@@ -7,17 +7,20 @@ import { flowRecorder } from './flows';
 export class Hub {
   private wss: WebSocketServer | null = null;
 
-  /** `refuse` says why a connection isn't let in (another site's page, say), or nothing to let it in. */
+  /**
+   * `refuse` says why a connection isn't let in (another site's page, a tagged tailnet device, say), or nothing to let
+   * it in. It's asked of every upgrade, Vite's HMR's too, which listens after this and finds a refused one closed.
+   */
   attach(server: Server, snapshot: () => Promise<Snapshot>, refuse: (req: IncomingMessage) => string | undefined = () => undefined): void {
     const wss = new WebSocketServer({ noServer: true });
     this.wss = wss;
     server.on('upgrade', (req, socket, head) => {
-      if (req.url !== '/ws') return; // leave other upgrades (Vite HMR) alone
       const why = refuse(req);
       if (why) {
-        console.warn(`Refused a connection to /ws: ${why}`);
+        console.warn(`Refused a connection to ${req.url ?? '/'}: ${why}`);
         return void socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n');
       }
+      if (req.url !== '/ws') return; // leave other upgrades (Vite HMR) alone
       wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
     });
     wss.on('connection', (ws) => {

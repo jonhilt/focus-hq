@@ -6,7 +6,18 @@ Where Focus keeps what the captain sets, and why. Most people clone Focus and ru
 
 - **Settings** (`state.json`, `server/settings.ts`): the captain's choices, set in the ready room, the machine's own among them (auto update, the terminal for cloud sessions, the browser agents drive, where previews are mirrored for your other devices, and in the Voice input card where whisper and its model are and whether the crew's voices use the Apple GPU). They're sent to every browser and lent to every plugin (`host.settings()`), so nothing secret goes here.
 - **Secrets** (`secrets.env` in the data folder, `server/secrets.ts`): what mustn't reach a browser or an agent: the bot's token, its webhook (often a secret in its path) and the webhook's header, and the API keys plugins declare (number-one's OpenAI and TypeSafe keys, set in its card in the Plugins tab). Set from Settings, which only ever hears where each comes from, never the value; or edited by hand, read as Focus starts.
-- **The environment**: what Focus needs before it can read either (`FOCUS_DATA_DIR`, `PORT`, `HOST`, `FOCUS_ALLOWED_HOSTS`), and knobs for working on Focus itself. An environment variable named for a setting or secret wins over it, and Settings shows it as set there, unchangeable from the browser: a server's env file (`deploy/vps/env.example`) keeps working as it did.
+- **The environment**: what Focus needs before it can read either (`FOCUS_DATA_DIR`, `PORT`, `HOST`, `FOCUS_ALLOWED_HOSTS`, `FOCUS_ALLOWED_LOGINS`), and knobs for working on Focus itself. An environment variable named for a setting or secret wins over it, and Settings shows it as set there, unchangeable from the browser: a server's env file (`deploy/vps/env.example`) keeps working as it did.
+
+## Who reaches Focus
+
+Focus has no login of its own, so it answers by where a request comes from (`server/hostGuardRules.ts`), over HTTP and every WebSocket upgrade alike:
+
+- **By its host.** Loopback, the name `HOST` gives, `.ts.net` (Tailscale Serve) and `FOCUS_ALLOWED_HOSTS` (comma-separated, `.example.com` for a suffix), from a page of Focus's own or none. Anything else is another site's name pointed at this machine, or another site's page driving it.
+- **Over the tailnet, by who's asking.** Tailscale Serve tells Focus whose device a request comes from (`Tailscale-User-Login`), and says nothing for a tagged device or a request through Funnel. A device a person owns reaches all of Focus, or only those whose login is in `FOCUS_ALLOWED_LOGINS` (comma-separated) when it's set. A tagged device (a box running a bot's untrusted code, like Grok Bot's) reaches only `/api/bot/*`, which want the bot's token; anything else is a 403.
+- A request is the tailnet's when Serve forwarded it from a tailnet address (`X-Forwarded-For`, which Serve sets), through Funnel, straight from a tailnet address, or to the `.ts.net` name. Not by its `Host` alone: Serve picks the site by its TLS name and passes the `Host` on as the device sent it, so a tagged device can say `localhost`.
+- A `FOCUS_ALLOWED_HOSTS` name off the tailnet (a LAN name, with `HOST=0.0.0.0`, or a reverse proxy of your own) carries no one's identity, so only its host is checked: anything that can reach it drives Focus, as before. Put Focus behind Tailscale Serve instead to tell devices apart.
+
+Held in `server/hostGuardRules.test.ts` and `server/hub.test.ts`.
 
 ## Promises
 

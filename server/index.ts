@@ -28,7 +28,7 @@ import { clampSpeed } from '../shared/demoPace';
 import { setDemoPace } from './demoPace';
 import { ghCliLayer } from './github/ghCli';
 import { GitHub, toProvider } from './github/service';
-import { allowedHosts, refusal } from './hostGuardRules';
+import { allowedHosts, allowedLogins, type Caller, refusal, tailnetRefusal } from './hostGuardRules';
 import { Hub } from './hub';
 import { flowRecorder } from './flows';
 import { loadPlugins, pluginCatalog } from './plugins/load';
@@ -214,12 +214,17 @@ function httpApp(focus: Focus, store: Store, previews: Previews): { app: express
   // Focus has no login: it only answers the captain's own browser (server/hostGuardRules.ts)
   const addresses = Object.values(os.networkInterfaces()).flatMap((list) => (list ?? []).map((i) => i.address));
   const hosts = allowedHosts(config.host, process.env.FOCUS_ALLOWED_HOSTS ?? '', { hostname: os.hostname(), addresses });
-  const refuse = (req: http.IncomingMessage) => refusal({ host: req.headers.host, origin: req.headers.origin }, hosts);
+  const hostRefusal = (req: http.IncomingMessage) => refusal({ host: req.headers.host, origin: req.headers.origin }, hosts);
+  // and a tagged tailnet device (Grok Bot's box) only reaches the bot's routes
+  const logins = allowedLogins(process.env.FOCUS_ALLOWED_LOGINS ?? '');
+  const deviceRefusal = (req: http.IncomingMessage) => tailnetRefusal(caller(req), logins);
+  const refuse = (req: http.IncomingMessage) => hostRefusal(req) ?? deviceRefusal(req);
   app.use((req, res, next) => {
-    const why = refuse(req);
+    const byHost = hostRefusal(req);
+    const why = byHost ?? deviceRefusal(req);
     if (!why) return next();
     console.warn(`Refused ${req.method} ${req.originalUrl}: ${why}`);
-    res.status(403).type('text').send(`${why}. Add it to FOCUS_ALLOWED_HOSTS if it's yours.`);
+    res.status(403).type('text').send(byHost ? `${why}. Add it to FOCUS_ALLOWED_HOSTS if it's yours.` : `${why}.`);
   });
   // recording a run's flows (`pnpm run flows`): each /api request, against the browser's file that made it
   const recorder = flowRecorder;
@@ -232,6 +237,21 @@ function httpApp(focus: Focus, store: Store, previews: Previews): { app: express
   // the Tricorder's page lives in a folder (client/tricorder/index.html), and its relative URLs need the slash
   app.get('/tricorder', (req, res, next) => (req.path.endsWith('/') ? next() : res.redirect(req.originalUrl.replace('/tricorder', '/tricorder/'))));
   return { app, refuse };
+}
+/** What `tailnetRefusal` reads of a request: Tailscale Serve's headers, the peer's address, the host and the URL. */
+function caller(req: http.IncomingMessage): Caller {
+  const one = (name: string) => {
+    const value = req.headers[name];
+    return Array.isArray(value) ? value.join(',') : value;
+  };
+  return {
+    login: one('tailscale-user-login'),
+    forwardedFor: one('x-forwarded-for'),
+    funnel: one('tailscale-funnel-request'),
+    remoteAddress: req.socket.remoteAddress,
+    host: req.headers.host,
+    url: req.url,
+  };
 }
 /** The demo's own routes: its pace, its previews' pages, and pretend pushes to its PRs. */
 function demoRoutes(app: express.Express, focus: Focus, store: Store, previews: Previews): void {
