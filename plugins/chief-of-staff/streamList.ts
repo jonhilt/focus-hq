@@ -2,16 +2,8 @@ import type { InboxItem } from './inbox';
 import type { ThreadEntry } from './thread';
 
 // The stream's decisions (stream.ts, README.md#a-thread-per-goal): how the goals on the left are listed and what each
-// row says, where "new since you last looked" falls in a thread, how each entry reads and how quiet lines bundle. Pure, so it's tested (streamList.test.ts).
-
-/**
- * Where "new since you last looked" goes in a thread: before the first entry after `seenAt` that isn't the captain's
- * own; -1 when nothing is new, or they've never looked (the whole thread is new, so a line would say nothing).
- */
-export function newSince(entries: readonly ThreadEntry[], seenAt: number | undefined): number {
-  if (seenAt === undefined) return -1;
-  return entries.findIndex((e) => e.at > seenAt && e.kind !== 'you');
-}
+// row says, how a thread is told (the chief of staff's readings in place of the lead's turns), where "new since you last
+// looked" falls in it, how each entry reads and how quiet lines bundle. Pure, so it's tested (streamList.test.ts).
 
 /** When the captain last looked at each goal's thread, from what this browser kept: only entries that are a time. */
 export function seenOf(kept: unknown): Record<string, number> {
@@ -31,12 +23,6 @@ export function pickGoal(picked: string | null, leads: readonly { id: string }[]
 /** What a thread's drawing depends on: drawn again only when that changes, so it doesn't jump under the captain's eyes. */
 export const threadKey = (leadId: string, status: string, entries: readonly Pick<ThreadEntry, 'at'>[]): string =>
   `${leadId}|${status}|${entries.length}|${entries.at(-1)?.at ?? ''}`;
-
-/** A thread's rows in order: its entries, with the line saying what's new since the captain last looked where it falls (`newSince`). */
-export function threadRows(entries: readonly ThreadEntry[], seenAt: number | undefined): ({ entry: ThreadEntry } | { newSince: true })[] {
-  const split = newSince(entries, seenAt);
-  return entries.flatMap((entry, i) => [...(i === split ? [{ newSince: true as const }] : []), { entry }]);
-}
 
 /**
  * What a goal's thread has at its foot: the first thing that needs the captain there which this browser has too (the
@@ -134,10 +120,8 @@ export function goalRow(flagged: number, latest: number | undefined, seenAt: num
 }
 
 /** A thread's rows with the quiet lines between messages bundled: two or more in a row become one, said in brief (`bundleSays`). */
-export type BundledRow = { entry: ThreadEntry } | { newSince: true } | { bundle: ThreadEntry[] };
-
-export function bundleRows(rows: readonly ({ entry: ThreadEntry } | { newSince: true })[]): BundledRow[] {
-  const out: BundledRow[] = [];
+export function bundleRows(rows: readonly CosRow[]): CosRow[] {
+  const out: CosRow[] = [];
   let run: ThreadEntry[] = [];
   const flush = () => {
     if (run.length > 1) out.push({ bundle: run });
@@ -154,6 +138,44 @@ export function bundleRows(rows: readonly ({ entry: ThreadEntry } | { newSince: 
   flush();
   return out;
 }
+
+type LeadEntry = Extract<ThreadEntry, { kind: 'lead' }>;
+type CosEntry = Extract<ThreadEntry, { kind: 'cos' }>;
+
+/**
+ * A thread told by the chief of staff: each of the lead's turns gives way to its reading of it (`reading`, with the
+ * `turn` it read), the lead's own words being in their workspace. A turn it hasn't read (it's reading it, or it's off
+ * for the project) stays as the lead said it.
+ */
+export type CosRow = { entry: ThreadEntry } | { newSince: true } | { bundle: ThreadEntry[] } | { reading: CosEntry; turn?: LeadEntry };
+
+const rowAt = (r: { entry: ThreadEntry } | { reading: CosEntry }): number => ('entry' in r ? r.entry.at : r.reading.at);
+
+export function cosRows(entries: readonly ThreadEntry[], seenAt: number | undefined): CosRow[] {
+  const rows: ({ entry: ThreadEntry } | { reading: CosEntry; turn?: LeadEntry })[] = [];
+  // the turn the chief of staff hasn't read yet, and where it stands: its reading takes its place, as of when it came
+  let unread: { row: { entry: ThreadEntry }; turn: LeadEntry } | undefined;
+  for (const e of entries) {
+    if (e.kind === 'lead') {
+      const row = { entry: e };
+      rows.push(row);
+      unread = { row, turn: e };
+    } else if (e.kind === 'cos') {
+      if (unread) rows.splice(rows.indexOf(unread.row), 1);
+      rows.push({ reading: e, ...(unread && { turn: unread.turn }) });
+      unread = undefined;
+    } else rows.push({ entry: e });
+  }
+  // what's new since the captain last looked: from the first row after then that isn't their own
+  const split = seenAt === undefined ? -1 : rows.findIndex((r) => rowAt(r) > seenAt && !('entry' in r && r.entry.kind === 'you'));
+  return bundleRows(rows.flatMap((r, i): CosRow[] => [...(i === split ? [{ newSince: true as const }] : []), r]));
+}
+
+/** What a reading says its route is, in a few words. */
+export const READING_ROUTE: Record<number, string> = { 1: 'Carrying on', 2: 'For you', 3: 'Needs you now', 4: 'Sent back to the lead' };
+
+/** The visuals a lead put on their screen while the turn a reading read was under way: since the reading before it. */
+export const shownSince = <A extends { at: number }>(artifacts: readonly A[], after: number, upTo: number): A[] => artifacts.filter((a) => a.at > after && a.at <= upTo);
 
 /** What a bundle of quiet lines amounts to, in brief: what merged, what QA passed, what went back or was flagged. */
 export function bundleSays(entries: readonly ThreadEntry[]): string[] {

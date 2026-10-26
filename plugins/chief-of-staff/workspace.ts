@@ -12,6 +12,8 @@ import type { ThreadEntry } from './thread';
 /** The tab the workspace was on, and the screen's visual picked, when the stream last closed. */
 let keptTab: WorkspaceTab = 'talk';
 let keptArt: string | null = null;
+/** The turn of the lead's a reading opened their conversation on, picked out in it. */
+let keptAt: number | null = null;
 
 type LeadPr = NonNullable<Agent['lead']>['prs'][number];
 
@@ -23,6 +25,8 @@ export interface Workspace {
   el: HTMLElement;
   /** Shows lead `lead`'s workspace with their thread's `entries`; drawn again only when what the tab shows changed. */
   show(lead: Agent, entries: readonly ThreadEntry[]): void;
+  /** Turns to `tab`: their conversation on the turn said at `at`, their screen on visual `art`. */
+  open(tab: WorkspaceTab, at?: { at?: number; art?: string }): void;
 }
 
 export function workspace(opts: {
@@ -48,6 +52,8 @@ export function workspace(opts: {
   let entries: readonly ThreadEntry[] = [];
   let shownKey = '';
   let talkFor = '';
+  // a reading opened the conversation on a turn: scrolled to once, as it's opened, not each time the tab is drawn again
+  let scrollToHot = false;
 
   // what the tab shows depends on: drawn again only when it changes, so nothing jumps under the captain's eyes
   const keyOf = (a: Agent): string => {
@@ -57,7 +63,7 @@ export function workspace(opts: {
     const lines = focus.lines(a.id);
     const last = lines.at(-1);
     const parts: Record<WorkspaceTab, string> = {
-      talk: `${entries.length}|${entries.at(-1)?.at ?? ''}`,
+      talk: `${entries.length}|${entries.at(-1)?.at ?? ''}|${keptAt ?? ''}`,
       screen: `${(work?.artifacts ?? []).map((x) => `${x.id}@${x.at}${x.image ? '+' : ''}`).join(',')}|${keptArt ?? ''}`,
       browser: preview ? `${preview.repo}#${preview.number}|${preview.status}|${preview.links[0]?.url ?? ''}|${preview.activity}|${preview.error ?? ''}|${preview.title}` : '',
       // what each pull request's line says, QA's badge included (it reads more of a review than its status)
@@ -79,7 +85,7 @@ export function workspace(opts: {
       prs: prs.length,
       activity: activity(focus.lines(a.id)).length,
     };
-    fill(tabs, ...WORKSPACE_TABS.map((t) => h('button', { class: `cos-ws-tab${keptTab === t.tab ? ' on' : ''}`, onclick: () => { keptTab = t.tab; draw(); } }, t.label, counts[t.tab] ? h('span', null, String(counts[t.tab])) : null)));
+    fill(tabs, ...WORKSPACE_TABS.map((t) => h('button', { class: `cos-ws-tab${keptTab === t.tab ? ' on' : ''}`, onclick: () => { keptTab = t.tab; keptAt = null; draw(); } }, t.label, counts[t.tab] ? h('span', null, String(counts[t.tab])) : null)));
     const key = keyOf(a);
     if (key === shownKey) return;
     shownKey = key;
@@ -91,13 +97,21 @@ export function workspace(opts: {
       activity: () => activityTab(a),
     };
     fill(body, ...drawTab[keptTab]());
-    // the conversation and the activity read from the end
-    if (keptTab === 'talk' || keptTab === 'activity') body.scrollTop = body.scrollHeight;
+    // the conversation and the activity read from the end, or from the turn a reading opened it on
+    const hot = scrollToHot ? body.querySelector<HTMLElement>('.hot') : null;
+    scrollToHot = false;
+    if (hot) body.scrollTop = hot.offsetTop - body.offsetTop - 8;
+    else if (keptTab === 'talk' || keptTab === 'activity') body.scrollTop = body.scrollHeight;
   };
 
   const talkTab = (a: Agent): HTMLElement[] => {
     const said = conversation(entries);
-    return said.length ? said.map((e) => opts.entryEl(e, a.name)) : [h('p', { class: 'muted' }, 'Nothing said yet.')];
+    if (!said.length) return [h('p', { class: 'muted' }, 'Nothing said yet.')];
+    return said.map((e) => {
+      const el = opts.entryEl(e, a.name);
+      if (e.at === keptAt && e.kind === 'lead') el.classList.add('hot');
+      return el;
+    });
   };
 
   const screenTab = (a: Agent): HTMLElement[] => {
@@ -157,12 +171,22 @@ export function workspace(opts: {
   return {
     el,
     show(a, list) {
+      if (lead?.id !== a.id) keptAt = null;
       lead = a;
       entries = list;
       title.textContent = `${a.name}'s workspace`;
       status.textContent = doing(a.status);
       live.className = `cos-st-dot ${a.status === 'error' ? 'error' : ['working', 'testing', 'pushing', 'setting-up'].includes(a.status) ? 'working' : ''}`;
       drawTalk(a);
+      draw();
+    },
+    open(tab, to) {
+      keptTab = tab;
+      keptAt = to?.at ?? null;
+      if (to?.art) keptArt = to.art;
+      // drawn again even when it's on that turn already: the captain may have scrolled away from it
+      scrollToHot = keptAt !== null;
+      shownKey = '';
       draw();
     },
   };

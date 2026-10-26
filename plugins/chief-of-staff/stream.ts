@@ -8,17 +8,18 @@ import { landedWhere as landedAt } from './landed';
 import { landedCard } from './landedCard';
 import { needCard } from './needCard';
 import { CHIEF_OF_STAFF } from './shared';
-import { type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, landedSplit, goalSections, latestNews, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
+import { bundleSays, type CosRow, cosRows, doing, entryView, footOf, goalRow, goalSections, landedSplit, latestNews, pickGoal, prCount, previewFor, READING_ROUTE, seenOf, shownSince, threadKey, type WorkspaceTab } from './streamList';
 import type { ThreadEntry } from './thread';
 import { workspace } from './workspace';
 
 // The stream (README.md#a-thread-per-goal): Comms as a thread per goal. On the left every shown project's goals in one
 // list, what needs the captain first and then each project's others under its name, a compact row each (a dot for its
 // state, how long since anything came in), and what waits on them outside any goal's conversation; the list folds away
-// to a strip. On the right the goal picked: what's agreed on it up top (done looks like, its pull requests, its
-// decisions), then its thread (the conversation in order, quiet lines between messages bundled, a line where what's new
-// since they last looked begins, and what needs them there asked at its end), and at the foot quick replies. At the
-// right the lead's workspace (workspace.ts), with the box to talk to them; it folds away to a strip too.
+// to a strip. In the centre the goal picked: what's agreed on it up top (done looks like, its pull requests), then its
+// thread told by the chief of staff (its reading of each of the lead's turns in the turn's place, what the captain said,
+// quiet lines between bundled, a line where what's new since they last looked begins, and what needs them there asked
+// at its end), and at the foot quick replies. At the right the lead's workspace (workspace.ts): their own words, the
+// rest of what they work with, and the box to talk to them; a reading opens it on what it read. It folds to a strip too.
 
 /** The goal picked when the stream last closed: it opens on it again. */
 let keptGoal: string | null = null;
@@ -87,15 +88,46 @@ function headEls(lead: Agent, openRoom: () => void): HTMLElement[] {
   ];
 }
 
-/** A thread's rows: its entries with quiet lines bundled, and the line where what's new since the captain last looked begins. */
-function threadEls(entries: readonly ThreadEntry[], lead: Agent): HTMLElement[] {
-  const rowEl = (r: BundledRow): HTMLElement => {
+/** Where a reading's ways into the lead's workspace go. */
+type OpenWorkspace = (tab: WorkspaceTab, to?: { at?: number; art?: string }) => void;
+
+/**
+ * The chief of staff's reading of a turn of the lead's (`says`, or before it wrote one, `why`), and its ways into the
+ * workspace: the turn's words, what the lead put on their screen meanwhile (`arts`), their preview when it's the latest.
+ */
+function readingEl(r: Extract<CosRow, { reading: unknown }>, arts: readonly { id: string; title: string }[], preview: boolean, openWs: OpenWorkspace): HTMLElement {
+  const e = r.reading;
+  const chip = (label: string, go: () => void) => h('button', { class: 'cos-st-rd-chip', onclick: go }, label);
+  const chips = [
+    r.turn ? chip('Their words ›', () => openWs('talk', { at: r.turn?.at })) : null,
+    ...arts.map((a) => chip(`▣ ${a.title}`, () => openWs('screen', { art: a.id }))),
+    preview ? chip('◍ Their preview', () => openWs('browser')) : null,
+  ].filter((c) => c !== null);
+  return h('div', { class: `cos-st-rd r${e.route}` },
+    h('div', { class: 'cos-st-rd-h' }, h('b', null, 'Chief of staff'), h('span', null, READING_ROUTE[e.route]), h('small', null, time(e.at))),
+    h('div', { class: 'cos-st-rd-says' }, e.says ?? e.why),
+    e.route === 4 && e.message ? h('details', { class: 'cos-st-rd-sent' }, h('summary', null, 'What it told the lead'), h('div', null, e.message)) : null,
+    chips.length ? h('div', { class: 'cos-st-rd-chips' }, ...chips) : null);
+}
+
+/** A thread's rows as the chief of staff tells it (`cosRows`), with the line where what's new since the captain last looked begins. */
+function threadEls(entries: readonly ThreadEntry[], lead: Agent, openWs: OpenWorkspace): HTMLElement[] {
+  const arts = lead.lead?.artifacts ?? [];
+  const preview = !!previewFor(focus.preview(lead.projectId), [...(lead.lead?.landed ?? []), ...(lead.lead?.prs ?? [])]);
+  const rows = cosRows(entries, seenAt(lead.id));
+  const latest = rows.findLast((r) => 'reading' in r);
+  let after = 0;
+  const els = rows.map((r): HTMLElement => {
+    if ('reading' in r) {
+      const el = readingEl(r, shownSince(arts, after, r.reading.at), preview && r === latest, openWs);
+      after = r.reading.at;
+      return el;
+    }
     if ('bundle' in r) return bundleEl(r.bundle, lead.name);
     if ('entry' in r) return entryEl(r.entry, lead.name);
     return h('div', { class: 'cos-st-new' }, 'New since you last looked');
-  };
-  const rows = bundleRows(threadRows(entries, seenAt(lead.id))).map(rowEl);
-  return rows.length ? rows : [h('p', { class: 'muted' }, 'Nothing said here yet.')];
+  });
+  return els.length ? els : [h('p', { class: 'muted' }, 'Nothing said here yet.')];
 }
 
 /** The captain has seen a goal's thread to its latest entry, at `latest`: what came in until then is no longer new. */
@@ -141,6 +173,14 @@ export function openStream(ui: CommsUi): void {
     error: ui.error,
     own: (stop) => ui.panels.own(stop),
   });
+  // a reading opens the workspace on what it read, unfolding it first
+  const openWs: OpenWorkspace = (tab, to) => {
+    if (localStorage.getItem(WS_FOLDED) === '1') {
+      localStorage.setItem(WS_FOLDED, '0');
+      render();
+    }
+    ws.open(tab, to);
+  };
   const renderSide = (lead: Agent) => {
     const folded = localStorage.getItem(WS_FOLDED) === '1';
     body.classList.toggle('ws-folded', folded);
@@ -212,8 +252,11 @@ export function openStream(ui: CommsUi): void {
     if (key === shownThread) return;
     shownThread = key;
     fill(head, ...headEls(lead, () => openAgent(lead.id)));
-    fill(thread, ...threadEls(entries, lead), ask);
-    const to = thread.querySelector<HTMLElement>('.cos-st-new');
+    fill(thread, ...threadEls(entries, lead, openWs), ask);
+    // from what's new since the captain looked, else the chief of staff's latest reading when it's the last word (what
+    // it asks of them comes under it), else the end
+    const last = ask.previousElementSibling;
+    const to = thread.querySelector<HTMLElement>('.cos-st-new') ?? (last instanceof HTMLElement && last.matches('.cos-st-rd') ? last : null);
     thread.scrollTop = to ? to.offsetTop - thread.offsetTop - 8 : thread.scrollHeight;
     seen(lead.id, entries.at(-1)?.at);
   };
@@ -233,13 +276,15 @@ export function openStream(ui: CommsUi): void {
     const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
     const { card, ready, key } = footOf(lead.id, open.filter((i) => i.agentId === lead.id), (id) => local.has(id));
     const landedHere = landedSplitNow().byLead.get(lead.id) ?? [];
-    const keyed = `${key}|${landedHere.map((i) => i.id).join(',')}`;
+    // under the chief of staff's reading of the turn, which already says it's for them, the card needs no line of its own
+    const read = entries.at(-1)?.kind === 'cos';
+    const keyed = `${key}|${read}|${landedHere.map((i) => i.id).join(',')}`;
     if (keyed === shownAsk) return;
     shownAsk = keyed;
     const a = card ? local.get(card) : undefined;
     if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
     fill(ask,
-      ...(a ? [h('div', { class: `cos-st-needs${ready ? ' ready' : ''}` }, ready ? 'The chief of staff · ready to send' : 'The chief of staff · needs you'), needCard(ui, a, openAgent)] : []),
+      ...(a ? [read && !ready ? null : h('div', { class: `cos-st-needs${ready ? ' ready' : ''}` }, ready ? 'The chief of staff · ready to send' : 'The chief of staff · needs you'), needCard(ui, a, openAgent)] : []),
       ...landedHere.flatMap((item) => [h('div', { class: 'cos-st-needs landed' }, 'Landed in Show'), landedCard(ui, item, refreshInbox)]));
   };
 

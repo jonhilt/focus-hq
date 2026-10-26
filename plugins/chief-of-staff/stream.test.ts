@@ -163,3 +163,64 @@ describe('the lead’s workspace, their screen and browser', () => {
   });
 });
 
+
+describe('the thread told by the chief of staff', () => {
+  it('has its reading in place of the turn it read, and the turn’s words in the workspace, opened on it from the reading', async () => {
+    localStorage.clear();
+    // the workspace folded, on another tab: the reading's way in unfolds it and turns to the turn
+    localStorage.setItem('cos-stream-workspace-folded', '1');
+    fake.threads.a = [
+      { kind: 'lead', at: 55, text: 'Slice 1 is up: the long report.' },
+      { kind: 'cos', at: 60, route: 2, why: 'A pick.', says: 'Slice 1 is up and wants your pick on the layout.' },
+      { kind: 'you', at: 70, text: 'The left one' },
+      { kind: 'lead', at: 80, text: 'On it.' },
+    ];
+    openStream(ui as never);
+    await settle();
+    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
+    await settle();
+    const centre = document.querySelector('.cos-st-thread');
+    expect(centre?.querySelector('.cos-st-rd-says')?.textContent).toBe('Slice 1 is up and wants your pick on the layout.');
+    expect(centre?.textContent).not.toContain('the long report');
+    // a turn it hasn't read yet stays as the lead said it
+    expect(centre?.textContent).toContain('On it.');
+    // the visual put up before the turn it read was
+    expect([...(centre?.querySelectorAll('.cos-st-rd-chip') ?? [])].map((c) => c.textContent)).toEqual(['Their words ›', '▣ Old sketch']);
+    [...(centre?.querySelectorAll<HTMLElement>('.cos-st-rd-chip') ?? [])].find((c) => c.textContent === 'Their words ›')?.click();
+    expect(document.querySelector('.cos-ws-tab.on')?.textContent).toMatch(/^Conversation/);
+    expect(document.querySelector('.cos-ws-body .hot')?.textContent).toContain('the long report');
+  });
+});
+
+describe('the conversation opened on a turn from its reading', () => {
+  it('goes to the end again when the lead says more, and back to the turn when the reading is pressed again', async () => {
+    localStorage.clear();
+    fake.threads.a = [
+      { kind: 'lead', at: 55, text: 'Slice 1 is up: the long report.' },
+      { kind: 'cos', at: 60, route: 1, why: 'Fine.', says: 'Slice 1 is up. Nothing for you.' },
+    ];
+    openStream(ui as never);
+    await settle();
+    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
+    await settle();
+    const body = document.querySelector<HTMLElement>('.cos-ws-body');
+    if (!body) throw new Error('no workspace');
+    // happy-dom lays nothing out: the pane is 900 high in its content, the turn 300 down it
+    Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => 900 });
+    const words = () => [...document.querySelectorAll<HTMLElement>('.cos-st-rd-chip')].find((c) => c.textContent === 'Their words ›');
+    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) { return this.classList.contains('hot') ? 300 : 0; });
+    words()?.click();
+    expect(body.scrollTop).toBe(292);
+    // scrolled away, the reading pressed again goes back to the turn
+    body.scrollTop = 0;
+    words()?.click();
+    expect(body.scrollTop).toBe(292);
+    fake.threads.a = [...fake.threads.a, { kind: 'lead', at: 80, text: 'And more.' }];
+    document.querySelector<HTMLElement>('.cos-st-quick button')?.click();
+    await settle();
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(document.querySelector('.cos-ws-body')?.textContent).toContain('And more.');
+    expect(body.scrollTop).toBe(900);
+    top.mockRestore();
+  });
+});

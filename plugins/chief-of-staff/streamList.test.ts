@@ -1,18 +1,32 @@
 import { describe, expect, it } from 'vitest';
-import { activity, ACTIVITY_LINES, age, bundleRows, bundleSays, conversation, doing, entryView, footOf, goalRow, landedSplit, goalSections, latestNews, newSince, pickGoal, prCount, previewFor, seenOf, threadKey, threadRows } from './streamList';
+import { activity, ACTIVITY_LINES, age, bundleRows, bundleSays, conversation, cosRows, doing, entryView, footOf, goalRow, landedSplit, goalSections, latestNews, pickGoal, prCount, previewFor, seenOf, shownSince, threadKey } from './streamList';
 import type { ThreadEntry } from './thread';
 
-describe('new since the captain last looked', () => {
-  const thread: ThreadEntry[] = [
-    { kind: 'lead', at: 1, text: 'Plan?' },
-    { kind: 'you', at: 2, text: 'Yes' },
-    { kind: 'you', at: 5, text: 'And faster' },
-    { kind: 'lead', at: 6, text: 'Done.' },
-  ];
-  it('falls before the first thing after they looked that isn’t their own', () => {
-    expect(newSince(thread, 2)).toBe(3);
-    expect(newSince(thread, 6)).toBe(-1);
-    expect(newSince(thread, undefined)).toBe(-1);
+describe('a thread told by the chief of staff', () => {
+  const turn = (at: number, text = 'Done.'): ThreadEntry => ({ kind: 'lead', at, text });
+  const read = (at: number, route: 1 | 2 | 3 | 4 = 1): ThreadEntry => ({ kind: 'cos', at, route, why: 'w', says: `reading ${at}` });
+  const you = (at: number): ThreadEntry => ({ kind: 'you', at, text: 'Go' });
+  const ops = (at: number): ThreadEntry => ({ kind: 'ops', at, from: 'Ops', text: 'Following it.' });
+  const shape = (rows: ReturnType<typeof cosRows>) => rows.map((r) => ('reading' in r ? `read ${r.reading.at}${r.turn ? ` of ${r.turn.at}` : ''}` : 'entry' in r ? `${r.entry.kind} ${r.entry.at}` : 'bundle' in r ? `bundle ${r.bundle.length}` : 'new'));
+
+  it('puts each reading in place of the turn it read, and keeps a turn it hasn’t read as the lead said it', () => {
+    expect(shape(cosRows([turn(1), read(2), you(3), turn(4), read(5, 2), turn(6)], undefined))).toEqual(['read 2 of 1', 'you 3', 'read 5 of 4', 'lead 6']);
+  });
+  it('places a reading as of when it came, after what the captain wrote while it was being read', () => {
+    expect(shape(cosRows([turn(1), you(2), read(3)], undefined))).toEqual(['you 2', 'read 3 of 1']);
+  });
+  it('reads a turn once: a second reading with no turn between has none behind it', () => {
+    expect(shape(cosRows([turn(1), read(2), read(3)], undefined))).toEqual(['read 2 of 1', 'read 3']);
+  });
+  it('bundles the quiet lines between, and puts what’s new since the captain looked before the first thing after then not their own', () => {
+    expect(shape(cosRows([turn(1), read(2), ops(3), ops(4), you(5), turn(6), read(7)], 2))).toEqual(['read 2 of 1', 'new', 'bundle 2', 'you 5', 'read 7 of 6']);
+    expect(shape(cosRows([turn(1), read(2), you(5)], 2))).toEqual(['read 2 of 1', 'you 5']);
+    expect(shape(cosRows([turn(1), read(2)], undefined))).toEqual(['read 2 of 1']);
+  });
+  it('finds the visuals put on the lead’s screen while a turn was under way', () => {
+    const arts = [{ id: 'a', at: 1 }, { id: 'b', at: 5 }, { id: 'c', at: 9 }];
+    expect(shownSince(arts, 1, 5).map((x) => x.id)).toEqual(['b']);
+    expect(shownSince(arts, 0, 10).map((x) => x.id)).toEqual(['a', 'b', 'c']);
   });
 });
 
@@ -61,11 +75,6 @@ describe('a thread as it’s drawn', () => {
   it('is drawn again only when the lead’s status or its entries change', () => {
     expect(threadKey('g', 'working', thread)).toBe('g|working|3|3');
     expect(threadKey('g', 'done', [])).toBe('g|done|0|');
-  });
-
-  it('puts the line saying what’s new where it falls, and none when nothing is', () => {
-    expect(threadRows(thread, 2).map((r) => ('entry' in r ? r.entry.at : 'new'))).toEqual([1, 2, 'new', 3]);
-    expect(threadRows(thread, 3).map((r) => ('entry' in r ? r.entry.at : 'new'))).toEqual([1, 2, 3]);
   });
 });
 
