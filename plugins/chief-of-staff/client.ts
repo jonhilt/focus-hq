@@ -3,7 +3,7 @@
 // captain, and its settings in a project's card (its switch, and whether it sends its words by itself).
 import './chief-of-staff.css';
 import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, LCARS, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
-import { openComms } from './comms';
+import { openStream } from './stream';
 import { hailing } from './here';
 import { type TurnStage, turnNews, turnStage } from './inbox';
 import { cosMove } from './move';
@@ -18,15 +18,15 @@ function badge(hails: number): HTMLElement {
 /** Its say in a project it's on for: whether its words for a lead go by themselves, unless the captain holds them. */
 function autoSendSwitch(project: Project, ui: Ui): HTMLElement {
   return new Switch('Auto-send ready words', autoSendFor(cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)), project), {
-    title: `A lead’s turn the chief of staff would carry on, or send back to the lead, gets its words by itself after ${AUTO_SEND_MS / 60_000} minutes, unless you hold them in Comms`,
+    title: `A lead’s turn the chief of staff would send back to the lead gets its words by itself after ${AUTO_SEND_MS / 60_000} minutes, unless you hold them in Comms; it never carries a lead on by itself`,
     changed: (on) => void callPlugin(CHIEF_OF_STAFF, '/auto-send', { projectId: project.id, on }).catch((e: Error) => ui.error(e.message)),
   }).el;
 }
 
-/** Its say in a project it's on for: whether Jev picks where a turn goes, Haiku only writing the words. */
+/** Its say in a project it's on for: whether Jev picks where a turn goes, the judge only writing the words. */
 function jevSwitch(project: Project, ui: Ui): HTMLElement {
   return new Switch('Route with Jev', jevFor(cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)), project.id), {
-    title: 'TypeSafe’s Jev picks where each lead’s turn goes, in under a second, and Haiku writes the words for it. It needs a TypeSafe key; when Jev can’t answer, Haiku routes as before',
+    title: 'TypeSafe’s Jev picks where each lead’s turn goes, in under a second, and the chief of staff’s judge writes the words for it. It needs a TypeSafe key; when Jev can’t answer, the judge routes as before',
     changed: (on) => void callPlugin(CHIEF_OF_STAFF, '/jev', { projectId: project.id, on }).catch((e: Error) => ui.error(e.message)),
   }).el;
 }
@@ -54,10 +54,10 @@ const chiefOfStaff: ClientPlugin = {
       'Comms, your inbox (C, the bridge chair)',
       'A badge on the HUD, and toasts',
       'Auto-send, per project: its words go to leads without you',
-      'Route with Jev, per project: TypeSafe’s Jev picks the route, Haiku writes the words',
+      'Route with Jev, per project: TypeSafe’s Jev picks the route, the judge writes the words',
     ],
     cost: 'background',
-    costDetail: 'A Haiku call at the end of every lead turn in the projects it’s on for, about a tenth of a cent each: small, but it adds up across busy leads. With Route with Jev, a Jev call too, about a hundredth of a cent.',
+    costDetail: 'A Sonnet call at the end of every lead turn in the projects it’s on for, about 3 cents each: it adds up across busy leads. With Route with Jev, a Jev call too, about a hundredth of a cent.',
   },
   project: {
     label: 'Chief of staff',
@@ -69,12 +69,12 @@ const chiefOfStaff: ClientPlugin = {
     const hails = hailing().length;
     return { text: `Comms: ${hails} waiting`, el: badge(hails) };
   },
-  panel: { label: 'Comms', open: openComms },
+  panel: { label: 'Comms', open: openStream },
   // L away from a holodeck, and back out of a project's goals
-  everyGoal: { label: 'Comms', title: 'Comms: who’s waiting on you, and every goal under way on the ship (C)', open: openComms },
+  everyGoal: { label: 'Comms', title: 'Comms: who’s waiting on you, and every goal under way on the ship (C)', open: openStream },
   // its badge and its toasts, in place of the core's plain count and toast
   hails: true,
-  chair: { at: 'bridge', label: 'Comms: what needs you', use: openComms },
+  chair: { at: 'bridge', label: 'Comms: what needs you', use: openStream },
   // its pill in "whose move" over a goal's pod, lit while it reads the lead's turn or counts down to sending its words; what it leaves the captain it hands them
   goal: { holder: { key: CHIEF_OF_STAFF, label: 'Chief of staff', colour: LCARS.peach }, move: cosMove },
   start({ ui }) {
@@ -82,7 +82,7 @@ const chiefOfStaff: ClientPlugin = {
     return {
       keydown: (e) => {
         if (e.code !== 'KeyC' || ui.panels.isOpen) return false;
-        openComms(ui);
+        openStream(ui);
         return true;
       },
     };

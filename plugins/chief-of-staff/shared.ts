@@ -78,7 +78,7 @@ export interface CosRead {
   judged?: Verdict;
   /**
    * When it sends its words to the lead itself, unless the captain holds them first: set as it judges a turn it would
-   * carry on or send back, in a project that lets it (`autoSendFor`); cleared by Hold.
+   * send back, in a project that lets it (`autoSendFor`), never one it would carry on; cleared by Hold.
    */
   sendsAt?: number;
   /**

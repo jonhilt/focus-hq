@@ -105,3 +105,59 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-decided small { flex-shrink: 0; }
 .cos-decided:hover { background: var(--surface-2); }
 .cos-decided.sel { outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }
+
+/* The stream (stream.ts): the projects along the top, the goals on the left, the goal picked as a thread on the right.
+   Its words are set to read (the captain found the denser Comms hard going): a plain sans at 16px, roomy lines, a
+   capped measure; labels alone stay in the ship's face. */
+.cos-stream { display: grid; grid-template-columns: minmax(260px, 320px) 1fr; grid-template-rows: auto 1fr; gap: 14px 22px; height: 100%; min-height: 0; }
+.cos-stream .cos-comms-tabs { grid-column: 1 / 3; }
+.cos-stream h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--lcars-lilac); }
+.cos-st-left, .cos-st-right { min-height: 0; overflow-y: auto; }
+.cos-st-left { display: flex; flex-direction: column; gap: 18px; padding-right: 6px; }
+.cos-st-goals { display: flex; flex-direction: column; gap: 6px; }
+.cos-st-goal { --dot: var(--muted); display: flex; flex-direction: column; gap: 2px; text-align: left; font: 15px/1.4 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--surface-2); border: 0; border-left: 4px solid transparent; border-radius: 0 10px 10px 0; padding: 10px 12px; cursor: pointer; }
+.cos-st-goal small { color: var(--muted); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cos-st-goal.needs { border-left-color: var(--lcars-gold); }
+.cos-st-goal.needs small { color: var(--lcars-gold); }
+.cos-st-goal.new small { color: var(--lcars-sky); }
+.cos-st-goal.sel { background: color-mix(in srgb, var(--surface-2) 70%, var(--lcars-sky) 12%); }
+.cos-st-goal-title { font-weight: 600; }
+.cos-st-shelf-item { display: flex; flex-direction: column; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; margin-bottom: 6px; font: 15px/1.4 system-ui, -apple-system, sans-serif; }
+.cos-st-shelf-item small { color: var(--muted); }
+.cos-st-right { display: grid; grid-template-rows: auto minmax(160px, 1fr) auto; gap: 12px; overflow: hidden; min-height: 0; font: 16px/1.55 system-ui, -apple-system, sans-serif; }
+/* the panel sets reading text in the ship's mono face; the stream's words are set to read */
+.cos-stream .cos-st-right :is(p, li, blockquote, textarea) { font: inherit; }
+.cos-st-head { border-bottom: 1px solid var(--line, #262c3d); padding-bottom: 10px; }
+.cos-st-title { font-size: 20px; font-weight: 600; color: var(--text); }
+.cos-st-head small { color: var(--muted); font-size: 13px; }
+.cos-st-head a { color: var(--lcars-sky); }
+.cos-st-thread { display: flex; flex-direction: column; gap: 6px; overflow-y: auto; min-height: 0; padding-right: 10px; }
+.cos-st-lead, .cos-st-you { max-width: 72ch; }
+.cos-st-lead small, .cos-st-you small { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+.cos-st-lead { padding: 10px 0; }
+.cos-st-you { align-self: flex-end; max-width: 60ch; background: #24304d; border-radius: 14px 14px 4px 14px; padding: 10px 14px; margin: 6px 0; }
+.cos-st-you small { color: #9ab3e0; }
+.cos-st-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cos-st-md { white-space: normal; }
+.cos-st-md p { margin: 0 0 0.7em; }
+.cos-st-md ul, .cos-st-md ol { margin: 0 0 0.7em; padding-left: 1.3em; }
+.cos-st-line { display: flex; gap: 12px; justify-content: space-between; align-items: baseline; color: var(--muted); font-size: 13px; line-height: 1.45; max-width: 72ch; padding: 3px 0; }
+.cos-st-line small { flex: none; font-size: 12px; }
+.cos-st-line.decided { color: #9cc4ff; border-left: 3px solid var(--lcars-sky); padding-left: 10px; }
+.cos-st-line.merged { color: var(--lcars-green, #7fd17f); }
+.cos-st-line.cos { color: var(--lcars-peach); }
+.cos-st-line.flagged { color: var(--lcars-red); }
+.cos-st-line.sent-back { color: var(--lcars-lilac); }
+.cos-st-fold summary { list-style: none; cursor: pointer; }
+.cos-st-fold summary::-webkit-details-marker { display: none; }
+.cos-st-fold summary .cos-st-line span::after { content: ' ›'; }
+.cos-st-fold[open] summary .cos-st-line span::after { content: ' ⌄'; }
+.cos-st-more { color: var(--text); font-size: 14px; border-left: 2px solid var(--lcars-lilac); padding: 4px 12px; margin: 2px 0 8px; max-width: 72ch; }
+.cos-st-new { display: flex; align-items: center; gap: 12px; color: var(--lcars-red); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin: 14px 0 4px; }
+.cos-st-new::after { content: ''; flex: 1; height: 1px; background: color-mix(in srgb, var(--lcars-red) 55%, transparent); }
+.cos-st-foot { max-height: 38vh; overflow-y: auto; padding-right: 10px; }
+.cos-st-needs { color: var(--lcars-gold); font-size: 12px; text-transform: uppercase; letter-spacing: 0.14em; margin-bottom: 6px; }
+.cos-st-talk { display: flex; gap: 10px; align-items: flex-end; }
+.cos-st-talk textarea { flex: 1; font: 15px/1.5 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 10px; padding: 10px 12px; resize: vertical; }
+.cos-st-talk textarea:focus { outline: none; border-color: var(--lcars-sky); }
+.cos-st-send { font: 600 14px/1 system-ui, sans-serif; background: var(--lcars-orange); color: var(--ink); border: 0; border-radius: 8px; padding: 10px 16px; cursor: pointer; }
