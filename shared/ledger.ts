@@ -284,15 +284,15 @@ export interface LedgerCheck {
 const bytes = (s: string) => new TextEncoder().encode(s).length;
 
 /**
- * Reads the ledger's text, checking it's whole: numbered without gaps, every line readable. A last line cut short (a
- * write interrupted) is expected now and then and only dropped; anything else is reported, never silently skipped.
- */
-/**
  * Kinds of line an older Focus wrote that nothing reads now: `decision`, a lead's decision raised and settled through a
  * tool (gone for asking, as in plain Claude Code). The log is never rewritten, so they stay in the file; loading leaves them out.
  */
 const RETIRED_KINDS: ReadonlySet<string> = new Set(['decision']);
 
+/**
+ * Reads the ledger's text, checking it's whole: numbered without gaps, every line readable. A last line cut short (a
+ * write interrupted) is expected now and then and only dropped; anything else is reported, never silently skipped.
+ */
 export function checkLedger(text: string): LedgerCheck {
   const check: LedgerCheck = { events: [], nextSeq: 1, goodBytes: bytes(text), tornTail: false, migrated: false, problems: [] };
   const lines = text.split('\n');
