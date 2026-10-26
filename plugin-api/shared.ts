@@ -5,7 +5,7 @@ import type { Agent as CoreAgent, LeadAgent as CoreLeadAgent, Project as CorePro
 import type { LedgerEvent as CoreLedgerEvent } from '../shared/ledger';
 
 export type {
-  AgentStatus, AgentTask, ArchivedGoal, Contact, Effort, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, PullRequest, QaReview, ResumeCost, ResumeHow, TermLine, Planner, QaReport, QueuedGoal, Settings, SignIn, Snapshot, Waypoint,
+  AgentStatus, AgentTask, ArchivedGoal, Contact, Effort, GoalArtifact, GoalNote, GoalRecord, IssueDraft, Issue, MessageReply, PullRequest, QaReview, ResumeCost, ResumeHow, TermLine, Planner, Preview, QaReport, QueuedGoal, Settings, SignIn, Snapshot, Waypoint,
 } from '../shared/types';
 /** A time of day, with the day when it isn't today (`14:05`, `Tue 09:30`). */
 export { clock } from '../shared/clock';

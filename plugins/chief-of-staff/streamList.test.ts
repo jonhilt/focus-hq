@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { age, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
+import { activity, ACTIVITY_LINES, age, bundleRows, bundleSays, conversation, doing, entryView, footOf, goalRow, goalSections, latestNews, newSince, pickGoal, prCount, previewFor, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
 
 describe('new since the captain last looked', () => {
@@ -132,5 +132,39 @@ describe('quiet lines bundled', () => {
 describe('a goal’s pull requests, for its header', () => {
   it('counts those merged, and leaves out the closed', () => {
     expect(prCount([{ outcome: 'merged' }, {}, { outcome: 'closed' }])).toEqual({ merged: 1, prs: 2 });
+  });
+});
+
+describe('a lead’s workspace', () => {
+  it('keeps the conversation alone: their words and the captain’s, nothing between', () => {
+    const entries: ThreadEntry[] = [
+      { kind: 'you', at: 1, text: 'Go' },
+      { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' },
+      { kind: 'lead', at: 3, text: 'Done.' },
+      { kind: 'cos', at: 4, route: 1, why: 'Fine.' },
+    ];
+    expect(conversation(entries).map((e) => e.at)).toEqual([1, 3]);
+  });
+  it('shows the project’s preview only when it runs one of this lead’s pull requests', () => {
+    const preview = { repo: 'a/b', number: 5, links: [] };
+    expect(previewFor(preview, [{ repo: 'a/b', number: 5 }])).toBe(preview);
+    expect(previewFor(preview, [{ repo: 'a/b', number: 6 }])).toBeUndefined();
+    expect(previewFor(undefined, [{ repo: 'a/b', number: 5 }])).toBeUndefined();
+  });
+  it('shows what they’ve been doing: each tool and error, a line each, the latest few, and none of the output or diffs', () => {
+    const lines = [
+      { t: 1, kind: 'text', text: 'Thinking aloud' },
+      { t: 2, kind: 'tool', text: '⏺ Read(stream.ts)\n(240 lines)' },
+      { t: 3, kind: 'output', text: '  ⎿  Read 240 lines' },
+      { t: 4, kind: 'success', text: '  + ## Done looks like' },
+      { t: 5, kind: 'error', text: '  fsync: EPERM  ' },
+      { t: 6, kind: 'tool', text: `${'x'.repeat(250)}` },
+    ];
+    const got = activity(lines);
+    expect(got.map((a) => [a.at, a.kind])).toEqual([[2, 'tool'], [5, 'error'], [6, 'tool']]);
+    expect(got[0].text).toBe('Read(stream.ts)');
+    expect(got[1].text).toBe('fsync: EPERM');
+    expect(got[2].text).toHaveLength(200);
+    expect(activity(Array.from({ length: 100 }, (_, i) => ({ t: i, kind: 'tool', text: `step ${i}` })))).toHaveLength(ACTIVITY_LINES);
   });
 });

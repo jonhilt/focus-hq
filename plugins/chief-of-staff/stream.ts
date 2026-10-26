@@ -9,14 +9,15 @@ import { needCard } from './needCard';
 import { CHIEF_OF_STAFF } from './shared';
 import { type BundledRow, bundleRows, bundleSays, doing, entryView, footOf, goalRow, goalSections, latestNews, pickGoal, prCount, seenOf, threadKey, threadRows } from './streamList';
 import type { ThreadEntry } from './thread';
+import { workspace } from './workspace';
 
 // The stream (README.md#a-thread-per-goal): Comms as a thread per goal. On the left every shown project's goals in one
 // list, what needs the captain first and then each project's others under its name, a compact row each (a dot for its
 // state, how long since anything came in), and what waits on them outside any goal's conversation; the list folds away
 // to a strip. On the right the goal picked: what's agreed on it up top (done looks like, its pull requests, its
 // decisions), then its thread (the conversation in order, quiet lines between messages bundled, a line where what's new
-// since they last looked begins, and what needs them there asked at its end), and at the foot quick replies and a box
-// to talk to the lead.
+// since they last looked begins, and what needs them there asked at its end), and at the foot quick replies. At the
+// right the lead's workspace (workspace.ts), with the box to talk to them; it folds away to a strip too.
 
 /** The goal picked when the stream last closed: it opens on it again. */
 let keptGoal: string | null = null;
@@ -33,8 +34,9 @@ const seenAll = (): Record<string, number> => {
 const seenAt = (goal: string): number | undefined => seenAll()[goal];
 const markSeen = (goal: string, at: number) => localStorage.setItem(SEEN, JSON.stringify({ ...seenAll(), [goal]: at }));
 
-/** Whether the goals list is folded to a strip, kept in this browser. */
+/** Whether the goals list, and the lead's workspace, are folded to a strip, kept in this browser. */
 const FOLDED = 'cos-stream-goals-folded';
+const WS_FOLDED = 'cos-stream-workspace-folded';
 
 /** When something last came into each goal's thread from anyone but the captain, as last fetched: the goals' rows say what's new by it. */
 const latestOf = new Map<string, number>();
@@ -118,11 +120,35 @@ export function openStream(ui: CommsUi): void {
   // what needs the captain on the goal, asked at the end of its thread
   const ask = h('div', { class: 'cos-st-ask' });
   const foot = h('div', { class: 'cos-st-foot' });
-  const body = h('div', { class: 'cos-stream' }, left, h('div', { class: 'cos-st-right' }, head, thread, foot));
+  const side = h('div', { class: 'cos-st-side' });
+  const body = h('div', { class: 'cos-stream' }, left, h('div', { class: 'cos-st-right' }, head, thread, foot), side);
   const back = () => ui.panels.backTo('Comms', () => openStream(ui));
   const openAgent = (id: string) => {
     ui.openAgent(id);
     back();
+  };
+
+  // the lead's workspace at the right, or the strip it folds to
+  const ws = workspace({
+    entryEl,
+    fold: () => { localStorage.setItem(WS_FOLDED, '1'); render(); },
+    send: (lead, words) => messageAgent(lead.id, lead.name, words).then(() => refreshThread()),
+    error: ui.error,
+    own: (stop) => ui.panels.own(stop),
+  });
+  const renderSide = (lead: Agent) => {
+    const folded = localStorage.getItem(WS_FOLDED) === '1';
+    body.classList.toggle('ws-folded', folded);
+    if (folded) {
+      if (side.dataset.strip !== lead.id) {
+        side.dataset.strip = lead.id;
+        fill(side, h('button', { class: 'cos-st-strip', title: 'Show their workspace', onclick: () => { localStorage.setItem(WS_FOLDED, '0'); render(); } }, h('span', null, `${lead.name}'s workspace`)));
+      }
+      return;
+    }
+    delete side.dataset.strip;
+    if (side.firstChild !== ws.el) fill(side, ws.el);
+    ws.show(lead, entries);
   };
 
   const flaggedFor = (leadId: string) => open.filter((i) => i.lane === 'needs-you' && i.agentId === leadId);
@@ -194,22 +220,15 @@ export function openStream(ui: CommsUi): void {
     fill(ask, h('div', { class: 'cos-st-needs' }, 'The chief of staff · needs you'), needCard(ui, a, openAgent));
   };
 
-  // at the foot, quick replies and a box to talk to the lead, their thread asked for again once it's sent
+  // at the foot, quick replies to the lead, their thread asked for again once one's sent; the box to talk to them is in their workspace
   const renderFoot = (lead: Agent) => {
     if (foot.dataset.lead === lead.id) return;
     foot.dataset.lead = lead.id;
     const say = (words: string, el: HTMLButtonElement) => void busy(el, () => messageAgent(lead.id, lead.name, words).then(() => refreshThread()), ui.error);
-    const box = h('textarea', { rows: 2, placeholder: `Talk to ${lead.name}…` });
-    const send = h('button', { class: 'cos-st-send', onclick: () => {
-      const words = box.value.trim();
-      if (words) void busy(send, () => messageAgent(lead.id, lead.name, words).then(() => { box.value = ''; refreshThread(); }), ui.error);
-    } }, 'Send');
-    fill(foot,
-      h('div', { class: 'cos-st-quick' }, ...QUICK.map((q) => {
-        const b = h('button', { onclick: () => say(q, b) }, q);
-        return b;
-      })),
-      h('div', { class: 'cos-st-talk' }, box, send));
+    fill(foot, h('div', { class: 'cos-st-quick' }, ...QUICK.map((q) => {
+      const b = h('button', { onclick: () => say(q, b) }, q);
+      return b;
+    })));
   };
 
   const render = () => {
@@ -223,13 +242,16 @@ export function openStream(ui: CommsUi): void {
     renderThread(lead);
     renderAsk(lead);
     renderFoot(lead);
+    renderSide(lead);
   };
 
   const noGoal = () => {
     fill(head);
     fill(thread, h('p', { class: 'muted' }, 'No goals under way.'));
     fill(foot);
+    fill(side);
     delete foot.dataset.lead;
+    delete side.dataset.strip;
   };
 
   // a goal newly picked, by the captain or for them, has its thread asked for

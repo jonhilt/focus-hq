@@ -3,7 +3,7 @@
 // and the Tricorder stays small. The browser's own state and REST client stay the core's: a plugin reads what `focus`
 // shows and calls only its own routes.
 import type { ReportCard } from '../shared/ledger';
-import type { Agent, IssueDraft, Project, QaReview, TermLine } from '../shared/types';
+import type { Agent, IssueDraft, Preview, Project, QaReview, TermLine } from '../shared/types';
 import { mergeMethodFor } from '../shared/mergeGateRules';
 import { api } from '../client/src/net/api';
 import { markRead as markTurnRead, shownPrs } from '../client/src/net/attention';
@@ -38,6 +38,8 @@ export const focus = {
   },
   /** An agent's terminal lines, as far as the browser has them. */
   lines: (agentId: string): readonly TermLine[] => state.lines.get(agentId) ?? [],
+  /** The pull request running on this machine for project `projectId` (one at a time), when one is: its links are where it's up. */
+  preview: (projectId: string): Readonly<Preview> | undefined => state.previews.get(projectId),
   /** The demo ship: fake GitHub and scripted agents. */
   get demo(): boolean {
     return state.info?.mode === 'demo';

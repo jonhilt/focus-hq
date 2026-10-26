@@ -157,3 +157,36 @@ export function prCount(prs: readonly { outcome?: 'merged' | 'closed' }[]): { me
   const live = prs.filter((p) => p.outcome !== 'closed');
   return { merged: live.filter((p) => p.outcome === 'merged').length, prs: live.length };
 }
+
+/** What a lead's workspace has in each of its tabs, how many: their conversation, their screen, their browser, their pull requests, their activity. */
+export type WorkspaceTab = 'talk' | 'screen' | 'browser' | 'prs' | 'activity';
+export const WORKSPACE_TABS: readonly { tab: WorkspaceTab; label: string }[] = [
+  { tab: 'talk', label: 'Conversation' },
+  { tab: 'screen', label: 'Screen' },
+  { tab: 'browser', label: 'Browser' },
+  { tab: 'prs', label: 'Pull requests' },
+  { tab: 'activity', label: 'Activity' },
+];
+
+/** A lead's conversation, for their workspace: what they said and what the captain said to them, nothing between. */
+export const conversation = (entries: readonly ThreadEntry[]): ThreadEntry[] => entries.filter((e) => e.kind === 'lead' || e.kind === 'you');
+
+/** The project's preview, when it's running one of this lead's pull requests: what their workspace's browser shows. */
+export function previewFor<P extends { repo: string; number: number }>(preview: P | undefined, prs: readonly { repo: string; number: number }[]): P | undefined {
+  return preview && prs.some((p) => p.repo === preview.repo && p.number === preview.number) ? preview : undefined;
+}
+
+/** How much of a lead's activity their workspace shows. */
+export const ACTIVITY_LINES = 40;
+
+/** What a lead's been doing, for their workspace: each tool they used and each error, a line each, the latest last (their
+ * log's other lines are output and diffs, said again in the thread). */
+export function activity(lines: readonly { t: number; kind: string; text: string }[]): { at: number; kind: 'tool' | 'error'; text: string }[] {
+  const out: { at: number; kind: 'tool' | 'error'; text: string }[] = [];
+  for (const l of lines) {
+    if (l.kind !== 'tool' && l.kind !== 'error') continue;
+    const text = (l.text.trim().split('\n')[0] ?? '').replace(/^⏺\s*/, '');
+    if (text) out.push({ at: l.t, kind: l.kind, text: text.length > 200 ? `${text.slice(0, 199)}…` : text });
+  }
+  return out.slice(-ACTIVITY_LINES);
+}
