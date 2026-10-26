@@ -13,45 +13,7 @@
 .cos-badge.hailing b { background: var(--lcars-red); color: var(--ink); animation: cos-hail 1.2s steps(1) infinite; }
 @keyframes cos-hail { 50% { background: var(--lcars-gold); } }
 
-/* Comms (comms.ts) */
-.cos-comms h3 { margin: 18px 0 8px; font-size: 14px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--lcars-lilac); }
-.cos-comms h3:first-child { margin-top: 0; }
-.cos-project { --tone: var(--lcars-lilac); margin-left: 8px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; background: var(--tone); color: var(--ink); border-radius: 999px; padding: 0 8px; vertical-align: 1px; }
-/* Needs you: a line each, what's needed in bold, who and where under it, the buttons that answer it on the right */
-.cos-needs { display: flex; flex-direction: column; gap: 6px; }
-.cos-need { --tone: var(--lcars-orange); display: flex; gap: 12px; align-items: center; background: var(--surface-2); border-left: 10px solid var(--tone); border-radius: 0 var(--radius) var(--radius) 0; padding: 8px 12px; }
-.cos-need-what { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cos-need-from { display: block; color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cos-need-sends { display: block; color: var(--lcars-lilac); }
-.cos-need-sends:empty { display: none; }
-/* a lead's turn you've read: still waiting for your reply, but quieter */
-.cos-need.read { --tone: var(--lcars-lilac) !important; background: color-mix(in srgb, var(--surface-2) 60%, #000); opacity: 0.75; }
-/* Comms' inbox: the projects along the top, the list on the left, the one picked on the right, each scrolling on its own */
-.cos-comms { display: grid; grid-template-columns: minmax(320px, 420px) 1fr; grid-template-rows: auto 1fr; gap: 14px 18px; height: 100%; min-height: 0; }
-.cos-comms-tabs { grid-column: 1 / 3; display: flex; flex-wrap: wrap; gap: 8px; }
-.cos-comms-tab { --tone: var(--lcars-orange); font: inherit; font-size: 15px; color: var(--text); background: var(--surface-2); border: 2px solid transparent; border-radius: 999px; padding: 3px 12px; cursor: pointer; }
-.cos-comms-tab:hover { border-color: color-mix(in srgb, var(--tone) 60%, transparent); }
-.cos-comms-tab.on { border-color: var(--tone); color: var(--tone); }
-.cos-comms-tab b { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 6px; margin-left: 6px; }
-.cos-comms-tab.goals { margin-left: auto; }
-.cos-inbox-left, .cos-inbox-right { overflow-y: auto; min-height: 0; padding-right: 6px; }
-.cos-inbox-left { display: flex; flex-direction: column; gap: 6px; }
-.cos-inbox-left h3 { margin: 6px 0 0; }
-.cos-comms-keys { margin-top: auto; padding-top: 10px; font-size: 11px; }
-.cos-inbox-row { display: block; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border: 0; }
-.cos-inbox-row:hover { background: color-mix(in srgb, var(--tone) 10%, var(--surface-2)); }
-.cos-inbox-row.sel { background: color-mix(in srgb, var(--tone) 22%, var(--surface-2)); outline: 2px solid var(--tone); outline-offset: -2px; }
-.cos-inbox-row .cos-need-what { font-weight: 400; margin-top: 3px; }
-.cos-inbox-row-head { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
-.cos-inbox-row-head small { white-space: nowrap; flex-shrink: 0; }
-.cos-inbox-tag { background: var(--tone); color: var(--ink); border-radius: 8px; padding: 0 8px; font-weight: 600; font-size: 14px; flex-shrink: 0; }
-.cos-inbox-goal { color: var(--lcars-peach); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.cos-decided-list { display: flex; flex-direction: column; }
-.cos-tray-line { font: inherit; font-size: 14px; color: var(--muted); background: none; border: 0; padding: 4px 0; text-align: left; cursor: pointer; }
-.cos-tray-line:hover { color: var(--text); }
-.cos-tray:empty { display: none; }
-@media (max-width: 760px) { .cos-comms { grid-template-columns: 1fr; height: auto; } .cos-comms-tabs { grid-column: 1; } .cos-inbox-left, .cos-inbox-right { overflow: visible; } }
-/* the one picked, large (needCard.ts): what to read to decide, and the answers */
+/* what needs the captain, large at the end of its goal's thread (needCard.ts): what to read to decide, and the answers */
 .cos-need-title { font-size: 26px; font-weight: 600; line-height: 1.15; color: var(--lcars-peach); }
 .cos-need-trail { font-size: 14px; color: var(--muted); margin-top: -8px; }
 .cos-card-fold > summary { cursor: pointer; color: var(--muted); font-size: 14px; }
@@ -88,27 +50,9 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-zoom-bar { display: flex; align-items: center; gap: 10px; }
 .cos-zoom-says { flex: 1; display: flex; flex-direction: column; }
 
-/* the list under a heading each for its goal: the goal small and spaced out, its items a quiet line each under it */
-.cos-inbox-goal-head { display: flex; align-items: baseline; gap: 4px; margin: 12px 0 0; font-size: 14px; letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; min-width: 0; }
-.cos-inbox-goal-head:first-child { margin-top: 0; }
-.cos-inbox-goal-head .cos-inbox-goal { overflow: hidden; text-overflow: ellipsis; color: var(--lcars-peach); }
-.cos-needs .cos-inbox-row { border-left-width: 4px; padding: 7px 10px; background: color-mix(in srgb, var(--surface-2) 70%, #000); }
-.cos-needs .cos-inbox-row-head { align-items: center; gap: 10px; }
-.cos-inbox-row .cos-inbox-row-head .cos-need-what { flex: 1; min-width: 0; margin-top: 0; font-size: 17px; font-weight: 400; color: var(--text); }
-.cos-needs .cos-inbox-tag { font-size: 13px; font-weight: 400; }
-.cos-needs { gap: 4px; }
-/* Recently decided: a line each, the goal, what was said, and when; pressed, it's brought back up */
-.cos-decided-list { gap: 4px; }
-.cos-decided { display: flex; align-items: baseline; gap: 8px; width: 100%; text-align: left; font: inherit; font-size: 14px; color: inherit; border: 0; cursor: pointer; background: color-mix(in srgb, var(--surface-2) 50%, #000); border-radius: var(--radius); padding: 6px 10px; }
-.cos-decided .cos-inbox-goal { flex-shrink: 1; max-width: 45%; color: var(--lcars-peach); }
-.cos-decided-answer { flex: 1; min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.cos-decided small { flex-shrink: 0; }
-.cos-decided:hover { background: var(--surface-2); }
-.cos-decided.sel { outline: 2px solid var(--lcars-lilac); outline-offset: -2px; }
-
 /* The stream (stream.ts): every project's goals on the left, compact rows, folding to a strip; the goal picked on the
    right, what's agreed on it up top, its thread, quick replies and a box to talk to its lead at the foot.
-   Its words are set to read (the captain found the denser Comms hard going): a plain sans at 16px, roomy lines, a
+   Its words are set to read (the user found the old, denser Comms hard going): a plain sans at 16px, roomy lines, a
    capped measure; labels alone stay in the ship's face. */
 .cos-stream { --left-w: minmax(200px, 270px); --side-w: minmax(0, 1fr); display: grid; grid-template-columns: var(--left-w) minmax(0, 1.1fr) var(--side-w); gap: 0 20px; height: 100%; min-height: 0; }
 .cos-stream.folded { --left-w: 40px; }
@@ -116,9 +60,9 @@ a.cos-card-option { color: inherit; text-decoration: none; }
 .cos-stream h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--lcars-lilac); }
 .cos-st-left, .cos-st-right { min-height: 0; overflow-y: auto; }
 .cos-st-left { display: flex; flex-direction: column; gap: 10px; padding-right: 6px; }
-.cos-st-left-top { display: flex; justify-content: space-between; gap: 8px; }
-.cos-st-inbox, .cos-st-foldbtn { font: 600 14px/1 var(--ui); letter-spacing: 0.04em; color: var(--muted); background: var(--surface-2); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
-.cos-st-inbox:hover, .cos-st-foldbtn:hover { color: var(--text); }
+.cos-st-left-top { display: flex; justify-content: flex-end; gap: 8px; }
+.cos-st-foldbtn { font: 600 14px/1 var(--ui); letter-spacing: 0.04em; color: var(--muted); background: var(--surface-2); border: 0; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.cos-st-foldbtn:hover { color: var(--text); }
 .cos-st-strip { width: 32px; height: 100%; background: var(--surface-2); border: 0; border-radius: 8px; cursor: pointer; color: var(--muted); padding: 0; }
 .cos-st-strip span { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 13px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; white-space: nowrap; }
 .cos-st-strip:hover { color: var(--text); }

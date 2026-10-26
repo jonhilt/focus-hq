@@ -1,4 +1,4 @@
-// The chief of staff in the 3D ship (README.md): Comms, the captain's inbox (C, the captain's chair on the bridge, the
+// The chief of staff in the 3D ship (README.md): Comms, a thread per goal (C, the captain's chair on the bridge, the
 // pause panel, L away from a holodeck, a project's goals), its badge on the HUD, a toast as a lead's turn comes to the
 // captain, and its settings in a project's card (its switch, and whether it sends its words by itself).
 import './chief-of-staff.css';
@@ -52,7 +52,7 @@ const chiefOfStaff: ClientPlugin = {
     name: 'Chief of staff',
     summary: 'Judges each of a goal lead’s turns as it ends, and puts what needs you in Comms, with words ready for you to send.',
     adds: [
-      'Comms, your inbox (C, the bridge chair)',
+      'Comms, a thread per goal (C, the bridge chair)',
       'A badge on the HUD, and toasts',
       'Auto-send, per project: its words go to leads without you',
       'Route with Jev, per project: TypeSafe’s Jev picks the route, the judge writes the words',

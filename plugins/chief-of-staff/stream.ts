@@ -1,7 +1,5 @@
-import { busy, fill, focus, h, LCARS, markdownHtml, messageAgent, readPlugin } from '../../plugin-api/client';
+import { busy, fill, focus, h, LCARS, markdownHtml, messageAgent, readPlugin, type Ui } from '../../plugin-api/client';
 import type { Agent, Attention } from '../../plugin-api/shared';
-import { type CommsUi, openComms } from './comms';
-import { lanes } from './commsList';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -105,6 +103,9 @@ function seen(goal: string, latest: number | undefined): void {
 /** Every shown project's goals: the leads under way in each. */
 const allLeads = (): Agent[] => focus.shown.flatMap((p) => focus.leadsIn(p.id));
 
+/** What Comms asks of the app: its panel, and the panels it goes on to (an agent's, a board, the goals, a lead's screen). */
+export type CommsUi = Pick<Ui, 'openAgent' | 'openBoard' | 'openGoals' | 'openScreen' | 'goToAgent' | 'error'> & { panels: Pick<Ui['panels'], 'open' | 'own' | 'backTo'> };
+
 /** Opens the stream on the goal picked last, or the first that needs the captain. */
 export function openStream(ui: CommsUi): void {
   let goal: string | null = keptGoal;
@@ -168,7 +169,6 @@ export function openStream(ui: CommsUi): void {
     }
     fill(left,
       h('div', { class: 'cos-st-left-top' },
-        h('button', { class: 'cos-st-inbox', title: 'The inbox as it was: everything waiting on you, in one list', onclick: () => openComms(ui) }, 'Inbox ›'),
         h('button', { class: 'cos-st-foldbtn', title: 'Fold the goals away', onclick: fold(true) }, '‹')),
       goals);
     renderGoals(leads);
@@ -178,7 +178,7 @@ export function openStream(ui: CommsUi): void {
     const now = Date.now();
     const sections = goalSections(leads, focus.shown, (id) => flaggedFor(id).length > 0);
     // what waits on the captain that isn't a goal's conversation: pull requests with nobody's lead on them, by project
-    const loose = lanes(open, null).flagged.filter((i) => !i.agentId);
+    const loose = open.filter((i) => i.lane === 'needs-you' && !i.agentId);
     const row = (l: Agent) => {
       const r = goalRow(flaggedFor(l.id).length, latestOf.get(l.id), seenAt(l.id), l.status, now);
       return h('button', { class: `cos-st-row ${r.dot}${l.id === goal ? ' sel' : ''}`, title: `${l.lead?.title ?? l.name}\n${l.name} · ${doing(l.status)}`, onclick: () => { goal = keptGoal = l.id; render(); } },
