@@ -62,6 +62,8 @@ export interface Verdict {
   ask: string;
   /** Why the turn goes where it does. */
   why: string;
+  /** The turn read to the captain, in a few plain sentences, ending on what they need to do: the stream shows it in the lead's place. Left out by verdicts from before it said. */
+  says?: string;
   /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
   message: string;
   /** Replies to what the lead asked or offered, a button each; none when the turn asks nothing a button answers. */

@@ -22,7 +22,7 @@ export type ThreadEntry =
   /** One of the goal's pull requests merged. */
   | { kind: 'merged'; at: number; repo: string; number: number }
   /** Where the chief of staff sent a turn of the lead's, and why. */
-  | { kind: 'cos'; at: number; route: VerdictRoute; why: string; message?: string; check?: string };
+  | { kind: 'cos'; at: number; route: VerdictRoute; why: string; says?: string; message?: string; check?: string };
 
 const time = (iso: unknown): number | undefined => {
   const t = typeof iso === 'string' ? Date.parse(iso) : Number.NaN;
@@ -80,7 +80,7 @@ export function ledgerEntries(lead: Pick<Agent, 'id' | 'sessionId'>, ledger: rea
   for (const e of ledger) {
     if (e.kind === 'merged' && e.lead === lead.id) out.push({ kind: 'merged', at: e.at, repo: e.repo, number: e.pr });
     else if (e.kind === 'cos-verdict' && lead.sessionId && e.sessionId === lead.sessionId)
-      out.push({ kind: 'cos', at: e.at, route: e.route, why: e.why, ...(e.message && { message: e.message }), ...(e.check && { check: e.check }) });
+      out.push({ kind: 'cos', at: e.at, route: e.route, why: e.why, ...(e.says && { says: e.says }), ...(e.message && { message: e.message }), ...(e.check && { check: e.check }) });
   }
   return out;
 }

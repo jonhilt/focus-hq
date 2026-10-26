@@ -160,7 +160,7 @@ export class ChiefOfStaff {
       const verdict = pinned ? { ...parsed, route: pinned } : parsed;
       this.host.record(agent.projectId, {
         kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, ...(verdict.check && { check: verdict.check }), why: verdict.why,
-        ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,
+        ...(verdict.says && { says: verdict.says }), ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,
         version: routing ? `${judgeVersion()}+${routing.how.version}` : judgeVersion(),
         ...(result.costUsd !== undefined && { costUsd: result.costUsd }),
         ...(routing && { router: { by: 'jev', ...routing.how } }),

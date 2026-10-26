@@ -19,6 +19,8 @@ const DONE = 800;
 /** What it reads a turn against: each part empty when the goal has none. */
 export interface TurnContext {
   goal: string;
+  /** Who leads it: the judge names them in what it says to the captain. */
+  lead?: string;
   /** The goal as the captain first put it. */
   firstWords?: string;
   /** What done looks like, from the lead's brief. */
@@ -42,12 +44,13 @@ export function captainWords(lines: readonly TermLine[], firstWords?: string, co
 }
 
 /** What a lead's turn is read against, from the lead, the ledger and the lead's log. */
-export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
+export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { name?: string } & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
   const intents = projectIntents([...ledger], lead.projectId);
   const about = intents.find((e) => !e.id);
   const done = lead.lead?.note?.done?.trim();
   return {
     goal: lead.lead?.title || '(untitled)',
+    ...(lead.name && { lead: lead.name }),
     ...(lead.lead?.brief?.trim() && { firstWords: clip(lead.lead.brief, FIRST_WORDS) }),
     ...(done && { done: clip(done, DONE) }),
     ...(about && { project: { what: about.what, guardrails: [...about.constraints] } }),
@@ -62,6 +65,7 @@ const list = (items: readonly string[]) => items.map((i) => `- ${i}`).join('\n')
 export function contextText(c: TurnContext): string {
   const parts = [
     `GOAL: ${c.goal}`,
+    c.lead && `THE LEAD: ${c.lead}`,
     c.firstWords && `The captain's first words:\n${c.firstWords}`,
     c.done && `What done looks like:\n${c.done}`,
     c.project && `THE PROJECT: ${c.project.what}${c.project.guardrails.length ? `\nGuardrails:\n${list(c.project.guardrails)}` : ''}`,

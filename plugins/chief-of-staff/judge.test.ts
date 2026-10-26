@@ -35,6 +35,9 @@ describe('the judge', () => {
     // with no headline, its reason stands in
     expect(parseVerdict({ route: 1, why: 'Progress.' })).toEqual({ route: 1, ask: 'Progress.', why: 'Progress.', message: '' });
     expect(parseVerdict({ route: 5, why: 'x', message: '' })).toBeUndefined();
+    // its reading for the captain, when it gives one
+    expect(parseVerdict({ route: 1, why: 'Progress.', says: ' Okafor fixed the boot; nothing for you. ', message: '' })).toMatchObject({ says: 'Okafor fixed the boot; nothing for you.' });
+    expect(parseVerdict({ route: 1, why: 'Progress.', says: '  ', message: '' })).not.toHaveProperty('says');
     expect(parseVerdict({ route: 1, why: '', message: '' })).toBeUndefined();
     expect(parseVerdict('1')).toBeUndefined();
   });

@@ -46,6 +46,7 @@ export const verdictSchema = (pinned?: CosRoute) => ({
     check: { type: 'string', enum: [...CHECKS] },
     ask: { type: 'string' },
     why: { type: 'string' },
+    says: { type: 'string' },
     message: { type: 'string' },
     replies: {
       type: 'array',
@@ -53,7 +54,7 @@ export const verdictSchema = (pinned?: CosRoute) => ({
       items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'], additionalProperties: false },
     },
   },
-  required: ['route', 'check', 'ask', 'why', 'message', 'replies'],
+  required: ['route', 'check', 'ask', 'why', 'says', 'message', 'replies'],
   additionalProperties: false,
 });
 
@@ -62,8 +63,8 @@ export const VERDICT_SCHEMA = verdictSchema();
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /**
- * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its headline, the words it would send (empty if it
- * gave none), and the replies it suggests (`repliesOf`: left out when there are none). With no headline, its reason
+ * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its headline, its reading for the captain (left out if it
+ * gave none), the words it would send (empty if it gave none), and the replies it suggests (`repliesOf`: left out when there are none). With no headline, its reason
  * stands in.
  */
 export function parseVerdict(structured: unknown): Verdict | undefined {
@@ -71,11 +72,13 @@ export function parseVerdict(structured: unknown): Verdict | undefined {
   const why = text(structured.why);
   if (!why) return undefined;
   const replies = repliesOf(structured.replies);
+  const says = text(structured.says);
   return {
     route: structured.route,
     ...(isOneOf(CHECKS, structured.check) && { check: structured.check }),
     ask: text(structured.ask) || why,
     why,
+    ...(says && { says }),
     message: text(structured.message),
     ...(replies.length && { replies }),
   };

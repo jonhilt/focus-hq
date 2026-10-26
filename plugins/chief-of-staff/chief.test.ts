@@ -94,15 +94,15 @@ describe('routing with Jev', () => {
 
 describe('the chief of staff', () => {
   it('judges a lead’s turn as it ends and writes the verdict in the ledger, saying nothing to anyone', async () => {
-    const o = await aboard({ route: 4, check: 'evidence', ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
+    const o = await aboard({ route: 4, check: 'evidence', ask: 'Run the tests first', why: 'It can check itself.', says: 'Slice 1 is up, but I sent it back to run its tests first. Nothing for you yet.', message: 'Run the tests first.' });
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
     await until(() => o.verdicts().length === 1);
     expect(o.verdicts()[0]).toMatchObject({
       kind: 'cos-verdict', projectId: o.project.id, sessionId: 'session-1', agent: o.lead().name, goal: o.lead().lead?.title, turnUuid: 'b',
-      route: 4, check: 'evidence', why: 'It can check itself.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: judgeVersion(), costUsd: 0.001,
+      route: 4, check: 'evidence', why: 'It can check itself.', says: 'Slice 1 is up, but I sent it back to run its tests first. Nothing for you yet.', message: 'Run the tests first.', model: 'claude-haiku-4-5', version: judgeVersion(), costUsd: 0.001,
     });
-    // it reads the turn against the goal as the captain put it (context.ts has the rest of what's agreed)
-    expect(o.asked[0].prompt).toMatch(new RegExp(`^GOAL: ${o.lead().lead?.title}\n\nThe captain's first words:\n`));
+    // it reads the turn against the goal as the captain put it (context.ts has the rest of what's agreed), and knows who leads it
+    expect(o.asked[0].prompt).toMatch(new RegExp(`^GOAL: ${o.lead().lead?.title}\n\nTHE LEAD: ${o.lead().name}\n\nThe captain's first words:\n`));
     expect(o.asked[0].prompt).toMatch(/\n\nThe end of what the lead said:\n<<<\nSlice 1 is up. Shall I start slice 2\?\n>>>$/);
     expect(o.asked[0].system).toContain('past replies:\nSTANDING ORDERS\nSay yes.');
     // nothing was sent to the lead

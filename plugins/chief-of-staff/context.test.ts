@@ -50,9 +50,10 @@ describe('turnContext', () => {
       line({ kind: 'intent', goalId: 'g1', by: 'the user', what: 'A goal’s own', constraints: [] }),
       line({ kind: 'intent', projectId: 'q', by: 'the user', what: 'Another project', constraints: [] }),
     ];
-    const c = turnContext(lead, ledger, [msg(1, '▶ Captain: Let shoppers save items for later.'), msg(2, '▶ Captain: Use a list.')]);
+    const c = turnContext({ ...lead, name: 'Lt. Okafor' }, ledger, [msg(1, '▶ Captain: Let shoppers save items for later.'), msg(2, '▶ Captain: Use a list.')]);
     expect(c).toEqual({
       goal: 'Saved items',
+      lead: 'Lt. Okafor',
       firstWords: 'Let shoppers save items for later.',
       done: 'A shopper saves an item and finds it next visit.',
       project: { what: 'A webshop shoppers trust', guardrails: ['Never break checkout'] },
@@ -62,6 +63,7 @@ describe('turnContext', () => {
     expect(contextText(c)).toBe(
       [
         'GOAL: Saved items',
+        'THE LEAD: Lt. Okafor',
         'The captain\'s first words:\nLet shoppers save items for later.',
         'What done looks like:\nA shopper saves an item and finds it next visit.',
         'THE PROJECT: A webshop shoppers trust\nGuardrails:\n- Never break checkout',

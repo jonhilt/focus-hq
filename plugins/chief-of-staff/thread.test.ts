@@ -55,12 +55,12 @@ describe('ledgerEntries', () => {
     const ledger = [
       line({ kind: 'merged', at: 5, repo: 'acme/shop', pr: 3, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead: 'g1' }),
       line({ kind: 'merged', at: 6, repo: 'acme/shop', pr: 4, by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead: 'g2' }),
-      line({ kind: 'cos-verdict', at: 7, sessionId: 's1', agent: 'L', turnUuid: 'u', route: 4, check: 'evidence', why: 'No test.', message: 'Test it.', model: 'm', version: 'v' }),
+      line({ kind: 'cos-verdict', at: 7, sessionId: 's1', agent: 'L', turnUuid: 'u', route: 4, check: 'evidence', why: 'No test.', says: 'I sent it back for a test.', message: 'Test it.', model: 'm', version: 'v' }),
       line({ kind: 'cos-verdict', at: 8, sessionId: 's2', agent: 'L', turnUuid: 'u', route: 2, why: 'w', model: 'm', version: 'v' }),
     ];
     expect(ledgerEntries(lead, ledger)).toEqual([
       { kind: 'merged', at: 5, repo: 'acme/shop', number: 3 },
-      { kind: 'cos', at: 7, route: 4, why: 'No test.', message: 'Test it.', check: 'evidence' },
+      { kind: 'cos', at: 7, route: 4, why: 'No test.', says: 'I sent it back for a test.', message: 'Test it.', check: 'evidence' },
     ]);
   });
 });
