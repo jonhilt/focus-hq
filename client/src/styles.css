@@ -738,7 +738,7 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 /* A session reads the way Pi does in a terminal (as in a herdr pane): one monospace font for all of it, Pi's dark
    theme's colours, and turns told apart by blocks, not fonts. The colours are Pi's okhsl values in hex. */
 .terminal {
-  --pi-text: #e1e2e6; --pi-muted: #a4a8b3; --pi-dim: #868a96; --pi-thinking: #9ea2ae;
+  --pi-text: #a1a1a1; --pi-muted: #a4a8b3; --pi-dim: #868a96; --pi-thinking: #9ea2ae;
   --pi-violet: #c993d6; --pi-blue: #919fe6; --pi-green: #66d1a5; --pi-red: #f2917a; --pi-yellow: #d4bd5e;
   /* Pi's blocks keep no fill on the panel's black: each is told apart by its accent, a thin bar along its left edge */
   --pi-user-bg: transparent; --pi-notice-bg: transparent; --pi-tool-bg: transparent; --pi-tool-error-bg: transparent; --pi-rule: #3a3d48;
