@@ -710,19 +710,27 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .crew-member:hover { background: color-mix(in srgb, var(--tone) 12%, transparent); }
 .crew-member p { margin: 2px 0 0; }
 .crew-member .muted { font-family: var(--mono); font-size: 12px; letter-spacing: 0; }
+/* A session reads the way Pi does in a terminal (as in a herdr pane): one monospace font for all of it, Pi's dark
+   theme's colours, and turns told apart by blocks, not fonts. The colours are Pi's okhsl values in hex. */
 .terminal {
-  background: var(--bg); color: #e6edf3; border: 2px solid var(--line); border-radius: 12px; padding: 12px;
-  font-family: var(--read); font-size: var(--read-size); line-height: var(--read-leading); letter-spacing: 0; overflow: auto; white-space: pre-wrap; word-break: break-word;
+  --pi-text: #e1e2e6; --pi-muted: #a4a8b3; --pi-dim: #868a96; --pi-thinking: #9ea2ae;
+  --pi-violet: #c993d6; --pi-blue: #919fe6; --pi-green: #66d1a5; --pi-red: #f2917a; --pi-yellow: #d4bd5e;
+  --pi-user-bg: #283259; --pi-notice-bg: #3f2a4a; --pi-tool-bg: #1f4636; --pi-tool-error-bg: #4f2a22; --pi-rule: #3a3d48;
+  --pi-pad: 14px;
+  background: #18191e; color: var(--pi-text); border: 2px solid var(--line); border-radius: 12px; padding: 12px;
+  font: 13px/1.5 ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', 'Source Code Pro', Consolas, monospace; letter-spacing: 0;
+  overflow: auto; white-space: pre-wrap; word-break: break-word;
   min-height: 240px;
 }
-/* what the session did rather than said (tool calls, their output, system lines) stays in mono, a step smaller */
-.terminal .system, .terminal .output, .terminal .tool, .terminal .error, .terminal .success, .terminal code, .terminal pre { font-family: var(--mono); font-size: 13px; }
-.terminal .system, .terminal .output { color: #8b949e; }
-.terminal .thinking { color: #d2a8ff; font-style: italic; }
-.terminal .tool { color: #79c0ff; }
-.terminal .error { color: #ff7b72; }
-.terminal .success { color: #7ee787; }
-.terminal .manager { color: #ffd33d; }
+.terminal .system, .terminal .output { color: var(--pi-muted); }
+.terminal .thinking { color: var(--pi-thinking); font-style: italic; }
+.terminal .tool { color: var(--pi-text); font-weight: 700; }
+.terminal .error { color: var(--pi-red); }
+.terminal .success { color: var(--pi-green); }
+/* what the session was sent: Pi's user block */
+.terminal .manager { background: var(--pi-user-bg); color: var(--pi-text); padding: 10px var(--pi-pad); margin: 0 0 14px; }
+/* a notice about the session (a question it asked, an approval it waits on): Pi's custom message block */
+.terminal .manager.notice { background: var(--pi-notice-bg); color: var(--pi-muted); }
 .browser-view { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
 .browser-bar { padding: 6px 10px; background: var(--surface-2); color: var(--lcars-lilac); border-bottom: 2px solid var(--line); font-family: var(--mono); font-size: 12px; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-view img, .browser-view canvas { width: 100%; display: block; }

@@ -1,34 +1,38 @@
-/* Claude's replies in a terminal, rendered from markdown: kept compact so they still read as a terminal. */
-.terminal .md { position: relative; padding-left: 2ch; white-space: normal; color: #e6edf3; margin: 2px 0 6px; }
-.terminal .md::before { content: '⏺'; position: absolute; left: 0; top: 0; }
+/* Claude's replies in a terminal, rendered from markdown in Pi's markdown colours: kept compact so they still read as a terminal. */
+.terminal .md { padding: 0 var(--pi-pad); white-space: normal; color: var(--pi-text); margin: 0 0 14px; }
+/* in the terminal's font, not the reading font a panel gives its paragraphs */
+.terminal .md p, .terminal .md li, .terminal .md blockquote { font: inherit; }
 .terminal .md > :first-child { margin-top: 0; }
 .terminal .md > :last-child { margin-bottom: 0; }
-.terminal .md p, .terminal .md ul, .terminal .md ol, .terminal .md pre, .terminal .md table, .terminal .md blockquote { margin: 0 0 0.6em; }
+.terminal .md p, .terminal .md ul, .terminal .md ol, .terminal .md pre, .terminal .md table, .terminal .md blockquote { margin: 0 0 0.75em; }
 .terminal .md h1, .terminal .md h2, .terminal .md h3, .terminal .md h4, .terminal .md h5, .terminal .md h6 {
-  margin: 0.8em 0 0.3em; font: inherit; font-weight: 700; color: #ffd8a8; letter-spacing: 0; text-transform: none;
+  margin: 1em 0 0.4em; font: inherit; font-weight: 700; color: var(--pi-yellow); letter-spacing: 0; text-transform: none;
 }
-.terminal .md h1, .terminal .md h2 { font-size: 1.08em; }
-.terminal .md ul, .terminal .md ol { padding-left: 2.2ch; }
+.terminal .md ul, .terminal .md ol { padding-left: 2.5ch; }
 .terminal .md li { margin: 0.1em 0; }
+.terminal .md li::marker { color: var(--pi-violet); }
 .terminal .md li > p { margin: 0; }
 .terminal .md strong { color: #fff; }
-.terminal .md a { color: #79c0ff; }
-.terminal .md code { background: rgba(110, 118, 129, 0.25); border-radius: 4px; padding: 0 0.3em; color: #ffa657; }
-.terminal .md pre { background: rgba(110, 118, 129, 0.15); border-radius: 6px; padding: 8px 10px; overflow-x: auto; white-space: pre; }
-.terminal .md pre code { background: none; padding: 0; color: #e6edf3; }
-.terminal .md blockquote { border-left: 3px solid #484f58; padding-left: 1ch; color: #8b949e; }
+.terminal .md a { color: var(--pi-blue); }
+.terminal .md code { color: var(--pi-violet); }
+.terminal .md pre { border-left: 2px solid var(--pi-muted); padding: 2px 0 2px 1.5ch; overflow-x: auto; white-space: pre; }
+.terminal .md pre code { color: var(--pi-green); }
+.terminal .md blockquote { border-left: 2px solid var(--pi-muted); padding-left: 1.5ch; color: var(--pi-muted); }
 .terminal .md table { border-collapse: collapse; display: block; overflow-x: auto; }
-.terminal .md th, .terminal .md td { border: 1px solid #30363d; padding: 2px 8px; text-align: left; }
-.terminal .md th { background: rgba(110, 118, 129, 0.15); }
-.terminal .md hr { border: 0; border-top: 1px solid #30363d; margin: 0.6em 0; }
+.terminal .md th, .terminal .md td { border: 1px solid var(--pi-rule); padding: 2px 8px; text-align: left; }
+.terminal .md th { color: var(--pi-yellow); }
+.terminal .md hr { border: 0; border-top: 1px solid var(--pi-muted); margin: 0.75em 0; }
 .terminal .md input[type='checkbox'] { margin: 0 0.5ch 0 0; vertical-align: middle; }
-/* What a session did between the things it said, folded under one line; open, its lines read as they always have. */
-.terminal .fold { margin: 2px 0 6px; }
-.terminal .fold > summary { cursor: pointer; list-style: none; width: fit-content; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.6 var(--mono); color: #8b949e; background: rgba(110, 118, 129, 0.12); border-radius: 999px; padding: 1px 10px; }
+/* What a session did between the things it said, folded under one line: Pi's tool block, green, or red when a step failed. */
+.terminal .fold { margin: 0 0 14px; background: var(--pi-tool-bg); }
+.terminal .fold:has(> summary.failed) { background: var(--pi-tool-error-bg); }
+.terminal .fold > summary { cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text); font-weight: 700; padding: 10px var(--pi-pad); }
 .terminal .fold > summary::-webkit-details-marker { display: none; }
-.terminal .fold > summary::before { content: '▸ '; }
+.terminal .fold > summary::before { content: '▸ '; color: var(--pi-dim); }
 .terminal .fold[open] > summary::before { content: '▾ '; }
-.terminal .fold > summary:hover { color: #e6edf3; }
-.terminal .fold > summary.failed { color: #ff7b72; }
-.terminal .fold[open] { border-left: 2px solid #30363d; padding-left: 8px; }
-.terminal .fold[open] > summary { margin-bottom: 4px; }
+.terminal .fold > summary:hover { color: #fff; }
+.terminal .fold > summary.failed { color: var(--pi-red); }
+.terminal .fold[open] { padding-bottom: 10px; }
+.terminal .fold[open] > summary { padding-bottom: 4px; }
+.terminal .fold > div { padding: 0 var(--pi-pad); }
+.terminal .fold .system, .terminal .fold .output { color: var(--pi-muted); }

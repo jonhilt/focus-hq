@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { foldSummary, lastReply, plainMarkdown, plainTermLine, replyPart, saysLine } from './termText';
+import { foldSummary, lastReply, plainMarkdown, plainTermLine, replyPart, saysLine, sentLine } from './termText';
 
 describe('replyPart', () => {
   it('starts a reply at the marker and carries it on through indented text lines', () => {
@@ -64,6 +64,15 @@ describe('saysLine', () => {
   it("keeps Claude's replies and the messages it was sent out of the fold, and folds the rest", () => {
     const kinds = ['text', 'manager', 'system', 'thinking', 'tool', 'output', 'error', 'success'] as const;
     expect(kinds.filter((kind) => saysLine({ t: 0, kind, text: '' }))).toEqual(['text', 'manager']);
+  });
+});
+
+describe('sentLine', () => {
+  it('tells a message sent to the session from a notice about it', () => {
+    expect(sentLine({ t: 0, kind: 'manager', text: '▶ Captain: try the other layout' })).toBe(true);
+    expect(sentLine({ t: 0, kind: 'manager', text: '❓ Asked the captain: Which layout? (A: Cards · B: List)' })).toBe(false);
+    expect(sentLine({ t: 0, kind: 'manager', text: '✋ Waiting for the captain to approve git push' })).toBe(false);
+    expect(sentLine({ t: 0, kind: 'text', text: '▶ not a message' })).toBe(false);
   });
 });
 

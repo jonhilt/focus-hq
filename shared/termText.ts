@@ -56,6 +56,9 @@ export function lastReply(lines: readonly TermLine[]): string {
 /** What a session said, which a terminal always shows: Claude's replies and the messages it was sent. */
 export const saysLine = (line: TermLine): boolean => line.kind === 'text' || line.kind === 'manager';
 
+/** A message sent to the session (`▶ Captain: …`), as against a manager line that's a notice about it (a question it asked, an approval). */
+export const sentLine = (line: TermLine): boolean => line.kind === 'manager' && line.text.startsWith('▶ ');
+
 /** A step's line: a tool call or a system line, as the server starts them. */
 const STEP = /^[⏺✻] /;
 

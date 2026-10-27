@@ -1,6 +1,6 @@
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { foldSummary, replyPart, saysLine } from '../../../shared/termText';
+import { foldSummary, replyPart, saysLine, sentLine } from '../../../shared/termText';
 import type { TermLine } from '../../../shared/types';
 import { h } from './dom';
 import './terminal.css';
@@ -18,6 +18,9 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 
 /** Markdown as safe HTML: GitHub's flavour, with single line breaks kept as Claude wrote them. */
 export const markdownHtml = (source: string): string => DOMPurify.sanitize(marked.parse(source, { async: false, gfm: true, breaks: true }));
+
+/** A line's classes: its kind, and a manager line that isn't a message sent to the session is a notice about it. */
+const lineClass = (line: TermLine): string => (line.kind === 'manager' && !sentLine(line) ? 'manager notice' : line.kind);
 
 /** A run of what the session did between the things it said, folded under the one line that sums it up. */
 type Fold = { el: HTMLDetailsElement; summary: HTMLElement; lines: TermLine[] };
@@ -49,7 +52,7 @@ export class TermView {
         changed.add(this.reply!);
       } else if (saysLine(line) || (!line.text.trim() && this.el.lastElementChild !== this.fold?.el)) {
         // a blank line doesn't start a fold of its own
-        this.el.append(h('div', { class: line.kind }, line.text || ' '));
+        this.el.append(h('div', { class: lineClass(line) }, line.text || ' '));
       } else {
         const fold = this.foldFor();
         fold.lines.push(line);
