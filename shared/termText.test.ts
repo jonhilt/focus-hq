@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { foldSummary, lastReply, plainMarkdown, plainTermLine, replyPart, saysLine, sentLine } from './termText';
+import type { TermLine } from './types';
+import { foldSummary, lastReply, plainMarkdown, replyPart, saysLine, sentLine, termBlocks } from './termText';
 
 describe('replyPart', () => {
   it('starts a reply at the marker and carries it on through indented text lines', () => {
@@ -32,14 +33,6 @@ describe('plainMarkdown', () => {
     expect(plainMarkdown('|---|:---:|')).toBe('─'.repeat(11));
     expect(plainMarkdown('```ts')).toBe('');
     expect(plainMarkdown('| a | b |')).toBe('| a | b |');
-  });
-});
-
-describe('plainTermLine', () => {
-  it('keeps the reply marker and indent, and leaves other lines as they came', () => {
-    expect(plainTermLine({ t: 0, kind: 'text', text: '⏺ **Done**' })).toBe('⏺ Done');
-    expect(plainTermLine({ t: 0, kind: 'text', text: '  - `a`' })).toBe('  • a');
-    expect(plainTermLine({ t: 0, kind: 'output', text: '  ⎿  **raw**' })).toBe('  ⎿  **raw**');
   });
 });
 
@@ -100,5 +93,45 @@ describe('foldSummary', () => {
 
   it("reads as the latest line when there's no step among them", () => {
     expect(foldSummary([{ t: 0, kind: 'output', text: '  ⎿  Your question is on your screen' }, { t: 1, kind: 'output', text: '' }])).toBe('2 lines · Your question is on your screen');
+  });
+});
+
+describe('termBlocks', () => {
+  const line = (kind: TermLine['kind'], text: string): TermLine => ({ t: 0, kind, text });
+
+  it('reads a session the way its panel does: what it said in view, what it did folded between', () => {
+    expect(termBlocks([
+      line('manager', '▶ Captain: save items for later'),
+      line('tool', '⏺ Read(cart.ts)'),
+      line('output', '  ⎿ 40 lines'),
+      line('text', '⏺ **Done.** Here:'),
+      line('text', '  - one'),
+      line('manager', '❓ Asked the captain: which layout?'),
+    ])).toEqual([
+      { kind: 'sent', text: '▶ Captain: save items for later' },
+      { kind: 'fold', text: '1 step · Read(cart.ts)', failed: false },
+      { kind: 'reply', text: 'Done. Here:\n• one' },
+      { kind: 'notice', text: '❓ Asked the captain: which layout?' },
+    ]);
+  });
+
+  it('marks a fold failed when a step in it did, and shows a reply line cut off by a fold as a plain line, as the panel does', () => {
+    expect(termBlocks([
+      line('text', '⏺ First'),
+      line('tool', '⏺ Bash(test)'),
+      line('error', 'boom'),
+      line('text', '  carried on'),
+    ])).toEqual([
+      { kind: 'reply', text: 'First' },
+      { kind: 'fold', text: '1 step · 1 failed · Bash(test)', failed: true },
+      { kind: 'line', text: '  carried on' },
+    ]);
+  });
+
+  it('leaves out blank lines between blocks', () => {
+    expect(termBlocks([line('text', '⏺ Hi'), line('system', ''), line('manager', '▶ Captain: yo')])).toEqual([
+      { kind: 'reply', text: 'Hi' },
+      { kind: 'sent', text: '▶ Captain: yo' },
+    ]);
   });
 });

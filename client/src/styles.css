@@ -276,11 +276,25 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .readouts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 8px 22px; margin-bottom: 12px; }
 .readout { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .readout > small { font-size: 12px; font-weight: 600; letter-spacing: 0.1em; color: var(--lcars-peach); text-transform: uppercase; white-space: nowrap; }
-.readout > b { font-size: 19px; font-weight: 600; letter-spacing: 0.06em; color: var(--lcars-sky); text-transform: uppercase; white-space: nowrap; }
+.readout > b { font-size: 19px; font-weight: 600; letter-spacing: 0.06em; color: var(--tone, var(--lcars-sky)); text-transform: uppercase; white-space: nowrap; }
 .readout.grow { min-width: 9em; }
 .readout.grow > b { font-weight: 500; letter-spacing: 0.02em; color: var(--text); text-transform: none; overflow: hidden; text-overflow: ellipsis; }
 .readout select.effort { font-size: 16px; padding: 0 6px; text-transform: uppercase; color: var(--lcars-sky); }
 .readouts .links { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+/* Readouts as one LCARS bar: each a segment tinted with its tone (the value in it at full strength), black gaps between, rounded at the bar's two ends. The one
+   that grows (what they're doing) closes the bar, dark, and takes whatever width is left. */
+.readouts.segments { gap: 8px var(--gap, 5px); align-items: stretch; margin-bottom: 16px; }
+.segments > .readout { justify-content: center; height: 44px; padding: 0 14px; background: color-mix(in srgb, var(--tone, var(--lcars-sky)) 16%, #000); color: var(--tone, var(--lcars-sky)); }
+.segments > .readout:first-child { border-radius: 22px 0 0 22px; padding-left: 20px; }
+.segments > .readout.grow { flex: 1 1 12em; border-radius: 0 22px 22px 0; background: var(--surface-2); }
+.segments > .readout > small { font-size: 10px; color: inherit; opacity: 0.65; }
+.segments > .readout > b { font-size: 18px; color: inherit; line-height: 1.05; }
+.segments > .readout.grow > small { color: var(--lcars-peach); opacity: 1; }
+.segments > .readout.grow > b { color: var(--text); font-size: 16px; }
+.segments select.effort { background: transparent; border: 0; color: inherit; font-size: 18px; font-weight: 600; padding: 0; border-radius: 0; cursor: pointer; }
+.segments select.effort:focus { outline: 1px solid currentColor; }
+.segments > .readout .btn.small { height: 20px; padding: 0 8px; font-size: 12px; background: #000; color: var(--text); }
+.segments > .links { align-self: center; }
 
 .btn {
   --tone: var(--lcars-lilac);
@@ -699,12 +713,23 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 
 /* an agent's panel: readouts, then the terminal on the left and, on the right, whichever view the sidebar has picked */
 .agent-body { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-.agent-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; flex: 1; min-height: 0; }
-/* alone, the terminal keeps to a width its lines still read at, in the middle */
-.agent-grid.single { grid-template-columns: minmax(0, 820px); justify-content: center; }
+/* The session keeps to a line length that reads comfortably, about 80 characters of its 13px mono with Pi's padding
+   either side; the pane beside it takes the rest of the width. */
+.agent-grid { --session-measure: 660px; display: grid; grid-template-columns: minmax(0, var(--session-measure)) minmax(0, 1fr); gap: 22px; flex: 1; min-height: 0; }
+/* alone, the session still reads at that width, in the middle, but scrolls from the panel's right edge, where a
+   scrollbar belongs, not from beside its text */
+.agent-grid.single { grid-template-columns: minmax(0, 1fr); }
+.agent-grid.single > .terminal { padding-inline: max(0px, calc((100% - var(--session-measure)) / 2)); }
 .pane { border: 2px solid var(--line); border-radius: 12px; background: var(--bg); min-height: 0; overflow: auto; }
 .pane:not(.browser-view) { padding: 12px 14px; }
 .pane > .goal-note { margin-top: 0; }
+/* beside the session, on the same black: an LCARS bar down its left edge sets it apart, rather than a box */
+.agent-grid > .pane { scrollbar-width: thin; scrollbar-color: var(--line) transparent; border: 0; border-left: 6px solid color-mix(in srgb, var(--lcars-lilac) 55%, #000); border-radius: 3px 0 0 3px; }
+.agent-grid > .pane:not(.browser-view) { padding: 0 4px 0 20px; }
+.agent-grid > .browser-view { border-left-color: color-mix(in srgb, var(--lcars-sky) 55%, #000); }
+/* the message box: a gold-edged capsule, as a bar's end would be */
+.session-compose input { border-radius: 999px; border-color: color-mix(in srgb, var(--lcars-gold) 45%, var(--line)); padding-left: 18px; }
+.session-compose input:focus { border-color: var(--focus); }
 .crew { display: flex; flex-direction: column; gap: 12px; }
 .crew-member { border-left: 6px solid var(--tone); border-radius: 0 10px 10px 0; padding: 2px 0 2px 10px; cursor: pointer; }
 .crew-member:hover { background: color-mix(in srgb, var(--tone) 12%, transparent); }
@@ -715,12 +740,15 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .terminal {
   --pi-text: #e1e2e6; --pi-muted: #a4a8b3; --pi-dim: #868a96; --pi-thinking: #9ea2ae;
   --pi-violet: #c993d6; --pi-blue: #919fe6; --pi-green: #66d1a5; --pi-red: #f2917a; --pi-yellow: #d4bd5e;
-  --pi-user-bg: #283259; --pi-notice-bg: #3f2a4a; --pi-tool-bg: #1f4636; --pi-tool-error-bg: #4f2a22; --pi-rule: #3a3d48;
+  /* Pi's blocks keep no fill on the panel's black: each is told apart by its accent, a thin bar along its left edge */
+  --pi-user-bg: transparent; --pi-notice-bg: transparent; --pi-tool-bg: transparent; --pi-tool-error-bg: transparent; --pi-rule: #3a3d48;
   --pi-pad: 14px;
-  background: #18191e; color: var(--pi-text); border: 2px solid var(--line); border-radius: 12px; padding: 12px;
+  /* on the panel's own black, not a box inside it: Pi's blocks are what mark its turns */
+  background: transparent; color: var(--pi-text); border: 0; border-radius: 0; padding: 0;
   font: 13px/1.5 ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', 'Source Code Pro', Consolas, monospace; letter-spacing: 0;
   overflow: auto; white-space: pre-wrap; word-break: break-word;
   min-height: 240px;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent;
 }
 .terminal .system, .terminal .output { color: var(--pi-muted); }
 .terminal .thinking { color: var(--pi-thinking); font-style: italic; }
@@ -728,9 +756,9 @@ textarea.briefing-input { min-height: 70px; width: 100%; margin-bottom: 8px; }
 .terminal .error { color: var(--pi-red); }
 .terminal .success { color: var(--pi-green); }
 /* what the session was sent: Pi's user block */
-.terminal .manager { background: var(--pi-user-bg); color: var(--pi-text); padding: 10px var(--pi-pad); margin: 0 0 14px; }
+.terminal .manager { background: var(--pi-user-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-blue) 60%, #000); color: var(--pi-text); padding: 10px var(--pi-pad); margin: 0 0 14px; }
 /* a notice about the session (a question it asked, an approval it waits on): Pi's custom message block */
-.terminal .manager.notice { background: var(--pi-notice-bg); color: var(--pi-muted); }
+.terminal .manager.notice { background: var(--pi-notice-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-violet) 60%, #000); color: var(--pi-muted); }
 .browser-view { border: 2px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--bg); display: flex; flex-direction: column; min-height: 0; }
 .browser-bar { padding: 6px 10px; background: var(--surface-2); color: var(--lcars-lilac); border-bottom: 2px solid var(--line); font-family: var(--mono); font-size: 12px; letter-spacing: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .browser-view img, .browser-view canvas { width: 100%; display: block; }

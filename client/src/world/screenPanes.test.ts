@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../../shared/types';
-import { paneAt, panePrefsOf, paneUse, screenPanes } from './screenPanes';
+import { paneAt, panePrefsOf, paneUse, screenPanes, sessionTop } from './screenPanes';
 
 const H = 600;
 const layout = (width: number, has: { browser: boolean; artifact?: boolean; progress: boolean }) =>
@@ -109,5 +109,22 @@ describe('panePrefsOf', () => {
     expect(panePrefsOf({ browser: 'no', tasks: 0, other: false })).toEqual(all);
     expect(panePrefsOf('browser')).toEqual(all);
     expect(panePrefsOf(null)).toEqual(all);
+  });
+});
+
+describe('sessionTop', () => {
+  const pane = { y: 36, h: 400, pad: 14, lineH: 20 };
+
+  it('starts the blocks at the top while they and the cursor fit', () => {
+    expect(sessionTop(100, pane)).toBe(50);
+    expect(sessionTop(400 - 28 - 20, pane)).toBe(50);
+  });
+
+  it('keeps the latest block at the bottom with the cursor row free under it, once they do not', () => {
+    for (const used of [400 - 28 - 19, 600, 5000]) {
+      const top = sessionTop(used, pane);
+      // where the cursor goes: just after the last block, with its whole row still inside the pane
+      expect(top + used + pane.lineH).toBe(pane.y + pane.h - pane.pad);
+    }
   });
 });

@@ -34,12 +34,6 @@ export function plainMarkdown(text: string): string {
   return `${indent}${rest}`;
 }
 
-/** A terminal line as a canvas draws it: a reply's line without its markdown, anything else as it came. */
-export function plainTermLine(line: TermLine): string {
-  const part = replyPart(line);
-  return part ? `${part.start ? REPLY : '  '}${plainMarkdown(part.text)}` : line.text;
-}
-
 /** The last of Claude's replies in a terminal, as plain text: what a lead last said, to quote it. */
 export function lastReply(lines: readonly TermLine[]): string {
   const start = lines.findLastIndex((l) => replyPart(l)?.start);
@@ -74,4 +68,43 @@ export function foldSummary(lines: readonly TermLine[]): string {
   const count = steps ? `${steps} ${steps === 1 ? 'step' : 'steps'}` : `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}`;
   const clipped = latest.length > 90 ? `${latest.slice(0, 89)}…` : latest;
   return [count, failed ? `${failed} failed` : '', clipped].filter(Boolean).join(' · ');
+}
+
+/**
+ * A session's lines in the blocks its panel reads them in (`TermView`), for screens drawn on a canvas: each of Claude's
+ * replies as plain text, each message sent to it and each notice about it, and what it did in between folded to the
+ * one line that sums it up (failed when a step did).
+ */
+export type TermBlock =
+  | { kind: 'reply'; text: string }
+  | { kind: 'sent' | 'notice' | 'line'; text: string }
+  | { kind: 'fold'; text: string; failed: boolean };
+
+export function termBlocks(lines: readonly TermLine[]): TermBlock[] {
+  const blocks: TermBlock[] = [];
+  let fold: TermLine[] | null = null;
+  const closeFold = () => {
+    if (fold) blocks.push({ kind: 'fold', text: foldSummary(fold), failed: fold.some((l) => l.kind === 'error') });
+    fold = null;
+  };
+  for (const line of lines) {
+    const part = replyPart(line);
+    const last = blocks.at(-1);
+    if (part && (part.start || (!fold && last?.kind === 'reply'))) {
+      if (!part.start && last?.kind === 'reply') last.text += `\n${plainMarkdown(part.text)}`;
+      else {
+        closeFold();
+        blocks.push({ kind: 'reply', text: plainMarkdown(part.text) });
+      }
+    } else if (saysLine(line) || (!line.text.trim() && !fold)) {
+      closeFold();
+      // a blank line doesn't start a fold of its own
+      if (line.text.trim()) blocks.push({ kind: line.kind === 'manager' ? (sentLine(line) ? 'sent' : 'notice') : 'line', text: line.text });
+    } else {
+      fold ??= [];
+      fold.push(line);
+    }
+  }
+  closeFold();
+  return blocks;
 }

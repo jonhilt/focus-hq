@@ -195,9 +195,9 @@ export class SideNav<K extends string> implements PanelNav {
 
 /** An LCARS readout: a small label over its value, in the cool colour LCARS keeps for data unless `tone` says otherwise. */
 export function readout(label: string, value: Node | string, opts: { tone?: string; title?: string; grow?: boolean } = {}): HTMLElement {
-  return h('div', { class: `readout${opts.grow ? ' grow' : ''}`, title: opts.title },
+  return h('div', { class: `readout${opts.grow ? ' grow' : ''}`, title: opts.title, style: opts.tone ? `--tone:${opts.tone}` : undefined },
     h('small', null, label),
-    h('b', { style: opts.tone ? `color:${opts.tone}` : undefined }, value),
+    h('b', null, value),
   );
 }
 

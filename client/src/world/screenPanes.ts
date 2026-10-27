@@ -124,3 +124,13 @@ export const screenPrefs = {
     }
   },
 };
+
+/**
+ * Where the terminal pane's first block starts: at the top while its blocks fit, else low enough that the latest ends
+ * at the bottom with a row left under it for the cursor, so the cursor never lands on the last line. `used` is the
+ * blocks' height, each with the gap after it.
+ */
+export function sessionTop(used: number, pane: { y: number; h: number; pad: number; lineH: number }): number {
+  const fits = used + pane.lineH <= pane.h - pane.pad * 2;
+  return fits ? pane.y + pane.pad : pane.y + pane.h - pane.pad - pane.lineH - used;
+}

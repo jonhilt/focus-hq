@@ -23,16 +23,17 @@
 .terminal .md th { color: var(--pi-yellow); }
 .terminal .md hr { border: 0; border-top: 1px solid var(--pi-muted); margin: 0.75em 0; }
 .terminal .md input[type='checkbox'] { margin: 0 0.5ch 0 0; vertical-align: middle; }
-/* What a session did between the things it said, folded under one line: Pi's tool block, green, or red when a step failed. */
-.terminal .fold { margin: 0 0 14px; background: var(--pi-tool-bg); }
-.terminal .fold:has(> summary.failed) { background: var(--pi-tool-error-bg); }
+/* What a session did between the things it said, folded under one line: Pi's tool block, a green tint, or red when a step failed. */
+.terminal .fold { margin: 0 0 14px; background: var(--pi-tool-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-green) 55%, #000); }
+.terminal .fold:has(> summary.failed) { background: var(--pi-tool-error-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-red) 60%, #000); }
 .terminal .fold > summary { cursor: pointer; list-style: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-text); font-weight: 700; padding: 10px var(--pi-pad); }
 .terminal .fold > summary::-webkit-details-marker { display: none; }
 .terminal .fold > summary::before { content: '▸ '; color: var(--pi-dim); }
 .terminal .fold[open] > summary::before { content: '▾ '; }
 .terminal .fold > summary:hover { color: #fff; }
 .terminal .fold > summary.failed { color: var(--pi-red); }
-.terminal .fold[open] { padding-bottom: 10px; }
-.terminal .fold[open] > summary { padding-bottom: 4px; }
-.terminal .fold > div { padding: 0 var(--pi-pad); }
+.terminal .fold[open] { padding-bottom: 14px; }
+.terminal .fold[open] > summary { padding-bottom: 10px; }
+/* an opened fold's lines sit in from its bar, under its summary's words rather than its ▸ */
+.terminal .fold > div { padding: 1px var(--pi-pad) 1px calc(var(--pi-pad) + 3ch); }
 .terminal .fold .system, .terminal .fold .output { color: var(--pi-muted); }

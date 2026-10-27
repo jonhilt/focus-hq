@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import type { Agent, BrowserFrame, ClaudeTask, GoalArtifact, GoalQuestion, TermLine } from '../../../shared/types';
 import { ARTIFACT_SIZE, artifactUrl, latestArtifact, openQuestion, optionUrl } from '../../../shared/artifacts';
 import { showsBrowser } from '../../../shared/browserView';
-import { plainTermLine } from '../../../shared/termText';
+import { type TermBlock, termBlocks } from '../../../shared/termText';
 import { canvasTexture, fitText, makeCanvas, MONO_FONT, roundRect, UI_FONT, wrap } from './canvas';
 import { flat } from './materials';
-import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs } from './screenPanes';
+import { type Pane, type PaneAt, paneAt, screenPanes, screenPrefs, sessionTop } from './screenPanes';
 import { BIG_REDRAW_EVERY, cursorOn, REDRAW_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from './screenRedraw';
 import { patchTexture } from './texturePatch';
 import { LCARS, LCARS_FONT, LCARS_STATUS, lcarsFrame } from './starship';
@@ -17,19 +17,14 @@ interface Rect {
   h: number;
 }
 
+/** Pi's dark theme, as the session panel has it (styles.css `.terminal`). */
+const PI = { text: '#e1e2e6', muted: '#a4a8b3', red: '#f2917a' };
 /** A busy terminal's cursor. */
-const CURSOR = '#e6edf3';
-
-export const TERM_COLORS: Record<TermLine['kind'], string> = {
-  system: '#8b949e',
-  text: '#e6edf3',
-  thinking: '#d2a8ff',
-  tool: '#79c0ff',
-  output: '#8b949e',
-  error: '#ff7b72',
-  success: '#7ee787',
-  manager: '#ffd33d',
-};
+const CURSOR = PI.text;
+/** The bar down a block's left edge: Pi's accent for it at the strength the panel draws it (none for a reply). */
+const TERM_BAR: Partial<Record<TermBlock['kind'] | 'failed', string>> = { sent: '#575f8a', notice: '#795880', fold: '#38735b', failed: '#915749' };
+/** How many of a session's latest lines a screen reads its blocks from. */
+const TERM_TAIL = 400;
 
 /** A station display's canvas: its pixels, and how many of them make one unit of the 800 × 512 layout's type and rails. */
 export interface ScreenSize {
@@ -179,7 +174,7 @@ export class StationScreen {
       return;
     }
 
-    ctx.fillStyle = '#0d1117';
+    ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, W, H);
 
     // title bar: an LCARS rail in the agent's status colour
@@ -215,10 +210,12 @@ export class StationScreen {
       else if (pane === 'progress') this.drawProgress(tasks, x, y, w, h);
     }
 
-    // status bar
+    // status bar: a dark tint of the status colour with its words in it, as the session panel's status bar has it
     ctx.fillStyle = color;
     ctx.fillRect(0, H - footerH, W, footerH);
-    ctx.fillStyle = '#000000';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
+    ctx.fillRect(0, H - footerH, W, footerH);
+    ctx.fillStyle = color;
     ctx.font = `600 20px ${LCARS_FONT}`;
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
@@ -276,34 +273,51 @@ export class StationScreen {
     ctx.restore();
   }
 
+  /**
+   * The session as its panel reads it (`termBlocks`): Pi's colours on black, what was sent to it, notices and folded
+   * steps each marked by a thin bar of its colour on the left, Claude's replies plain, the latest at the bottom.
+   */
   private drawTerminal(lines: TermLine[], x: number, y: number, w: number, h: number): void {
     const ctx = this.c.ctx;
     const lineH = 20;
-    const pad = 10;
+    const pad = 14;
+    const gap = 12;
+    const inset = 14;
     ctx.save();
     ctx.beginPath();
     ctx.rect(x, y, w, h);
     ctx.clip();
-    ctx.font = `15px ${MONO_FONT}`;
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(x, y, w, h);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'top';
-    const maxRows = Math.floor((h - pad * 2) / lineH);
-    const charW = ctx.measureText('M').width;
-    const cols = Math.max(10, Math.floor((w - pad * 2) / charW));
-    // wrap from the end until the screen is full
-    const rows: { kind: TermLine['kind']; text: string }[] = [];
-    for (let i = lines.length - 1; i >= 0 && rows.length < maxRows; i--) {
-      const text = plainTermLine(lines[i]);
-      const chunks: string[] = [];
-      for (let j = 0; j < Math.max(1, text.length); j += cols) chunks.push(text.slice(j, j + cols));
-      for (let k = chunks.length - 1; k >= 0 && rows.length < maxRows; k--) rows.unshift({ kind: lines[i].kind, text: chunks[k] });
+    const textW = w - pad * 2 - inset;
+    // from the latest block back until the screen is full; the last few hundred lines are plenty to fill it
+    const stacked: { block: TermBlock; rows: string[] }[] = [];
+    let used = 0;
+    for (const block of termBlocks(lines.slice(-TERM_TAIL)).reverse()) {
+      if (used > h) break;
+      ctx.font = `${block.kind === 'fold' ? '700 ' : ''}15px ${MONO_FONT}`;
+      const rows = block.kind === 'fold' ? [fitText(ctx, `▸ ${block.text}`, textW)] : wrap(ctx, block.text, textW);
+      stacked.unshift({ block, rows });
+      used += rows.length * lineH + gap;
     }
-    rows.forEach((row, i) => {
-      ctx.fillStyle = TERM_COLORS[row.kind];
-      ctx.fillText(row.text, x + pad, y + pad + i * lineH);
-    });
+    // top down while it all fits, the latest kept at the bottom (over the cursor's row) once it doesn't
+    let cy = sessionTop(used, { y, h, pad, lineH });
+    for (const { block, rows } of stacked) {
+      const bar = TERM_BAR[block.kind === 'fold' && block.failed ? 'failed' : block.kind];
+      if (bar) {
+        ctx.fillStyle = bar;
+        ctx.fillRect(x + pad, cy - 3, 3, rows.length * lineH + 4);
+      }
+      ctx.font = `${block.kind === 'fold' ? '700 ' : ''}15px ${MONO_FONT}`;
+      ctx.fillStyle = block.kind === 'notice' ? PI.muted : block.kind === 'fold' && block.failed ? PI.red : PI.text;
+      rows.forEach((row, i) => ctx.fillText(row, x + pad + inset, cy + i * lineH));
+      cy += rows.length * lineH + gap;
+    }
     // blinking cursor, its cell kept as it is without it, for the blinks between drawings (blink)
-    const cursor = { x: x + pad, y: y + pad + Math.min(rows.length, maxRows - 1) * lineH + 2, w: charW, h: lineH - 4 };
+    ctx.font = `15px ${MONO_FONT}`;
+    const cursor = { x: x + pad + inset, y: cy + 2, w: ctx.measureText('M').width, h: lineH - 4 };
     this.keepCell(cursor);
     if (this.cursor) {
       ctx.fillStyle = CURSOR;

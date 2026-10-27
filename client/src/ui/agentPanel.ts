@@ -78,7 +78,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   const replay = new RunReplay(id);
   const grid = h('div', { class: 'agent-grid' }, terminal, browser, info, replay.el);
   const ask = h('div');
-  const readouts = h('div', { class: 'readouts' });
+  const readouts = h('div', { class: 'readouts segments' });
   const closing = h('div');
   const body = h('div', { class: 'agent-body' }, ask, readouts, closing, grid);
 
@@ -103,7 +103,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   // a lead's Close goal is up with the links, out of the way of Send; anyone else's Send home stays here
   const lead = agent.task === 'lead';
   const dismiss = lead ? null : h('button', { class: 'btn' }, 'Send home');
-  const footer = h('div', { class: 'compose' }, withMic(ui, input), send, stop, dismiss);
+  const footer = h('div', { class: 'compose session-compose' }, withMic(ui, input), send, stop, dismiss);
   // made once and put back on every redraw of the header, so it keeps its busy state while the goal closes
   const close = lead ? h('button', { class: 'btn small', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal') : null;
   if (close) close.onclick = () => {
@@ -149,7 +149,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   };
 
   const title = h('h2');
-  ui.panels.open({ title, body, footer, nav, wide: true, accent: UNIFORM[agent.avatar.division] });
+  ui.panels.open({ title, body, footer, nav, full: true, accent: UNIFORM[agent.avatar.division] });
   shown = id;
   ui.panels.own(() => (shown = null));
   // reading a lead's turn here answers their hail, on every screen, whether or not you reply; coming back to this
@@ -195,18 +195,18 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     title.replaceChildren(a.name, h('span', { class: 'muted' }, ` · ${a.task === 'lead' ? a.lead?.title ?? 'Goal' : a.brief ? `${a.brief.label}: ${a.issue.title}` : `#${a.issue.number} ${a.issue.title}`}`));
     fill(
       readouts,
+      // one LCARS bar of segments, each in its own colour, and what they're doing last, taking the rest of the bar
       readout('Status', a.status, { tone: LCARS_STATUS[a.status] }),
-      readout('Activity', statusLine(a), { grow: true }),
-      a.run ? readout('Run', runLine(a.run), { title: `Where their run is, as its journal tells it (fact #${a.run.seq})` }) : null,
-      a.task === 'lead' ? readout('Station', String((a.lead?.station ?? 0) + 1)) : null,
-      a.task === 'lead' ? readout('Slice', String(a.lead?.slice ?? 1)) : null,
-      readout('Effort', a.task === 'lead' ? leadEffortPicker(a) : a.effort ?? 'default'),
-      readout('Autonomy', autonomyPicker(a)),
+      a.run ? readout('Run', runLine(a.run), { tone: LCARS.periwinkle, title: `Where their run is, as its journal tells it (fact #${a.run.seq})` }) : null,
+      a.task === 'lead' ? readout('Station · Slice', `${(a.lead?.station ?? 0) + 1} · ${a.lead?.slice ?? 1}`, { tone: LCARS.sky }) : null,
+      readout('Effort', a.task === 'lead' ? leadEffortPicker(a) : a.effort ?? 'default', { tone: LCARS.gold }),
+      readout('Autonomy', autonomyPicker(a), { tone: autonomyOf(a) === 'full' ? LCARS.red : LCARS.gold }),
       contextReadout(a),
-      readout('Started', timeAgo(a.startedAt)),
-      a.costUsd > 0 ? readout('Usage', `~$${a.costUsd.toFixed(2)}`, { title: 'Estimated usage (on a subscription this is not billed)' }) : null,
-      !a.cloud ? readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { title: 'What this session signs in to Claude with' }) : null,
-      a.cloud ? readout('Works in', 'Cloud', { title: 'Works in a Claude Code cloud session and pushes their own branch' }) : null,
+      readout('Started', timeAgo(a.startedAt), { tone: LCARS.peach }),
+      a.costUsd > 0 ? readout('Usage', `~$${a.costUsd.toFixed(2)}`, { tone: LCARS.peach, title: 'Estimated usage (on a subscription this is not billed)' }) : null,
+      !a.cloud ? readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { tone: LCARS.lilac, title: 'What this session signs in to Claude with' }) : null,
+      a.cloud ? readout('Works in', 'Cloud', { tone: LCARS.lilac, title: 'Works in a Claude Code cloud session and pushes their own branch' }) : null,
+      readout('Activity', statusLine(a), { grow: true }),
       h('div', { class: 'links' },
         cloudLink(a),
         a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
@@ -371,11 +371,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
    * machine, else from their next turn. Shows the ship-wide setting until the captain picks one for them.
    */
   const autonomyPicker = (a: Agent) => {
-    const shipWide = state.info?.settings.autonomy ?? 'ask';
-    const mode = effectiveAutonomy(a, { autonomy: shipWide });
+    const mode = autonomyOf(a);
     const select = h('select', {
       class: 'effort',
-      style: mode === 'full' ? 'color:var(--lcars-red)' : undefined,
       title: `${AUTONOMY_HINT[mode]}\n\n${a.autonomy ? `Chosen for ${a.name} alone` : 'The ship-wide setting'}: a change applies to ${a.name} only, at once if they're working on this machine.`,
     },
       ...AUTONOMY_MODES.map((m) => h('option', { value: m, selected: m === mode, title: AUTONOMY_HINT[m] }, AUTONOMY_LABEL[m])),
@@ -418,6 +416,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     }
   }));
 }
+
+/** What the agent may do without asking: theirs if the captain picked one, else the ship-wide setting. */
+const autonomyOf = (a: Agent): Autonomy => effectiveAutonomy(a, { autonomy: state.info?.settings.autonomy ?? 'ask' });
 
 /** Picks the effort an agent is hired at. The empty value leaves it to the model's default. */
 export function effortPicker(value?: Effort): HTMLSelectElement {
