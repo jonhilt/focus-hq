@@ -5,6 +5,7 @@ import type { Inbox } from './captainsInbox';
 import { decideOf } from './inbox';
 import { landedAnswerOf } from './landed';
 import type { CosState } from './shared';
+import { stoodByKept } from './watchRules';
 import { goalThread } from './thread';
 
 // The chief of staff's routes (docs/ledger.md#the-captains-inbox-api): the captain's inbox under
@@ -58,6 +59,37 @@ export function inboxRoutes(inbox: Inbox, settings: PluginState<CosState>, leads
       handle: ({ body }) => {
         const { projectId, on } = switchOf(body);
         settings.set({ ...settings.get(), jev: { ...settings.get().jev, [projectId]: on } });
+        return settings.get();
+      },
+    },
+  ];
+}
+
+/**
+ * The captain's watch (README.md#the-watch): taking the conn of a goal, by its lead's id, or standing down (`lead`
+ * null), and telling a hail to stand by (`key`, its `hailKey`), into the muster. Hails stood by that no longer wait are
+ * let go as another is.
+ */
+export function watchRoutes(inbox: Pick<Inbox, 'view'>, settings: PluginState<CosState>, isLead: (id: string) => boolean): PluginRoute[] {
+  return [
+    {
+      method: 'post', path: '/conn',
+      handle: ({ body }) => {
+        const lead = body.lead;
+        if (lead !== null && (typeof lead !== 'string' || !isLead(lead))) throw new Error('That goal isn’t aboard');
+        // a patch: standing down sets the conn to nothing, which isn't kept
+        settings.set({ conn: lead ?? undefined });
+        return settings.get();
+      },
+    },
+    {
+      method: 'post', path: '/stand-by',
+      handle: ({ body }) => {
+        if (typeof body.key !== 'string' || !body.key) throw new Error('Say which hail: key');
+        const waiting = new Set(inbox.view().open.map((i) => i.id));
+        if (!waiting.has(body.key)) throw new Error('That hail isn’t waiting any more');
+        const kept = stoodByKept(settings.get().stoodBy ?? [], waiting).filter((k) => k !== body.key);
+        settings.set({ stoodBy: [...kept, body.key] });
         return settings.get();
       },
     },

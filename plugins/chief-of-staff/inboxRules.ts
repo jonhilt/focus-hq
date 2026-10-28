@@ -3,6 +3,7 @@ import { needsYou, turnRead } from '../../plugin-api/shared';
 import type { Decide, InboxItem } from './inbox';
 import { laneOf } from './laneRules';
 import { readOf } from './shared';
+import { gradeOf, toasts } from './watchRules';
 
 // The captain's inbox's decisions (docs/ledger.md#the-captains-inbox-api): what waits on them and in what order, whether
 // an answer fits the item it answers, and where a lead's turn stands for them, with the toast as it changes. Pure, so
@@ -58,4 +59,13 @@ export function turnNews(before: TurnStage | undefined, lead: Pick<Agent, 'name'
   if (now === 'card') return { level: 'info', text: `🗂 ${lead.name}: ${ask}` };
   if (now === 'waiting' && before === 'working') return { level: 'info', text: `🖖 ${lead.name} is waiting for you` };
   return null;
+}
+
+/**
+ * The toast as a lead's turn comes to the captain (`turnNews`), on watch or not: while a goal is at the conn, only its
+ * own turns and hails toast; the rest wait as counts on their berths (`toasts`, README.md#the-watch).
+ */
+export function turnToast(before: TurnStage | undefined, lead: Pick<Agent, 'id' | 'name' | 'status' | 'lead'>, conn: string | undefined): { level: 'info' | 'error'; text: string } | null {
+  const news = turnNews(before, lead);
+  return news && toasts(conn, lead.id, gradeOf(readOf(lead)?.judged)) ? news : null;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cosReadOf, MAX_REPLY_LABEL, MAX_REPLY_TEXT, readOf, repliesOf, verdictOf } from './shared';
+import { cosReadOf, cosStateOf, MAX_REPLY_LABEL, MAX_REPLY_TEXT, readOf, repliesOf, verdictOf } from './shared';
 
 const verdict = { route: 2, ask: 'Filters first?', why: 'A pick.', message: 'Filters.' };
 const back = { route: 4, ask: 'Test it first', why: 'No evidence.', message: 'Test it first.' };
@@ -29,6 +29,11 @@ describe('its mark on a lead’s turn, read back', () => {
     expect(verdictOf({ ...verdict, replies: [] })).toEqual(verdict);
   });
 
+  it('keeps the check that decided a verdict, so a watch can tell a hail, and reads one from before it named one as naming none', () => {
+    expect(verdictOf({ ...verdict, check: 'irreversible' })).toEqual({ ...verdict, check: 'irreversible' });
+    expect(verdictOf({ ...verdict, check: 'gut feel' })).toEqual(verdict);
+  });
+
   it('takes a reply only with a label and words, each label once, three at most', () => {
     expect(repliesOf([{ label: ' Go ', text: ' Yes, go. ' }, { label: 'go', text: 'Again' }, { label: '', text: 'x' }, { label: 'x' }, 'Go', null, { label: 'B', text: 'b' }, { label: 'C', text: 'c' }, { label: 'D', text: 'd' }]))
       .toEqual([{ label: 'Go', text: 'Yes, go.' }, { label: 'B', text: 'b' }, { label: 'C', text: 'c' }]);
@@ -49,5 +54,13 @@ describe('its mark on a lead’s turn, read back', () => {
   it('is read from the lead’s marks, under the plugin’s id', () => {
     expect(readOf({ lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], marks: { 'chief-of-staff': { at: 3 }, other: 'x' } } })).toEqual({ at: 3 });
     expect(readOf({ lead: undefined })).toBeUndefined();
+  });
+});
+
+describe('what it keeps across a restart, read back', () => {
+  it('keeps the goal at the conn and the hails stood by, and reads what was kept before the watch as no watch', () => {
+    expect(cosStateOf({ autoSend: { p: true }, conn: 'lead-1', stoodBy: ['turn:b:4', 7] })).toEqual({ autoSend: { p: true }, jev: {}, conn: 'lead-1', stoodBy: ['turn:b:4'] });
+    expect(cosStateOf({ autoSend: {}, conn: '' })).toEqual({ autoSend: {}, jev: {} });
+    expect(cosStateOf(undefined)).toEqual({ autoSend: {}, jev: {} });
   });
 });

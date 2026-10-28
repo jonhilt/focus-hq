@@ -1,0 +1,1075 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bridge grammar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens ----------
+   Page: a light spec sheet. Mockups: Focus's chosen direction (B, flight-deck), its --t-* tokens from
+   docs/interface-style/prototypes/flight.css. Tokens marked "new" are proposed additions. */
+:root {
+  color-scheme: light;
+  --page-ground: #e8e6e1; --page-surface: #fbfaf8; --page-ink: #1c1e22; --page-muted: #61666e; --page-line: rgba(28,30,34,.12);
+  /* flight.css, as is */
+  --t-well: #0b0d10; --t-panel: #15181d; --t-surface: #1b1f25; --t-surface2: #1e232b; --t-line: #3a424e;
+  --t-text: #e9edf2; --t-muted: #8a94a3; --t-label: #7d8794; --t-shadow: 0 20px 50px #000a;
+  --t-display: 'Chakra Petch', sans-serif; --t-font: 'IBM Plex Sans', sans-serif; --t-mono: 'IBM Plex Mono', monospace;
+  --read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  /* new: the one colour, reserved for "needs you" (flight.css's --lcars-orange, no longer used for titles) */
+  --attn: #f5a524; --attn-wash: rgba(245,165,36,.12);
+  /* new: lift (shadow), hairline (border), spring (motion) per layer */
+  --lift-1: 0 1px 0 rgba(0,0,0,.5);
+  --lift-2: 0 6px 16px rgba(0,0,0,.55);
+  --lift-3: 0 14px 36px rgba(0,0,0,.65);
+  --lift-4: var(--t-shadow);
+  --hairline-rail: rgba(58,66,78,.45);
+  --hairline-sheet: var(--t-line);
+  --hairline-card: rgba(233,237,242,.10);
+  --hairline-hail: var(--attn);
+  --spring-paper: 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-card: 420ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-flick: 220ms cubic-bezier(.2,.9,.3,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page-ground); color: var(--page-ink); }
+body { font: 15px/1.55 'IBM Plex Sans', system-ui, sans-serif; overflow-x: hidden; }
+a { color: inherit; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 80px; }
+
+/* ---------- Header ---------- */
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--page-line); padding-bottom: 14px; }
+header.top h1 { font: 600 34px/1.1 'Chakra Petch', sans-serif; margin: 0; letter-spacing: .01em; }
+header.top h1 small { display: block; font: 500 13px/1.4 'IBM Plex Sans', sans-serif; color: var(--page-muted); letter-spacing: 0; margin-top: 6px; }
+nav.tabs { display: flex; gap: 2px; background: #dcd9d3; padding: 3px; border-radius: 4px; }
+nav.tabs button { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .06em; text-transform: uppercase; border: 0; background: transparent; padding: 7px 14px; border-radius: 3px; cursor: pointer; color: var(--page-muted); }
+nav.tabs button[aria-selected="true"] { background: var(--page-surface); color: var(--page-ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.lede { font-size: 17px; line-height: 1.6; max-width: 900px; margin: 22px 0 18px; }
+.lede b { font-weight: 600; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 14px 18px; }
+.box h3 { font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; color: var(--page-muted); }
+.box ul { margin: 0; padding-left: 18px; } .box li { margin: 4px 0; font-size: 14px; }
+.evidence { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--page-line); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; margin: 16px 0 0; }
+.evidence div { background: var(--page-surface); padding: 12px 16px; }
+.evidence b { display: block; font: 600 26px/1.1 'Chakra Petch', sans-serif; }
+.evidence span { font-size: 13px; color: var(--page-muted); }
+.pull { margin: 14px 0 0; font-size: 13.5px; color: var(--page-muted); }
+.pull q { color: var(--page-ink); font-style: italic; }
+
+section.tab { display: none; padding-top: 28px; } section.tab.on { display: block; }
+h2 { font: 600 22px/1.2 'Chakra Petch', sans-serif; margin: 34px 0 10px; }
+h2:first-child { margin-top: 0; }
+h4 { font: 600 15px 'IBM Plex Sans', sans-serif; margin: 0 0 4px; }
+p.note { color: var(--page-muted); font-size: 14px; max-width: 860px; }
+
+/* tables */
+table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--page-line); vertical-align: top; }
+th { font: 600 11.5px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--page-muted); background: #f3f1ed; }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 600 10.5px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--page-line); color: var(--page-muted); white-space: nowrap; }
+.tag.new { border-color: #1c1e22; color: #1c1e22; }
+.tag.merged, .tag.split, .tag.renamed { border-color: #61666e; color: #3b3f45; }
+.tag.dropped { text-decoration: line-through; }
+.scroll-x { overflow-x: auto; }
+
+/* nouns */
+.nouns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.noun { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.noun h3 { font: 600 19px 'Chakra Petch', sans-serif; margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.noun .purpose { font-size: 15px; margin: 0; }
+.noun dl { display: grid; grid-template-columns: 92px 1fr; gap: 3px 10px; margin: 0; font-size: 13.5px; }
+.noun dt { color: var(--page-muted); font-weight: 500; }
+.noun dd { margin: 0; }
+.tile { background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); border-radius: 4px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+
+/* verbs matrix */
+.matrix th, .matrix td { text-align: center; padding: 6px 4px; font-size: 13px; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+.matrix thead th { writing-mode: vertical-rl; transform: rotate(180deg); height: 118px; vertical-align: bottom; text-align: left; padding: 8px 4px; }
+.matrix thead th:first-child { writing-mode: horizontal-tb; transform: none; vertical-align: bottom; }
+.matrix td.y::after { content: '●'; font-size: 11px; }
+.matrix td.n::after { content: '●'; font-size: 11px; color: #1c1e22; outline: 1px solid #1c1e22; outline-offset: 2px; border-radius: 50%; }
+.matrix td.x::after { content: '×'; color: var(--page-muted); }
+.matrix td:nth-child(odd):not(:first-child) { background: #f6f4f0; }
+.legend { font-size: 13px; color: var(--page-muted); margin: 8px 0 0; }
+.principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.principles div { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 12px 16px; font-size: 14.5px; }
+
+/* layers */
+.stack { display: grid; grid-template-columns: 1.05fr .9fr 1.15fr; gap: 20px; align-items: center; margin-top: 12px; }
+.stack .defs h4 { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; margin: 14px 0 2px; }
+.stack .defs h4:first-child { margin-top: 0; }
+.stack .defs p { margin: 0; font-size: 14px; line-height: 1.6; }
+.principle { max-width: 64ch; margin: 0 0 8px; }
+.principle p { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
+.principle .rule { font: 600 18px/1.45 'IBM Plex Sans', sans-serif; border-left: 3px solid var(--page-ink); padding-left: 14px; margin-bottom: 12px; }
+.iso { position: relative; height: 380px; perspective: 1400px; }
+.iso .rig { position: absolute; left: 50%; top: 62%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-38deg); }
+.iso .pl { position: absolute; left: -110px; top: -80px; width: 220px; height: 160px; border-radius: 4px; transform-style: preserve-3d; display: flex; align-items: flex-end; padding: 8px; font: 600 11px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--t-text); }
+.iso .pl.hull { background: var(--t-well); border: 1px solid #000; transform: translateZ(0); }
+.iso .pl.rail { width: 54px; left: -110px; background: var(--t-panel); border: 1px solid var(--hairline-rail); transform: translateZ(38px); writing-mode: vertical-rl; align-items: center; justify-content: flex-start; }
+.iso .pl.sheet { left: -48px; width: 160px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); transform: translateZ(76px); box-shadow: var(--lift-3); }
+.iso .pl.card { left: -36px; top: -40px; width: 96px; height: 78px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(114px); }
+.iso .pl.panel { left: 70px; top: -80px; width: 62px; background: var(--t-panel); border: 1px solid var(--hairline-sheet); transform: translateZ(152px); writing-mode: vertical-rl; align-items: center; justify-content: flex-start; }
+.iso .pl.hail { opacity: 1; box-shadow: none; left: -40px; top: -20px; width: 96px; height: 32px; background: var(--t-surface2); border: 1px solid var(--attn); transform: translateZ(180px); align-items: center; }
+.iso .pl.hail::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--attn); }
+.iso .pl span { transform: none; }
+.tokens td, .tokens th { font-size: 12.5px; padding: 6px 8px; }
+.tokens code { font: 11.5px 'IBM Plex Mono', monospace; }
+
+/* scenarios */
+.scenario { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.55fr); gap: 26px; margin: 26px 0 0; padding: 24px 0 0; border-top: 1px solid var(--page-line); align-items: start; }
+.scenario h3 { font: 600 20px 'Chakra Petch', sans-serif; margin: 0 0 6px; }
+.scenario .today { font-size: 13.5px; background: #f1eee9; border-left: 3px solid #9aa0a8; padding: 8px 12px; margin: 10px 0; border-radius: 0 4px 4px 0; }
+.scenario p { font-size: 14.5px; margin: 8px 0; }
+.scenario em { font-style: normal; color: var(--page-muted); }
+.scenario p { line-height: 1.6; max-width: 60ch; }
+.scenario p.why { font-size: 13.5px; color: var(--page-muted); border-top: 1px solid var(--page-line); padding-top: 10px; margin-top: 14px; }
+.scenario p.why b { color: var(--page-ink); font-weight: 600; }
+ol.steps { list-style: none; padding: 0; margin: 14px 0 0; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 4px; cursor: pointer; color: var(--page-muted); transition: color .2s, background .2s; font-size: 14px; }
+ol.steps li::before { content: counter(s); font: 600 12px 'IBM Plex Mono', monospace; padding-top: 2px; }
+ol.steps li b { font-weight: 600; }
+ol.steps li.on { color: var(--page-ink); background: var(--page-surface); box-shadow: inset 2px 0 0 var(--page-ink); }
+ol.steps li.on b { font-weight: 700; }
+.table { position: relative; background: #d9d6d0; border-radius: 8px; padding: 14px; }
+.table .replay { position: absolute; bottom: 6px; right: 14px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: #15181d; color: #e9edf2; cursor: pointer; display: grid; place-items: center; }
+.table .replay svg { width: 15px; height: 15px; }
+.table .cap { font: 500 12px 'IBM Plex Mono', monospace; color: var(--page-muted); margin: 10px 40px 0 2px; min-height: 22px; align-items: center; display: flex; justify-content: space-between; gap: 10px; }
+.mk-wrap { position: relative; width: 100%; aspect-ratio: 760 / 500; overflow: hidden; border-radius: 4px; }
+.today-mock .mk-wrap { aspect-ratio: 760 / 500; }
+
+/* ================= Mockup (Focus look) ================= */
+.mk { position: absolute; left: 0; top: 0; width: 760px; height: 500px; transform-origin: 0 0; transform: scale(var(--s, 1)); background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); overflow: hidden;
+  background-image: radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%); }
+.mk * { box-sizing: border-box; }
+.mk .disp { font-family: var(--t-display); letter-spacing: .06em; text-transform: uppercase; }
+.mk .mono { font-family: var(--t-mono); }
+.mk .muted { color: var(--t-muted); }
+.mk .hud { position: absolute; left: 12px; right: 12px; top: 8px; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.mk .hud .where { font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; color: var(--t-muted); display: flex; gap: 8px; align-items: center; }
+.mk .hud .where b { color: var(--t-text); font-weight: 600; }
+.muschip { display: flex; align-items: center; gap: 0; height: 24px; border: 1px solid var(--t-line); background: var(--t-panel); font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; }
+.muschip span { padding: 0 9px; color: var(--t-muted); }
+.muschip .cnt { width: 26px; height: 22px; background: var(--attn); color: #111; display: block; overflow: hidden; text-align: center; padding: 0; }
+.roll { display: flex; flex-direction: column; transition: transform var(--spring-card); }
+.roll i { font-style: normal; display: block; height: 22px; line-height: 22px; }
+.mk .berth .n .roll i { height: 16px; line-height: 16px; }
+
+/* rail (berths) */
+.mk .rail { position: absolute; left: 12px; top: 46px; width: 160px; bottom: 12px; }
+.mk .proj { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin: 2px 4px 5px; }
+.mk .proj:not(:first-child) { margin-top: 14px; }
+.berth { position: relative; display: grid; grid-template-columns: 12px 1fr 22px; align-items: center; gap: 6px; height: 30px; padding: 0 6px 0 8px; margin-bottom: 4px; background: var(--t-panel); border: 1px solid var(--hairline-rail); box-shadow: var(--lift-1); font-size: 12px; color: var(--t-text);
+  transition: opacity var(--spring-card), transform var(--spring-card), background .3s, border-color .3s; }
+.berth .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.berth .n { width: 22px; height: 16px; overflow: hidden; font: 600 11px/16px var(--t-mono); text-align: center; color: var(--attn); box-shadow: inset 0 0 0 1px var(--attn); transition: opacity .3s; }
+.berth .n.zero { opacity: 0; }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+.dot.work { background: var(--t-text); }
+.dot.hold { box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+.dot.moor { width: 9px; height: 2px; border-radius: 1px; background: var(--t-muted); }
+.dot.idle { background: var(--t-muted); }
+.berth.moored { opacity: .5; }
+.berth:has(.sub) { grid-template-columns: 12px 1fr auto 22px; }
+.berth .sub { white-space: nowrap; font: 500 9.5px var(--t-mono); color: var(--t-muted); }
+
+/* the viewer (sheet) */
+.mk .viewer { position: absolute; left: 184px; top: 46px; width: 564px; height: 442px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); box-shadow: var(--lift-3);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px);
+  transition: transform var(--spring-paper), opacity var(--spring-paper); transform-origin: 0 20px; }
+.vhead { padding: 14px 18px 10px; border-bottom: 1px solid var(--hairline-card); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.vhead .p { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); }
+.vhead .g { font: 600 17px/1.25 var(--t-display); letter-spacing: .02em; grid-column: 1; }
+.vhead .who { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--t-muted); display: flex; align-items: center; gap: 6px; }
+.since { margin: 10px 18px 0; font-size: 12px; color: var(--t-muted); display: flex; gap: 14px; white-space: nowrap; }
+.since b { color: var(--t-text); font-weight: 500; }
+.chart { margin: 8px 18px 0; height: 66px; position: relative; transition: transform var(--spring-paper), opacity var(--spring-paper); transform-origin: 0 0; }
+.chart svg { position: absolute; inset: 0; overflow: visible; }
+.chart .lbl { position: absolute; top: 40px; font-size: 10.5px; color: var(--t-muted); white-space: nowrap; transform: translateX(-50%); }
+.chart .lbl.here { color: var(--t-text); }
+.orders { margin: 0 18px; font-size: 11.5px; color: var(--t-muted); display: flex; gap: 8px; align-items: center; height: 22px; white-space: nowrap; overflow: hidden; }
+.orders .k { font: 600 9.5px var(--t-display); letter-spacing: .14em; color: var(--t-label); }
+.ord { color: var(--t-text); border: 1px solid var(--hairline-card); padding: 0 6px; transition: opacity var(--spring-card), transform var(--spring-card); }
+
+/* cards on the sheet */
+.card { position: absolute; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); transition: transform var(--spring-card), opacity var(--spring-card); }
+.card .ch { font: 600 10px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); }
+.btn { display: inline-flex; align-items: center; height: 24px; padding: 0 10px; font: 600 10.5px var(--t-display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--t-line); color: var(--t-text); background: var(--t-surface); transition: background .25s, color .25s, border-color .25s; white-space: nowrap; }
+.btn.go { background: var(--t-text); color: #111; border-color: var(--t-text); }
+.btn.press { background: var(--t-text); color: #111; }
+.btn.attn { background: var(--attn); border-color: var(--attn); color: #111; }
+
+/* exhibit internals: controls + previews */
+.ctl { font-size: 11.5px; }
+.ctl .q { color: var(--t-muted); font-size: 10.5px; margin: 8px 0 3px; font-family: var(--t-display); letter-spacing: .1em; text-transform: uppercase; }
+.opt { display: flex; align-items: center; gap: 6px; padding: 3px 0; color: var(--t-muted); }
+.opt::before { content: ''; width: 9px; height: 9px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--t-muted); transition: box-shadow .25s, background .25s; flex: none; }
+.opt.sel { color: var(--t-text); }
+.opt.sel::before { background: var(--t-text); box-shadow: inset 0 0 0 1.5px var(--t-text); }
+.phone { position: absolute; width: 132px; height: 236px; background: #f4f2ee; border: 5px solid #2a3039; border-radius: 16px; color: #1c1e22; font-size: 9px; padding: 10px 9px; overflow: hidden; transition: transform var(--spring-card), opacity var(--spring-card); }
+.phone .brand { font-weight: 700; font-size: 8.5px; letter-spacing: .06em; color: #555; }
+.phone .h { font-weight: 700; font-size: 11px; margin: 6px 0 2px; line-height: 1.2; }
+.phone .row { background: #fff; border: 1px solid #dedad3; border-radius: 4px; padding: 5px 6px; margin-top: 5px; display: flex; justify-content: space-between; transition: transform var(--spring-card), opacity var(--spring-card); }
+.phone .signbtn { background: #1c1e22; color: #fff; border-radius: 4px; text-align: center; padding: 6px; margin-top: 6px; font-weight: 600; transition: transform var(--spring-card); }
+.phone .signer { background: #fff; border: 1px solid #b9b4ab; border-radius: 4px; padding: 5px 6px; margin-top: 5px; display: flex; justify-content: space-between; transition: opacity var(--spring-card), transform var(--spring-card); }
+.desk { position: absolute; width: 250px; height: 168px; background: #f4f2ee; border: 5px solid #2a3039; border-top-width: 12px; border-radius: 5px; color: #1c1e22; font-size: 8.5px; padding: 8px 10px; transition: transform var(--spring-card), opacity var(--spring-card); display: grid; grid-template-columns: 1.3fr 1fr; gap: 8px; }
+.desk .h { font-weight: 700; font-size: 10.5px; grid-column: 1 / -1; }
+.desk .pane { background: #fff; border: 1px solid #dedad3; border-radius: 3px; padding: 5px; }
+.desk .bar { height: 5px; background: #e2ded7; border-radius: 2px; margin: 4px 0; }
+
+/* comms panel (from the right edge) */
+.mk .panel { position: absolute; top: 46px; right: 12px; width: 236px; height: 442px; background: var(--t-panel); border: 1px solid var(--hairline-sheet); box-shadow: var(--lift-4); transform: translateX(260px); transition: transform var(--spring-paper); padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; }
+.panel .ph { font: 600 10px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); display: flex; justify-content: space-between; }
+.msg { font-size: 12px; line-height: 1.45; }
+.msg small { display: block; font-size: 10px; color: var(--t-muted); margin-bottom: 1px; }
+.msg.you { padding-left: 8px; border-left: 2px solid var(--t-line); }
+.panel .box2 { margin-top: auto; height: 34px; border: 1px solid var(--t-line); color: var(--t-muted); font-size: 11px; padding: 8px; }
+
+/* hail (popover, from the Muster chip) */
+.hail { position: absolute; top: 40px; right: 12px; width: 304px; background: var(--t-surface2); border: 1px solid var(--hairline-hail); box-shadow: var(--lift-4); padding: 9px 12px 10px 16px; transform-origin: 100% 0; transform: translateY(-14px) scale(.92); opacity: 0; transition: transform var(--spring-flick), opacity var(--spring-flick); }
+.hail::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--attn); }
+.hail .hk { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--attn); }
+.hail .ht { font-size: 12.5px; margin-top: 2px; }
+.hail .more { font-size: 11.5px; color: var(--t-muted); margin-top: 6px; }
+.hail .acts { display: flex; gap: 6px; margin-top: 8px; }
+
+/* muster (a sheet) */
+.mk .muster { position: absolute; left: 184px; top: 46px; width: 564px; height: 442px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); box-shadow: var(--lift-3); padding: 16px 18px; opacity: 0; transform: translateY(26px); transition: transform var(--spring-paper), opacity var(--spring-paper); pointer-events: none;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.muster .mh { display: flex; justify-content: space-between; align-items: baseline; }
+.muster .mh b { font: 600 17px var(--t-display); letter-spacing: .02em; }
+.mrow { display: grid; grid-template-columns: 4px 1fr auto; gap: 12px; align-items: center; padding: 10px 12px 10px 0; margin-top: 8px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transition: transform var(--spring-card), opacity var(--spring-card); }
+.mrow .bar { align-self: stretch; background: var(--attn); }
+.mrow.report .bar { background: var(--t-line); }
+.mrow .g { font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); }
+.mrow .w { font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mrow .why { font-size: 11px; color: var(--t-muted); }
+.mrow .a { display: flex; gap: 6px; }
+
+/* question list: how a composer scales past two choices */
+.qs { font-size: 11px; color: var(--t-text); }
+.qs .top { display: flex; justify-content: space-between; align-items: baseline; color: var(--t-muted); font-size: 10.5px; margin-bottom: 6px; }
+.qs .top .ttl { font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); }
+.qcount { display: inline-block; height: 14px; overflow: hidden; vertical-align: bottom; }
+.qcount .roll i { height: 14px; line-height: 14px; }
+.presets { display: flex; gap: 4px; margin-bottom: 6px; }
+.preset { border: 1px solid var(--t-line); padding: 0 6px; font-size: 10px; line-height: 16px; color: var(--t-muted); }
+.qq { border-top: 1px solid var(--hairline-card); padding: 2px 0; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; min-height: 19px; }
+.qq .k { color: var(--t-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.qq .chip { font-size: 10px; line-height: 14px; border: 1px solid var(--hairline-card); padding: 0 5px; white-space: nowrap; max-width: 92px; overflow: hidden; text-overflow: ellipsis; }
+.qq .chip.unset { color: var(--t-muted); border-style: dashed; }
+.qq.open { grid-template-columns: 1fr; }
+.qq.open .k { color: var(--t-text); }
+.qq.open .opt { padding: 2px 0 2px 2px; }
+
+/* ===== Scenario 1: One goal at the conn ===== */
+#m1 .viewer { transform: translate(-150px, 0) scale(.3); opacity: 0; }
+#m1 .empty { position: absolute; left: 184px; top: 46px; width: 564px; height: 442px; border: 1px dashed var(--t-line); display: grid; place-items: center; text-align: center; color: var(--t-muted); font-size: 13px; transition: opacity var(--spring-paper); }
+#m1 .empty b { display: block; font: 600 15px var(--t-display); letter-spacing: .06em; color: var(--t-text); margin-bottom: 4px; text-transform: uppercase; }
+#m1.conn .viewer { transform: none; opacity: 1; }
+#m1.conn .empty { opacity: 0; }
+#m1.conn .berth:not(.at) { opacity: .5; }
+#m1.conn .berth.at { transform: translateX(6px); background: var(--t-surface); border-color: var(--hairline-sheet); }
+#m1.conn .berth.moored { opacity: .3; }
+#m1 .w1, #m1 .w2, #m1.conn .w0, #m1.down .w0 { display: none; }
+#m1.conn .w1 { display: inline; } #m1.down .w2 { display: inline; }
+#m1 .ex1 { left: 18px; top: 196px; width: 526px; height: 228px; padding: 12px 14px; }
+#m1 .ex1 .qs { position: absolute; left: 14px; top: 32px; width: 230px; }
+#m1 .ex1 .phone { left: 330px; top: 8px; transform: scale(.9); transform-origin: 0 0; }
+#m1 .signer { opacity: 0; transform: translateY(-4px); }
+#m1.work .signer { opacity: 1; transform: none; }
+#m1.work .o1a { color: var(--t-muted); } #m1.work .o1a::before { background: none; box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#m1.work .o1c { color: var(--t-text); } #m1.work .o1c::before { background: var(--t-text); box-shadow: inset 0 0 0 1.5px var(--t-text); }
+#m1.work .qcount .roll { transform: translateY(-14px); }
+#m1 .berth .n .roll { transform: translateY(0); }
+#m1.tick .b-fee .n .roll { transform: translateY(-16px); }
+#m1.tick .muschip .roll { transform: translateY(-22px); }
+#m1.standby .muschip .roll { transform: translateY(-44px); }
+#m1 .b-api .n { opacity: 0; }
+#m1.standby .b-api .n { opacity: 1; }
+#m1.tick .b-fee { box-shadow: var(--lift-1), 0 0 0 1px var(--attn); }
+#m1.down.tick .b-fee { box-shadow: var(--lift-1); }
+#m1.hailing .hail.mini { opacity: 1; transform: none; }
+#m1.onscreen .hail.mini { opacity: 0; transform: none; }
+#m1.onscreen .hail.full { opacity: 1; transform: none; }
+#m1.standby .hail.full { opacity: 0; transform: translate(10px, -30px) scale(.12); transition: transform var(--spring-paper), opacity var(--spring-paper); }
+#m1.down .viewer { transform: translate(-150px, 30px) scale(.28); opacity: 0; }
+#m1.down .muster { opacity: 1; transform: none; }
+#m1.down .berth.at { transform: none; background: var(--t-panel); border-color: var(--hairline-rail); }
+#m1.down .berth { opacity: 1; }
+#m1.down .berth.moored { opacity: .5; }
+
+/* ===== Scenario 2: Make it so by handling it ===== */
+#m2 .berth:not(.at) { opacity: .5; } #m2 .berth.at { transform: translateX(6px); background: var(--t-surface); border-color: var(--hairline-sheet); } #m2 .berth.moored { opacity: .3; }
+#m2 .dec { left: 18px; top: 200px; width: 526px; height: 100px; padding: 12px 14px; }
+#m2 .dec .w { font-size: 14px; margin: 3px 0 4px; }
+#m2 .dec .why { font-size: 12px; color: var(--t-muted); }
+#m2 .dec .acts { position: absolute; right: 14px; bottom: 12px; display: flex; gap: 6px; }
+#m2 .thumb { position: absolute; right: 14px; top: 12px; width: 70px; height: 44px; border: 1px solid var(--hairline-card); background: repeating-linear-gradient(0deg, #2a3039 0 3px, transparent 3px 8px); }
+#m2 .ex2 { left: 18px; top: 128px; width: 526px; height: 298px; padding: 12px 14px; opacity: 0; transform: translateY(70px) scale(.98); }
+#m2 .ex2 .qs { position: absolute; left: 14px; top: 32px; width: 178px; transition: opacity var(--spring-card); }
+#m2 .ex2 .phone { left: 206px; top: 34px; }
+#m2 .ex2 .desk { left: 350px; top: 52px; transform-origin: 0 0; transform: scale(.68); }
+#m2.open .dec { opacity: 0; transform: translateY(-20px); }
+#m2.open .ex2 { opacity: 1; transform: none; }
+#m2 .since, #m2 .orders, #m2 .chart { transition: opacity var(--spring-card), transform var(--spring-card); }
+#m2.open .chart { transform: scaleY(0); opacity: 0; }
+#m2.open .since { opacity: 0; }
+#m2.open .orders { transform: translateY(-74px); }
+#m2 .signer { opacity: 0; transform: translateY(-4px); }
+#m2.handle .signer { opacity: 1; transform: none; }
+#m2.handle .o2a { color: var(--t-muted); } #m2.handle .o2a::before { background: none; box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#m2.handle .o2b { color: var(--t-text); } #m2.handle .o2b::before { background: var(--t-text); box-shadow: inset 0 0 0 1.5px var(--t-text); }
+#m2.handle .qcount .roll { transform: translateY(-14px); }
+#m2 .pin { position: absolute; left: 300px; top: 104px; width: 14px; height: 14px; border-radius: 50%; background: var(--t-text); box-shadow: 0 0 0 3px rgba(233,237,242,.25); opacity: 0; transform: scale(.4); transition: transform var(--spring-flick), opacity var(--spring-flick), background .3s; }
+#m2 .pinnote { position: absolute; left: 350px; top: 184px; width: 162px; font-size: 11px; background: var(--t-surface); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 6px 8px; opacity: 0; transform: translateY(6px); transition: transform var(--spring-card), opacity var(--spring-card); }
+#m2 .pinnote small { display: block; color: var(--t-muted); font-size: 9.5px; }
+#m2 .pinnote .re { margin-top: 5px; padding-top: 5px; border-top: 1px solid var(--hairline-card); opacity: 0; transition: opacity var(--spring-card); }
+#m2.mark .pin, #m2.mark .pinnote { opacity: 1; transform: none; }
+#m2 .docs { transition: transform var(--spring-card); }
+#m2.moved .docs { transform: translateY(70px); }
+#m2.moved .signer, #m2.moved .signbtn { transform: translateY(-56px); }
+#m2.moved .pin { background: var(--t-surface2); box-shadow: inset 0 0 0 2px var(--t-text); transform: translateY(70px); }
+#m2 .chiproll { display: inline-block; height: 14px; overflow: hidden; vertical-align: top; }
+#m2 .chiproll .roll i { height: 14px; line-height: 14px; }
+#m2.moved .chiproll .roll { transform: translateY(-14px); }
+#m2.moved .pinnote .re { opacity: 1; }
+#m2 .story { position: absolute; left: 14px; top: 30px; width: 178px; height: 256px; background: var(--t-surface); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 24px 8px 8px; display: grid; grid-template-rows: repeat(3, 1fr); gap: 6px; opacity: 0; transform: translateY(10px) scale(.95); transition: transform var(--spring-paper), opacity var(--spring-paper); }
+#m2 .story div { background: #f4f2ee; border-radius: 2px; position: relative; }
+#m2 .story div::after { content: attr(data-l); position: absolute; left: 5px; bottom: 3px; font-size: 8px; color: #555; }
+#m2 .story .sh { position: absolute; left: 8px; top: 6px; font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-muted); }
+#m2.channel .story { opacity: 1; transform: none; }
+#m2.channel .qs, #m2.channel .pinnote, #m2.channel .pin { opacity: 0; }
+#m2.await .dec { opacity: 0; transform: translateY(-20px); }
+#m2.await .ex2 { opacity: 0; transform: translateY(40px) scale(.97); }
+#m2.await .story { opacity: 0; transform: translate(-60px, 240px) scale(.25); }
+#m2 .holdchip { position: absolute; left: 18px; top: 200px; width: 526px; height: 44px; padding: 10px 14px; font-size: 12.5px; display: flex; align-items: center; gap: 10px; white-space: nowrap; opacity: 0; transform: translateY(10px); }
+#m2.await .holdchip { opacity: 1; transform: none; }
+#m2.await .b-sign .dot { background: none; box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#m2 .reply { position: absolute; left: 18px; top: 252px; width: 526px; padding: 10px 14px; font-size: 12.5px; opacity: 0; transform: translateY(10px); }
+#m2.answered .reply { opacity: 1; transform: none; }
+#m2.madeso .holdchip, #m2.madeso .reply { opacity: 0; transform: translateY(-120px) scale(.6); }
+#m2 .ord.new { opacity: 0; transform: translateY(8px); }
+#m2.madeso .ord.new { opacity: 1; transform: none; }
+#m2.madeso .b-sign .dot { background: var(--t-text); box-shadow: none; }
+
+/* ===== Scenario 3: Launch probes before you commit ===== */
+#m3 .berth:not(.at) { opacity: .5; } #m3 .berth.at { transform: translateX(6px); background: var(--t-surface); border-color: var(--hairline-sheet); } #m3 .berth.moored { opacity: .3; }
+#m3 .viewer { transition: transform var(--spring-paper); }
+#m3 .rail { transition: opacity var(--spring-paper), transform var(--spring-paper); }
+#m3 .since, #m3 .chart { transition: opacity var(--spring-card), transform var(--spring-card); }
+#m3 .orders { transition: transform var(--spring-card); }
+#m3 .prose { left: 18px; top: 196px; width: 526px; height: 236px; padding: 12px 14px; }
+#m3 .prose .w { font-size: 14px; margin-top: 3px; }
+#m3 .calls { margin: 6px 0 0; padding: 0; list-style: none; font-size: 11px; color: var(--t-muted); columns: 2; column-gap: 18px; line-height: 1.55; }
+#m3 .calls li { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m3 .calls li::before { content: '✓  '; }
+#m3 .contested { margin-top: 8px; border-left: 3px solid var(--t-text); padding: 5px 10px; background: var(--t-surface); font-size: 12px; }
+#m3 .contested .ways { color: var(--t-muted); font-size: 11px; margin-top: 2px; }
+#m3 .prose .acts { position: absolute; right: 14px; bottom: 12px; display: flex; gap: 6px; }
+#m3.launch .prose { opacity: 0; transform: translateY(30px) scale(.97); }
+#m3 .forks path.f { stroke-dasharray: 200; stroke-dashoffset: 200; transition: stroke-dashoffset 1.4s cubic-bezier(.3,.7,.3,1), opacity .4s; }
+#m3 .forks circle.f, #m3 .forks text.f { opacity: 0; transition: opacity .4s; }
+#m3.launch .forks path.f { stroke-dashoffset: 110; }
+#m3.run .forks path.f { stroke-dashoffset: 0; }
+#m3.run .forks circle.f, #m3.run .forks text.f { opacity: 1; }
+#m3 .running { left: 18px; top: 196px; width: 526px; height: 84px; padding: 12px 14px; font-size: 12.5px; opacity: 0; transform: translateY(10px); }
+#m3.launch .running { opacity: 1; transform: none; }
+#m3 .running .bar3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; font-size: 10.5px; color: var(--t-muted); }
+#m3 .running .bar3 span { display: block; height: 4px; background: #2a3039; position: relative; overflow: hidden; margin-top: 3px; }
+#m3 .running .bar3 span::after { content: ''; position: absolute; inset: 0; background: var(--t-text); transform-origin: 0 0; transform: scaleX(.12); transition: transform 1.6s ease; }
+#m3.run .running .bar3 span::after { transform: scaleX(1); }
+#m3 .cmp { left: 18px; top: 128px; width: 526px; height: 298px; padding: 12px 14px; opacity: 0; transform: translateY(60px); }
+#m3.compare .running { opacity: 0; transform: translateY(-20px); }
+#m3.compare .cmp { opacity: 1; transform: none; }
+#m3.compare .chart { opacity: 0; transform: scaleY(0); }
+#m3.compare .since { opacity: 0; }
+#m3.compare .orders { transform: translateY(-74px); }
+#m3 .trybox { position: relative; display: flex; align-items: center; height: 24px; margin-top: 6px; border: 1px solid var(--t-line); padding: 0 8px; font-size: 11px; background: var(--t-surface); }
+#m3 .trybox .k { font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); }
+#m3 .trybox .ph, #m3 .trybox .tx { position: absolute; left: 86px; transition: opacity var(--spring-card); white-space: nowrap; }
+#m3 .trybox .ph { color: var(--t-muted); }
+#m3 .trybox .tx { opacity: 0; }
+#m3.try .trybox .ph { opacity: 0; }
+#m3.try .trybox .tx { opacity: 1; }
+#m3 .cmp .cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 8px; }
+#m3 .col { background: var(--t-surface); border: 1px solid var(--hairline-card); padding: 8px; height: 208px; position: relative; transition: transform var(--spring-card), opacity var(--spring-card), border-color .3s; }
+#m3 .col h5 { margin: 0; font: 600 11px var(--t-display); letter-spacing: .06em; text-transform: uppercase; }
+#m3 .col .sum { font-size: 10.5px; color: var(--t-muted); margin: 2px 0 5px; height: 28px; line-height: 1.3; }
+#m3 .fee { background: #f4f2ee; color: #1c1e22; border-radius: 3px; padding: 4px 6px; font-size: 9.5px; }
+#m3 .fee .r { display: flex; justify-content: space-between; padding: 2px 0; border-bottom: 1px solid #e2ded7; }
+#m3 .fee .r:last-child { border: 0; }
+#m3 .fee .add { opacity: 0; transition: opacity var(--spring-card); font-weight: 600; }
+#m3.try .fee .add { opacity: 1; }
+#m3 .nowhere { font-size: 9.5px; color: #1c1e22; background: #e2ded7; padding: 3px 5px; margin-top: 4px; opacity: 0; transition: opacity var(--spring-card); }
+#m3.try .nowhere { opacity: 1; }
+#m3 .facts { font-size: 10.5px; margin-top: 6px; display: grid; grid-template-columns: 1fr auto; gap: 1px 6px; color: var(--t-muted); }
+#m3 .facts b { color: var(--t-text); font-weight: 500; font-family: var(--t-mono); font-size: 10px; }
+#m3.talk .viewer { transform: translateX(-172px) scale(.89); }
+#m3.talk .panel { transform: none; }
+#m3.talk .rail { opacity: 0; transform: translateX(-24px); }
+#m3.madeso .panel { transform: translateX(260px); }
+#m3.madeso .viewer { transform: none; }
+#m3.madeso .rail { opacity: 1; transform: none; }
+#m3.madeso .col.a, #m3.madeso .col.b { opacity: 0; transform: translateY(30px) scale(.9); }
+#m3.madeso .col.c { transform: translateX(-338px); border-color: var(--t-text); }
+#m3 .col .picked { position: absolute; right: 8px; bottom: 8px; font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; opacity: 0; transition: opacity .3s; }
+#m3.madeso .col.c .picked { opacity: 1; }
+#m3 .settledline { position: absolute; left: 186px; top: 80px; width: 300px; font-size: 12px; color: var(--t-muted); opacity: 0; transition: opacity var(--spring-card); }
+#m3.madeso .settledline { opacity: 1; }
+#m3.orders-in .running { opacity: 0; }
+#m3.orders-in .cmp { opacity: 0; transform: translateY(-30px) scale(.96); }
+#m3.orders-in .chart, #m3.orders-in .since { opacity: 1; transform: none; }
+#m3.orders-in .orders { transform: none; }
+#m3 .ord.new { opacity: 0; transform: translateY(8px); }
+#m3.orders-in .ord.new { opacity: 1; transform: none; }
+#m3 .next { left: 18px; top: 196px; width: 526px; height: 60px; padding: 12px 14px; font-size: 12.5px; opacity: 0; transform: translateY(16px); }
+#m3.orders-in .next { opacity: 1; transform: none; }
+#m3.orders-in .forks .f.gone { opacity: .12; }
+
+/* ===== Today (static) ===== */
+#m0 { background: #000; }
+#m0 .frame { position: absolute; inset: 10px; border: 10px solid #f1955a; border-radius: 30px 6px 6px 30px; }
+#m0 .c { position: absolute; top: 30px; bottom: 30px; font-size: 11.5px; color: #ddd; }
+#m0 .c1 { left: 30px; width: 150px; } #m0 .c2 { left: 196px; width: 300px; } #m0 .c3 { left: 512px; width: 216px; }
+#m0 .gl { padding: 6px 8px; margin-bottom: 4px; background: #1d1f2a; color: #ddd; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#m0 h6 { font: 600 10px var(--t-display); letter-spacing: .12em; color: #f1955a; margin: 6px 0; text-transform: uppercase; }
+#m0 .t { font-size: 13px; font-weight: 600; color: #fff; margin-bottom: 6px; }
+#m0 .cd { border-left: 6px solid #f1955a; background: #1d1f2a; padding: 8px; margin: 8px 0; }
+#m0 .cd b { color: #f1955a; font-size: 13px; display: block; }
+#m0 .qr { position: absolute; bottom: 0; display: flex; gap: 6px; }
+#m0 .qr span { background: #242638; border-radius: 10px; padding: 2px 8px; font-size: 10px; white-space: nowrap; }
+#m0 .call { position: absolute; width: 22px; height: 22px; border-radius: 50%; background: #fff; color: #111; font: 700 12px/22px var(--t-mono); text-align: center; box-shadow: 0 2px 8px #000; }
+.today-notes { font-size: 13.5px; margin: 10px 0 0; padding-left: 0; list-style: none; counter-reset: n; }
+.today-notes li { counter-increment: n; display: grid; grid-template-columns: 26px 1fr; margin: 5px 0; }
+.today-notes li::before { content: counter(n); width: 18px; height: 18px; border-radius: 50%; background: var(--page-ink); color: #fff; font: 700 11px/18px 'IBM Plex Mono', monospace; text-align: center; }
+
+.handover td:first-child { font-weight: 600; white-space: nowrap; }
+.handover code, p code, td code { font: 12.5px 'IBM Plex Mono', monospace; background: #efece6; padding: 0 4px; border-radius: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk { transition-property: opacity !important; transition-duration: .3s !important; }
+}
+@media (max-width: 900px) {
+  .cols2, .nouns, .principles, .stack, .scenario { grid-template-columns: 1fr; }
+  .evidence { grid-template-columns: 1fr 1fr; }
+  .iso { height: 320px; }
+  header.top h1 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Bridge grammar <small>Focus · how the captain works with goals, leads and the chief of staff · brownfield · draft 2, 28 Oct 2026</small></h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="nouns">Nouns</button>
+    <button role="tab" aria-selected="false" data-tab="verbs">Verbs</button>
+    <button role="tab" aria-selected="false" data-tab="layers">Layers</button>
+  </nav>
+</header>
+
+<p class="lede">The job: steer several goals at once, across projects, without the work steering you. Today every goal arrives at the same volume, so you answer whichever spoke last and hop between them, and decisions reach you as text to read and a letter to pick. The main idea has two halves. <b>One goal at the conn</b>: you take the conn of one goal at a time and give it a watch. The others stay underway inside the orders you've already given, and what they need is mustered for when you stand down, unless it really can't wait. And <b>judge the terrain, not the map</b>: anything you'd decide by looking reaches you as an <b>exhibit</b> you can handle, and anything you'd decide by how it behaves gets <b>probes</b>, approaches built for real side by side. What you make so becomes an <b>order</b> on the goal's chart. Agent labour is cheap; your attention isn't. The lead does the translating.</p>
+
+<div class="evidence">
+  <div><b>130</b><span>decisions you made on 27 Oct, over 12½ hours</span></div>
+  <div><b>13</b><span>goals they touched, in 3 projects</span></div>
+  <div><b>66</b><span>times the next decision was on a different goal (about every 11 minutes)</span></div>
+  <div><b>9</b><span>replies that day asking to see the real thing rather than pick from text</span></div>
+</div>
+<p class="pull">From the ledger's <code>captain-decision</code> lines (counts only). The nine, in your words: <q>how can I actually see the mockup and it changing as I select options?</q>, <q>can I see the desktop version as well as mobile?</q>, <q>every time we change this I have to reselect</q>, <q>a way to export this to share with a colleague</q>, <q>I need to visualise this</q>, <q>show me both side by side</q>… That's Maggie Appleton's European navigator problem: a plan approved as text, then argued with once you could see it.</p>
+
+<div class="cols2" style="margin-top:16px">
+  <div class="box"><h3>Assumptions</h3><ul>
+    <li>You're the only captain; Focus is <b>sovereign</b> (open all day, full screen), so the chrome can be dense, but only around the goal at the conn.</li>
+    <li>The 3D ship stays. This is the layer of panels on top of it: Comms, the lead's room screens, the session panel.</li>
+    <li>The look follows direction <b>B (flight-deck)</b> from <code>interface-style.md</code>, since LCARS is on its way out. Mockups use <code>flight.css</code>'s tokens.</li>
+    <li>The chief of staff's four routes still hold; this changes <i>when</i> their output reaches you, not how it judges.</li>
+    <li>The words are Starfleet's where Starfleet has one: the conn, on screen, stand by, make it so, open a channel, probes.</li>
+    <li>Client names below are stand-ins: Harbour &amp; Lane for the client, Priya for the colleague who signs things off.</li>
+  </ul></div>
+  <div class="box"><h3>To confirm</h3><ul>
+    <li>Does a watch end only when you say, or also on a timer you set (say 45 minutes)?</li>
+    <li>Which hails can break a watch: only P5 and P6 (can't be undone, lead contradicts you), or any interrupt route?</li>
+    <li>Should a goal underway ever wake you for a landed slice, or is that always a report at the muster?</li>
+    <li>Probes cost real tokens per branch. Do you want a ceiling per goal, or a cost shown on each launch (as drawn)?</li>
+    <li>Phase two: a shared exhibit Priya opens and handles herself, leaving her own pins. Phase one (drawn here) sends her a storyboard of your settings. Where does her link live: an artifact page, or somewhere only Focus users open?</li>
+  </ul></div>
+</div>
+
+<!-- ======================= NOUNS ======================= -->
+<section class="tab on" id="nouns">
+<h2>Today → Proposed</h2>
+<p class="note">Every noun you meet today, what it becomes, and why. Codebase names are kept where they already make sense to you.</p>
+<div class="scroll-x"><table>
+<thead><tr><th>Today (as you see it)</th><th>Where it lives</th><th>Proposed</th><th>Change</th><th>Because</th></tr></thead>
+<tbody>
+<tr><td>Project</td><td>holodeck, manager's Projects tab</td><td>Project</td><td><span class="tag">kept</span></td><td>Groups goals on the rail; nothing wrong with it.</td></tr>
+<tr><td>Goal</td><td>team station, stream's goal list</td><td>Goal</td><td><span class="tag">kept</span></td><td>Gains a <b>berth</b> state (at the conn, underway, awaiting, moored), so goals stop being equal.</td></tr>
+<tr><td>—</td><td>—</td><td>Watch</td><td><span class="tag new">new</span></td><td>Nothing today says which goal has you. Without it, every goal can claim you at any moment.</td></tr>
+<tr><td>Needs you list, Ready to send, landed cards</td><td>stream's left column, phone strips</td><td>Muster</td><td><span class="tag merged">merged</span></td><td>Three places held "things for you from other goals"; one batch, cleared at watch change, replaces them.</td></tr>
+<tr><td>Card, interrupt, question, raised hand, ready to close</td><td>inbox items (<code>inbox.ts</code> kinds), station screen</td><td>Decision, graded <i>hail</i> or <i>decision</i></td><td><span class="tag merged">merged</span></td><td>Five kinds for one job: something only you can settle. The grade, not the kind, decides when it reaches you.</td></tr>
+<tr><td>The chief of staff's words, sent with a press or by themselves</td><td>Ready to send</td><td>Word (a decision grade)</td><td><span class="tag renamed">renamed</span></td><td>It's the chief of staff answering inside your orders; you see it at the muster, after it went.</td></tr>
+<tr><td>Visuals on the station screen, ask-with-options previews, mockups on localhost</td><td><code>mcp__office__show</code>, <code>ask</code>, preview tab</td><td>Exhibit</td><td><span class="tag merged">merged</span></td><td>All of them are "the thing to judge by". Today they're scattered across a screen, a tab and a URL, and your choices on them are lost when they change.</td></tr>
+<tr><td>Options A / B / C in prose; probes (a lead's background tasks by their chair)</td><td>lead's turn, questions; the 3D room</td><td>Probe</td><td><span class="tag merged">merged</span></td><td>A probe is already background work you can see. Now it can also be an approach built for real on its own branch, so a choice is made on what happened, not on a prediction.</td></tr>
+<tr><td>Goal's chart (stellar cartography wall), brief.md, the thread</td><td>side screen, workspace file, stream centre</td><td>Chart</td><td><span class="tag merged">merged</span></td><td>The map becomes the goal's home at the conn: slices as waypoints, probes as forks, orders as marks. Today it's a wall screen you walk past.</td></tr>
+<tr><td>Done looks like, captain decisions, standing orders</td><td>brief.md, ledger, <code>standing-orders.txt</code></td><td>Orders</td><td><span class="tag merged">merged</span></td><td>What's agreed is what the lead and the chief of staff steer by. Today it's split across three places and only one is on screen.</td></tr>
+<tr><td>Thread (stream centre), lead's words (workspace)</td><td>Comms</td><td>Log, in the comms panel</td><td><span class="tag split">split</span></td><td>The conversation is still there, beside the chart, not as the centre. Today the same news is told three times: reading, card, lead's words.</td></tr>
+<tr><td>Landed in Show, slice landed, carry-on readings</td><td>cards, toasts</td><td>Report</td><td><span class="tag merged">merged</span></td><td>Things to know, not decide. They sit at the foot of the muster and never interrupt.</td></tr>
+<tr><td>Lead</td><td>team station</td><td>Lead</td><td><span class="tag">kept</span></td><td>—</td></tr>
+<tr><td>Chief of staff</td><td>plugin</td><td>Chief of staff</td><td><span class="tag">kept</span></td><td>Its job sharpens: officer of the watch for every goal not at the conn.</td></tr>
+<tr><td>Session panel (9 status chips, run log)</td><td>agent panel</td><td>Session</td><td><span class="tag">kept</span>, demoted</td><td>Effort, context %, run number: the agent's way of seeing. It moves under the lead's panel, one press away, off the default path.</td></tr>
+<tr><td>Pull request, slice, lane</td><td>board, stream header</td><td>Pull request, slice (a waypoint)</td><td><span class="tag">kept</span></td><td>They hang off the chart's waypoints, so you merge where you can see what it's for.</td></tr>
+<tr><td>Quick replies (Carry on, Show me first, Hold off, Why?)</td><td>stream foot</td><td>—</td><td><span class="tag dropped">dropped</span></td><td>The same four on every goal regardless of what's asked. Replaced by the decision's own verbs.</td></tr>
+</tbody></table></div>
+
+<h2>The nouns</h2>
+<div class="nouns">
+
+<div class="noun">
+  <h3>Goal <span class="tag">kept</span></h3>
+  <p class="purpose">An outcome you've asked for, worked by one lead.</p>
+  <dl><dt>Attributes</dt><dd>title, project, lead, berth, how many decisions it holds for you, last news</dd>
+  <dt>States</dt><dd><b>at the conn</b> (has you), <b>underway</b> (runs on orders), <b>awaiting</b> (waits on someone outside the ship), <b>moored</b> (parked, silent), closed</dd>
+  <dt>Relations</dt><dd>has one lead, one chart, one set of orders; many decisions, exhibits and probes</dd></dl>
+  <div class="tile">
+    <div class="berth" style="width:200px;background:var(--t-surface);border-color:var(--hairline-sheet)"><i class="dot work"></i><span class="t">Signing redesign</span><span class="n zero"></span></div>
+    <div class="berth" style="width:200px"><i class="dot work"></i><span class="t">Fee structure</span><span class="n">2</span></div>
+    <div class="berth" style="width:200px"><i class="dot hold"></i><span class="t">Security check</span><span class="sub">upstream</span><span class="n zero"></span></div>
+    <div class="berth moored" style="width:200px"><i class="dot moor"></i><span class="t">Pi Durable move</span><span class="n zero"></span></div>
+  </div>
+</div>
+
+<div class="noun">
+  <h3>Watch <span class="tag new">new</span></h3>
+  <p class="purpose">A stretch of your time given to the one goal at the conn.</p>
+  <dl><dt>Attributes</dt><dd>the goal, when it began, what changed since your last watch on it, how much is mustered meanwhile</dd>
+  <dt>States</dt><dd>on watch, standing down</dd>
+  <dt>Relations</dt><dd>one at a time; belongs to one goal; ends in a muster</dd></dl>
+  <div class="tile" style="font:600 11px var(--t-display);letter-spacing:.1em;color:var(--t-muted);text-transform:uppercase;align-items:center">
+    <span>On watch · <b style="color:var(--t-text)">Signing redesign</b> · 34 min</span>
+  </div>
+</div>
+
+<div class="noun">
+  <h3>Decision <span class="tag merged">merged</span></h3>
+  <p class="purpose">Something only you can settle, prepared so you can settle it in seconds.</p>
+  <dl><dt>Attributes</dt><dd>its question in one line, the lead's pick and why, what it unblocks, its exhibit if it's one you'd judge by looking, and which part of it (if any) has real alternatives worth probing</dd>
+  <dt>Grades</dt><dd><b>hail</b> (now: can't be undone, reaches beyond the ship, or the lead contradicts you), <b>decision</b> (at the conn, or at the muster), <b>word</b> (the chief of staff answered inside your orders)</dd>
+  <dt>States</dt><dd>being read, waiting, standing by, awaiting someone, made so, sent back</dd></dl>
+  <div class="tile">
+    <div class="hail" style="position:relative;opacity:1;transform:none;width:250px;top:0;right:0;box-shadow:none"><div class="hk">Hail · Proposals API</div><div class="ht">Read production to check duplicate signatures?</div></div>
+    <div class="mrow" style="width:250px;margin:0"><span class="bar"></span><div><div class="g">Fee structure</div><div class="w">Billing timings for the pilot?</div></div><span></span></div>
+    <div class="mrow report" style="width:250px;margin:0"><span class="bar"></span><div><div class="g">Agent host · word</div><div class="w">Sent back: run the tests first</div></div><span></span></div>
+  </div>
+</div>
+
+<div class="noun">
+  <h3>Exhibit <span class="tag merged">merged</span></h3>
+  <p class="purpose">The real thing, made to be handled, so you judge by looking and trying, not by reading.</p>
+  <dl><dt>Kinds</dt><dd><b>composer</b> (questions that change a live preview), <b>comparison</b> (probes side by side), <b>canvas</b> (a diagram to point at), <b>preview</b> (the running branch)</dd>
+  <dt>Composer</dt><dd>its questions run down the left, one open at a time; each answered one folds to a chip with your answer; a count says how many are set; presets (the lead's pick, the leanest) fill them in one go. Your answers live in its link, so a reload or a shared link keeps them.</dd>
+  <dt>Marks</dt><dd>a pin you drop on a spot, with a note. It goes to the lead tied to that spot, with a crop of it; the pin turns to a ring when they've dealt with it.</dd>
+  <dt>States</dt><dd>building, ready, handled, sent out, made so</dd></dl>
+  <div class="tile" style="height:150px;position:relative">
+    <div class="qs" style="position:absolute;left:12px;top:10px;width:180px">
+      <div class="top"><span class="ttl">Questions</span><span>3 of 8 set</span></div>
+      <div class="qq"><span class="k">Signers</span><span class="chip">Shared link</span></div>
+      <div class="qq"><span class="k">Documents</span><span class="chip">Below Sign</span></div>
+      <div class="qq"><span class="k">Password</span><span class="chip">None</span></div>
+      <div class="qq"><span class="k">Reminder</span><span class="chip unset">—</span></div>
+      <div class="qq"><span class="k">+ 4 more</span><span></span></div>
+    </div>
+    <div class="phone" style="left:206px;top:10px;transform:scale(.52);transform-origin:0 0"><div class="brand">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="signbtn">Sign</div></div>
+    <div class="desk" style="left:286px;top:10px;transform:scale(.55);transform-origin:0 0"><div class="h">Your proposal</div><div class="pane"><div class="bar"></div><div class="bar"></div><div class="bar" style="width:60%"></div></div><div class="pane"><div class="bar"></div></div></div>
+  </div>
+</div>
+
+<div class="noun">
+  <h3>Probe <span class="tag merged">merged</span></h3>
+  <p class="purpose">One way of doing it, tried for real on its own branch, so the choice is made on what happened.</p>
+  <dl><dt>Attributes</dt><dd>the approach in a line, its branch, the real case it was tried on, what it measured (edits, migrations, what it couldn't do)</dd>
+  <dt>States</dt><dd>running, back, made so, scuttled (branch dropped)</dd>
+  <dt>Relations</dt><dd>2–4 per question, and only on the one part of a decision that has real alternatives. The decision names them before you launch. Together they make one comparison exhibit. While they run they float by the lead's chair in 3D, like any probe.</dd></dl>
+  <div class="tile"><svg width="330" height="60" viewBox="0 0 330 60"><path d="M10 30 H80" stroke="#e9edf2" stroke-width="2"/><path d="M80 30 C110 30 110 10 140 10 H250" stroke="#8a94a3" stroke-width="1.5" fill="none"/><path d="M80 30 H250" stroke="#8a94a3" stroke-width="1.5"/><path d="M80 30 C110 30 110 50 140 50 H250" stroke="#e9edf2" stroke-width="2" fill="none"/><circle cx="80" cy="30" r="4" fill="#e9edf2"/><text x="256" y="13" fill="#8a94a3" font-size="10">A</text><text x="256" y="33" fill="#8a94a3" font-size="10">B</text><text x="256" y="53" fill="#e9edf2" font-size="10">C · made so</text></svg></div>
+</div>
+
+<div class="noun">
+  <h3>Chart <span class="tag merged">merged</span></h3>
+  <p class="purpose">The goal's map: where it's been, where it is, and where it's heading next.</p>
+  <dl><dt>Attributes</dt><dd>waypoints (one per slice, with its pull requests), forks (probes), marks (decisions made so), contacts (loose threads)</dd>
+  <dt>Where from</dt><dd>Ops already keeps it: a waypoint per slice, drawn from what the lead actually did (<code>goals.md</code>, "The goal's chart"). It isn't a task list written up front. Points behind are facts; the point ahead is a sketch from the brief's "ideas for next", drawn dashed and redrawn as you go.</dd>
+  <dt>Size</dt><dd>the strip shows only the last waypoint behind, where you are, and the next one ahead. Older ones fold into a count ("3 behind"); opening the chart shows them all.</dd></dl>
+  <div class="tile" style="padding:14px 16px"><svg width="320" height="40"><line x1="6" y1="14" x2="190" y2="14" stroke="#e9edf2" stroke-width="2"/><line x1="190" y1="14" x2="314" y2="14" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="24" cy="14" r="5" fill="#3a424e"/><circle cx="32" cy="14" r="5" fill="#e9edf2"/><circle cx="110" cy="14" r="5" fill="#e9edf2"/><circle cx="190" cy="14" r="7" fill="#0b0d10" stroke="#e9edf2" stroke-width="2"/><circle cx="282" cy="14" r="5" fill="#0b0d10" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/><text x="28" y="36" fill="#8a94a3" font-size="10" text-anchor="middle">3 behind</text><text x="110" y="36" fill="#8a94a3" font-size="10" text-anchor="middle">PDF parity</text><text x="190" y="36" fill="#e9edf2" font-size="10" text-anchor="middle">Signing flow</text><text x="282" y="36" fill="#8a94a3" font-size="10" text-anchor="middle">Portal · next</text></svg></div>
+</div>
+
+<div class="noun">
+  <h3>Orders <span class="tag merged">merged</span></h3>
+  <p class="purpose">What's agreed on a goal, which the lead builds to and the chief of staff holds them to.</p>
+  <dl><dt>Attributes</dt><dd>done looks like, each decision made so (when, and on what exhibit or probe), the project's standing orders</dd>
+  <dt>States</dt><dd>in force, superseded (you changed your mind: kept, struck through)</dd>
+  <dt>Relations</dt><dd>one set per goal; each order points back at the decision that made it, which is also a <code>captain-decision</code> line in the ledger, as today</dd></dl>
+  <div class="tile"><div class="orders" style="margin:0"><span class="k">Orders</span><span class="ord">Shared link + who's signing</span><span class="ord">PDF says "sign in your portal"</span></div></div>
+</div>
+
+<div class="noun">
+  <h3>Muster <span class="tag merged">merged</span></h3>
+  <p class="purpose">What came in from goals not at the conn, gathered for you to clear in one go.</p>
+  <dl><dt>Attributes</dt><dd>its decisions, ordered by what each unblocks (a lead idle first); its reports, folded at the foot</dd>
+  <dt>States</dt><dd>gathering (during a watch), up (at watch change), clear</dd>
+  <dt>Relations</dt><dd>one, ship-wide; fed by every goal underway, and by every hail told to stand by</dd></dl>
+  <div class="tile" style="align-items:center"><div class="muschip" style="position:relative"><span>Muster</span><span class="cnt"><span class="roll"><i>4</i></span></span></div><span style="font-size:12px;color:var(--t-muted)">a count, never text, while you're on watch</span></div>
+</div>
+
+<div class="noun">
+  <h3>Report <span class="tag merged">merged</span></h3>
+  <p class="purpose">Something you should know that needs nothing from you.</p>
+  <dl><dt>Attributes</dt><dd>what happened, where, by whom; a link to its pull request or exhibit</dd>
+  <dt>States</dt><dd>unread, heard (Got it)</dd>
+  <dt>Relations</dt><dd>belongs to one goal; sits at the foot of the muster</dd></dl>
+</div>
+
+<div class="noun">
+  <h3>Lead, Log &amp; Session <span class="tag">kept</span></h3>
+  <p class="purpose">The lead is who you talk to about a goal. The log is your conversation with them. The session is the machinery underneath.</p>
+  <dl><dt>Lead</dt><dd>name, what they're doing in plain words</dd>
+  <dt>Log</dt><dd>in the comms panel beside the chart: your words and theirs, quiet lines folded</dd>
+  <dt>Session</dt><dd>status chips, run log, context: opened from the lead's panel, never on the way to a decision</dd></dl>
+</div>
+
+<div class="noun">
+  <h3>Pull request <span class="tag">kept</span></h3>
+  <p class="purpose">A change ready to land, hung on the chart's waypoint it belongs to.</p>
+  <dl><dt>Attributes</dt><dd>repo and number, lane, QA's word, its system recap</dd>
+  <dt>States</dt><dd>draft, ready, passed, failed, landed</dd>
+  <dt>Relations</dt><dd>belongs to one slice (waypoint) of one goal</dd></dl>
+</div>
+
+</div>
+</section>
+
+<!-- ======================= VERBS ======================= -->
+<section class="tab" id="verbs">
+<h2>Object × action</h2>
+<p class="note">Verbs are reused across nouns wherever they mean the same thing. ● applies · <span style="outline:1px solid #1c1e22;border-radius:50%;padding:0 3px">●</span> new compared with today · × removed.</p>
+<div class="scroll-x"><table class="matrix">
+<thead><tr><th>Noun</th><th>On screen</th><th>Take the conn</th><th>Stand down</th><th>Raise / lower</th><th>Moor</th><th>Make it so</th><th>Stand by</th><th>Send back</th><th>Await</th><th>Launch probes</th><th>Handle</th><th>Try a case</th><th>Mark</th><th>Open a channel</th><th>Talk</th><th>Got it</th><th>Undo</th><th>Quick reply</th></tr></thead>
+<tbody>
+<tr><td>Goal</td><td class="n"></td><td class="n"></td><td></td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td class="y"></td><td></td></tr>
+<tr><td>Watch</td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Decision</td><td class="y"></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="n"></td><td class="y"></td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td class="n"></td><td class="x"></td></tr>
+<tr><td>Exhibit</td><td class="y"></td><td></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="n"></td><td class="y"></td><td></td><td class="n"></td><td></td></tr>
+<tr><td>Probe</td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td class="n"></td><td class="n"></td><td></td><td class="n"></td><td></td><td></td><td></td></tr>
+<tr><td>Chart</td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td></td></tr>
+<tr><td>Orders</td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td class="n"></td><td></td></tr>
+<tr><td>Muster</td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td></td></tr>
+<tr><td>Report</td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="y"></td><td></td><td></td></tr>
+<tr><td>Word</td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="y"></td><td class="n"></td><td></td></tr>
+<tr><td>Pull request</td><td class="y"></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="n"></td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td></td><td></td></tr>
+<tr><td>Lead</td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td></td><td class="x"></td></tr>
+</tbody></table></div>
+<p class="legend">Moving: <b>Make it so</b> on a pull request (merge) moves from the board onto the chart's waypoint. <b>Talk</b> moves from the centre of Comms into the comms panel. <b>Got it</b> leaves the decision and stays on words and reports, the only things owed nothing. Make it so on an exhibit means "make the decision it belongs to so, as I've set it".</p>
+
+<h2>Operational principles</h2>
+<div class="principles">
+  <div><b>Goal.</b> You raise the goals that matter most to the top of the rail. You take the conn of one; the others stay underway, and the chief of staff keeps them going inside their orders. A goal awaiting someone outside the ship drops out of your way until they answer.</div>
+  <div><b>Watch.</b> Taking the conn starts a watch. The goal fills the viewer, opening on what changed since your last watch on it, not on its whole history. When you stand down, the goal shrinks back into its berth and the muster comes up.</div>
+  <div><b>Decision.</b> When a lead needs you, the chief of staff grades it. At the conn, it's in front of you. Underway, it adds one to that goal's count and waits for the muster. Only a hail breaks the watch, and you can put it on screen and tell it to stand by without leaving.</div>
+  <div><b>Exhibit.</b> If you'd decide it by looking, the lead builds it to be handled. You answer its questions, see both sizes, mark what's wrong, open a channel to whoever else must agree, and make it so. Your answers stay on it, so nothing is picked twice.</div>
+  <div><b>Probe.</b> When one part of a decision turns on how something will behave, the lead names the ways and you launch probes. Each is built for real on a branch against one real case, and they come back as a comparison. You try the case that worries you in all of them at once, make one so, and the rest are scuttled.</div>
+  <div><b>Muster.</b> It gathers quietly during a watch, as a count. At watch change it comes up ordered by what each item unblocks. You clear it top to bottom, and reports wait folded at the end.</div>
+</div>
+
+<h2>Verb → signifier</h2>
+<div class="scroll-x"><table>
+<thead><tr><th>Verb</th><th>Affordance</th><th>Signifier (how you find it)</th></tr></thead>
+<tbody>
+<tr><td>On screen</td><td>See a berth's or hail's contents without leaving the conn</td><td>Hover or press a berth or hail: it opens in place, a popover from where it sits</td></tr>
+<tr><td>Take the conn</td><td>Put a goal in the viewer and start a watch</td><td>Press a berth; its number key (1–9); the goal's station in the 3D ship</td></tr>
+<tr><td>Stand down</td><td>End the watch, bring up the muster</td><td>The Muster chip on the HUD (its count is the invitation); <kbd>M</kbd></td></tr>
+<tr><td>Raise / lower</td><td>Change a goal's place in the rail's order</td><td>Drag a berth; grip appears on hover</td></tr>
+<tr><td>Moor</td><td>Park a goal so it says nothing</td><td>Drag a berth below the rail's line; it greys and flattens</td></tr>
+<tr><td>Make it so</td><td>Decide; it becomes an order</td><td>"Make it so" on the lead's pick; your own choice is named for what it does ("Shared link, who's signing"), never a letter</td></tr>
+<tr><td>Stand by</td><td>Send a hail or decision to the muster</td><td>"Stand by" on the item; it visibly shrinks into the Muster chip</td></tr>
+<tr><td>Send back</td><td>Return to the lead with words</td><td>Typing in the comms panel while a decision's open answers it</td></tr>
+<tr><td>Await</td><td>Mark a decision as waiting on someone outside the ship</td><td>"Awaiting…" on the decision, with a name; the goal's dot becomes a ring</td></tr>
+<tr><td>Launch probes</td><td>Have the named ways built for real</td><td>On the part of a decision that has alternatives, with the ways and the cost ("3 branches, about 20 min")</td></tr>
+<tr><td>Handle</td><td>Answer an exhibit's questions and see it follow</td><td>The question list on the exhibit's left; the preview answers within a beat</td></tr>
+<tr><td>Try a case</td><td>Run one case through every probe at once</td><td>The "Try a case" box across the top of a comparison</td></tr>
+<tr><td>Mark</td><td>Point at a spot on an exhibit or chart and say what's wrong</td><td>Click anywhere on the preview: a pin drops with a note box; it becomes a ring once the lead has dealt with it</td></tr>
+<tr><td>Open a channel</td><td>Send an exhibit, as you set it, to someone outside the ship</td><td>"Open a channel" on the exhibit; makes a storyboard of your settings only</td></tr>
+<tr><td>Talk</td><td>Talk to the lead about what's in front of you</td><td>The lead's name on the viewer's head; <kbd>T</kbd>; the panel slides from the right</td></tr>
+<tr><td>Got it</td><td>Hear a report or a word; nothing sent</td><td>On reports and words only</td></tr>
+<tr><td>Undo</td><td>Take back a make-it-so or a word within its grace period</td><td>The order, struck through, with "undo" for a minute; later, "supersede" on the order</td></tr>
+</tbody></table></div>
+</section>
+
+<!-- ======================= LAYERS ======================= -->
+<section class="tab" id="layers">
+<h2>The stack</h2>
+<div class="principle">
+  <p class="rule">A thing sits as high as the attention it's asking of you right now. The higher it sits, the sooner it has to leave.</p>
+  <p>A hail asks the most, so it sits on top and is gone within a glance. The goal at the conn asks for your watch, so it's a sheet, and it stays up while you work. Goals underway ask nothing, so they rest low on the rail.</p>
+  <p>Anything that asks nothing of you never rises. Reports stay in the muster, and the chief of staff's words never become toasts.</p>
+</div>
+<div class="stack">
+  <div class="defs">
+    <h4>Hull</h4>
+    <p>The ground. In 3D it's the room you're standing in. In the panels it's the darkest surface, and it holds nothing of its own.</p>
+    <h4>Rail</h4>
+    <p>A berth for each goal, resting on the hull down the left edge, in the order you've set. Only the berth at the conn is raised.</p>
+    <h4>Viewer</h4>
+    <p>The sheet: the goal at the conn, or the muster when you stand down. Only one sheet is ever up. It grows out of its berth and shrinks back into it.</p>
+    <h4>Card</h4>
+    <p>Decisions, exhibits and probes rest on the sheet. Opening an exhibit lifts it to fill the sheet's body. The chart folds away, and the orders slide up to stay in view.</p>
+    <h4>Panel</h4>
+    <p>The comms panel slides in from the right edge. It pushes the sheet aside rather than covering it, so the conversation sits beside what it's about.</p>
+    <h4>Hail</h4>
+    <p>A popover. It drops from the Muster chip at the top right and goes back into it. It lives the shortest time of anything here.</p>
+  </div>
+  <div class="iso" aria-hidden="true"><div class="rig">
+    <div class="pl hull"><span>Hull</span></div>
+    <div class="pl rail"><span>Rail</span></div>
+    <div class="pl sheet"><span>Viewer</span></div>
+    <div class="pl card"><span>Card</span></div>
+    <div class="pl panel"><span>Panel</span></div>
+    <div class="pl hail"><span style="padding-left:6px">Hail</span></div>
+  </div></div>
+  <div class="scroll-x"><table class="tokens">
+    <thead><tr><th>Layer</th><th>Shadow</th><th>Hairline</th><th>Spring</th></tr></thead>
+    <tbody>
+      <tr><td>Hull</td><td>none</td><td>none</td><td>none</td></tr>
+      <tr><td>Rail</td><td><code>--lift-1</code> <span class="tag new">new</span></td><td><code>--hairline-rail</code> <span class="tag new">new</span> (<code>--t-line</code> at 45%)</td><td><code>--spring-card</code> <span class="tag new">new</span></td></tr>
+      <tr><td>Viewer</td><td><code>--lift-3</code> <span class="tag new">new</span></td><td><code>--t-line</code></td><td><code>--spring-paper</code> <span class="tag new">new</span></td></tr>
+      <tr><td>Card</td><td><code>--lift-2</code> <span class="tag new">new</span></td><td><code>--hairline-card</code> <span class="tag new">new</span> (text at 10%)</td><td><code>--spring-card</code></td></tr>
+      <tr><td>Panel</td><td><code>--t-shadow</code></td><td><code>--t-line</code></td><td><code>--spring-paper</code></td></tr>
+      <tr><td>Hail</td><td><code>--t-shadow</code></td><td><code>--attn</code> <span class="tag new">new</span></td><td><code>--spring-flick</code> <span class="tag new">new</span></td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Surfaces: hull <code>--t-well</code>, rail and panel <code>--t-panel</code>, viewer <code>--t-surface</code>, card <code>--t-surface2</code>. Colour: <code>--attn</code> (flight.css's orange) means <i>needs you</i> and nothing else, so titles move to <code>--t-text</code>. State is shape, not colour: a filled dot is working, a ring is awaiting, a dash is moored. On the chart, solid is done and dashed is ahead.</p>
+  <p class="legend">No modals. The confirm dialog survives only for what can't be undone (closing a goal with unpushed work), which the principle allows: it asks the most, and leaves at once.</p>
+  </div>
+</div>
+
+<!-- Today -->
+<div class="scenario today-mock">
+  <div>
+    <h3>Today</h3>
+    <p>Comms as it is on 27 Oct, from the demo ship, simplified. Each numbered spot is a pain this grammar answers.</p>
+    <ol class="today-notes">
+      <li><span>Every goal is a row of the same weight; the only ranking is "needs you" first, so the last to speak wins.</span></li>
+      <li><span>The same news, three times: the chief of staff's reading, the card, and the lead's words on the right.</span></li>
+      <li><span>The decision is a letter to pick from prose; the mockup it's about is on another screen in another room.</span></li>
+      <li><span>Four quick replies, the same on every goal, whatever was asked.</span></li>
+      <li><span>The chart, the brief and what you've agreed aren't here at all: they're on a wall screen and in a file.</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <div class="mk-wrap"><div class="mk" id="m0">
+      <div class="frame"></div>
+      <div class="c c1"><h6>Needs you</h6><div class="gl">Signing redesign…</div><div class="gl">Fee structure: wh…</div><h6>Advisory</h6><div class="gl">Proposals API: P…</div><div class="gl">Investigate defa…</div><h6>Focus</h6><div class="gl">agent-host slice …</div><div class="gl">Lead session scr…</div><div class="gl">Move Focus's ag…</div><div class="gl">Session view in …</div></div>
+      <div class="c c2"><div class="t">Signing redesign: streamline how clients sign</div><h6>Chief of staff</h6><div>The lead needs you to pick between the options it laid out, and says which it would take.</div><div class="cd"><b>Signing redesign: streamline how clients sign</b><span style="color:#aaa">Advisory · Lt. Mensah · waiting</span><div style="margin-top:6px">❓ Pick: Which WS4 signing options? Start from Lean + S1 + A3?</div></div><div class="qr"><span>Carry on</span><span>Show me first</span><span>Hold off for now</span><span>Why?</span></div></div>
+      <div class="c c3"><h6>Lt. Mensah's workspace</h6><div style="color:#bbb">I've built 10 options for WS4 from the handover. Lean + S1 + A3 is my pick because it keeps one link per signer and… (continues for 40 lines)</div></div>
+      <div class="call" style="left:150px;top:44px">1</div>
+      <div class="call" style="left:470px;top:100px">2</div>
+      <div class="call" style="left:470px;top:190px">3</div>
+      <div class="call" style="left:166px;top:442px">4</div>
+      <div class="call" style="left:486px;top:40px">5</div>
+    </div></div>
+    <div class="cap"><span>Static · today</span></div>
+  </div>
+</div>
+
+<!-- Scenario 1 -->
+<div class="scenario" data-mk="m1">
+  <div>
+    <h3>1 · One goal at the conn</h3>
+    <div class="today"><b>Today:</b> a question on the fee structure, then a hail on the proposals API, then back to signing: 66 switches in a day, each one a fresh read of a thread.</div>
+    <p>The overview is the hull, with the rail of goals down its left and an empty viewer beside it. A berth with decisions waiting for you carries their count in its right-hand slot.</p>
+    <p>Taking the conn grows the goal out of its berth into the viewer, a sheet in focus. The other berths dim and stay where they are. The sheet opens on what changed since your last watch, then the chart (one waypoint behind, where you are, the next one dashed), the orders, and the exhibit the lead is waiting on.</p>
+    <p>While you work, news from goals underway lands on the rail as a number on their berth, never as text. A hail is the one exception. It drops from the Muster chip at the top right and sits over the sheet's corner. Putting it on screen opens it in place. Telling it to stand by sends it back into the chip, and the count goes up by one.</p>
+    <p>Standing down shrinks the goal back into its berth. The muster rises as the new sheet, its rows ordered by what each one unblocks, with reports folded at the foot.</p>
+    <p class="why"><b>Why.</b> A decision you weren't thinking about costs you the one you were. A number can wait without asking you to read it. Deciding when isn't deciding what.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>Overview</b>: six goals in three projects; two hold decisions</span></li>
+      <li data-cls="conn"><span><b>Take the conn</b>: Signing redesign opens on what's new</span></li>
+      <li data-cls="conn work"><span><b>Work it</b>: you answer Signers with a shared link</span></li>
+      <li data-cls="conn work tick"><span><b>Arrives elsewhere</b>: Fee structure's count goes to 2</span></li>
+      <li data-cls="conn work tick hailing"><span><b>A hail</b>: production data, so it can't wait</span></li>
+      <li data-cls="conn work tick hailing onscreen"><span><b>On screen</b>: read it in place, still at the conn</span></li>
+      <li data-cls="conn work tick onscreen standby"><span><b>Stand by</b>: it goes back into the Muster chip</span></li>
+      <li data-cls="tick standby down"><span><b>Stand down</b>: the goal returns to its berth; the muster comes up</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="m1">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b class="w-what"><span class="w0">No watch</span><span class="w1">On watch · Signing redesign</span><span class="w2">Watch change</span></b></div><div class="muschip"><span>Muster</span><span class="cnt"><span class="roll"><i>2</i><i>3</i><i>4</i></span></span></div></div>
+      <div class="rail">
+        <div class="proj">Harbour &amp; Lane</div>
+        <div class="berth at b-sign"><i class="dot work"></i><span class="t">Signing redesign</span><span class="n zero"></span></div>
+        <div class="berth b-fee"><i class="dot work"></i><span class="t">Fee structure</span><span class="n"><span class="roll"><i>1</i><i>2</i></span></span></div>
+        <div class="berth b-api"><i class="dot work"></i><span class="t">Proposals API</span><span class="n"><span class="roll"><i>1</i></span></span></div>
+        <div class="proj">Focus</div>
+        <div class="berth b-host"><i class="dot work"></i><span class="t">Agent host: slice 2</span><span class="n"><span class="roll"><i>1</i></span></span></div>
+        <div class="berth moored"><i class="dot moor"></i><span class="t">Pi Durable move</span><span class="n zero"></span></div>
+        <div class="proj">Open source</div>
+        <div class="berth"><i class="dot hold"></i><span class="t">Security check</span><span class="sub">upstream</span><span class="n zero"></span></div>
+      </div>
+      <div class="empty"><div><b>Nothing at the conn</b>Take the conn of one goal. The rest stay underway on their orders.</div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="since"><span>Since your last watch (11:18):</span><b>composer built</b><b>2 PRs passed QA</b><b>1 decision</b></div>
+        <div class="chart"><svg width="526" height="40"><line x1="10" y1="14" x2="300" y2="14" stroke="#e9edf2" stroke-width="2"/><line x1="300" y1="14" x2="516" y2="14" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="36" cy="14" r="5" fill="#3a424e"/><circle cx="44" cy="14" r="5" fill="#e9edf2"/><circle cx="170" cy="14" r="5" fill="#e9edf2"/><circle cx="300" cy="14" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/><circle cx="460" cy="14" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:40px">1 behind</span><span class="lbl" style="left:170px">PDF parity</span><span class="lbl here" style="left:300px">Signing flow</span><span class="lbl" style="left:460px">Portal · next</span></div>
+        <div class="orders"><span class="k">Orders</span><span class="ord">Done: signs in a minute, on a phone</span><span class="ord">PDF says "sign in your portal"</span></div>
+        <div class="card ex1"><div class="ch">Exhibit · signing page composer</div>
+          <div class="qs">
+            <div class="top"><span class="ttl">Questions</span><span><span class="qcount"><span class="roll"><i>2</i><i>3</i></span></span> of 8 set</span></div>
+            <div class="qq open"><span class="k">Signers</span><div><div class="opt sel o1a">One link each</div><div class="opt o1c">Shared link, who's signing</div></div></div>
+            <div class="qq"><span class="k">Documents</span><span class="chip">Above Sign</span></div>
+            <div class="qq"><span class="k">Password</span><span class="chip">None</span></div>
+            <div class="qq"><span class="k">Reminder</span><span class="chip unset">—</span></div>
+            <div class="qq"><span class="k">+ 4 more</span><span></span></div>
+          </div>
+          <div class="phone"><div class="brand">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div><div class="signer"><span>Dana Whitfield</span><span>▾</span></div><div class="signbtn">Sign</div></div>
+        </div>
+      </div>
+      <div class="muster">
+        <div class="mh"><b>Muster · 4 decisions, 3 reports</b><span class="muted" style="font-size:11.5px">by what each unblocks</span></div>
+        <div class="mrow r1"><span class="bar"></span><div><div class="g">Proposals API · hail, stood by</div><div class="w">Read production to check duplicate signatures?</div><div class="why">Mensah idle until you answer · read-only, one query</div></div><div class="a"><span class="btn">Not now</span><span class="btn go">Allow read-only</span></div></div>
+        <div class="mrow r2"><span class="bar"></span><div><div class="g">Fee structure</div><div class="w">Approve PR 1's storage, so Reyes can start?</div><div class="why">Reyes waiting · one part worth probing</div></div><div class="a"><span class="btn">Open</span></div></div>
+        <div class="mrow r3"><span class="bar"></span><div><div class="g">Fee structure</div><div class="w">Bill on acceptance, first month, and monthly?</div><div class="why">Lead's pick: all three · nobody waiting</div></div><div class="a"><span class="btn go">Make it so</span></div></div>
+        <div class="mrow r4"><span class="bar"></span><div><div class="g">Agent host: slice 2</div><div class="w">Ship steering as its own slice?</div><div class="why">Nobody waiting yet</div></div><div class="a"><span class="btn">Open</span></div></div>
+        <div class="mrow report r5"><span class="bar"></span><div><div class="g">Reports · 3</div><div class="w">2 slices landed in Show · 1 word sent back by the chief of staff</div></div><div class="a"><span class="btn">Got it</span></div></div>
+      </div>
+      <div class="hail mini"><div class="hk">Hail · Proposals API</div><div class="ht">Read production to check duplicate signatures?</div></div>
+      <div class="hail full"><div class="hk">Hail · Proposals API · Lt. Mensah</div><div class="ht">Read production to check duplicate signatures?</div><div class="more">Before marking #1273 ready: one read-only query against the production database. It's yours because it touches production data.</div><div class="acts"><span class="btn">Stand by</span><span class="btn go">Allow read-only</span></div></div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 8</span><span>Advisory, Focus and open-source goals</span></div>
+  </div>
+</div>
+
+<!-- Scenario 2 -->
+<div class="scenario" data-mk="m2">
+  <div>
+    <h3>2 · Make it so by handling it</h3>
+    <div class="today"><b>Today:</b> "Pick: Lean + S1 + A3?" Then eight turns to get a composer you could see, at both sizes, that kept your picks, with an export for a colleague. Each was built after you asked.</div>
+    <p>The goal is at the conn. The decision arrives as a card resting on the sheet, with a thumbnail of its exhibit and two buttons: Launch probes, and Open the composer. There are no letters to pick from.</p>
+    <p>Opening the composer lifts the exhibit to fill the sheet's body. The chart folds away and the orders slide up to sit just above it. Its questions run down the left: one open, the rest folded to chips with their answers, and a count of how many are set. The signing page is on the right at both sizes, phone and desktop, and follows each answer within a beat.</p>
+    <p>Clicking the phone's documents list drops a pin, and a note box opens beside it. The note goes to the lead tied to that spot. When they've moved the documents below the sign button, their reply appears under your note and the pin becomes a ring.</p>
+    <p>Opening a channel to Priya lifts a storyboard of your answers off the exhibit, in place of the questions, and sends it. The exhibit settles back down and the chart returns. An awaiting card stays on the sheet, and the goal's dot on the rail becomes a ring. Priya's reply lands under the card, and making it so folds both away into the orders row.</p>
+    <p class="why"><b>Why.</b> You judge a page by looking at it. Pointing is faster than describing. Your answers stay on the exhibit, so nothing is picked twice. Waiting on Priya isn't waiting on you.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>It arrives</b>: how should a client sign? With a composer</span></li>
+      <li data-cls="open"><span><b>Open the exhibit</b>: 8 questions, both sizes; orders stay</span></li>
+      <li data-cls="open handle"><span><b>Handle</b>: Signers becomes a shared link; 3 of 8 set</span></li>
+      <li data-cls="open handle mark"><span><b>Mark</b>: a pin on the documents list, with a note</span></li>
+      <li data-cls="open handle mark moved"><span><b>The lead acts on it</b>: documents move below Sign</span></li>
+      <li data-cls="open handle moved channel"><span><b>Open a channel</b>: a storyboard of your answers, to Priya</span></li>
+      <li data-cls="await"><span><b>Await</b>: the decision waits on Priya, not on you</span></li>
+      <li data-cls="await answered"><span><b>Priya answers</b>: the dropdown is enough</span></li>
+      <li data-cls="await answered madeso"><span><b>Make it so</b>: it's an order on the chart</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="m2">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt"><span class="roll"><i>3</i></span></span></div></div>
+      <div class="rail">
+        <div class="proj">Harbour &amp; Lane</div>
+        <div class="berth at b-sign"><i class="dot work"></i><span class="t">Signing redesign</span><span class="n zero"></span></div>
+        <div class="berth"><i class="dot work"></i><span class="t">Fee structure</span><span class="n"><span class="roll"><i>2</i></span></span></div>
+        <div class="berth"><i class="dot work"></i><span class="t">Proposals API</span><span class="n zero"></span></div>
+        <div class="proj">Focus</div>
+        <div class="berth"><i class="dot work"></i><span class="t">Agent host: slice 2</span><span class="n"><span class="roll"><i>1</i></span></span></div>
+        <div class="berth moored"><i class="dot moor"></i><span class="t">Pi Durable move</span><span class="n zero"></span></div>
+      </div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · waiting</span></div>
+        <div class="since"><span>Since your last watch (09:40):</span><b>handover read</b><b>composer built</b><b>1 decision</b></div>
+        <div class="chart"><svg width="526" height="40"><line x1="10" y1="14" x2="300" y2="14" stroke="#e9edf2" stroke-width="2"/><line x1="300" y1="14" x2="516" y2="14" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="36" cy="14" r="5" fill="#3a424e"/><circle cx="44" cy="14" r="5" fill="#e9edf2"/><circle cx="170" cy="14" r="5" fill="#e9edf2"/><circle cx="300" cy="14" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/><circle cx="460" cy="14" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:40px">1 behind</span><span class="lbl" style="left:170px">PDF parity</span><span class="lbl here" style="left:300px">Signing flow</span><span class="lbl" style="left:460px">Portal · next</span></div>
+        <div class="orders"><span class="k">Orders</span><span class="ord">Done: signs in a minute, on a phone</span><span class="ord new">Shared link + who's signing</span></div>
+        <div class="card dec"><div class="ch">Decision · from Lt. Mensah</div><div class="w">How should a client sign when there are two signatories?</div><div class="why">From the handover and today's portal. My pick: one link each.</div><div class="thumb"></div><div class="acts"><span class="btn">Launch probes</span><span class="btn go">Open the composer</span></div></div>
+        <div class="card ex2"><div class="ch">Exhibit · signing page composer</div>
+          <div class="qs">
+            <div class="top"><span class="ttl">Questions</span><span><span class="qcount"><span class="roll"><i>2</i><i>3</i></span></span> of 8 set</span></div>
+            <div class="presets"><span class="preset">Lead's pick</span><span class="preset">Leanest</span></div>
+            <div class="qq open"><span class="k">Signers</span><div><div class="opt sel o2a">One link each</div><div class="opt o2b">Shared link, who's signing</div></div></div>
+            <div class="qq"><span class="k">Documents</span><span class="chip"><span class="chiproll"><span class="roll"><i>Above Sign</i><i>Below Sign</i></span></span></span></div>
+            <div class="qq"><span class="k">Password</span><span class="chip">None</span></div>
+            <div class="qq"><span class="k">Reminder</span><span class="chip unset">—</span></div>
+            <div class="qq"><span class="k">Countersign</span><span class="chip unset">—</span></div>
+            <div class="qq"><span class="k">Portal login</span><span class="chip unset">—</span></div>
+            <div class="qq"><span class="k">Confirmation</span><span class="chip unset">—</span></div>
+            <div class="qq"><span class="k">Decline</span><span class="chip unset">—</span></div>
+          </div>
+          <div class="phone"><div class="brand">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="docs"><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div></div><div class="signer"><span>Dana Whitfield</span><span>▾</span></div><div class="signbtn">Sign</div></div>
+          <div class="desk"><div class="h">Your proposal is ready to sign</div><div class="pane"><div class="bar"></div><div class="bar"></div><div class="bar" style="width:70%"></div><div class="bar"></div></div><div class="pane"><div style="font-size:7.5px;color:#666">Who's signing?</div><div class="bar" style="background:#fff;border:1px solid #b9b4ab;height:9px"></div><div style="background:#1c1e22;height:12px;border-radius:2px;margin-top:6px"></div></div></div>
+          <div class="pin"></div>
+          <div class="pinnote"><small>You → Lt. Mensah</small>Documents below signing, on mobile<div class="re"><small>Lt. Mensah</small>Moved below Sign on phones.</div></div>
+          <div class="story"><span class="sh">Channel → Priya Shah</span><div data-l="1 · Email"></div><div data-l="2 · Who's signing"></div><div data-l="3 · Signed"></div></div>
+        </div>
+        <div class="card holdchip"><i class="dot hold"></i><span>Awaiting <b>Priya Shah</b>: is a dropdown of signers enough?</span><span class="muted" style="margin-left:auto">channel opened 11:20</span></div>
+        <div class="card reply"><span class="muted" style="font-size:11px">Priya Shah · 14:09</span><br>A dropdown to pick who's signing is enough; we don't need to prove who they are.</div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 9</span><span>One decision, from arrival to order</span></div>
+  </div>
+</div>
+
+<!-- Scenario 3 -->
+<div class="scenario" data-mk="m3">
+  <div>
+    <h3>3 · Launch probes before you commit</h3>
+    <div class="today"><b>Today:</b> "Approve the six PR 1 fee storage calls so Reyes can start?" as text, then: <i>I need to visualise this</i>, <i>show me both side by side with the same proposal</i>, and three rounds of mockups.</div>
+    <p>The decision arrives as a card with six storage calls. Five are straightforward and ticked. The lead has picked out the one with real alternatives, where prices live, and named the three ways: on each service, one Fees tab, or a Fees tab plus extras. The cost sits under them: three branches, about 20 minutes.</p>
+    <p>Launching probes swaps the card for a progress card, one bar per way, and three forks grow from the waypoint on the chart. They show where the work is happening, so you can take the conn of another goal while they run.</p>
+    <p>When they're back, the comparison fills the sheet's body: the same Northwind proposal three times, priced each way, with the facts underneath. A "Try a case" box runs across the top. Typing a £450 setup fee that isn't a service puts it through all three at once. B and C add it as a line; A has nowhere to put it.</p>
+    <p>Asking why opens the comms panel from the right edge. It pushes the sheet left and the rail tucks away, so the answer sits beside the comparison it's about.</p>
+    <p>Making C so closes the panel. A and B drop away and C slides over to the left. Then the comparison folds back into the chart. The forks for A and B fade, the new order joins the orders row, and the lead's card says PR 1 is starting.</p>
+    <p class="why"><b>Why.</b> A plan is a prediction and a branch is a fact. Only the contested part is worth the branches. Running the same case through each is what makes them comparable.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>It arrives</b>: five calls ticked, one with three named ways</span></li>
+      <li data-cls="launch"><span><b>Launch probes</b>: three branches on the Northwind proposal</span></li>
+      <li data-cls="launch run"><span><b>They run</b>: forks on the chart; you're free meanwhile</span></li>
+      <li data-cls="launch run compare"><span><b>Compare</b>: the same proposal, priced three ways</span></li>
+      <li data-cls="launch run compare try"><span><b>Try a case</b>: a £450 setup fee, through all three</span></li>
+      <li data-cls="launch run compare try talk"><span><b>Talk beside it</b>: why does B need a migration?</span></li>
+      <li data-cls="launch run compare try madeso"><span><b>Make it so</b>: C; A and B are scuttled</span></li>
+      <li data-cls="launch run orders-in"><span><b>Orders</b>: written on the chart; PR 1 starts</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="m3">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Fee structure</b></div><div class="muschip"><span>Muster</span><span class="cnt"><span class="roll"><i>1</i></span></span></div></div>
+      <div class="rail">
+        <div class="proj">Harbour &amp; Lane</div>
+        <div class="berth"><i class="dot hold"></i><span class="t">Signing redesign</span><span class="sub">Priya</span><span class="n zero"></span></div>
+        <div class="berth at"><i class="dot work"></i><span class="t">Fee structure</span><span class="n zero"></span></div>
+        <div class="berth"><i class="dot work"></i><span class="t">Proposals API</span><span class="n zero"></span></div>
+        <div class="proj">Focus</div>
+        <div class="berth"><i class="dot work"></i><span class="t">Agent host: slice 2</span><span class="n"><span class="roll"><i>1</i></span></span></div>
+        <div class="berth moored"><i class="dot moor"></i><span class="t">Pi Durable move</span><span class="n zero"></span></div>
+      </div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Fee structure for accountancy proposals</span><span class="who"><i class="dot work"></i>Lt. Reyes</span></div>
+        <div class="since"><span>Since your last watch (16:24):</span><b>fees tab mocked</b><b>1 decision</b></div>
+        <div class="chart"><svg width="526" height="60" class="forks"><line x1="10" y1="14" x2="90" y2="14" stroke="#e9edf2" stroke-width="2"/><line x1="90" y1="14" x2="516" y2="14" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="30" cy="14" r="5" fill="#e9edf2"/><circle cx="90" cy="14" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/>
+          <path class="f gone" d="M98 14 C120 14 120 2 142 2 H240" stroke="#8a94a3" stroke-width="1.5" fill="none"/><path class="f gone" d="M98 14 H240" stroke="#8a94a3" stroke-width="1.5" fill="none"/><path class="f" d="M98 14 C120 14 120 26 142 26 H240" stroke="#e9edf2" stroke-width="1.5" fill="none"/>
+          <circle class="f gone" cx="240" cy="2" r="3" fill="#8a94a3"/><circle class="f gone" cx="240" cy="14" r="3" fill="#8a94a3"/><circle class="f" cx="240" cy="26" r="3" fill="#e9edf2"/><text class="f gone" x="248" y="5" fill="#8a94a3" font-size="9">A</text><text class="f gone" x="248" y="17" fill="#8a94a3" font-size="9">B</text><text class="f" x="248" y="29" fill="#e9edf2" font-size="9">C</text>
+          <circle cx="380" cy="14" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:30px">Brief</span><span class="lbl here" style="left:90px">PR 1 · storage</span><span class="lbl" style="left:380px">PR 2 · next</span></div>
+        <div class="orders"><span class="k">Orders</span><span class="ord">One company per proposal</span><span class="ord new">Prices on one Fees tab, extras allowed</span></div>
+        <div class="card prose"><div class="ch">Decision · from Lt. Reyes</div><div class="w">Approve PR 1's storage so Reyes can start?</div>
+          <ul class="calls"><li>Charges keyed by proposal and service</li><li>Both totals stored, recalculated on save</li><li>Billing: acceptance, first month, monthly</li><li>A fee structure setting per template</li><li>Old proposals untouched until edited</li></ul>
+          <div class="contested"><b>Where prices live</b> has real alternatives:<div class="ways">A · on each service &nbsp;·&nbsp; B · one Fees tab &nbsp;·&nbsp; C · Fees tab plus extras</div><div class="ways">3 branches, about 20 minutes</div></div>
+          <div class="acts"><span class="btn">Make the five so</span><span class="btn go">Launch probes</span></div></div>
+        <div class="card running"><div class="ch">Probes · where prices live · Northwind group proposal</div><div style="margin-top:4px">Building each way for real. You can take the conn of another goal meanwhile.</div><div class="bar3"><div>A · on each service<span></span></div><div>B · one Fees tab<span></span></div><div>C · Fees tab + extras<span></span></div></div></div>
+        <div class="card cmp"><div class="ch">Exhibit · comparison · Northwind group proposal</div>
+          <div class="trybox"><span class="k">Try a case</span><span class="ph">e.g. a fee that isn't one of the services</span><span class="tx">Add a £450 setup fee that isn't a service</span></div>
+          <div class="cols">
+            <div class="col a"><h5>A · On services</h5><div class="sum">Price beside each service's wording</div><div class="fee"><div class="r"><span>Bookkeeping</span><span>£320/mo</span></div><div class="r"><span>Year-end accounts</span><span>£1,800</span></div><div class="r"><span>Payroll (12)</span><span>£95/mo</span></div></div><div class="nowhere">✕ Setup fee: nowhere to put it</div><div class="facts"><span>Edits to price it</span><b>14</b><span>Old proposals moved</span><b>0</b></div></div>
+            <div class="col b"><h5>B · One Fees tab</h5><div class="sum">Every price on one tab, typed labels</div><div class="fee"><div class="r"><span>Bookkeeping</span><span>£320/mo</span></div><div class="r"><span>Year-end accounts</span><span>£1,800</span></div><div class="r"><span>Payroll (12)</span><span>£95/mo</span></div><div class="r add"><span>Setup</span><span>£450</span></div></div><div class="facts"><span>Edits to price it</span><b>6</b><span>Old proposals moved</span><b>212</b></div></div>
+            <div class="col c"><span class="picked">Made so</span><h5>C · Fees tab + extras</h5><div class="sum">One tab; labels from the service; extras allowed</div><div class="fee"><div class="r"><span>Bookkeeping</span><span>£320/mo</span></div><div class="r"><span>Year-end accounts</span><span>£1,800</span></div><div class="r"><span>Payroll (12)</span><span>£95/mo</span></div><div class="r add"><span>Setup (extra)</span><span>£450</span></div></div><div class="facts"><span>Edits to price it</span><b>7</b><span>Old proposals moved</span><b>0</b></div></div>
+          </div>
+          <div class="settledline">Made so 17:02. Branches A and B scuttled.</div>
+        </div>
+        <div class="card next"><div class="ch">Lt. Reyes · working</div><div style="margin-top:4px">Starting PR 1 from branch C: charges keyed by service, with extras.</div></div>
+      </div>
+      <div class="panel"><div class="ph"><span>Lt. Reyes</span><span>log</span></div>
+        <div class="msg you"><small>You · 16:58</small>Why does B need to move old proposals?</div>
+        <div class="msg"><small>Lt. Reyes · 16:58</small>B takes prices off services, so the 212 existing proposals need their prices copied to the Fees tab. C leaves them where they are and only reads them there.</div>
+        <div class="box2">Write to Lt. Reyes…</div></div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 8</span><span>Exploring the terrain, not predicting it</span></div>
+  </div>
+</div>
+
+<h2>Audits</h2>
+<div class="scroll-x"><table>
+<thead><tr><th>Check</th><th>Result</th></tr></thead>
+<tbody>
+<tr><td>Every surface is a declared layer</td><td>HUD and Muster chip are hull-level chrome; berths are rail; goal and muster are the viewer; decision, exhibit, probe progress, awaiting and reply are cards; the pin and its note are part of the exhibit card; the log is the panel; the hail is a popover. The storyboard is a card lifted off the exhibit while a channel opens, and leaves at once.</td></tr>
+<tr><td>Every action is a declared verb</td><td>Take the conn, handle, on screen, stand by, stand down, open (on screen, for a decision), mark, open a channel, await, make it so, launch probes, try a case, talk. "Allow read-only" and "Make the five so" are make it so, named for what they do.</td></tr>
+<tr><td>Every object is a declared noun</td><td>Goal, watch, decision (and its grades), exhibit (and its questions and marks), probe, chart, orders, muster, report, lead, log. Priya is an attribute of an awaiting decision, not a noun: Focus doesn't model people outside the ship.</td></tr>
+<tr><td>Grounding</td><td>Every current noun is in Today → Proposed; new nouns are marked; new tokens are marked. Probe merges with the probes Focus already draws by a lead's chair. Client and colleague names are stand-ins; numbers are illustrative except the ledger counts at the top.</td></tr>
+<tr><td>Principle</td><td>No modals. The hail is the only thing above the panel and it lives one glance. Reports and words never rise above the muster.</td></tr>
+<tr><td>Colour</td><td>Amber appears only on what needs you: the Muster count, berth counts, the hail and the muster's decision bars. The previews' light surfaces are the client's product, not Focus chrome.</td></tr>
+</tbody></table></div>
+
+<h2>If it's signed off</h2>
+<p class="note">Where each piece would land in the codebase, as acceptance criteria for building it.</p>
+<div class="scroll-x"><table class="handover">
+<thead><tr><th>Piece</th><th>Touches</th><th>Accepted when</th></tr></thead>
+<tbody>
+<tr><td>Berth &amp; watch</td><td>new <code>watchRules.ts</code> in the chief of staff (which berth a goal is in, what reaches you); the goal's berth kept in the store; the rail in <code>stream.ts</code> replacing the goals list</td><td>Scenario 1 plays in the demo ship: one goal at the conn, counts on the others, nothing else toasts.</td></tr>
+<tr><td>Decision grades</td><td><code>cosRules.ts</code> routes → grades (interrupt with P5/P6 → hail, card → decision, carry on / back to the lead → word); <code>inboxRules.ts</code> lanes</td><td>An underway goal's card never toasts; a hail does, and can be told to stand by into the muster.</td></tr>
+<tr><td>Muster</td><td><code>captainsInbox.ts</code>, <code>landed.ts</code> folded in; ordered by "lead idle" first</td><td>Standing down shows decisions then reports; clearing them writes <code>captain-decision</code> lines as today.</td></tr>
+<tr><td>Exhibit</td><td><code>mcp__office__show</code> and <code>ask</code> grow a questions channel (the page declares its questions and reports what you set; Focus keeps the answers in its link and per exhibit); marks carry an element and a crop to the lead; the lead's prompt asks for an exhibit whenever a decision is about what users see</td><td>Scenario 2: answers survive a reload; a mark reaches the lead and its ring shows when they reply; open a channel produces a storyboard page.</td></tr>
+<tr><td>Probe</td><td>a decision may name its contested part and 2–4 ways; a lead workflow builds one branch per way against one real case and a comparison page with a "try a case" input; the chart draws forks from the branches; the 3D probes by the lead's chair show them running</td><td>Scenario 3 against a real goal, with the ways and cost shown before you launch.</td></tr>
+<tr><td>Chart &amp; orders</td><td><code>chartView.ts</code> moves into the viewer, drawing only last behind, here and next (dashed); orders read from <code>brief.md</code>, decisions made so and standing orders</td><td>Every make-it-so appears as an order within a beat, pointing back at its exhibit or probes.</td></tr>
+<tr><td>Session</td><td><code>agentPanel.ts</code>'s status chips behind the lead's panel</td><td>No route to a decision passes through the session view.</td></tr>
+</tbody></table></div>
+</section>
+
+</div>
+
+<script>
+// Tabs
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach(b => b.addEventListener('click', () => {
+  tabs.forEach(t => t.setAttribute('aria-selected', String(t === b)));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+  if (location.hash !== '#' + b.dataset.tab) history.replaceState(null, '', '#' + b.dataset.tab);
+  requestAnimationFrame(fit);
+}));
+const start = location.hash.slice(1);
+if (start) document.querySelector(`nav.tabs button[data-tab="${start}"]`)?.click();
+
+// Scale each fixed-size mockup to its column
+function fit() {
+  document.querySelectorAll('.mk-wrap').forEach(w => {
+    const s = w.clientWidth / 760;
+    if (s > 0) w.querySelector('.mk').style.setProperty('--s', s);
+  });
+}
+new ResizeObserver(fit).observe(document.body);
+fit();
+
+// Scenarios: each step is a declared class list on the mockup
+document.querySelectorAll('.scenario[data-mk]').forEach(sc => {
+  const mk = sc.querySelector('.mk');
+  const base = 'mk';
+  const steps = [...sc.querySelectorAll('ol.steps li')];
+  const cap = sc.querySelector('.stepcap');
+  let i = 0, timer = null, played = false;
+  const go = n => {
+    i = n;
+    mk.className = (base + ' ' + (steps[n].dataset.cls || '')).trim();
+    steps.forEach((li, k) => li.classList.toggle('on', k === n));
+    if (cap) cap.textContent = `Step ${n + 1} of ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const play = () => {
+    stop(); go(0);
+    timer = setInterval(() => { if (i >= steps.length - 1) return stop(); go(i + 1); }, 1900);
+  };
+  steps.forEach((li, k) => li.addEventListener('click', () => { stop(); go(k); }));
+  sc.querySelector('.replay').addEventListener('click', play);
+  go(0);
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !played) { played = true; play(); }
+  }), { threshold: 0.45 }).observe(sc.querySelector('.table'));
+});
+</script>
+</body>
+</html>

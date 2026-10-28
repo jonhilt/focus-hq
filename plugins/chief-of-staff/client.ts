@@ -1,14 +1,15 @@
-// The chief of staff in the 3D ship (README.md): Comms, a thread per goal (C, the captain's chair on the bridge, the
+// The chief of staff in the 3D ship (README.md): Comms, the bridge with one goal at the conn (C, the captain's chair on the bridge, the
 // pause panel, L away from a holodeck, a project's goals), its badge on the HUD, a toast as a lead's turn comes to the
 // captain, and its settings in a project's card (its switch, and whether it sends its words by itself).
 import './chief-of-staff.css';
 import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, LCARS, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
 import { openStream } from './stream';
 import { hailing } from './here';
-import { type TurnStage, turnNews, turnStage } from './inboxRules';
+import { type TurnStage, turnStage, turnToast } from './inboxRules';
 import { cosMove } from './moveRules';
 import { autoSendFor, jevFor } from './cosRules';
 import { AUTO_SEND_MS, CHIEF_OF_STAFF, cosStateOf } from './shared';
+import { watchOf } from './watchRules';
 
 /** Comms on the HUD: whatever waits on the captain, anywhere on the ship, lit up and counted; C opens Comms to answer it. */
 function badge(hails: number): HTMLElement {
@@ -32,15 +33,19 @@ function jevSwitch(project: Project, ui: Ui): HTMLElement {
   }).el;
 }
 
+/** The goal at the conn, while its lead's aboard. */
+const connNow = () => watchOf(cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)).conn, (id) => !!focus.agent(id));
+
 /**
  * A goal's lead's turn coming to the captain, unless they're already looking at the lead: as it ends, or as the chief
  * of staff judges it a card or an interrupt (`turnNews`); what it would carry on or send back stays quiet, in Comms.
+ * While the captain's on watch, only the goal at the conn and hails toast: the rest wait as counts on their berths.
  */
 function toastTurns(ui: Ui): void {
   const stages = new Map<string, TurnStage>();
   focus.onAgent((a) => {
     if (a.task !== 'lead' || focus.isHidden(a.projectId)) return;
-    const news = turnNews(stages.get(a.id), a);
+    const news = turnToast(stages.get(a.id), a, connNow());
     stages.set(a.id, turnStage(a));
     if (news && !agentPanelOpen(a.id)) ui.hud.toast(news.level, news.text, { label: 'Talk', run: () => ui.openAgent(a.id) });
   });
@@ -52,7 +57,7 @@ const chiefOfStaff: ClientPlugin = {
     name: 'Chief of staff',
     summary: 'Judges each of a goal lead’s turns as it ends, and puts what needs you in Comms, with words ready for you to send.',
     adds: [
-      'Comms, a thread per goal (C, the bridge chair)',
+      'Comms: one goal at the conn, the rest underway (C, the bridge chair)',
       'A badge on the HUD, and toasts',
       'Auto-send, per project: its words go to leads without you',
       'Route with Jev, per project: TypeSafe’s Jev picks the route, the judge writes the words',

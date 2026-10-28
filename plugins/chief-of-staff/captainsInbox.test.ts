@@ -281,6 +281,27 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     await until(() => o.claude.turns.length === 2);
     expect(o.claude.turns[1].req.prompt).toContain('[Chief of Staff] Before this goes to the captain, test what you built');
   });
+
+  it('keeps the goal at the conn until the captain stands down, and only a goal aboard', async () => {
+    const o = await aboard(false);
+    o.route('/conn')({ lead: o.id });
+    expect(o.state()?.conn).toBe(o.id);
+    expect(() => o.route('/conn')({ lead: 'nobody' })).toThrow(/isn’t aboard/);
+    expect(o.state()?.conn).toBe(o.id);
+    o.route('/conn')({ lead: null });
+    expect(o.state()?.conn).toBeUndefined();
+  });
+
+  it('stands a waiting hail by into the muster, and refuses one that isn’t waiting', async () => {
+    const o = await aboard(false);
+    o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
+    await until(() => !!o.read()?.judged);
+    const [item] = (o.route('/inbox')() as { open: { id: string }[] }).open;
+    o.route('/stand-by')({ key: item.id });
+    o.route('/stand-by')({ key: item.id });
+    expect(o.state()?.stoodBy).toEqual([item.id]);
+    expect(() => o.route('/stand-by')({ key: 'turn:gone:1' })).toThrow(/isn’t waiting/);
+  });
 });
 
 describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-inbox-api)', () => {

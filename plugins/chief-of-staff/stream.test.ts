@@ -4,9 +4,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Agent } from '../../plugin-api/client';
 import type { ThreadEntry } from './thread';
 
-// The stream as the captain uses it: a goal's row on the left says whether anything is new since they last looked, the
-// goals fold to a strip and back, the quick replies reach the lead, and their workspace has its tabs and the box to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; preview?: unknown } => ({ threads: {} }));
+// Comms as the captain uses it: a goal's berth on the rail says whether anything is new since they last looked, the
+// goals fold to a strip and back, taking the conn opens a goal's sheet and standing down brings up the muster, a hail
+// from a goal underway sits over the sheet until it's stood by, the quick replies reach the lead, and their workspace
+// has its tabs and the box to talk to them.
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; preview?: unknown; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[] } => ({ threads: {}, open: [], waiting: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'working', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -26,11 +28,20 @@ vi.mock('../../plugin-api/client', async () => {
     busy: async (_b: HTMLButtonElement, run: () => Promise<unknown>) => { await run(); },
     fill: (el: HTMLElement, ...children: (Node | null)[]) => el.replaceChildren(...children.flatMap((c) => (c ? [c] : []))),
     messageAgent: vi.fn(() => Promise.resolve()),
+    // the watch as Focus keeps it: taking the conn is kept at once, and heard as the plugin's state changing
+    pluginState: () => ({ autoSend: {}, conn: fake.conn, stoodBy: fake.stoodBy }),
+    onPluginState: (_id: string, f: () => void) => { fake.state = f; return () => undefined; },
+    callPlugin: vi.fn((_p: string, path: string, body: { lead?: string | null; key?: string }) => {
+      if (path === '/conn') fake.conn = body.lead ?? undefined;
+      if (path === '/stand-by' && body.key) fake.stoodBy = [...(fake.stoodBy ?? []), body.key];
+      fake.state?.();
+      return Promise.resolve({});
+    }),
     readPlugin: (_p: string, path: string) => Promise.resolve({ entries: fake.threads[decodeURIComponent(path.split('/').pop() ?? '')] ?? [] }),
   };
 });
-vi.mock('./here', () => ({ waitingNow: () => [] }));
-vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: [], landed: [], decided: [] }) } }));
+vi.mock('./here', () => ({ waitingNow: () => fake.waiting }));
+vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: fake.open, landed: [], decided: [] }) } }));
 const { openStream } = await import('./stream');
 const { messageAgent } = await import('../../plugin-api/client');
 
@@ -40,17 +51,27 @@ const ui = {
   openAgent: vi.fn(), error: vi.fn(),
 };
 const settle = () => new Promise((r) => setTimeout(r, 50));
-afterEach(() => { for (const c of cleanups) c(); cleanups = []; });
+afterEach(() => {
+  for (const c of cleanups) c();
+  cleanups = [];
+  fake.conn = undefined;
+  fake.stoodBy = undefined;
+  fake.open = [];
+  fake.waiting = [];
+});
+const berth = (goal: string) => [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes(goal));
 
-describe('a goal’s row in the stream', () => {
+describe('a goal’s berth on the rail', () => {
   it('says there is something new when its lead spoke after the captain last looked at its thread', async () => {
     fake.threads.a = [{ kind: 'lead', at: 5, text: 'Plan?' }];
     fake.threads.b = [{ kind: 'lead', at: 6, text: 'Hello' }];
     openStream(ui as never);
     await settle();
-    document.querySelectorAll<HTMLElement>('.cos-st-row')[1].click();
+    berth('Goal a')?.click();
     await settle();
-    // goal a's lead speaks again while the captain is on goal b
+    berth('Goal b')?.click();
+    await settle();
+    // goal a's lead speaks again while goal b is at the conn
     fake.threads.a = [...fake.threads.a, { kind: 'lead', at: 9, text: 'Done.' }];
     cleanups.forEach((c) => c());
     cleanups = [];
@@ -81,15 +102,15 @@ describe('the goals list', () => {
 });
 
 describe('the foot of a goal’s thread', () => {
-  it('sends a quick reply to the lead of the goal picked', async () => {
+  it('sends a quick reply to the lead of the goal at the conn', async () => {
     localStorage.clear();
     openStream(ui as never);
     await settle();
+    berth('Goal b')?.click();
+    await settle();
     [...document.querySelectorAll<HTMLElement>('.cos-st-quick button')].find((b) => b.textContent === 'Carry on')?.click();
     await settle();
-    const picked = document.querySelector('.cos-st-row.sel')?.textContent ?? '';
-    const id = picked.includes('Goal a') ? 'a' : 'b';
-    expect(messageAgent).toHaveBeenCalledWith(id, `Lt. ${id}`, 'Carry on');
+    expect(messageAgent).toHaveBeenCalledWith('b', 'Lt. b', 'Carry on');
   });
 });
 
@@ -222,5 +243,69 @@ describe('the conversation opened on a turn from its reading', () => {
     expect(document.querySelector('.cos-ws-body')?.textContent).toContain('And more.');
     expect(body.scrollTop).toBe(900);
     top.mockRestore();
+  });
+});
+
+// a card of goal b's lead waits on the captain, and an interrupt from goal a's that can't be undone
+const card = { id: 'turn:b:1000', kind: 'turn', projectId: 'p', agentId: 'b', who: 'Lt. b', goal: 'Goal b', what: 'Filters first?', lane: 'needs-you', cos: { route: 2, ask: 'Filters first?', why: '', message: '' } };
+const hail = { id: 'turn:a:1000', kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. a', goal: 'Goal a', what: 'Read production?', lane: 'needs-you', cos: { route: 3, check: 'irreversible', ask: 'Read production?', why: '', message: '' } };
+
+describe('the watch', () => {
+  it('opens on the muster with nobody at the conn, and on the goal’s sheet once its conn is taken', async () => {
+    localStorage.clear();
+    fake.open = [card];
+    openStream(ui as never);
+    await settle();
+    expect(document.querySelector('.cos-bridge')?.classList).toContain('mustering');
+    expect(document.querySelector('.cos-br-status')?.textContent).toBe('Bridge · No watch');
+    expect(document.querySelector('.cos-br-row-what')?.textContent).toBe('Filters first?');
+    berth('Goal a')?.click();
+    await settle();
+    expect(fake.conn).toBe('a');
+    expect(document.querySelector('.cos-bridge')?.classList).not.toContain('mustering');
+    expect(document.querySelector('.cos-br-status')?.textContent).toBe('On watch · Goal a');
+    // the other goal dims in its berth, its decision a count on it
+    expect(berth('Goal b')?.classList).toContain('dim');
+    expect(berth('Goal b')?.querySelector('.cos-br-count')?.textContent).toBe('1');
+    expect(document.querySelector('.cos-br-chip b')?.textContent).toBe('1');
+  });
+
+  it('brings the muster up as the captain stands down', async () => {
+    localStorage.clear();
+    fake.conn = 'a';
+    openStream(ui as never);
+    await settle();
+    document.querySelector<HTMLElement>('.cos-br-down')?.click();
+    await settle();
+    expect(fake.conn).toBeUndefined();
+    expect(document.querySelector('.cos-bridge')?.classList).toContain('mustering');
+  });
+
+  it('puts a hail from a goal underway over the sheet, and tells it to stand by into the muster', async () => {
+    localStorage.clear();
+    fake.conn = 'b';
+    fake.open = [hail];
+    openStream(ui as never);
+    await settle();
+    const over = document.querySelector<HTMLElement>('.cos-br-hail');
+    expect(over?.hidden).toBe(false);
+    expect(over?.querySelector('.cos-br-hail-what')?.textContent).toBe('Read production?');
+    [...(over?.querySelectorAll<HTMLElement>('button') ?? [])].find((b) => b.textContent === 'Stand by')?.click();
+    await settle();
+    expect(fake.stoodBy).toEqual(['turn:a:1000']);
+    expect(document.querySelector<HTMLElement>('.cos-br-hail')?.hidden).toBe(true);
+    // in the muster, a hail still: first, and said to be stood by
+    document.querySelector<HTMLElement>('.cos-br-chip')?.click();
+    expect(document.querySelector('.cos-br-row-goal')?.textContent).toBe('Goal a · hail, stood by');
+  });
+
+  it('keeps a card from a goal underway off the sheet: a count on its berth, no hail', async () => {
+    localStorage.clear();
+    fake.conn = 'a';
+    fake.open = [card];
+    openStream(ui as never);
+    await settle();
+    expect(document.querySelector<HTMLElement>('.cos-br-hail')?.hidden).toBe(true);
+    expect(berth('Goal b')?.querySelector('.cos-br-count')?.textContent).toBe('1');
   });
 });

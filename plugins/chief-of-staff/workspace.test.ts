@@ -7,7 +7,8 @@ import type { ThreadEntry } from './thread';
 // A lead's workspace as the captain watches it: its Activity tab keeps up with the lead's log, even once the browser
 // holds the log at its cap and drops the oldest line as each new one comes; its Browser tab keeps up with a preview
 // starting; its Pull requests tab with QA's word; and folded, it comes back as a strip after the goals went and returned.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; reviews: Map<string, unknown>; preview?: unknown; lines: { t: number; kind: string; text: string }[]; on?: (id: string) => void; ship?: () => void } => ({ threads: {}, reviews: new Map(), lines: [] }));
+// goal a is at the conn, so its sheet and its lead's workspace are open
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; reviews: Map<string, unknown>; preview?: unknown; lines: { t: number; kind: string; text: string }[]; on?: (id: string) => void; ship?: () => void; conn?: string; stoodBy?: string[]; state?: () => void } => ({ threads: {}, reviews: new Map(), lines: [], conn: 'a' }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'working', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -27,6 +28,15 @@ vi.mock('../../plugin-api/client', async () => {
     busy: async (_b: HTMLButtonElement, run: () => Promise<unknown>) => { await run(); },
     fill: (el: HTMLElement, ...children: (Node | null)[]) => el.replaceChildren(...children.flatMap((c) => (c ? [c] : []))),
     messageAgent: vi.fn(() => Promise.resolve()),
+    // the watch as Focus keeps it: taking the conn is kept at once, and heard as the plugin's state changing
+    pluginState: () => ({ autoSend: {}, conn: fake.conn, stoodBy: fake.stoodBy }),
+    onPluginState: (_id: string, f: () => void) => { fake.state = f; return () => undefined; },
+    callPlugin: vi.fn((_p: string, path: string, body: { lead?: string | null; key?: string }) => {
+      if (path === '/conn') fake.conn = body.lead ?? undefined;
+      if (path === '/stand-by' && body.key) fake.stoodBy = [...(fake.stoodBy ?? []), body.key];
+      fake.state?.();
+      return Promise.resolve({});
+    }),
     readPlugin: (_p: string, path: string) => Promise.resolve({ entries: fake.threads[decodeURIComponent(path.split('/').pop() ?? '')] ?? [] }),
   };
 });

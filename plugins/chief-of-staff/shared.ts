@@ -115,11 +115,11 @@ export function repliesOf(v: unknown): Reply[] {
   return out;
 }
 
-/** A verdict, if `v` is one: one from before it suggested replies reads as suggesting none. */
+/** A verdict, if `v` is one: one from before it suggested replies reads as suggesting none, one from before it named its check names none. */
 export function verdictOf(v: unknown): Verdict | undefined {
   if (!isRecord(v) || !isOneOf(ROUTES, v.route) || typeof v.ask !== 'string' || typeof v.why !== 'string' || typeof v.message !== 'string') return undefined;
   const replies = repliesOf(v.replies);
-  return { route: v.route, ask: v.ask, why: v.why, message: v.message, ...(replies.length && { replies }) };
+  return { route: v.route, ...(isOneOf(CHECKS, v.check) && { check: v.check }), ask: v.ask, why: v.why, message: v.message, ...(replies.length && { replies }) };
 }
 
 /**
@@ -143,11 +143,14 @@ export const readOf = (agent: Pick<Agent, 'lead'> | undefined): CosRead | undefi
 
 /**
  * What it keeps across a restart, by project: whether it sends its words by itself (`autoSendFor`), and whether Jev
- * routes its turns (`jevFor`; missing from what was kept before there was the switch).
+ * routes its turns (`jevFor`; missing from what was kept before there was the switch). And the captain's watch
+ * (README.md#the-watch): the goal at the conn, by its lead's id, and the hails they told to stand by, by `hailKey`.
  */
 export interface CosState {
   autoSend: Record<string, boolean>;
   jev?: Record<string, boolean>;
+  conn?: string;
+  stoodBy?: string[];
 }
 
 export const freshState = (): CosState => ({ autoSend: {}, jev: {} });
@@ -157,5 +160,12 @@ const switches = (v: unknown): Record<string, boolean> =>
 
 /** Its state as the browser has it (`state.plugins[CHIEF_OF_STAFF]`): fresh where it isn't one. */
 export function cosStateOf(v: unknown): CosState {
-  return { autoSend: switches(isRecord(v) ? v.autoSend : undefined), jev: switches(isRecord(v) ? v.jev : undefined) };
+  const kept = isRecord(v) ? v : {};
+  const stoodBy = Array.isArray(kept.stoodBy) ? kept.stoodBy.filter((k): k is string => typeof k === 'string') : [];
+  return {
+    autoSend: switches(kept.autoSend),
+    jev: switches(kept.jev),
+    ...(typeof kept.conn === 'string' && kept.conn && { conn: kept.conn }),
+    ...(stoodBy.length && { stoodBy }),
+  };
 }

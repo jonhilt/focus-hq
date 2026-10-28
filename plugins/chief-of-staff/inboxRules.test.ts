@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../plugin-api/shared';
-import { acknowledged, decideRefusal, turnNews, turnStage, waiting } from './inboxRules';
+import { acknowledged, decideRefusal, turnNews, turnStage, turnToast, waiting } from './inboxRules';
 import { CHIEF_OF_STAFF } from './shared';
 
 const agent = (a: Partial<Agent> = {}): Agent => ({
@@ -75,5 +75,14 @@ describe('the toast as a lead’s turn comes to the captain', () => {
     expect(turnNews('reading', at('done', judged(1)))).toBeNull();
     expect(turnNews('reading', at('done', judged(4)))).toBeNull();
     expect(turnStage(at('working', judged(3)))).toBe('working');
+  });
+
+  it('on watch, toasts the goal at the conn and a hail, and keeps another goal’s card to its berth', () => {
+    const hail = { at: 1, judged: { route: 3, check: 'irreversible', ask: 'Read production?', why: 'w', message: 'm' } };
+    expect(turnToast('reading', at('done', judged(2)), 'a1')).toEqual({ level: 'info', text: '🗂 Lt. Vale: Spend $40?' });
+    expect(turnToast('reading', at('done', judged(2)), 'other')).toBeNull();
+    expect(turnToast('working', at('done'), 'other')).toBeNull();
+    expect(turnToast('reading', at('done', hail), 'other')).toEqual({ level: 'error', text: '🚨 Lt. Vale: Read production?' });
+    expect(turnToast('reading', at('done', judged(2)), undefined)).toEqual({ level: 'info', text: '🗂 Lt. Vale: Spend $40?' });
   });
 });

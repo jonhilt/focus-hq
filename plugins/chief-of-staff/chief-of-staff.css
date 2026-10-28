@@ -200,3 +200,84 @@ a.cos-st-chip { color: var(--lcars-sky); }
 .cos-ws-act small { color: var(--muted); font-size: 12px; }
 .cos-ws-act.error span { color: var(--lcars-red); }
 
+
+/* The bridge (stream.ts, README.md#the-watch): the watch and the Muster chip across the top, the rail of berths, and the
+   viewer, the goal at the conn as a sheet or the muster. Amber is only on what needs the captain: the chip's count,
+   the berths' counts, the hail and the muster's hails. Motion is transform and opacity alone, and none when reduced. */
+.cos-bridge { --attn: var(--lcars-orange); --spring: cubic-bezier(0.2, 0.9, 0.25, 1.15); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; height: 100%; min-height: 0; }
+.cos-br-bar { display: flex; align-items: center; gap: 10px; font: 600 13px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+.cos-br-status { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cos-br-status b { color: var(--text); font-weight: 600; }
+.cos-bridge.on-watch .cos-br-status b { color: var(--lcars-sky); }
+.cos-br-btn { font: 13px/1.2 system-ui, -apple-system, sans-serif; letter-spacing: 0; text-transform: none; color: var(--text); background: var(--surface-2); border: 1px solid transparent; border-radius: 999px; padding: 5px 12px; cursor: pointer; white-space: nowrap; }
+.cos-br-btn:hover { border-color: var(--lcars-sky); }
+.cos-br-btn.primary { background: color-mix(in srgb, var(--lcars-sky) 22%, var(--surface-2)); }
+.cos-br-chip { display: inline-flex; gap: 8px; align-items: center; font: 600 13px/1 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); background: var(--surface-2); border: 1px solid transparent; border-radius: 999px; padding: 5px 6px 5px 12px; cursor: pointer; }
+.cos-br-chip b { min-width: 1.6em; padding: 3px 6px; border-radius: 999px; background: color-mix(in srgb, var(--muted) 25%, transparent); color: var(--text); text-align: center; font-variant-numeric: tabular-nums; }
+.cos-br-chip.attn b { background: var(--attn); color: var(--ink); }
+.cos-br-chip.on { border-color: var(--attn); color: var(--text); }
+.cos-bridge:not(.on-watch) .cos-br-chip { cursor: default; }
+
+/* the rail: berths stay where they are; while a goal's at the conn the others dim, their counts still lit */
+.cos-br-berth > :not(.cos-br-count) { transition: opacity 0.25s ease; }
+.cos-br-berth.dim > :not(.cos-br-count) { opacity: 0.5; }
+.cos-br-berth.dim:hover > * { opacity: 1; }
+.cos-br-berth.sel { box-shadow: inset 3px 0 0 var(--lcars-sky); }
+.cos-br-count { min-width: 1.5em; padding: 2px 6px; border-radius: 999px; background: var(--attn); color: var(--ink); font: 600 12px/1.2 var(--ui); text-align: center; font-variant-numeric: tabular-nums; }
+
+/* the viewer: the sheet at the conn, or the muster rising in its place */
+.cos-br-viewer { position: relative; min-height: 0; display: grid; }
+.cos-br-viewer > * { grid-area: 1 / 1; min-height: 0; }
+.cos-br-viewer > .cos-st-right { transition: transform 0.35s var(--spring), opacity 0.25s ease; }
+.cos-bridge.mustering .cos-br-viewer > .cos-st-right { opacity: 0; transform: scale(0.98); pointer-events: none; visibility: hidden; }
+.cos-bridge:not(.mustering) .cos-br-muster { display: none; }
+.cos-bridge.mustering .cos-stream { --side-w: 0px; }
+.cos-bridge.mustering .cos-st-side { display: none; }
+.cos-bridge:not(.on-watch) .cos-st-side { display: none; }
+.cos-bridge:not(.on-watch) .cos-stream { --side-w: 0px; }
+
+/* the sheet's head: the chart strip (last behind, here, next dashed) and what's come in since the watch began */
+.cos-br-chart { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 12px; }
+.cos-br-wp { border-radius: 999px; padding: 3px 10px; border: 1px solid var(--line, #262c3d); color: var(--muted); }
+.cos-br-wp.behind { border: 0; padding-left: 0; }
+.cos-br-wp.here { border-color: var(--lcars-sky); color: var(--text); background: color-mix(in srgb, var(--lcars-sky) 14%, transparent); }
+.cos-br-wp.next { border-style: dashed; }
+.cos-br-since { font-size: 14px; color: var(--text); }
+.cos-br-since b { font: 600 12px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-right: 8px; }
+
+/* the muster: rows by what each unblocks, opened in place; the reports folded at its foot */
+.cos-br-muster { overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding-right: 10px; font: 15px/1.45 system-ui, -apple-system, sans-serif; animation: cos-br-rise 0.35s var(--spring); }
+@keyframes cos-br-rise { from { opacity: 0; transform: translateY(12px); } }
+.cos-br-mh { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line, #262c3d); }
+.cos-br-mh b { font: 600 13px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--attn); }
+.cos-br-mh small { color: var(--muted); flex: 1; }
+.cos-br-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; align-items: center; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; border-left: 3px solid transparent; }
+.cos-br-row.hail { border-left-color: var(--attn); }
+.cos-br-row-h { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cos-br-row-goal { font-size: 12px; color: var(--muted); }
+.cos-br-row-goal i { font-style: normal; color: var(--attn); }
+.cos-br-row-what { font-weight: 600; color: var(--text); }
+.cos-br-row-h small { color: var(--muted); font-size: 12px; }
+.cos-br-row-acts { display: flex; gap: 6px; }
+.cos-br-row .cos-br-btn:not(.primary) { border-color: var(--line, #262c3d); }
+.cos-br-row-card { grid-column: 1 / -1; }
+.cos-br-empty { color: var(--muted); max-width: 52ch; }
+.cos-br-reports { margin-top: 6px; }
+.cos-br-reports > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; color: var(--muted); font-size: 13px; padding: 6px 0; }
+.cos-br-reports > summary b { font: 600 12px/1 var(--ui); letter-spacing: 0.14em; text-transform: uppercase; color: var(--text); }
+.cos-br-reports[open] { display: flex; flex-direction: column; gap: 10px; }
+
+/* a hail from a goal underway, dropped from the Muster chip over the sheet's top right corner */
+.cos-br-hail { position: absolute; top: 0; right: 0; z-index: 2; width: min(420px, 100%); max-height: 100%; overflow-y: auto; box-sizing: border-box; display: flex; flex-direction: column; gap: 8px; background: color-mix(in srgb, var(--surface-2) 88%, #000); border: 1px solid var(--attn); border-radius: 12px; padding: 12px 14px; box-shadow: 0 12px 32px rgb(0 0 0 / 50%); font: 15px/1.45 system-ui, -apple-system, sans-serif; transform-origin: top right; animation: cos-br-drop 0.4s var(--spring); }
+.cos-br-hail[hidden] { display: none; }
+@keyframes cos-br-drop { from { opacity: 0; transform: translateY(-16px) scale(0.96); } }
+.cos-br-hail-h { font: 600 12px/1.2 var(--ui); letter-spacing: 0.12em; text-transform: uppercase; color: var(--attn); }
+.cos-br-hail-what { font-weight: 600; color: var(--text); }
+.cos-br-hail-acts { display: flex; justify-content: flex-end; gap: 6px; }
+.cos-bridge.mustering .cos-br-hail { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cos-br-muster, .cos-br-hail { animation-name: cos-br-fade; }
+  .cos-br-viewer > .cos-st-right { transition: opacity 0.2s ease; transform: none !important; }
+  @keyframes cos-br-fade { from { opacity: 0; } }
+}

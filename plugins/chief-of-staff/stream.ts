@@ -1,28 +1,26 @@
-import { busy, fill, focus, h, LCARS, markdownHtml, messageAgent, readPlugin, type Ui } from '../../plugin-api/client';
-import type { Agent, Attention } from '../../plugin-api/shared';
+import { busy, callPlugin, fill, focus, h, LCARS, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
+import { ACTIVE_STATUSES, type Agent, type Attention } from '../../plugin-api/shared';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import type { LandedItem } from './landed';
-import { landedWhere as landedAt } from './landed';
 import { landedCard } from './landedCard';
 import { needCard } from './needCard';
-import { CHIEF_OF_STAFF } from './shared';
-import { bundleSays, type CosRow, cosRows, doing, entryView, footOf, goalRow, goalSections, landedSplit, latestNews, pickGoal, prCount, previewFor, READING_ROUTE, seenOf, shownSince, threadKey, type WorkspaceTab } from './streamList';
+import { CHIEF_OF_STAFF, cosStateOf } from './shared';
+import { bundleSays, type CosRow, cosRows, doing, entryView, footOf, goalRow, goalSections, landedSplit, latestNews, prCount, previewFor, READING_ROUTE, seenOf, shownSince, threadKey, type WorkspaceTab } from './streamList';
 import type { ThreadEntry } from './thread';
+import { chartStrip, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
 import { workspace } from './workspace';
 
-// The stream (README.md#a-thread-per-goal): Comms as a thread per goal. On the left every shown project's goals in one
-// list, what needs the captain first and then each project's others under its name, a compact row each (a dot for its
-// state, how long since anything came in), and what waits on them outside any goal's conversation; the list folds away
-// to a strip. In the centre the goal picked: what's agreed on it up top (done looks like, its pull requests), then its
-// thread told by the chief of staff (its reading of each of the lead's turns in the turn's place, what the captain said,
-// quiet lines between bundled, a line where what's new since they last looked begins, and what needs them there asked
-// at its end), and at the foot quick replies. At the right the lead's workspace (workspace.ts): their own words, the
-// rest of what they work with, and the box to talk to them; a reading opens it on what it read. It folds to a strip too.
-
-/** The goal picked when the stream last closed: it opens on it again. */
-let keptGoal: string | null = null;
+// Comms as the bridge (README.md#the-watch, docs/interface-style/mockups/bridge-grammar.html): one goal at the conn, the
+// rest underway. On the left the rail, every shown project's goals in their berths, staying where they are, each with
+// how many decisions wait on it (or how long since anything came in); it folds away to a strip. In the viewer the goal
+// at the conn as a sheet: what's agreed on it up top (its chart's last waypoint, where it is and what's next, what's come
+// in since the watch began, done looks like), then its thread told by the chief of staff (README.md#a-thread-per-goal),
+// what needs the captain there asked at its end, and quick replies at the foot. At the right the lead's workspace
+// (workspace.ts), folding to a strip too. With nobody at the conn, or the Muster chip pressed, the viewer is the muster:
+// what waits outside the goal at the conn, by what each unblocks. A hail from a goal underway sits over the sheet's
+// corner, put on screen there or told to stand by into the muster.
 
 /** When the captain last looked at each goal's thread (its latest entry's time), kept in this browser. */
 const SEEN = 'cos-stream-seen';
@@ -70,8 +68,8 @@ function bundleEl(entries: ThreadEntry[], lead: string): HTMLElement {
     h('div', { class: 'cos-st-bundle-lines' }, ...entries.map((e) => entryEl(e, lead))));
 }
 
-/** A thread's title, and under it what's agreed: done looks like, its pull requests merged, and a way into the lead's room. */
-function headEls(lead: Agent, openRoom: () => void): HTMLElement[] {
+/** A thread's title, and under it (after what the caller puts there) what's agreed: done looks like, its pull requests merged, and a way into the lead's room. */
+function headEls(lead: Agent, openRoom: () => void, under: (HTMLElement | null)[] = []): HTMLElement[] {
   const work = lead.lead;
   const { merged, prs } = prCount([...(work?.landed ?? []), ...(work?.prs ?? [])]);
   const live = lead.status === 'error' ? 'error' : ['working', 'testing', 'pushing', 'setting-up'].includes(lead.status) ? 'working' : 'quiet';
@@ -81,6 +79,7 @@ function headEls(lead: Agent, openRoom: () => void): HTMLElement[] {
     h('div', { class: 'cos-st-head-top' },
       h('div', { class: 'cos-st-title' }, work?.title ?? lead.name),
       h('span', { class: 'cos-st-who' }, h('i', { class: `cos-st-dot ${live}` }), `${lead.name} · ${doing(lead.status)}`)),
+    ...under.filter((el) => el !== null),
     ...(done ? [h('div', { class: 'cos-st-done' }, h('b', null, 'Done looks like'), done)] : []),
     h('div', { class: 'cos-st-chips' },
       prs ? h('span', { class: 'cos-st-chip' }, `${merged} of ${prs} pull request${prs === 1 ? '' : 's'} merged`) : null,
@@ -141,15 +140,82 @@ const allLeads = (): Agent[] => focus.shown.flatMap((p) => focus.leadsIn(p.id));
 /** What Comms asks of the app: its panel, and the panels it goes on to (an agent's, a board, the goals, a lead's screen). */
 export type CommsUi = Pick<Ui, 'openAgent' | 'openBoard' | 'openGoals' | 'openScreen' | 'goToAgent' | 'error'> & { panels: Pick<Ui['panels'], 'open' | 'own' | 'backTo'> };
 
-/** Opens the stream on the goal picked last, or the first that needs the captain. */
+/** The watch as Focus keeps it: the goal at the conn while its lead's aboard (`watchOf`), and the hails stood by. */
+const watchNow = () => {
+  const kept = cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF));
+  return { conn: watchOf(kept.conn, (id) => !!focus.agent(id)), stoodBy: new Set(kept.stoodBy ?? []) };
+};
+
+/** Something waiting, as the bridge files it: how hard it asks, whether someone's idle on it, and where it reaches the captain. */
+interface Filed {
+  item: InboxItem;
+  grade: Grade;
+  idle: boolean;
+  since?: number;
+  stoodBy: boolean;
+  reach: Reach;
+}
+
+/** What waits on the captain, filed for the watch; a turn the chief of staff is still reading isn't yet anywhere. */
+function filed(open: readonly InboxItem[], conn: string | undefined, stoodBy: ReadonlySet<string>): Filed[] {
+  return open.filter((i) => i.lane !== 'judging').map((item) => {
+    const grade: Grade = item.lane === 'ready' ? 'word' : gradeOf(item.kind === 'turn' ? item.cos : undefined);
+    const agent = item.agentId ? focus.agent(item.agentId) : undefined;
+    const idle = !!agent && !ACTIVE_STATUSES.includes(agent.status);
+    const by = stoodBy.has(item.id);
+    return { item, grade, idle, since: item.since, stoodBy: by, reach: reachOf({ leadId: item.agentId, grade, stoodBy: by }, conn) };
+  });
+}
+
+/** Who's held up by something in the muster: what it unblocks, in a line. */
+function unblocks(f: Filed): string {
+  const agent = f.item.agentId ? focus.agent(f.item.agentId) : undefined;
+  if (!agent) return `${f.item.who} · nobody waiting`;
+  return f.idle ? `${agent.name} idle until you answer` : `${agent.name} still working · nobody waiting yet`;
+}
+
+/** The goal's chart as its sheet shows it (`chartStrip`): the last waypoint behind, where it is, the next one dashed. */
+function chartEl(lead: Agent): HTMLElement | null {
+  const c = chartStrip(lead.lead?.waypoints ?? [], lead.lead?.note?.next ?? []);
+  if (!c.here) return null;
+  return h('div', { class: 'cos-br-chart', title: 'The whole chart is in their room' },
+    c.behind ? h('span', { class: 'cos-br-wp behind' }, `${c.behind} behind`) : null,
+    c.last ? h('span', { class: 'cos-br-wp last' }, c.last) : null,
+    h('span', { class: 'cos-br-wp here' }, c.here),
+    c.next ? h('span', { class: 'cos-br-wp next' }, `${c.next} · next`) : null);
+}
+
+/** What came into the goal's thread since the watch began, in a line: how many updates, and what they amount to. */
+function sinceEl(entries: readonly ThreadEntry[], from: number | undefined): HTMLElement | null {
+  if (from === undefined) return null;
+  const since = entries.filter((e) => e.at > from && e.kind !== 'you');
+  if (!since.length) return null;
+  const at = new Date(from).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+  return h('div', { class: 'cos-br-since' }, h('b', null, `Since your last watch (${at})`), [`${since.length} update${since.length === 1 ? '' : 's'}`, ...bundleSays(since)].join(' · '));
+}
+
+/**
+ * Opens Comms, the bridge (README.md#the-watch): the goal at the conn as a sheet in focus, or with none, the muster.
+ */
 export function openStream(ui: CommsUi): void {
-  let goal: string | null = keptGoal;
+  let { conn } = watchNow();
+  // the muster looked at mid-watch, the watch staying on; the muster row opened; the hail put on screen
+  let peek = false;
+  let expanded: string | null = null;
+  let onScreen: string | null = null;
+  let reportsOpen = false;
   let open: InboxItem[] = [];
   let landed: LandedItem[] = [];
   let entries: ThreadEntry[] = [];
   let shownThread = '';
   let shownAsk = '';
+  // when the captain last looked at the goal at the conn, as the watch began: its sheet opens on what's new since
+  let watchFrom = conn ? seenAt(conn) : undefined;
 
+  const status = h('div', { class: 'cos-br-status' });
+  const down = h('button', { class: 'cos-br-btn cos-br-down', title: 'The goal goes back to its berth, and the muster comes up' }, 'Stand down');
+  const chip = h('button', { class: 'cos-br-chip' });
+  const bar = h('div', { class: 'cos-br-bar' }, status, down, chip);
   const goals = h('div', { class: 'cos-st-goals' });
   const left = h('div', { class: 'cos-st-left' });
   const head = h('div', { class: 'cos-st-head' });
@@ -158,11 +224,36 @@ export function openStream(ui: CommsUi): void {
   const ask = h('div', { class: 'cos-st-ask' });
   const foot = h('div', { class: 'cos-st-foot' });
   const side = h('div', { class: 'cos-st-side' });
-  const body = h('div', { class: 'cos-stream' }, left, h('div', { class: 'cos-st-right' }, head, thread, foot), side);
+  const muster = h('div', { class: 'cos-br-muster' });
+  const hail = h('div', { class: 'cos-br-hail', hidden: true });
+  const viewer = h('div', { class: 'cos-br-viewer' }, h('div', { class: 'cos-st-right' }, head, thread, foot), muster, hail);
+  const body = h('div', { class: 'cos-bridge' }, bar, h('div', { class: 'cos-stream' }, left, viewer, side));
   const back = () => ui.panels.backTo('Comms', () => openStream(ui));
   const openAgent = (id: string) => {
     ui.openAgent(id);
     back();
+  };
+
+  // taking the conn of a goal (or standing down, with null): drawn at once, kept by Focus
+  // (until Focus has it, what's drawn goes by the captain's press rather than what Focus last said)
+  let taking = false;
+  const take = (id: string | null) => {
+    conn = id ?? undefined;
+    peek = false;
+    expanded = onScreen = null;
+    watchFrom = id ? seenAt(id) : undefined;
+    taking = true;
+    render();
+    void callPlugin(CHIEF_OF_STAFF, '/conn', { lead: id }).catch((e: Error) => ui.error(e.message)).finally(() => {
+      taking = false;
+      render();
+    });
+  };
+  down.onclick = () => take(null);
+  chip.onclick = () => {
+    if (!conn) return;
+    peek = !peek;
+    render();
   };
 
   // the lead's workspace at the right, or the strip it folds to
@@ -196,12 +287,23 @@ export function openStream(ui: CommsUi): void {
     ws.show(lead, entries);
   };
 
-  const flaggedFor = (leadId: string) => open.filter((i) => i.lane === 'needs-you' && i.agentId === leadId);
-  // the slices that landed in Show: at the end of their goal's thread, or on the left once their lead's gone
+  // the slices that landed in Show: at the end of their goal's thread at the conn, the rest in the muster's reports
   const landedSplitNow = () => landedSplit(landed, (id) => !!focus.agent(id));
 
-  // the goals list, or the strip it folds to
-  const renderLeft = (leads: Agent[]) => {
+  // across the top: the watch, standing down, and the Muster chip with what waits outside the goal at the conn
+  const renderBar = (all: readonly Filed[]) => {
+    const lead = conn ? focus.agent(conn) : undefined;
+    fill(status, lead ? h('span', null, h('b', null, 'On watch'), ` · ${lead.lead?.title ?? lead.name}`) : h('span', null, h('b', null, 'Bridge'), ' · No watch'));
+    down.hidden = !lead;
+    const count = all.filter((f) => f.reach === 'muster' || f.reach === 'hail').length;
+    fill(chip, 'Muster', h('b', null, String(count)));
+    chip.classList.toggle('attn', count > 0);
+    chip.classList.toggle('on', !lead || peek);
+    chip.title = !lead ? 'The muster: what waits on you, by what each unblocks' : peek ? 'Back to the goal at the conn' : 'Look over the muster: the watch stays on';
+  };
+
+  // the rail: every goal in its berth by project, staying where it is, with how many decisions wait on it
+  const renderLeft = (leads: Agent[], all: readonly Filed[]) => {
     const folded = localStorage.getItem(FOLDED) === '1';
     body.classList.toggle('folded', folded);
     const fold = (to: boolean) => () => {
@@ -209,49 +311,121 @@ export function openStream(ui: CommsUi): void {
       render();
     };
     if (folded) {
-      const needing = leads.filter((l) => flaggedFor(l.id).length).length;
-      fill(left, h('button', { class: 'cos-st-strip', title: 'Show the goals', onclick: fold(false) }, h('span', null, `Goals${needing ? ` · ${needing} need you` : ''}`)));
+      const waiting = all.filter((f) => f.reach === 'muster' || f.reach === 'hail').length;
+      fill(left, h('button', { class: 'cos-st-strip', title: 'Show the goals', onclick: fold(false) }, h('span', null, `Goals${waiting ? ` · ${waiting} waiting` : ''}`)));
       return;
     }
     fill(left,
       h('div', { class: 'cos-st-left-top' },
         h('button', { class: 'cos-st-foldbtn', title: 'Fold the goals away', onclick: fold(true) }, '‹')),
       goals);
-    renderGoals(leads);
+    renderRail(leads, all);
   };
 
-  const renderGoals = (leads: Agent[]) => {
+  const renderRail = (leads: Agent[], all: readonly Filed[]) => {
     const now = Date.now();
-    const sections = goalSections(leads, focus.shown, (id) => flaggedFor(id).length > 0);
-    // what waits on the captain that isn't a goal's conversation: pull requests with nobody's lead on them, by project
-    const loose = open.filter((i) => i.lane === 'needs-you' && !i.agentId);
-    const row = (l: Agent) => {
-      const r = goalRow(flaggedFor(l.id).length, latestOf.get(l.id), seenAt(l.id), l.status, now);
-      return h('button', { class: `cos-st-row ${r.dot}${l.id === goal ? ' sel' : ''}`, title: `${l.lead?.title ?? l.name}\n${l.name} · ${doing(l.status)}`, onclick: () => { goal = keptGoal = l.id; render(); } },
-        h('i', { class: 'cos-st-dot' }),
-        h('span', { class: 'cos-st-row-title' }, l.lead?.title ?? l.name),
-        h('small', null, r.right));
+    const decisions = (id: string) => all.filter((f) => f.item.agentId === id && f.grade !== 'word').length;
+    const berth = (l: Agent) => {
+      const n = decisions(l.id);
+      const r = goalRow(n, latestOf.get(l.id), seenAt(l.id), l.status, now);
+      const at = l.id === conn;
+      const title = l.lead?.title ?? l.name;
+      return h('button', {
+        class: `cos-st-row cos-br-berth ${r.dot}${at ? ' sel' : ''}${conn && !at ? ' dim' : ''}`,
+        title: `${at ? 'At the conn' : 'Take the conn'}: ${title}\n${l.name} · ${doing(l.status)}`,
+        onclick: () => { if (!at) take(l.id); },
+      },
+      h('i', { class: 'cos-st-dot' }),
+      h('span', { class: 'cos-st-row-title' }, title),
+      // at the conn, what waits on it is on its sheet
+      n && !at ? h('b', { class: 'cos-br-count', title: `${n} decision${n === 1 ? '' : 's'} waiting` }, String(n)) : h('small', null, at ? 'at the conn' : r.right));
     };
-    const landedLoose = landedSplitNow().loose;
-    const looseIn = (projectId: string) => [
-      ...loose.filter((i) => i.projectId === projectId).map((i) => h('div', { class: 'cos-st-loose' }, h('span', null, i.what), h('small', null, `Ready for you · ${i.who}`))),
-      ...landedLoose.filter((i) => i.projectId === projectId).map(landedLine),
-    ];
-    const els = sections.flatMap((s) => {
+    const els = goalSections(leads, focus.shown, () => false).flatMap((s) => {
       const project = focus.project(s.key);
-      return [h('h3', { class: `cos-st-section${s.key === 'needs' ? ' needs' : ''}`, style: project ? `--tone:${project.color}` : '' }, s.name), ...s.goals.map(row), ...(project ? looseIn(project.id) : [])];
+      return [h('h3', { class: 'cos-st-section', style: project ? `--tone:${project.color}` : '' }, s.name), ...s.goals.map(berth)];
     });
-    // a project with nothing under way may still have something ready for the captain
-    const listed = new Set(sections.map((s) => s.key));
-    for (const p of focus.shown) if (!listed.has(p.id) && looseIn(p.id).length) els.push(h('h3', { class: 'cos-st-section', style: `--tone:${p.color}` }, p.name), ...looseIn(p.id));
     fill(goals, ...(els.length ? els : [h('p', { class: 'muted' }, 'No goals under way.')]));
+  };
+
+  // a hail from a goal underway, over the sheet's corner: on screen in place, or told to stand by into the muster
+  const renderHail = (all: readonly Filed[]) => {
+    const f = all.find((x) => x.reach === 'hail');
+    const key = f ? `${f.item.id}|${onScreen === f.item.id}` : '';
+    if (hail.dataset.key === key) return;
+    hail.dataset.key = key;
+    hail.hidden = !f;
+    if (!f) return fill(hail);
+    const local = waitingNow().find((a) => hailKey(a) === f.item.id);
+    const shown = onScreen === f.item.id;
+    const standBy = h('button', { class: 'cos-br-btn', title: 'Into the muster, for when you stand down' }, 'Stand by');
+    standBy.onclick = () => void busy(standBy, () => callPlugin(CHIEF_OF_STAFF, '/stand-by', { key: f.item.id }), ui.error);
+    const screen = h('button', { class: 'cos-br-btn primary', onclick: () => { onScreen = f.item.id; render(); } }, 'On screen');
+    fill(hail,
+      h('div', { class: 'cos-br-hail-h' }, `Hail · ${f.item.goal} · ${f.item.who}`),
+      h('div', { class: 'cos-br-hail-what' }, f.item.what),
+      shown && local ? needCard(ui, local, openAgent) : null,
+      h('div', { class: 'cos-br-hail-acts' }, standBy, shown ? null : screen));
+  };
+
+  // the muster: what waits on the captain outside the goal at the conn, by what each unblocks, the reports folded at its foot
+  const renderMuster = (all: readonly Filed[]) => {
+    const rows = musterOrder(all.filter((f) => f.reach === 'muster' || f.reach === 'hail'));
+    const words = all.filter((f) => f.reach === 'report');
+    const landedHere = landed.filter((i) => !(conn && i.leadId === conn));
+    const key = JSON.stringify([rows.map((r) => [r.item.id, r.stoodBy, r.idle]), words.map((r) => r.item.id), landedHere.map((i) => i.id), expanded, conn, peek]);
+    if (muster.dataset.key === key) return;
+    muster.dataset.key = key;
+    const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
+    const lead = conn ? focus.agent(conn) : undefined;
+    const reports = words.length + landedHere.length;
+    fill(muster,
+      h('div', { class: 'cos-br-mh' },
+        h('b', null, 'Muster'),
+        h('span', null, `${rows.length} decision${rows.length === 1 ? '' : 's'}${reports ? `, ${reports} report${reports === 1 ? '' : 's'}` : ''}`),
+        h('small', null, 'by what each unblocks'),
+        lead ? h('button', { class: 'cos-br-btn', title: lead.lead?.title ?? lead.name, onclick: () => { peek = false; render(); } }, 'Back to the conn') : null),
+      ...(rows.length ? rows.map((f) => musterRow(f, local.get(f.item.id))) : [h('p', { class: 'cos-br-empty' }, lead ? 'Nothing else waits on you.' : 'Nothing waits on you. Take the conn of one goal: the rest stay underway on their orders.')]),
+      reports ? reportsEl(words, landedHere, local) : null);
+  };
+
+  const musterRow = (f: Filed, a: Attention | undefined) => {
+    const agent = f.item.agentId ? focus.agent(f.item.agentId) : undefined;
+    const isOpen = expanded === f.item.id;
+    const tag = f.grade === 'hail' ? (f.stoodBy ? 'hail, stood by' : 'hail') : '';
+    return h('div', { class: `cos-br-row ${f.grade}${isOpen ? ' open' : ''}` },
+      h('div', { class: 'cos-br-row-h' },
+        h('span', { class: 'cos-br-row-goal' }, f.item.goal, tag ? h('i', null, ` · ${tag}`) : null),
+        h('span', { class: 'cos-br-row-what' }, f.item.what),
+        h('small', null, unblocks(f))),
+      h('div', { class: 'cos-br-row-acts' },
+        a ? h('button', { class: 'cos-br-btn primary', onclick: () => { expanded = isOpen ? null : f.item.id; render(); } }, isOpen ? 'Close' : 'Open') : null,
+        agent?.task === 'lead' && agent.id !== conn ? h('button', { class: 'cos-br-btn', onclick: () => take(agent.id) }, 'Take the conn') : null),
+      isOpen && a ? h('div', { class: 'cos-br-row-card' }, needCard(ui, a, openAgent)) : null);
+  };
+
+  // words the chief of staff has ready for leads, and slices that landed in Show: heard with a press, nothing asked
+  const reportsEl = (words: readonly Filed[], landedHere: readonly LandedItem[], local: ReadonlyMap<string, Attention>) => {
+    const n = words.length + landedHere.length;
+    const says = [
+      landedHere.length ? `${landedHere.length} slice${landedHere.length === 1 ? '' : 's'} landed in Show` : '',
+      words.length ? `${words.length} word${words.length === 1 ? '' : 's'} ready for a lead` : '',
+    ].filter(Boolean).join(' · ');
+    const el = h('details', { class: 'cos-br-reports', open: reportsOpen },
+      h('summary', null, h('b', null, `Reports · ${n}`), h('span', null, says)),
+      ...words.flatMap((f) => {
+        const a = local.get(f.item.id);
+        return a ? [needCard(ui, a, openAgent)] : [];
+      }),
+      ...landedHere.map((item) => landedCard(ui, item, refreshInbox)));
+    el.addEventListener('toggle', () => { reportsOpen = el.open; });
+    return el;
   };
 
   const renderThread = (lead: Agent) => {
     const key = threadKey(lead.id, lead.status, entries);
     if (key === shownThread) return;
     shownThread = key;
-    fill(head, ...headEls(lead, () => openAgent(lead.id)));
+    fill(head, ...headEls(lead, () => openAgent(lead.id), [chartEl(lead), sinceEl(entries, watchFrom)]));
     fill(thread, ...threadEls(entries, lead, openWs), ask);
     // from what's new since the captain looked, else the chief of staff's latest reading when it's the last word (what
     // it asks of them comes under it), else the end
@@ -259,15 +433,6 @@ export function openStream(ui: CommsUi): void {
     const to = thread.querySelector<HTMLElement>('.cos-st-new') ?? (last instanceof HTMLElement && last.matches('.cos-st-rd') ? last : null);
     thread.scrollTop = to ? to.offsetTop - thread.offsetTop - 8 : thread.scrollHeight;
     seen(lead.id, entries.at(-1)?.at);
-  };
-
-  // a slice that landed in Show with nobody's lead aboard to tell: a line on the left, heard with a press
-  const landedLine = (item: LandedItem) => {
-    const got = h('button', { class: 'cos-st-got', title: 'You’ve heard: off Comms, nothing sent' }, 'Got it');
-    got.onclick = () => void busy(got, () => inbox.decideLanded(item.id, { ack: true }).then(refreshInbox), ui.error);
-    return h('div', { class: 'cos-st-loose' },
-      h('a', { href: `https://github.com/${item.repo}/pull/${item.number}`, target: '_blank', rel: 'noopener' }, `${landedAt(item)} merged itself in Show`),
-      h('small', { class: 'cos-st-landed' }, `Landed · ${item.goal ?? item.who}`, got));
   };
 
   // what needs the captain on this goal (the card Comms shows), or words the chief of staff has ready for its lead, and
@@ -301,12 +466,19 @@ export function openStream(ui: CommsUi): void {
 
   const render = () => {
     const leads = allLeads();
-    goal = pickGoal(goal, leads, (id) => flaggedFor(id).length > 0);
-    for (const l of leads) if (!asked.has(l.id) && l.id !== goal) refreshLatest(l.id);
-    renderLeft(leads);
-    if (goal !== fetched) picked();
-    const lead = goal ? focus.agent(goal) : undefined;
+    if (!taking) ({ conn } = watchNow());
+    const all = filed(open, conn, watchNow().stoodBy);
+    for (const l of leads) if (!asked.has(l.id) && l.id !== conn) refreshLatest(l.id);
+    const mustering = !conn || peek;
+    body.classList.toggle('on-watch', !!conn);
+    body.classList.toggle('mustering', mustering);
+    renderBar(all);
+    renderLeft(leads, all);
+    renderHail(all);
+    if (mustering) renderMuster(all);
+    const lead = conn ? focus.agent(conn) : undefined;
     if (!lead) return noGoal();
+    if (conn !== fetched) picked();
     renderThread(lead);
     renderAsk(lead);
     renderFoot(lead);
@@ -314,17 +486,18 @@ export function openStream(ui: CommsUi): void {
   };
 
   const noGoal = () => {
+    fetched = null;
     fill(head);
-    fill(thread, h('p', { class: 'muted' }, 'No goals under way.'));
+    fill(thread);
     fill(foot);
     fill(side);
     delete foot.dataset.lead;
     delete side.dataset.strip;
   };
 
-  // a goal newly picked, by the captain or for them, has its thread asked for
+  // a goal newly at the conn has its thread asked for
   const picked = () => {
-    fetched = goal;
+    fetched = conn ?? null;
     entries = [];
     shownThread = shownAsk = '';
     refreshThread();
@@ -337,18 +510,18 @@ export function openStream(ui: CommsUi): void {
   function refreshThread() {
     clearTimeout(asking);
     asking = setTimeout(() => {
-      const id = goal;
+      const id = conn;
       if (!id) return;
       void readPlugin<{ entries: ThreadEntry[] }>(CHIEF_OF_STAFF, `/thread/${encodeURIComponent(id)}`).then((t) => {
         noteLatest(id, t.entries);
-        if (goal !== id) return;
+        if (conn !== id) return;
         entries = t.entries;
         render();
       }, () => undefined);
-    }, fetched === goal && entries.length ? 1000 : 0);
+    }, fetched === conn && entries.length ? 1000 : 0);
   }
-  // the goals not picked have their threads asked for too, once as they're shown and again as their lead's turn ends,
-  // for when something last came in: their rows say whether it's new since the captain looked
+  // the goals underway have their threads asked for too, once as they're shown and again as their lead's turn ends,
+  // for when something last came in: their berths say whether it's new since the captain looked
   const asked = new Set<string>();
   const noteLatest = (id: string, list: readonly ThreadEntry[]) => {
     const at = latestNews(list);
@@ -378,12 +551,14 @@ export function openStream(ui: CommsUi): void {
     clearTimeout(asking);
   });
   ui.panels.own(focus.onShip(refreshInbox));
+  // the watch changing, here or in another browser: taking the conn, standing down, a hail stood by
+  ui.panels.own(onPluginState(CHIEF_OF_STAFF, render));
   // a turn ending is a lead's status turning to done: an agent changes far more often than that
   const statusOf = new Map<string, string>();
   ui.panels.own(focus.onAgent((a) => {
     const ended = a.status === 'done' && statusOf.get(a.id) !== 'done';
     statusOf.set(a.id, a.status);
-    if (a.id === goal) refreshThread();
+    if (a.id === conn) refreshThread();
     else if (ended && asked.has(a.id)) refreshLatest(a.id);
   }));
 }
