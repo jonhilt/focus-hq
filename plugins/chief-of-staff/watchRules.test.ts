@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { chartStrip, gradeOf, musterOrder, reachOf, stoodByKept, toasts, watchOf } from './watchRules';
+import { gradeOf, musterOrder, reachOf, stoodByKept, stripOf, toasts, watchOf } from './watchRules';
 
 describe('how hard something asks for the captain', () => {
   it('is a word for the lead on carry on and back to the lead, a decision on a card', () => {
@@ -72,14 +72,33 @@ describe('the muster', () => {
   });
 });
 
-describe('the chart strip', () => {
-  it('shows the last waypoint behind, the one it’s at and the next, the older ones counted', () => {
-    const waypoints = [{ slice: 1, title: 'Quick wins' }, { slice: 2, title: 'PDF parity' }, { slice: 3, heading: 'Signing flow' }];
-    expect(chartStrip(waypoints, ['Portal', 'Reminders'])).toEqual({ behind: 1, last: 'PDF parity', here: 'Signing flow', next: 'Portal' });
+describe('the strip', () => {
+  const waypoints = [{ slice: 1, title: 'Quick wins' }, { slice: 2, title: 'PDF parity', learned: ['Fee rows follow the PDF'] }, { slice: 3, heading: 'Signing flow' }];
+
+  it('is a section per slice, the one it’s at last, then the first of the lead’s next ones', () => {
+    const s = stripOf({ waypoints, artifacts: [], prs: [], questions: [] }, ['Portal', 'Reminders']);
+    expect(s.slices.map((x) => [x.slice, x.name, x.now])).toEqual([[1, 'Quick wins', false], [2, 'PDF parity', false], [3, 'Signing flow', true]]);
+    expect(s.next).toBe('Portal');
+  });
+
+  it('puts each exhibit in the slice it was last shown in, and one from before that was kept in the current slice', () => {
+    const artifacts = [{ id: 'fees', title: 'Fee table', at: 1, slice: 2 }, { id: 'flow', title: 'Flow', at: 2, slice: 3, image: true }, { id: 'old', title: 'Old', at: 0 }];
+    const s = stripOf({ waypoints, artifacts, prs: [], questions: [] }, []);
+    expect(s.slices.map((x) => x.exhibits.map((e) => e.id))).toEqual([[], ['fees'], ['flow', 'old']]);
+    expect(s.slices[2]?.exhibits[0]).toEqual({ id: 'flow', title: 'Flow', at: 2, image: true });
+  });
+
+  it('keeps each slice’s record: its merged pull requests, the questions answered in it, and what it taught', () => {
+    const prs = [{ number: 1268, slice: 2, outcome: 'merged' as const, recap: { title: 'Fee rows follow the PDF' } }, { number: 1270, slice: 2, outcome: 'closed' as const }, { number: 1271, slice: 2, outcome: 'merged' as const }];
+    const questions = [{ slice: 2, question: 'Bill on acceptance?', answer: { at: 5 } }, { slice: 2, question: 'Still open?' }];
+    const two = stripOf({ waypoints, artifacts: [], prs, questions }, []).slices[1];
+    expect(two?.shipped).toEqual(['#1268 Fee rows follow the PDF', '#1271']);
+    expect(two?.decided).toEqual([{ what: 'Bill on acceptance?', at: 5 }]);
+    expect(two?.taught).toEqual(['Fee rows follow the PDF']);
   });
 
   it('names a slice by its number until it has a title or heading, and shows no more than there is', () => {
-    expect(chartStrip([{ slice: 1 }], [])).toEqual({ behind: 0, here: 'Slice 1' });
-    expect(chartStrip([], [])).toEqual({ behind: 0 });
+    expect(stripOf({ waypoints: [{ slice: 1 }], artifacts: [], prs: [], questions: [] }, []).slices[0]?.name).toBe('Slice 1');
+    expect(stripOf({ waypoints: [], artifacts: [], prs: [], questions: [] }, [])).toEqual({ slices: [] });
   });
 });

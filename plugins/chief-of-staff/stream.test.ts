@@ -15,7 +15,10 @@ const agent = (id: string): Agent => ({
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
   lead: {
     station: 0, title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
-    waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1 }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
+    waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1, learned: ['Fees follow the PDF'] }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
+    artifacts: [{ id: 'fees', title: 'Fee table', at: 5, slice: 1 }, { id: 'flow', title: 'Flow', at: 6, slice: 2 }],
+    landed: [{ repo: 'acme/shop', number: 12, url: '', slice: 1, outcome: 'merged' }],
+    questions: [{ slice: 1, id: 'q1', question: 'Bill on acceptance?', options: [], at: 3, answer: { at: 4 } }],
   },
 });
 const leads = [agent('a'), agent('b')];
@@ -101,7 +104,7 @@ describe('the bridge with nobody at the conn', () => {
 });
 
 describe('taking the conn', () => {
-  it('opens the goal’s sheet: its head, its chart and its orders, the other berths dimmed with their counts', async () => {
+  it('opens the goal’s sheet: its head, its strip and its orders, the other berths dimmed with their counts', async () => {
     fake.open = [card];
     await open();
     berth('Goal a')?.click();
@@ -110,10 +113,33 @@ describe('taking the conn', () => {
     expect(shown('sheet')).toBe(true);
     expect(shown('empty')).toBe(false);
     expect(document.body.textContent).toContain('On watch · Goal a');
-    expect(part('chart')?.textContent).toBe('Quick winsSaved listSharing · next');
+    expect(parts('slice').map((s) => s.firstElementChild?.textContent)).toEqual(['1 · Quick wins', '2 · Saved list · now', 'Sharing · next']);
     expect(part('sheet')?.textContent).toContain('Done: Saved items survive a reload');
     expect(berth('Goal b')?.className).toContain('tw:opacity-50');
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
+  });
+
+  it('lays the slice it’s at out on the strip and stacks the ones behind; a stack fans out with its record under, a card opens in place, and Esc folds them', async () => {
+    await open();
+    berth('Goal a')?.click();
+    await settle();
+    expect(parts('card').map((c) => c.textContent)).toEqual(['Flow']);
+    expect(parts('stack').map((c) => c.textContent)).toEqual(['1 exhibit']);
+    part('stack')?.click();
+    expect(parts('card').map((c) => c.textContent)).toEqual(['Fee table']);
+    expect(parts('stack').map((c) => c.textContent)).toEqual(['1 exhibit · now']);
+    expect(part('record')?.textContent).toContain('#12');
+    expect(part('record')?.textContent).toContain('Bill on acceptance?');
+    expect(part('record')?.textContent).toContain('Fees follow the PDF');
+    part('card')?.click();
+    expect(part('exhibit')?.textContent).toContain('Exhibit · Fee table · slice 1');
+    expect(part('exhibit')?.querySelector('iframe')?.getAttribute('src')).toContain('fees.html');
+    press('Escape', 'Escape');
+    expect(part('exhibit')).toBeNull();
+    expect(part('record')).not.toBeNull();
+    press('Escape', 'Escape');
+    expect(part('record')).toBeNull();
+    expect(parts('card').map((c) => c.textContent)).toEqual(['Flow']);
   });
 
   it('takes it by a berth’s number too', async () => {

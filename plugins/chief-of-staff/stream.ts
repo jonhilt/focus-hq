@@ -1,6 +1,6 @@
 import './bridge.css';
 import { busy, callPlugin, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
-import { ACTIVE_STATUSES, type Agent, type GoalArtifact, artifactUrl, type Attention } from '../../plugin-api/shared';
+import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention } from '../../plugin-api/shared';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -9,7 +9,7 @@ import { answersOf } from './needCard';
 import { CHIEF_OF_STAFF, cosStateOf } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import type { ThreadEntry } from './thread';
-import { type ChartStrip, chartStrip, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
+import { type Grade, gradeOf, musterOrder, type Reach, reachOf, type StripExhibit, type StripSlice, stripOf, watchOf } from './watchRules';
 
 // Comms as the bridge (README.md#the-watch), drawn as docs/interface-style/mockups/bridge-grammar.html draws it, its
 // values in Tailwind's utilities (bridge.css). The HUD across the top: where the captain is (Bridge, on watch or not)
@@ -111,44 +111,6 @@ function dotEl(lead: Agent): HTMLElement {
   return h('i', { class: `tw:inline-block tw:w-[9px] tw:h-[9px] tw:rounded-full ${kind}` });
 }
 
-/** How far apart the chart's waypoints sit, from its left edge. */
-const STEP = 200;
-
-/**
- * The chart as the sheet draws it (`chartStrip`): from its left edge, the older waypoints stacked with their count, the
- * last one, where the goal is, and the next one; a solid track up to where it is and a dashed one on to the next. Each
- * label starts under its waypoint and reads on to the right.
- */
-function chartEl(c: ChartStrip): HTMLElement {
-  const svg = (tag: string, attrs: Record<string, string | number>) => {
-    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
-    return el;
-  };
-  const stops = [
-    ...(c.behind ? [{ kind: 'behind', text: `${c.behind} behind` }] : []),
-    ...(c.last ? [{ kind: 'last', text: c.last }] : []),
-    { kind: 'here', text: c.here ?? '' },
-    ...(c.next ? [{ kind: 'next', text: `${c.next} · next` }] : []),
-  ].map((s, i) => ({ ...s, x: 8 + i * STEP }));
-  const at = (kind: string) => stops.find((s) => s.kind === kind)?.x ?? 0;
-  const art = svg('svg', { width: '100%', height: 40, class: 'tw:absolute tw:inset-0 tw:overflow-visible' });
-  art.append(svg('line', { x1: stops[0]?.x ?? 0, y1: 14, x2: at('here'), y2: 14, stroke: '#e9edf2', 'stroke-width': 2 }));
-  if (c.next) art.append(svg('line', { x1: at('here'), y1: 14, x2: at('next'), y2: 14, stroke: '#8a94a3', 'stroke-width': 1.5, 'stroke-dasharray': '4 4' }));
-  for (const s of stops) {
-    if (s.kind === 'behind') art.append(svg('circle', { cx: s.x, cy: 14, r: 5, fill: '#3a424e' }), svg('circle', { cx: s.x + 8, cy: 14, r: 5, fill: '#e9edf2' }));
-    if (s.kind === 'last') art.append(svg('circle', { cx: s.x, cy: 14, r: 5, fill: '#e9edf2' }));
-    if (s.kind === 'here') art.append(svg('circle', { cx: s.x, cy: 14, r: 7, fill: '#1b1f25', stroke: '#e9edf2', 'stroke-width': 2 }));
-    if (s.kind === 'next') art.append(svg('circle', { cx: s.x, cy: 14, r: 5, fill: '#1b1f25', stroke: '#8a94a3', 'stroke-width': 1.5, 'stroke-dasharray': '2 2' }));
-  }
-  return h('div', { class: 'tw:relative tw:mx-[18px] tw:mt-2 tw:h-[66px]', attrs: { 'data-part': 'chart' } },
-    art,
-    ...stops.map((s) => h('span', {
-      class: `tw:absolute tw:top-10 tw:text-[10.5px] tw:whitespace-nowrap tw:truncate ${s.kind === 'here' ? 'tw:text-ink' : 'tw:text-muted'}`,
-      style: `left:${s.x - 6}px;max-width:${STEP - 16}px`,
-    }, s.text)));
-}
-
 /**
  * Opens Comms, the bridge (README.md#the-watch): the goal at the conn as a sheet, or the muster, or an empty table.
  */
@@ -159,6 +121,10 @@ export function openStream(ui: CommsUi): void {
   let talking = false;
   let expanded: string | null = null;
   let onScreen: string | null = null;
+  // the strip: the slice behind fanned out in place, the exhibit open under it, and the exhibits looked at this watch
+  let fanned: number | null = null;
+  let opened: string | null = null;
+  const had = new Set<string>();
   let open: InboxItem[] = [];
   let landed: LandedItem[] = [];
   let entries: ThreadEntry[] = [];
@@ -181,8 +147,10 @@ export function openStream(ui: CommsUi): void {
   const empty = h('div', { class: `${TW.table} tw:border tw:border-dashed tw:border-line tw:grid tw:place-items-center tw:text-center tw:text-muted tw:text-[13px]`, attrs: { 'data-part': 'empty' } },
     h('div', null, h('b', { class: 'tw:block tw:font-display tw:text-[15px] tw:font-semibold tw:tracking-[.06em] tw:text-ink tw:mb-1 tw:uppercase' }, 'Nothing at the conn'), 'Take the conn of one goal. The rest stay underway on their orders.'));
   const head = h('div', { class: 'tw:flex-none' });
-  const cards = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:px-[18px] tw:pt-[14px] tw:pb-[18px] tw:flex tw:flex-col tw:gap-[10px]' });
-  const viewer = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut tw:origin-[0_20px] tw:transition-transform tw:duration-[560ms] tw:ease-spring`, attrs: { 'data-part': 'sheet' } }, head, cards);
+  const shelf = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px] tw:empty:hidden' });
+  const cards = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px]' });
+  const below = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:px-[18px] tw:pt-[14px] tw:pb-[18px] tw:flex tw:flex-col tw:gap-[10px]' }, shelf, cards);
+  const viewer = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut tw:origin-[0_20px] tw:transition-transform tw:duration-[560ms] tw:ease-spring`, attrs: { 'data-part': 'sheet' } }, head, below);
   const muster = h('div', { class: `${TW.table} tw:overflow-y-auto tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 tw:px-[18px] tw:py-4 cos-rise`, attrs: { 'data-part': 'muster' } });
   const said = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:flex tw:flex-col tw:gap-2' });
   const box = h('textarea', { class: 'tw:flex-none tw:h-[34px] tw:min-h-0 tw:border tw:border-solid tw:border-line tw:bg-transparent tw:text-ink tw:text-[11px] tw:p-2 tw:resize-none tw:outline-none tw:rounded-none tw:focus:border-muted tw:font-read' });
@@ -204,8 +172,10 @@ export function openStream(ui: CommsUi): void {
     conn = id ?? undefined;
     mustering = id === null;
     talking = false;
-    expanded = onScreen = null;
+    expanded = onScreen = opened = null;
+    fanned = null;
     ticked.clear();
+    had.clear();
     watchFrom = id ? seenAt(id) : undefined;
     taking = true;
     entries = [];
@@ -278,16 +248,102 @@ export function openStream(ui: CommsUi): void {
     fill(rail, ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[12px]' }, 'No goals under way.')]));
   };
 
-  // the sheet's head: the goal, the lead (Talk), what came in since the watch began, the chart, the orders
+  // the strip under the goal's head (stripOf): a section per slice on one track, the ones behind as stacks of their
+  // exhibits with a count, the one it's at with its exhibits laid out, and the next as an empty slot. Pressing a stack
+  // fans it out in place (the current slice gathers into a stack), and pressing a card opens it under the strip.
+  const fan = (slice: number | null) => {
+    fanned = slice;
+    opened = null;
+    render();
+  };
+  const look = (id: string | null) => {
+    opened = opened === id ? null : id;
+    if (id) had.add(id);
+    render();
+  };
+  const exhibitEl = (x: StripExhibit, lead: Agent, fresh: boolean) => h('button', {
+    class: 'tw:w-[104px] tw:flex-none tw:p-0 tw:bg-transparent tw:border-0 tw:text-left tw:cursor-pointer tw:group',
+    title: `${x.title}: open it here`, attrs: { 'data-part': 'card', 'data-id': x.id }, onclick: () => look(x.id),
+  },
+    h('span', { class: `tw:block tw:h-[58px] tw:bg-surface2 tw:border tw:border-solid tw:shadow-lift-1 tw:overflow-hidden tw:transition-colors tw:group-hover:border-muted ${opened === x.id ? 'tw:border-ink' : 'tw:border-hair-card'}` },
+      x.image ? h('img', { class: 'tw:block tw:w-full tw:h-full tw:object-cover tw:object-top', src: artifactUrl(lead.id, x, 'jpg'), alt: '' }) : null),
+    h('span', { class: 'tw:flex tw:items-center tw:gap-1 tw:mt-1 tw:text-[10.5px] tw:text-ink' },
+      fresh ? h('i', { class: 'tw:flex-none tw:w-[6px] tw:h-[6px] tw:rounded-full tw:bg-ink', title: 'New since the watch began' }) : null,
+      h('span', { class: 'tw:truncate' }, x.title)));
+  const stackEl = (sl: StripSlice, back: boolean) => h('button', {
+    class: 'tw:relative tw:block tw:w-[112px] tw:h-[76px] tw:p-0 tw:bg-transparent tw:border-0 tw:text-left tw:cursor-pointer tw:group',
+    title: back ? 'Back to now' : `Slice ${sl.slice}: fan its exhibits out, its record under`, attrs: { 'data-part': 'stack' }, onclick: () => fan(back ? null : sl.slice),
+  },
+    sl.exhibits.length > 1 ? h('span', { class: 'tw:absolute tw:left-[2px] tw:top-0 tw:w-[92px] tw:h-[52px] tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:rotate-[-5deg]' }) : null,
+    h('span', { class: `tw:absolute tw:left-[8px] tw:top-[2px] tw:w-[92px] tw:h-[52px] tw:bg-surface2 tw:border tw:shadow-lift-1 tw:transition-colors tw:group-hover:border-muted ${sl.exhibits.length ? 'tw:border-solid tw:border-hair-card' : 'tw:border-dashed tw:border-line'}` }),
+    h('span', { class: 'tw:absolute tw:left-[2px] tw:top-[60px] tw:text-[10.5px] tw:text-muted tw:whitespace-nowrap' },
+      back ? `${plural(sl.exhibits.length, 'exhibit')} · now` : sl.exhibits.length ? plural(sl.exhibits.length, 'exhibit') : 'its record'));
+  const section = (label: string, pip: string, rule: string, here: boolean, ...body: (HTMLElement | null)[]) =>
+    h('div', { class: 'tw:relative tw:flex-none tw:min-w-[96px] tw:pr-4', attrs: { 'data-part': 'slice' } },
+      h('span', { class: `tw:block tw:h-4 tw:text-[10.5px] tw:whitespace-nowrap tw:truncate tw:max-w-[220px] ${here ? 'tw:text-ink' : 'tw:text-muted'}` }, label),
+      h('span', { class: `tw:absolute tw:left-0 tw:right-0 tw:top-[24px] ${rule}` }),
+      h('i', { class: `tw:absolute tw:top-[25px] tw:left-[4px] tw:-translate-y-1/2 tw:rounded-full ${pip}` }),
+      h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-[22px]' }, ...body));
+  const sliceEl = (sl: StripSlice, lead: Agent) => {
+    const out = sl.slice === fanned || (sl.now && fanned === null);
+    const pip = sl.now ? 'tw:w-3 tw:h-3 tw:bg-surface tw:shadow-[0_0_0_2px_#e9edf2]' : 'tw:w-[9px] tw:h-[9px] tw:bg-ink';
+    const fresh = (x: StripExhibit) => watchFrom !== undefined && x.at > watchFrom && !had.has(x.id);
+    const body = !out
+      ? [stackEl(sl, sl.now)]
+      : sl.exhibits.length
+        ? sl.exhibits.map((x) => exhibitEl(x, lead, fresh(x)))
+        : [h('span', { class: 'tw:block tw:h-[76px] tw:text-[10.5px] tw:text-muted' }, sl.now ? 'Nothing shown yet' : 'Nothing shown')];
+    return section(`${sl.slice} · ${sl.name}${sl.now ? ' · now' : ''}`, pip, 'tw:h-[2px] tw:bg-ink', sl.now || sl.slice === fanned, ...body);
+  };
+  const stripEl = (slices: readonly StripSlice[], next: string | undefined, lead: Agent) =>
+    h('div', { class: 'tw:flex tw:mx-[18px] tw:mt-[10px] tw:pb-2 tw:overflow-x-auto tw:overflow-y-hidden', attrs: { 'data-part': 'strip' } },
+      ...slices.map((sl) => sliceEl(sl, lead)),
+      next
+        ? section(`${next} · next`, 'tw:w-[9px] tw:h-[9px] tw:bg-surface tw:shadow-[inset_0_0_0_1.5px_#8a94a3]', 'tw:h-0 tw:border-t-[1.5px] tw:border-dashed tw:border-muted', false,
+          h('span', { class: 'tw:grid tw:place-items-center tw:w-[104px] tw:h-[58px] tw:border tw:border-dashed tw:border-line tw:text-[10.5px] tw:text-muted' }, 'nothing yet'))
+        : null);
+
+  // under the strip: the exhibit opened from its card, and the record of the slice fanned out (what it shipped, what
+  // was decided and when, what it taught), both resting on the sheet above the cards that ask for the captain
+  const renderShelf = (lead: Agent, slices: readonly StripSlice[]) => {
+    const sl = slices.find((x) => x.slice === fanned);
+    const x = slices.flatMap((y) => y.exhibits.map((e) => ({ ...e, slice: y.slice }))).find((e) => e.id === opened);
+    keyed(shelf, JSON.stringify([lead.id, sl ?? null, x ?? null]), () => fill(shelf, x ? openedEl(lead, x) : null, sl ? recordEl(sl) : null));
+  };
+  const recordEl = (sl: StripSlice) => {
+    const col = (k: string, lines: readonly (readonly [string, string?])[]) => h('div', { class: 'tw:min-w-0' },
+      h('div', { class: `${TW.label} tw:mb-1` }, k),
+      ...(lines.length ? lines : [['Nothing'] as const]).map(([what, when]) => h('div', { class: `tw:text-[11.5px]/[1.4] tw:mb-1 ${lines.length ? 'tw:text-ink' : 'tw:text-muted'}` },
+        what, when ? h('small', { class: 'tw:block tw:text-muted tw:text-[10px]' }, when) : null)));
+    return h('div', { class: `${TW.card} tw:grid tw:grid-cols-[1.1fr_1.3fr_1fr] tw:gap-[14px]`, attrs: { 'data-part': 'record' } },
+      col('Shipped', sl.shipped.map((p) => [p] as const)),
+      col('Decided', sl.decided.map((d) => [d.what, new Date(d.at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })] as const)),
+      col('Taught', sl.taught.map((t) => [t] as const)));
+  };
+  const openedEl = (lead: Agent, x: StripExhibit & { slice: number }) =>
+    h('div', { class: TW.card, attrs: { 'data-part': 'exhibit' } },
+      h('div', { class: 'tw:flex tw:justify-between tw:items-center tw:mb-2 tw:gap-2' },
+        h('div', { class: `${TW.ch} tw:truncate` }, `Exhibit · ${x.title} · slice ${x.slice}`),
+        h('div', { class: 'tw:flex tw:gap-[6px]' },
+          h('a', { class: TW.btn, href: artifactUrl(lead.id, x, 'html'), target: '_blank', rel: 'noopener' }, 'New tab'),
+          button('Close', false, () => look(null)))),
+      x.image
+        ? h('img', { class: 'tw:block tw:w-full tw:border tw:border-solid tw:border-hair-card', src: artifactUrl(lead.id, x, 'jpg'), alt: x.title })
+        : h('iframe', { class: 'tw:block tw:w-full tw:h-[260px] tw:border-0 tw:bg-white', src: artifactUrl(lead.id, x, 'html'), title: x.title }));
+
+  // the sheet's head: the goal, the lead (Talk), what came in since the watch began, the strip, the orders
   const renderHead = (lead: Agent) => {
     const work = lead.lead;
     const project = focus.project(lead.projectId);
     const from = watchFrom;
     const since = from === undefined ? [] : entries.filter((e) => e.at > from && e.kind !== 'you');
-    const c = chartStrip(work?.waypoints ?? [], work?.note?.next ?? []);
+    const strip = stripOf({
+      waypoints: work?.waypoints ?? [], artifacts: work?.artifacts ?? [], prs: [...(work?.landed ?? []), ...(work?.prs ?? [])], questions: work?.questions ?? [],
+    }, work?.note?.next ?? []);
     const orders = [work?.note?.done ? `Done: ${work.note.done}` : '', ...(work?.note?.learned ?? []).slice(-2).reverse()].filter(Boolean);
     const says = [plural(since.length, 'update'), ...bundleSays(since)];
-    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, c, orders, talking]);
+    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, strip, fanned, opened, [...had], orders, talking]);
+    renderShelf(lead, strip.slices);
     keyed(head, key, () => fill(head,
       h('div', { class: 'tw:grid tw:grid-cols-[1fr_auto] tw:gap-x-3 tw:gap-y-[2px] tw:px-[18px] tw:pt-[14px] tw:pb-[10px] tw:border-b tw:border-solid tw:border-hair-card' },
         h('span', { class: TW.label }, project?.name ?? ''),
@@ -301,9 +357,9 @@ export function openStream(ui: CommsUi): void {
           h('span', null, `Since your last watch (${clock(from ?? 0)}):`),
           ...says.map((s) => h('b', { class: 'tw:text-ink tw:font-medium' }, s)))
         : null,
-      c.here ? chartEl(c) : null,
+      strip.slices.length ? stripEl(strip.slices, strip.next, lead) : null,
       orders.length
-        ? h('div', { class: `tw:mx-[18px] tw:text-[11.5px] tw:text-muted tw:flex tw:gap-2 tw:items-center tw:h-[22px] tw:whitespace-nowrap tw:overflow-hidden ${c.here ? '' : 'tw:mt-[10px]'}` },
+        ? h('div', { class: `tw:mx-[18px] tw:text-[11.5px] tw:text-muted tw:flex tw:gap-2 tw:items-center tw:h-[22px] tw:whitespace-nowrap tw:overflow-hidden ${strip.slices.length ? '' : 'tw:mt-[10px]'}` },
           h('span', { class: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.14em] tw:text-label' }, 'Orders'),
           ...orders.map((o) => h('span', { class: 'tw:text-ink tw:border tw:border-solid tw:border-hair-card tw:px-[6px] tw:max-w-[50%] tw:truncate', title: o }, o)))
         : null));
@@ -319,15 +375,15 @@ export function openStream(ui: CommsUi): void {
     const mineLanded = landed.filter((i) => i.leadId === lead.id);
     const work = lead.lead;
     // what the cards show, and what their answers depend on (the lead's pull requests, for the merge buttons)
-    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, mineLanded.map((i) => i.id), work?.artifacts, work?.prs, focus.preview(lead.projectId)]);
+    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, mineLanded.map((i) => i.id), work?.prs, focus.preview(lead.projectId)]);
     keyed(cards, key, () => {
       if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
       const els: HTMLElement[] = [];
       if (item && a && !ready) els.push(decisionCard(item, a, lead));
       if (item && ready) els.push(wordCard(item));
       for (const l of mineLanded) els.push(landedCard(l));
-      const shown = exhibitCard(lead);
-      if (shown) els.push(shown);
+      const live = previewCard(lead);
+      if (live) els.push(live);
       fill(cards, ...els);
     });
   };
@@ -356,20 +412,14 @@ export function openStream(ui: CommsUi): void {
       got);
   };
 
-  // what the lead last put up to look at: its picture, or the page itself, and their preview when one runs
-  const exhibitCard = (lead: Agent): HTMLElement | null => {
-    const art = (lead.lead?.artifacts ?? []).reduce<GoalArtifact | undefined>((last, x) => (!last || x.at >= last.at ? x : last), undefined);
+  // the lead's preview, while one runs: what they put up to look at is on the strip
+  const previewCard = (lead: Agent): HTMLElement | null => {
     const preview = previewFor(focus.preview(lead.projectId), [...(lead.lead?.landed ?? []), ...(lead.lead?.prs ?? [])]);
     const live = preview?.status === 'running' ? preview.links[0]?.url : undefined;
-    if (!art && !live) return null;
-    const links = h('div', { class: 'tw:flex tw:gap-[6px]' },
-      art ? h('a', { class: TW.btn, href: artifactUrl(lead.id, art, 'html'), target: '_blank', rel: 'noopener' }, 'Open') : null,
-      live ? h('a', { class: TW.btn, href: live, target: '_blank', rel: 'noopener' }, 'Their preview') : null);
-    return h('div', { class: TW.card, attrs: { 'data-part': 'exhibit' } },
-      h('div', { class: 'tw:flex tw:justify-between tw:items-center tw:mb-2' }, h('div', { class: TW.ch }, `Exhibit · ${art?.title ?? 'their preview'}`), links),
-      art?.image
-        ? h('img', { class: 'tw:block tw:w-full tw:border tw:border-solid tw:border-hair-card', src: artifactUrl(lead.id, art, 'jpg'), alt: art.title })
-        : art ? h('iframe', { class: 'tw:block tw:w-full tw:h-[260px] tw:border-0 tw:bg-white', src: artifactUrl(lead.id, art, 'html'), title: art.title }) : null);
+    if (!live) return null;
+    return h('div', { class: `${TW.card} tw:flex tw:items-center tw:gap-3`, attrs: { 'data-part': 'preview' } },
+      h('div', { class: `${TW.ch} tw:flex-1` }, 'Their preview is running'),
+      h('a', { class: TW.btn, href: live, target: '_blank', rel: 'noopener' }, 'Open'));
   };
 
   // the muster: what waits outside the goal at the conn, by what each unblocks, and the reports at its foot
@@ -548,6 +598,12 @@ export function openStream(ui: CommsUi): void {
       e.preventDefault();
       e.stopPropagation();
       return talk(false);
+    }
+    // then folds the strip: the exhibit open under it, then the slice fanned out
+    if (e.key === 'Escape' && (opened || fanned !== null)) {
+      e.preventDefault();
+      e.stopPropagation();
+      return opened ? look(null) : fan(null);
     }
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
     const berth = /^Digit([1-9])$/.exec(e.code);
