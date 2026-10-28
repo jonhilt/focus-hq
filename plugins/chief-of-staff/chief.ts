@@ -150,9 +150,10 @@ export class ChiefOfStaff {
     this.judging.add(key);
     try {
       const orders = this.standingOrders();
-      // it reads the turn against what's agreed (context.ts); Jev routes by the goal and the turn alone, as it was trained
+      // it reads the whole turn against what's agreed (context.ts); Jev routes by the goal and the turn's clipped end alone,
+      // as it was trained
       const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), await this.host.allLines(agent.id))));
-      const { routing, failed } = await this.routeWithJev(agent.projectId, judgePrompt(goal, tail.text), orders);
+      const { routing, failed } = await this.routeWithJev(agent.projectId, judgePrompt(goal, tail.clipped), orders);
       const pinned = routing?.route;
       const result = await this.judge.judge({ system: judgeSystemPrompt(orders, pinned), prompt, settings: this.host.settings(), ...(pinned && { schema: verdictSchema(pinned) }) });
       const parsed = parseVerdict(result.structured);

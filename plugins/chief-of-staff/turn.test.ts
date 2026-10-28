@@ -9,12 +9,12 @@ const tool = (uuid: string) => ({ type: 'user', uuid, message: { content: [{ typ
 describe('turnTail', () => {
   it('keeps what the lead said since the last message to it, and names the turn by the last line', () => {
     const t = jsonl([said('a', 'Earlier.'), to('b', 'Grid or list?'), said('c', 'Looking.'), tool('d'), said('e', 'List it is. Ship?'), to('f', 'reminder', true)]);
-    expect(turnTail(t)).toEqual({ text: 'Looking.\n\nList it is. Ship?', uuid: 'f' });
+    expect(turnTail(t)).toEqual({ text: 'Looking.\n\nList it is. Ship?', clipped: 'Looking.\n\nList it is. Ship?', uuid: 'f' });
   });
 
   it('starts again after Ops’ messages too, and skips the harness’s own and lines mid-write', () => {
     const t = jsonl([said('a', 'Before.'), to('b', '[Office] Slice 1 merged.'), said('c', 'Next.'), to('d', '<system-reminder>x</system-reminder>')]) + '\n{"type":"assi';
-    expect(turnTail(t)).toEqual({ text: 'Next.', uuid: 'd' });
+    expect(turnTail(t)).toEqual({ text: 'Next.', clipped: 'Next.', uuid: 'd' });
   });
 
   it('is nothing when the lead said nothing since', () => {
@@ -22,9 +22,15 @@ describe('turnTail', () => {
     expect(turnTail('')).toBeUndefined();
   });
 
-  it('keeps the last 2,000 characters, marked with how much was cut', () => {
-    const text = turnTail(jsonl([said('a', 'x'.repeat(2500))]))?.text;
-    expect(text).toBe(`[−500]… ${'x'.repeat(2000)}`);
+  it('gives the judge all of a long turn, and keeps the last 2,000 characters, marked, as the ledger does', () => {
+    const turn = `Three calls.\n\n1. ${'x'.repeat(2500)}`;
+    const tail = turnTail(jsonl([said('a', turn)]));
+    expect(tail?.text).toBe(turn);
+    expect(tail?.clipped).toBe(`[−${turn.length - 2000}]… ${turn.slice(-2000)}`);
+  });
+
+  it('cuts only a runaway turn, past 50,000 characters, from its start', () => {
+    expect(turnTail(jsonl([said('a', 'y'.repeat(50_010))]))?.text).toBe(`[−10]… ${'y'.repeat(50_000)}`);
   });
 });
 

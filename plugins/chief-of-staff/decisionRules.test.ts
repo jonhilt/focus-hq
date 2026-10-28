@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { aboutIt, actsOf } from './decisionRules';
+import { aboutIt, actsOf, briefOf } from './decisionRules';
 
 describe('a decision’s actions', () => {
-  it('makes the chief of staff’s first suggested reply so on a lead’s turn, the rest named beside it, with Got it', () => {
+  it('puts the chief of staff’s first suggested reply first on a lead’s turn, as the pick, the rest named beside it, with Got it', () => {
     const replies = [{ label: 'One link each', text: 'Go with one link each.' }, { label: 'Shared link', text: 'Use a shared link.' }];
     expect(actsOf({ kind: 'turn', replies, prs: 0 })).toEqual({
-      go: { kind: 'reply', label: 'Make it so', text: 'Go with one link each.' },
-      pick: 'One link each',
+      go: { kind: 'reply', label: 'One link each', text: 'Go with one link each.' },
       others: [{ kind: 'reply', label: 'Shared link', text: 'Use a shared link.' }],
       ack: true,
       more: false,
@@ -34,6 +33,14 @@ describe('a decision’s actions', () => {
     expect(actsOf({ kind: 'wrap-up', prs: 1 }).go).toEqual({ kind: 'close-goal', label: 'Close the goal' });
     expect(actsOf({ kind: 'qa', prs: 0 }).go?.kind).toBe('prs');
     expect(actsOf({ kind: 'error', prs: 0 })).toEqual({ others: [], ack: false, more: false });
+  });
+
+  it('briefs the captain with the chief of staff’s words to them, not why it routed the turn', () => {
+    const cos = { message: 'Three calls: 1. … Recommended: split them.', says: 'Okafor needs three calls.', why: 'It starts a new slice.' };
+    expect(briefOf({ ...cos, route: 2 })).toBe('Three calls: 1. … Recommended: split them.');
+    expect(briefOf({ ...cos, route: 3 })).toBe('Three calls: 1. … Recommended: split them.');
+    expect(briefOf({ ...cos, route: 1 })).toBe('Okafor needs three calls.');
+    expect(briefOf({ route: 4, message: 'Carry on.', why: 'Inside what you set.' })).toBe('Inside what you set.');
   });
 
   it('sends Discuss’s words after the decision they’re about', () => {

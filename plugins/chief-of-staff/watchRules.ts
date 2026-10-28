@@ -53,50 +53,39 @@ export function musterOrder<T extends { grade: Grade; idle: boolean; since?: num
   return [...items].sort((a, b) => rank(a) - rank(b) || (a.since ?? 0) - (b.since ?? 0));
 }
 
-/** A slice's exhibit on the strip: the lead's id for it, its title, when it was last shown, and whether it has a picture. */
-export interface StripExhibit {
+/** An exhibit the lead put up: their id for it, its title, when it was last shown, its slice, and whether it has a picture. */
+export interface Exhibit {
   id: string;
   title: string;
   at: number;
+  slice: number;
   image?: boolean;
 }
 
-/** One slice as a section of the strip: its exhibits, and the record it keeps (what it shipped, decided and taught). */
-export interface StripSlice {
-  slice: number;
-  name: string;
-  /** The slice the goal is in: its exhibits lie out; the ones behind are a stack until fanned. */
-  now: boolean;
-  exhibits: StripExhibit[];
-  shipped: string[];
-  decided: { what: string; at: number }[];
-  taught: string[];
-}
+/** How the exhibits panel groups them: by the slice each was shown in, or all together, newest first. */
+export type ExhibitsBy = 'slice' | 'newest';
 
 /**
- * A goal's strip as its sheet shows it (exhibits-grammar.html, option D): the chart and the exhibits as one thing, a
- * section per slice in order, the one it's at last, then the first of the lead's next ones as an empty slot. An exhibit
- * goes in the slice it was last shown in; one shown before that was kept is the current slice's. Each section keeps
- * its slice's record: its pull requests that merged, the questions answered in it, and what it taught.
+ * A goal's exhibits as its panel lists them, in groups: by slice, the slice it's at first, each with its name; or
+ * one group, newest first. Within a slice, newest first too. An exhibit shown before its slice was kept is the current
+ * slice's. A slice with nothing shown has no group (28 October 2026: the strip that drew every slice, empty or not,
+ * folded the slices behind into stacks, and the captain took the folded exhibits for missing ones).
  */
-export function stripOf(work: {
-  waypoints: readonly { slice: number; title?: string; heading?: string; learned?: string[] }[];
-  artifacts: readonly (StripExhibit & { slice?: number })[];
-  prs: readonly { number: number; slice?: number; outcome?: 'merged' | 'closed'; recap?: { title: string } }[];
-  questions: readonly { slice?: number; question: string; answer?: { at: number } }[];
-}, next: readonly string[]): { slices: StripSlice[]; next?: string } {
-  const at = work.waypoints.at(-1)?.slice;
-  const slices = work.waypoints.map((w): StripSlice => ({
-    slice: w.slice,
-    name: w.title ?? w.heading ?? `Slice ${w.slice}`,
-    now: w.slice === at,
-    exhibits: work.artifacts.filter((a) => (a.slice ?? at) === w.slice)
-      .map(({ id, title, at: shown, image }) => ({ id, title, at: shown, ...(image && { image }) })),
-    shipped: work.prs.filter((p) => p.slice === w.slice && p.outcome === 'merged').map((p) => `#${p.number}${p.recap ? ` ${p.recap.title}` : ''}`),
-    decided: work.questions.flatMap((q) => (q.slice === w.slice && q.answer ? [{ what: q.question, at: q.answer.at }] : [])),
-    taught: w.learned ?? [],
-  }));
-  return { slices, ...(next[0] && { next: next[0] }) };
+export function exhibitsOf(work: {
+  waypoints: readonly { slice: number; title?: string; heading?: string }[];
+  artifacts: readonly { id: string; title: string; at: number; slice?: number; image?: boolean }[];
+}, by: ExhibitsBy): { label: string; exhibits: Exhibit[] }[] {
+  const now = work.waypoints.at(-1)?.slice ?? 1;
+  const all = work.artifacts
+    .map(({ id, title, at, slice, image }): Exhibit => ({ id, title, at, slice: slice ?? now, ...(image && { image }) }))
+    .sort((x, y) => y.at - x.at);
+  if (by === 'newest') return all.length ? [{ label: 'Newest first', exhibits: all }] : [];
+  const name = (n: number) => {
+    const w = work.waypoints.find((x) => x.slice === n);
+    return `${n} · ${w?.title ?? w?.heading ?? `Slice ${n}`}${n === now ? ' · now' : ''}`;
+  };
+  return [...new Set(all.map((x) => x.slice))].sort((x, y) => y - x)
+    .map((n) => ({ label: name(n), exhibits: all.filter((x) => x.slice === n) }));
 }
 
 /** The hails stood by that still wait: one answered, or gone with its turn, is let go. */

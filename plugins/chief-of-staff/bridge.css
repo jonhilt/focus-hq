@@ -50,21 +50,27 @@
 
 /* what the reused cards and the lead's words bring is set at the bridge's sizes, not the panel's reading text */
 .panel-body :is(.cos-acts, .cos-md) :is(p, li, blockquote, small, textarea, input) { font: inherit; }
-.panel-body .cos-acts { font: 12px/1.45 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #e9edf2; }
+.panel-body .cos-acts { font: 13px/1.5 system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; color: #e9edf2; }
 .panel-body .cos-acts .cos-card-option small { color: #8a94a3; }
 
 /* the lead's words in the panel: kept as markdown */
 .cos-md p { margin: 0 0 .5em; }
 .cos-md :is(ul, ol) { margin: 0 0 .5em; padding-left: 1.3em; }
 .cos-md > :last-child { margin-bottom: 0; }
+/* the conversation wraps: code and long paths break onto the next line rather than scroll sideways */
+.cos-md :is(pre, code) { white-space: pre-wrap; overflow-wrap: anywhere; }
+.cos-md :is(pre, table) { max-width: 100%; overflow-x: hidden; }
 
 @keyframes cos-rise { from { opacity: 0; transform: translateY(26px); } }
 @keyframes cos-drop { from { opacity: 0; transform: translateY(-14px) scale(.92); } }
+@keyframes cos-slide { from { opacity: 0; transform: translateX(20px); } }
 @keyframes cos-grow { from { opacity: 0; transform: translate(-150px, 0) scale(.3); } }
 .cos-rise { animation: cos-rise 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1); }
 .cos-drop { animation: cos-drop 220ms cubic-bezier(.2, .9, .3, 1); }
+/* settles without overshoot: the panel slides in once, and nothing beside it moves */
+.cos-slide { animation: cos-slide 260ms cubic-bezier(.2, .9, .3, 1); }
 .cos-grow { transform-origin: 0 20px; animation: cos-grow 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1); }
 @media (prefers-reduced-motion: reduce) {
-  .cos-rise, .cos-drop, .cos-grow { animation: cos-fade .2s ease; }
+  .cos-rise, .cos-drop, .cos-grow, .cos-slide { animation: cos-fade .2s ease; }
   @keyframes cos-fade { from { opacity: 0; } }
 }

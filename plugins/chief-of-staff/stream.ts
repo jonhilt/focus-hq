@@ -1,7 +1,7 @@
 import './bridge.css';
 import { allowTool, answerLead, busy, callPlugin, closeGoal, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
 import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, openQuestion } from '../../plugin-api/shared';
-import { aboutIt, type Act, actsOf } from './decisionRules';
+import { aboutIt, type Act, actsOf, briefOf } from './decisionRules';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -10,18 +10,18 @@ import { mergesOf } from './needCard';
 import { CHIEF_OF_STAFF, cosStateOf, readOf } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import type { ThreadEntry } from './thread';
-import { type Grade, gradeOf, musterOrder, type Reach, reachOf, type StripExhibit, type StripSlice, stripOf, watchOf } from './watchRules';
+import { type Exhibit, type ExhibitsBy, exhibitsOf, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
 
 // Comms as the bridge (README.md#the-watch), drawn as docs/interface-style/mockups/bridge-grammar.html draws it, its
 // values in Tailwind's utilities (bridge.css). The HUD across the top: where the captain is (Bridge, on watch or not)
 // and the Muster chip, its count what waits outside the goal at the conn. On the left the rail: every shown project's
 // goals in their berths, staying where they are, a count on each with decisions waiting. In the viewer, with nobody at
 // the conn, an empty table; at the conn, the goal as a sheet: its head (the lead's name is Talk), what came in since
-// the watch began, its chart (the last waypoint behind, where it is, the next one dashed), its orders, and what it asks
-// of the captain as cards resting on it: a decision, words ready for the lead, what of it landed, what the lead put up
-// to look at. Standing down (the chip, or M) brings the muster up in the viewer's place, by what each unblocks. A hail
-// from a goal underway drops from the chip, put on screen in place or told to stand by. Talk (the lead's name, or T)
-// slides the panel in from the right, the conversation and a box to talk to the lead; the rail steps back.
+// the watch began, its exhibits (a count, opening a panel of them beside it), and what it asks of the captain as
+// cards resting on it: a decision, words ready for the lead, what of it landed, their preview while it runs. Standing
+// down (the chip, or M) brings the muster up in the viewer's place, by what each unblocks. A hail from a goal underway
+// drops from the chip, put on screen in place or told to stand by. Talk (the lead's name, or T) opens the panel beside
+// the sheet, the conversation and a box to talk to the lead.
 
 /** When the captain last looked at each goal's conversation (its latest entry's time), kept in this browser. */
 const SEEN = 'cos-stream-seen';
@@ -36,6 +36,8 @@ const seenAt = (goal: string): number | undefined => seenAll()[goal];
 const markSeen = (goal: string, at: number) => localStorage.setItem(SEEN, JSON.stringify({ ...seenAll(), [goal]: at }));
 
 const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+/** When something was shown, with its day: an exhibit can be from days ago. */
+const when = (at: number) => new Date(at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
 
 /** Every shown project's goals: the leads under way in each. */
 const allLeads = (): Agent[] => focus.shown.flatMap((p) => focus.leadsIn(p.id));
@@ -82,12 +84,12 @@ const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 /** The mockup's pieces, as its CSS draws them (bridge-grammar.html), in Tailwind's utilities. */
 const TW = {
   label: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.14em] tw:uppercase tw:text-label',
-  btn: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms] tw:hover:bg-surface2',
-  go: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-ink tw:bg-ink tw:text-[#111] tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms]',
+  btn: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms] tw:hover:bg-surface2',
+  go: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-ink tw:bg-ink tw:text-[#111] tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms]',
   /** Where the viewer, the muster and the empty table sit: right of the rail, under the HUD. */
-  table: 'tw:absolute tw:left-[304px] tw:top-[46px] tw:right-3 tw:bottom-3',
+  table: 'tw:absolute tw:left-[304px] tw:top-[46px] tw:right-3 tw:bottom-3 tw:max-w-[860px]',
   card: 'tw:relative tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:shadow-lift-2 tw:px-[14px] tw:py-3',
-  ch: 'tw:font-display tw:text-[10px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label',
+  ch: 'tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label',
 };
 
 /**
@@ -120,12 +122,18 @@ export function openStream(ui: CommsUi): void {
   // the muster up in the viewer's place; the panel slid in to talk; a muster row opened; the hail put on screen
   let mustering = false;
   let talking = false;
+  // the decision last on the sheet, kept faded once it's answered until the next one comes
+  let settled: { lead: string; el: HTMLElement } | null = null;
+  // the panel's just opened: once the conversation's drawn, show the lead's latest words from their start
+  let findLatest = false;
   // the decision being discussed in the panel: quoted at its top, and what's said goes to the lead about it
   let discussing: { id: string; what: string } | null = null;
   let expanded: string | null = null;
   let onScreen: string | null = null;
-  // the strip: the slice behind fanned out in place, the exhibit open under it, and the exhibits looked at this watch
-  let fanned: number | null = null;
+  // the exhibits: their panel beside the sheet and how it groups them, the one open on the sheet, and the ones looked
+  // at this watch
+  let browsing = false;
+  let groupBy: ExhibitsBy = 'slice';
   let opened: string | null = null;
   const had = new Set<string>();
   let open: InboxItem[] = [];
@@ -139,32 +147,34 @@ export function openStream(ui: CommsUi): void {
   // until Focus has the conn, what's drawn goes by the captain's press rather than what Focus last said
   let taking = false;
 
-  const where = h('div', { class: 'tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:text-muted tw:flex tw:gap-2 tw:items-center' });
+  const where = h('div', { class: 'tw:font-display tw:text-[12px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:text-muted tw:flex tw:gap-2 tw:items-center' });
   const count = h('span', { class: 'tw:block tw:w-[26px] tw:h-[22px] tw:leading-[22px] tw:text-center' });
   const chip = h('button', {
-    class: 'tw:flex tw:items-center tw:h-6 tw:p-0 tw:border tw:border-solid tw:border-line tw:bg-panel tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:rounded-none tw:cursor-pointer',
+    class: 'tw:flex tw:items-center tw:h-6 tw:p-0 tw:border tw:border-solid tw:border-line tw:bg-panel tw:font-display tw:text-[12px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:rounded-none tw:cursor-pointer',
     attrs: { 'data-part': 'chip' },
   }, h('span', { class: 'tw:px-[9px] tw:text-muted' }, 'Muster'), count);
   const hud = h('div', { class: 'tw:absolute tw:left-3 tw:right-3 tw:top-2 tw:h-7 tw:flex tw:items-center tw:justify-between' }, where, chip);
   const rail = h('div', { class: 'tw:absolute tw:left-3 tw:top-[46px] tw:w-[280px] tw:bottom-3 tw:overflow-y-auto tw:overflow-x-hidden tw:transition tw:duration-[560ms] tw:ease-spring' });
-  const empty = h('div', { class: `${TW.table} tw:border tw:border-dashed tw:border-line tw:grid tw:place-items-center tw:text-center tw:text-muted tw:text-[13px]`, attrs: { 'data-part': 'empty' } },
+  const empty = h('div', { class: `${TW.table} tw:border tw:border-dashed tw:border-line tw:grid tw:place-items-center tw:text-center tw:text-muted tw:text-[14px]`, attrs: { 'data-part': 'empty' } },
     h('div', null, h('b', { class: 'tw:block tw:font-display tw:text-[15px] tw:font-semibold tw:tracking-[.06em] tw:text-ink tw:mb-1 tw:uppercase' }, 'Nothing at the conn'), 'Take the conn of one goal. The rest stay underway on their orders.'));
   const head = h('div', { class: 'tw:flex-none' });
   const shelf = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px] tw:empty:hidden' });
   const cards = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px]' });
   const below = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:px-[18px] tw:pt-[14px] tw:pb-[18px] tw:flex tw:flex-col tw:gap-[10px]' }, shelf, cards);
-  const viewer = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut tw:origin-[0_20px] tw:transition-transform tw:duration-[560ms] tw:ease-spring`, attrs: { 'data-part': 'sheet' } }, head, below);
+  const viewer = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut`, attrs: { 'data-part': 'sheet' } }, head, below);
   const muster = h('div', { class: `${TW.table} tw:overflow-y-auto tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 tw:px-[18px] tw:py-4 cos-rise`, attrs: { 'data-part': 'muster' } });
-  const said = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:flex tw:flex-col tw:gap-2' });
-  const box = h('textarea', { class: 'tw:flex-none tw:h-[34px] tw:min-h-0 tw:border tw:border-solid tw:border-line tw:bg-transparent tw:text-ink tw:text-[11px] tw:p-2 tw:resize-none tw:outline-none tw:rounded-none tw:focus:border-muted tw:font-read' });
-  const talkHead = h('div', { class: 'tw:font-display tw:text-[10px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' });
-  const topic = h('div', { class: 'tw:flex-none tw:border-l-2 tw:border-solid tw:border-attn tw:pl-2 tw:text-[11.5px]/[1.4]', attrs: { 'data-part': 'topic' } });
-  const panel = h('div', { class: 'tw:absolute tw:top-[46px] tw:right-3 tw:bottom-3 tw:w-[236px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-[14px] tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:transition-transform tw:duration-[560ms] tw:ease-spring', attrs: { 'data-part': 'talk' } }, talkHead, topic, said, box);
+  const said = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:overflow-x-hidden tw:[overflow-wrap:anywhere] tw:flex tw:flex-col tw:gap-5 tw:pr-1' });
+  const box = h('textarea', { class: 'tw:flex-none tw:h-[72px] tw:min-h-0 tw:border tw:border-solid tw:border-line tw:bg-transparent tw:text-ink tw:text-[14.5px]/[1.5] tw:p-2 tw:resize-none tw:outline-none tw:rounded-none tw:focus:border-muted tw:font-read' });
+  const talkHead = h('div', { class: 'tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' });
+  const topic = h('div', { class: 'tw:flex-none tw:border-0 tw:border-l-2 tw:border-solid tw:border-attn tw:pl-3 tw:text-[14.5px]/[1.5]', attrs: { 'data-part': 'topic' } });
+  // the panel to talk in opens beside the sheet (the sheet narrows to make room only where there isn't any)
+  const panel = h('div', { class: 'tw:absolute tw:top-[46px] tw:left-[min(1176px,calc(100%_-_472px))] tw:bottom-3 tw:w-[460px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-4 tw:py-3 tw:flex tw:flex-col tw:gap-2 cos-slide', attrs: { 'data-part': 'talk' } }, talkHead, topic, said, box);
+  const gallery = h('div', { class: 'tw:absolute tw:top-[46px] tw:left-[min(1176px,calc(100%_-_472px))] tw:bottom-3 tw:w-[460px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-4 tw:py-3 tw:flex tw:flex-col tw:gap-3 cos-slide', attrs: { 'data-part': 'gallery' } });
   const hail = h('div', { class: 'tw:absolute tw:top-10 tw:right-3 tw:z-10 tw:w-[304px] tw:max-h-[calc(100%-52px)] tw:overflow-y-auto tw:bg-surface2 tw:border tw:border-solid tw:border-attn tw:shadow-lift-4 tw:pt-[9px] tw:pr-3 tw:pb-[10px] tw:pl-4 tw:origin-top-right cos-drop', attrs: { 'data-part': 'hail' } });
   const body = h('div', {
-    class: 'tw:relative tw:h-full tw:min-h-[500px] tw:overflow-hidden tw:bg-well tw:bg-[radial-gradient(ellipse_at_50%_120%,#1a2230_0%,transparent_60%)] tw:text-ink tw:font-read tw:text-[13px]/[1.45]',
+    class: 'tw:relative tw:h-full tw:min-h-[500px] tw:overflow-hidden tw:bg-well tw:bg-[radial-gradient(ellipse_at_50%_120%,#1a2230_0%,transparent_60%)] tw:text-ink tw:font-read tw:text-[14px]/[1.45]',
     attrs: { 'data-part': 'bridge' },
-  }, rail, empty, viewer, muster, panel, hud, hail);
+  }, rail, empty, viewer, muster, panel, gallery, hud, hail);
 
 
   // taking the conn of a goal, or standing down (null): drawn at once, kept by Focus
@@ -173,8 +183,9 @@ export function openStream(ui: CommsUi): void {
     mustering = id === null;
     talking = false;
     discussing = null;
+    settled = null;
     expanded = onScreen = opened = null;
-    fanned = null;
+    browsing = false;
     ticked.clear();
     had.clear();
     watchFrom = id ? seenAt(id) : undefined;
@@ -196,6 +207,7 @@ export function openStream(ui: CommsUi): void {
   chip.onclick = muster_;
   const talk = (on: boolean) => {
     talking = on && !!conn;
+    if (talking) browsing = false;
     if (!talking) discussing = null;
     render();
     if (talking) box.focus();
@@ -214,8 +226,6 @@ export function openStream(ui: CommsUi): void {
 
   // the rail: every goal in its berth by project, staying where it is, with how many decisions wait on it
   const renderRail = (leads: readonly Agent[], all: readonly Filed[]) => {
-    rail.classList.toggle('tw:opacity-0', talking);
-    rail.classList.toggle('tw:-translate-x-6', talking);
     const decisions = (id: string) => all.filter((f) => f.item.agentId === id && f.grade !== 'word').length;
     const sections = berths(leads, focus.shown);
     for (const l of leads) {
@@ -236,26 +246,31 @@ export function openStream(ui: CommsUi): void {
         const state = at ? 'tw:bg-surface tw:border-line' : 'tw:bg-panel tw:border-hair-rail';
         const dim = conn && !at ? 'tw:opacity-50' : '';
         const ring = ticked.has(l.id) && !at ? 'tw:shadow-[0_1px_0_rgb(0_0_0/50%),0_0_0_1px_#f5a524]' : 'tw:shadow-lift-1';
-        return h('button', {
-          class: `tw:relative tw:grid tw:grid-cols-[12px_1fr_22px] tw:items-center tw:gap-[6px] tw:w-full tw:min-h-[30px] tw:py-[6px] tw:pl-2 tw:pr-[6px] tw:mb-1 tw:border tw:border-solid tw:rounded-none tw:text-[12px] tw:text-ink tw:text-left tw:font-read tw:cursor-pointer tw:transition-[opacity,transform,background-color,border-color] tw:duration-[420ms] tw:ease-spring tw:hover:opacity-100 ${state} ${dim} ${ring}`,
+        const berth = h('button', {
+          class: `tw:relative tw:grid tw:grid-cols-[12px_1fr_22px] tw:items-center tw:gap-[6px] tw:w-full tw:min-h-[30px] tw:py-[6px] tw:pl-2 tw:pr-[6px] tw:mb-1 tw:border tw:border-solid tw:rounded-none tw:text-[13px] tw:text-ink tw:text-left tw:font-read tw:cursor-pointer tw:transition-[opacity,transform,background-color,border-color] tw:duration-[420ms] tw:ease-spring tw:hover:opacity-100 ${state} ${dim} ${ring}`,
           title: `${at ? 'At the conn' : 'Take the conn'}: ${l.lead?.title ?? l.name}\n${l.name} · ${doing(l.status)}`,
           attrs: { 'data-part': 'berth', ...(at && { 'data-at': '' }) },
           onclick: () => { if (!at) take(l.id); },
         },
         dotEl(l),
         h('span', { class: 'tw:line-clamp-2 tw:leading-[1.3]' }, l.lead?.title ?? l.name),
-        h('span', { class: `tw:w-[22px] tw:h-4 tw:font-mono tw:text-[11px]/[16px] tw:font-semibold tw:text-center tw:text-attn tw:shadow-[inset_0_0_0_1px_#f5a524] ${n && !at ? '' : 'tw:opacity-0'}`, attrs: { 'data-part': 'count' } }, n ? String(n) : ''));
+        h('span', { class: `tw:w-[22px] tw:h-4 tw:font-mono tw:text-[12px]/[16px] tw:font-semibold tw:text-center tw:text-attn tw:shadow-[inset_0_0_0_1px_#f5a524] ${n && !at ? '' : 'tw:opacity-0'}`, attrs: { 'data-part': 'count' } }, n ? String(n) : ''));
+        // Beam there, over the berth's right end while it's hovered: to the lead's team room
+        return h('div', { class: 'tw:relative tw:group' }, berth,
+          h('button', {
+            class: 'tw:absolute tw:right-[34px] tw:top-1/2 tw:-translate-y-1/2 tw:h-5 tw:px-[6px] tw:border tw:border-solid tw:border-line tw:bg-surface2 tw:text-muted tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:rounded-none tw:cursor-pointer tw:opacity-0 tw:group-hover:opacity-100 tw:focus:opacity-100 tw:hover:text-ink',
+            title: `Beam to ${l.name}'s team room`, attrs: { 'data-part': 'beam' }, onclick: () => ui.goToAgent(l.id),
+          }, 'Beam'));
       }),
     ]);
-    fill(rail, ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[12px]' }, 'No goals under way.')]));
+    fill(rail, ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[13px]' }, 'No goals under way.')]));
   };
 
-  // the strip under the goal's head (stripOf): a section per slice on one track, the ones behind as stacks of their
-  // exhibits with a count, the one it's at with its exhibits laid out, and the next as an empty slot. Pressing a stack
-  // fans it out in place (the current slice gathers into a stack), and pressing a card opens it under the strip.
-  const fan = (slice: number | null) => {
-    fanned = slice;
-    opened = null;
+  // the exhibits panel, beside the sheet in the talk panel's place: every exhibit the lead put up, by slice or newest
+  // first, a press opening one on the sheet
+  const browse = (on: boolean) => {
+    browsing = on && !!conn;
+    if (browsing) talking = false;
     render();
   };
   const look = (id: string | null) => {
@@ -263,66 +278,47 @@ export function openStream(ui: CommsUi): void {
     if (id) had.add(id);
     render();
   };
-  const exhibitEl = (x: StripExhibit, lead: Agent, fresh: boolean) => h('button', {
-    class: 'tw:w-[104px] tw:flex-none tw:p-0 tw:bg-transparent tw:border-0 tw:text-left tw:cursor-pointer tw:group',
-    title: `${x.title}: open it here`, attrs: { 'data-part': 'card', 'data-id': x.id }, onclick: () => look(x.id),
+  const exhibitsFor = (lead: Agent) => exhibitsOf({ waypoints: lead.lead?.waypoints ?? [], artifacts: lead.lead?.artifacts ?? [] }, groupBy);
+  const fresh = (x: Exhibit) => watchFrom !== undefined && x.at > watchFrom && !had.has(x.id);
+  const exhibitRow = (x: Exhibit, lead: Agent) => h('button', {
+    class: `tw:grid tw:grid-cols-[88px_1fr] tw:gap-3 tw:items-center tw:w-full tw:text-left tw:p-[6px] tw:bg-transparent tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-surface2 ${opened === x.id ? 'tw:border-ink tw:bg-surface2' : 'tw:border-transparent'}`,
+    title: `${x.title}: open it on the sheet`, attrs: { 'data-part': 'card', 'data-id': x.id }, onclick: () => look(x.id),
   },
-    h('span', { class: `tw:block tw:h-[58px] tw:bg-surface2 tw:border tw:border-solid tw:shadow-lift-1 tw:overflow-hidden tw:transition-colors tw:group-hover:border-muted ${opened === x.id ? 'tw:border-ink' : 'tw:border-hair-card'}` },
+    h('span', { class: 'tw:block tw:h-[54px] tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:overflow-hidden' },
       x.image ? h('img', { class: 'tw:block tw:w-full tw:h-full tw:object-cover tw:object-top', src: artifactUrl(lead.id, x, 'jpg'), alt: '' }) : null),
-    h('span', { class: 'tw:flex tw:items-center tw:gap-1 tw:mt-1 tw:text-[10.5px] tw:text-ink' },
-      fresh ? h('i', { class: 'tw:flex-none tw:w-[6px] tw:h-[6px] tw:rounded-full tw:bg-ink', title: 'New since the watch began' }) : null,
-      h('span', { class: 'tw:truncate' }, x.title)));
-  const stackEl = (sl: StripSlice, back: boolean) => h('button', {
-    class: 'tw:relative tw:block tw:w-[112px] tw:h-[76px] tw:p-0 tw:bg-transparent tw:border-0 tw:text-left tw:cursor-pointer tw:group',
-    title: back ? 'Back to now' : `Slice ${sl.slice}: fan its exhibits out, its record under`, attrs: { 'data-part': 'stack' }, onclick: () => fan(back ? null : sl.slice),
-  },
-    sl.exhibits.length > 1 ? h('span', { class: 'tw:absolute tw:left-[2px] tw:top-0 tw:w-[92px] tw:h-[52px] tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:rotate-[-5deg]' }) : null,
-    h('span', { class: `tw:absolute tw:left-[8px] tw:top-[2px] tw:w-[92px] tw:h-[52px] tw:bg-surface2 tw:border tw:shadow-lift-1 tw:transition-colors tw:group-hover:border-muted ${sl.exhibits.length ? 'tw:border-solid tw:border-hair-card' : 'tw:border-dashed tw:border-line'}` }),
-    h('span', { class: 'tw:absolute tw:left-[2px] tw:top-[60px] tw:text-[10.5px] tw:text-muted tw:whitespace-nowrap' },
-      back ? `${plural(sl.exhibits.length, 'exhibit')} · now` : sl.exhibits.length ? plural(sl.exhibits.length, 'exhibit') : 'its record'));
-  const section = (label: string, pip: string, rule: string, here: boolean, ...body: (HTMLElement | null)[]) =>
-    h('div', { class: 'tw:relative tw:flex-none tw:min-w-[96px] tw:pr-4', attrs: { 'data-part': 'slice' } },
-      h('span', { class: `tw:block tw:h-4 tw:text-[10.5px] tw:whitespace-nowrap tw:truncate tw:max-w-[220px] ${here ? 'tw:text-ink' : 'tw:text-muted'}` }, label),
-      h('span', { class: `tw:absolute tw:left-0 tw:right-0 tw:top-[24px] ${rule}` }),
-      h('i', { class: `tw:absolute tw:top-[25px] tw:left-[4px] tw:-translate-y-1/2 tw:rounded-full ${pip}` }),
-      h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-[22px]' }, ...body));
-  const sliceEl = (sl: StripSlice, lead: Agent) => {
-    const out = sl.slice === fanned || (sl.now && fanned === null);
-    const pip = sl.now ? 'tw:w-3 tw:h-3 tw:bg-surface tw:shadow-[0_0_0_2px_#e9edf2]' : 'tw:w-[9px] tw:h-[9px] tw:bg-ink';
-    const fresh = (x: StripExhibit) => watchFrom !== undefined && x.at > watchFrom && !had.has(x.id);
-    const body = !out
-      ? [stackEl(sl, sl.now)]
-      : sl.exhibits.length
-        ? sl.exhibits.map((x) => exhibitEl(x, lead, fresh(x)))
-        : [h('span', { class: 'tw:block tw:h-[76px] tw:text-[10.5px] tw:text-muted' }, sl.now ? 'Nothing shown yet' : 'Nothing shown')];
-    return section(`${sl.slice} · ${sl.name}${sl.now ? ' · now' : ''}`, pip, 'tw:h-[2px] tw:bg-ink', sl.now || sl.slice === fanned, ...body);
+    h('span', { class: 'tw:min-w-0' },
+      h('span', { class: 'tw:flex tw:items-center tw:gap-[6px] tw:text-[14px] tw:text-ink' },
+        fresh(x) ? h('i', { class: 'tw:flex-none tw:w-[7px] tw:h-[7px] tw:rounded-full tw:bg-ink', title: 'New since the watch began' }) : null,
+        h('span', { class: 'tw:truncate' }, x.title)),
+      h('span', { class: 'tw:block tw:text-[12.5px] tw:text-muted' }, `${groupBy === 'newest' ? `Slice ${x.slice} · ` : ''}${when(x.at)}`)));
+  const renderGallery = (lead: Agent | undefined) => {
+    show(gallery, browsing);
+    if (!lead || !browsing) return;
+    const groups = exhibitsFor(lead);
+    keyed(gallery, JSON.stringify([lead.id, groups, groupBy, opened, [...had]]), () => {
+      const by = (b: ExhibitsBy, label: string) => h('button', {
+        class: `tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase ${groupBy === b ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-transparent tw:text-muted tw:border-line tw:hover:text-ink'}`,
+        attrs: { 'data-part': `by-${b}` }, onclick: () => { groupBy = b; render(); },
+      }, label);
+      fill(gallery,
+        h('div', { class: 'tw:flex-none tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' },
+          h('span', null, `Exhibits · ${lead.name}`),
+          h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[11px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => browse(false) }, 'Close')),
+        h('div', { class: 'tw:flex-none tw:flex tw:gap-[6px]' }, by('slice', 'By slice'), by('newest', 'Newest first')),
+        h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:overflow-x-hidden tw:flex tw:flex-col tw:gap-4' },
+          ...(groups.length
+            ? groups.map((g) => h('div', { attrs: { 'data-part': 'group' } },
+              h('div', { class: `${TW.label} tw:mb-1` }, g.label),
+              ...g.exhibits.map((x) => exhibitRow(x, lead))))
+            : [h('div', { class: 'tw:text-muted tw:text-[13.5px]' }, `${lead.name} hasn't put anything up yet.`)])));
+    });
   };
-  const stripEl = (slices: readonly StripSlice[], next: string | undefined, lead: Agent) =>
-    h('div', { class: 'tw:flex tw:mx-[18px] tw:mt-[10px] tw:pb-2 tw:overflow-x-auto tw:overflow-y-hidden', attrs: { 'data-part': 'strip' } },
-      ...slices.map((sl) => sliceEl(sl, lead)),
-      next
-        ? section(`${next} · next`, 'tw:w-[9px] tw:h-[9px] tw:bg-surface tw:shadow-[inset_0_0_0_1.5px_#8a94a3]', 'tw:h-0 tw:border-t-[1.5px] tw:border-dashed tw:border-muted', false,
-          h('span', { class: 'tw:grid tw:place-items-center tw:w-[104px] tw:h-[58px] tw:border tw:border-dashed tw:border-line tw:text-[10.5px] tw:text-muted' }, 'nothing yet'))
-        : null);
-
-  // under the strip: the exhibit opened from its card, and the record of the slice fanned out (what it shipped, what
-  // was decided and when, what it taught), both resting on the sheet above the cards that ask for the captain
-  const renderShelf = (lead: Agent, slices: readonly StripSlice[]) => {
-    const sl = slices.find((x) => x.slice === fanned);
-    const x = slices.flatMap((y) => y.exhibits.map((e) => ({ ...e, slice: y.slice }))).find((e) => e.id === opened);
-    keyed(shelf, JSON.stringify([lead.id, sl ?? null, x ?? null]), () => fill(shelf, x ? openedEl(lead, x) : null, sl ? recordEl(sl) : null));
+  // the exhibit opened from the panel, resting on the sheet above the cards that ask for the captain
+  const renderShelf = (lead: Agent) => {
+    const x = exhibitsOf({ waypoints: lead.lead?.waypoints ?? [], artifacts: lead.lead?.artifacts ?? [] }, 'newest')[0]?.exhibits.find((e) => e.id === opened);
+    keyed(shelf, JSON.stringify([lead.id, x ?? null]), () => fill(shelf, x ? openedEl(lead, x) : null));
   };
-  const recordEl = (sl: StripSlice) => {
-    const col = (k: string, lines: readonly (readonly [string, string?])[]) => h('div', { class: 'tw:min-w-0' },
-      h('div', { class: `${TW.label} tw:mb-1` }, k),
-      ...(lines.length ? lines : [['Nothing'] as const]).map(([what, when]) => h('div', { class: `tw:text-[11.5px]/[1.4] tw:mb-1 ${lines.length ? 'tw:text-ink' : 'tw:text-muted'}` },
-        what, when ? h('small', { class: 'tw:block tw:text-muted tw:text-[10px]' }, when) : null)));
-    return h('div', { class: `${TW.card} tw:grid tw:grid-cols-[1.1fr_1.3fr_1fr] tw:gap-[14px]`, attrs: { 'data-part': 'record' } },
-      col('Shipped', sl.shipped.map((p) => [p] as const)),
-      col('Decided', sl.decided.map((d) => [d.what, new Date(d.at).toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' })] as const)),
-      col('Taught', sl.taught.map((t) => [t] as const)));
-  };
-  const openedEl = (lead: Agent, x: StripExhibit & { slice: number }) =>
+  const openedEl = (lead: Agent, x: Exhibit) =>
     h('div', { class: TW.card, attrs: { 'data-part': 'exhibit' } },
       h('div', { class: 'tw:flex tw:justify-between tw:items-center tw:mb-2 tw:gap-2' },
         h('div', { class: `${TW.ch} tw:truncate` }, `Exhibit · ${x.title} · slice ${x.slice}`),
@@ -333,38 +329,39 @@ export function openStream(ui: CommsUi): void {
         ? h('img', { class: 'tw:block tw:w-full tw:border tw:border-solid tw:border-hair-card', src: artifactUrl(lead.id, x, 'jpg'), alt: x.title })
         : h('iframe', { class: 'tw:block tw:w-full tw:h-[260px] tw:border-0 tw:bg-white', src: artifactUrl(lead.id, x, 'html'), title: x.title }));
 
-  // the sheet's head: the goal, the lead (Talk), what came in since the watch began, the strip, the orders
+  // the sheet's head: the goal, the lead (Talk), what came in since the watch began, and the strip
   const renderHead = (lead: Agent) => {
     const work = lead.lead;
     const project = focus.project(lead.projectId);
     const from = watchFrom;
     const since = from === undefined ? [] : entries.filter((e) => e.at > from && e.kind !== 'you');
-    const strip = stripOf({
-      waypoints: work?.waypoints ?? [], artifacts: work?.artifacts ?? [], prs: [...(work?.landed ?? []), ...(work?.prs ?? [])], questions: work?.questions ?? [],
-    }, work?.note?.next ?? []);
-    const orders = [work?.note?.done ? `Done: ${work.note.done}` : '', ...(work?.note?.learned ?? []).slice(-2).reverse()].filter(Boolean);
+    const shown = work?.artifacts ?? [];
+    const unseen = watchFrom === undefined ? 0 : shown.filter((x) => x.at > (watchFrom ?? 0) && !had.has(x.id)).length;
     const says = [plural(since.length, 'update'), ...bundleSays(since)];
-    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, strip, fanned, opened, [...had], orders, talking]);
-    renderShelf(lead, strip.slices);
+    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, shown.length, unseen, browsing, talking]);
+    renderShelf(lead);
     keyed(head, key, () => fill(head,
-      h('div', { class: 'tw:grid tw:grid-cols-[1fr_auto] tw:gap-x-3 tw:gap-y-[2px] tw:px-[18px] tw:pt-[14px] tw:pb-[10px] tw:border-b tw:border-solid tw:border-hair-card' },
+      h('div', { class: 'tw:grid tw:grid-cols-[1fr_auto_auto_auto] tw:gap-x-3 tw:gap-y-[2px] tw:px-[18px] tw:pt-[14px] tw:pb-[10px] tw:border-b tw:border-solid tw:border-hair-card' },
         h('span', { class: TW.label }, project?.name ?? ''),
-        h('span', { class: 'tw:col-start-1 tw:font-display tw:text-[17px]/[1.25] tw:font-semibold tw:tracking-[.02em]' }, work?.title ?? lead.name),
+        h('span', { class: 'tw:col-start-1 tw:font-display tw:text-[19px]/[1.25] tw:font-semibold tw:tracking-[.02em]' }, work?.title ?? lead.name),
         h('button', {
-          class: 'tw:row-span-2 tw:col-start-2 tw:row-start-1 tw:self-center tw:text-[12px] tw:text-muted tw:flex tw:items-center tw:gap-[6px] tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer tw:font-read tw:hover:text-ink',
+          class: 'tw:row-span-2 tw:col-start-2 tw:row-start-1 tw:self-center tw:text-[13px] tw:text-muted tw:flex tw:items-center tw:gap-[6px] tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer tw:font-read tw:hover:text-ink',
           title: `Talk to ${lead.name} (T)`, attrs: { 'data-part': 'who' }, onclick: () => talk(!talking),
-        }, dotEl(lead), `${lead.name} · ${doing(lead.status)}`)),
+        }, dotEl(lead), `${lead.name} · ${doing(lead.status)}`),
+        h('button', {
+          class: 'tw:row-span-2 tw:col-start-3 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:rounded-none tw:cursor-pointer tw:hover:bg-surface2',
+          title: `Beam to ${lead.name}'s team room (B)`, attrs: { 'data-part': 'beam-here' }, onclick: () => ui.goToAgent(lead.id),
+        }, 'Beam there'),
+        h('button', {
+          class: `tw:row-span-2 tw:col-start-4 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:flex tw:items-center tw:gap-[6px] ${browsing ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-surface tw:text-ink tw:border-line tw:hover:bg-surface2'}`,
+          title: 'What the lead put up to look at, by slice or newest first (E)', attrs: { 'data-part': 'exhibits' }, onclick: () => browse(!browsing),
+        }, `Exhibits · ${shown.length}`, unseen ? h('span', { class: 'tw:normal-case tw:tracking-normal tw:font-read tw:font-medium' }, `${unseen} new`) : null)),
       since.length
-        ? h('div', { class: 'tw:mx-[18px] tw:mt-[10px] tw:text-[12px] tw:text-muted tw:flex tw:gap-[14px] tw:whitespace-nowrap tw:overflow-hidden', attrs: { 'data-part': 'since' } },
+        ? h('div', { class: 'tw:mx-[18px] tw:mt-[10px] tw:text-[13px] tw:text-muted tw:flex tw:gap-[14px] tw:whitespace-nowrap tw:overflow-hidden', attrs: { 'data-part': 'since' } },
           h('span', null, `Since your last watch (${clock(from ?? 0)}):`),
           ...says.map((s) => h('b', { class: 'tw:text-ink tw:font-medium' }, s)))
         : null,
-      strip.slices.length ? stripEl(strip.slices, strip.next, lead) : null,
-      orders.length
-        ? h('div', { class: `tw:mx-[18px] tw:text-[11.5px] tw:text-muted tw:flex tw:gap-2 tw:items-center tw:h-[22px] tw:whitespace-nowrap tw:overflow-hidden ${strip.slices.length ? '' : 'tw:mt-[10px]'}` },
-          h('span', { class: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.14em] tw:text-label' }, 'Orders'),
-          ...orders.map((o) => h('span', { class: 'tw:text-ink tw:border tw:border-solid tw:border-hair-card tw:px-[6px] tw:max-w-[50%] tw:truncate', title: o }, o)))
-        : null));
+      null));
   };
 
   // what the goal asks of the captain, as cards resting on the sheet
@@ -381,7 +378,10 @@ export function openStream(ui: CommsUi): void {
     keyed(cards, key, () => {
       if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
       const els: HTMLElement[] = [];
-      if (item && a && !ready) els.push(decisionCard(item, a, lead));
+      if (item && a && !ready) {
+        settled = { lead: lead.id, el: decisionCard(item, a, lead) };
+        els.push(settled.el);
+      } else if (settled?.lead === lead.id) els.push(faded(settled.el, lead));
       if (item && ready) els.push(wordCard(item));
       for (const l of mineLanded) els.push(landedCard(l));
       const live = previewCard(lead);
@@ -390,16 +390,41 @@ export function openStream(ui: CommsUi): void {
     });
   };
 
+  // a decision answered (from its card, or in the chat) stays where it was, faded and out of reach, until the lead's
+  // next one takes its place: it doesn't vanish from under the captain
+  const faded = (el: HTMLElement, lead: Agent) => {
+    el.inert = true;
+    el.classList.add('tw:opacity-40', 'tw:transition-opacity', 'tw:duration-500');
+    el.dataset.part = 'answered';
+    const heading = el.firstElementChild;
+    if (heading) heading.textContent = `Answered · ${lead.name} is on it`;
+    return el;
+  };
+
   const decisionCard = (item: InboxItem, a: Attention, lead: Agent) =>
     h('div', { class: TW.card, attrs: { 'data-part': 'decision' } },
       h('div', { class: TW.ch }, `Decision · from ${lead.name}`),
-      h('div', { class: 'tw:text-[14px] tw:mt-[3px] tw:mb-1' }, item.what),
-      item.cos?.says || item.cos?.why ? h('div', { class: 'tw:text-[12px] tw:text-muted' }, item.cos.says ?? item.cos.why) : null,
+      h('div', { class: 'tw:text-[16px] tw:mt-[3px] tw:mb-1' }, item.what),
+      item.cos ? h('div', { class: 'cos-md tw:text-[14px]/[1.6] tw:text-ink tw:mt-2 tw:max-w-[68ch]', attrs: { 'data-part': 'brief' }, innerHTML: markdownHtml(briefOf(item.cos)) }) : null,
       ...actsEl(item, a, 'tw:mt-[10px]'));
 
   // a decision's actions (actsOf): Make it so on the pick, the other choices named for what they do, then Discuss (the
   // panel slides in with the decision quoted, and what's said goes to its lead about it) and Got it; their open pull
   // requests fold under More
+  // a reply as a choice the width of the card, pressed whole: its name, the words it sends under it, and the
+  // chief of staff's pick marked
+  const choiceEl = (c: Extract<Act, { kind: 'reply' }>, pick: boolean, item: InboxItem, lead: Agent | undefined) => {
+    const b: HTMLButtonElement = h('button', {
+      class: `tw:block tw:w-full tw:text-left tw:px-3 tw:py-[10px] tw:bg-surface tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-[#1e232b] tw:hover:border-muted ${pick ? 'tw:border-ink' : 'tw:border-line'}`,
+      title: `Send this to ${lead?.name ?? 'the lead'}`, attrs: { 'data-part': 'choice', 'data-act': 'reply' },
+      onclick: () => void busy(b, () => run(c, item, lead), ui.error),
+    },
+      h('span', { class: 'tw:flex tw:items-center tw:gap-2' },
+        h('span', { class: 'tw:font-display tw:text-[12px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:text-ink' }, c.label),
+        pick ? h('span', { class: 'tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:text-[#111] tw:bg-ink tw:px-[6px] tw:py-px' }, 'The pick') : null),
+      h('span', { class: 'tw:block tw:mt-1 tw:text-[13.5px]/[1.5] tw:text-muted' }, c.text));
+    return b;
+  };
   const actsEl = (item: InboxItem, a: Attention, gap: string): HTMLElement[] => {
     const lead = 'agent' in a ? a.agent : undefined;
     const q = lead && a.kind === 'question' ? openQuestion(lead) : undefined;
@@ -410,23 +435,27 @@ export function openStream(ui: CommsUi): void {
       ...(q && { question: q }), ...(req && { permission: { id: req.id, tool: req.tool } }),
     });
     const press = (act: Act, go: boolean) => {
-      const b = button(act.label, go, () => void busy(b, () => run(act, item, lead), ui.error), act.kind === 'reply' ? `Send “${act.text}”` : undefined);
+      const b = button(act.label, go, () => void busy(b, () => run(act, item, lead), ui.error));
       b.dataset.act = act.kind;
       return b;
     };
     const quiet = (label: string, title: string, onclick: () => void) =>
-      h('button', { class: 'tw:bg-transparent tw:border-0 tw:px-1 tw:h-6 tw:text-muted tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:cursor-pointer tw:hover:text-ink', title, onclick }, label);
+      h('button', { class: 'tw:bg-transparent tw:border-0 tw:px-1 tw:h-6 tw:text-muted tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:cursor-pointer tw:hover:text-ink', title, onclick }, label);
     const got = quiet('Got it', 'Read: off your queue until their next turn. Nothing is sent', () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
+    // a reply is drawn with the words it sends beside it: a short label alone can't say what it decides
+    const isReply = (x: Act | undefined): x is Extract<Act, { kind: 'reply' }> => x?.kind === 'reply';
+    const choices = [acts.go, ...acts.others].filter(isReply);
+    const buttons = [acts.go, ...acts.others].filter((x): x is Act => !!x && !isReply(x));
     return [
-      acts.pick ? h('div', { class: `tw:text-[11.5px] tw:text-muted ${gap}` }, 'Pick: ', h('b', { class: 'tw:text-ink tw:font-medium' }, acts.pick)) : null,
-      h('div', { class: `tw:flex tw:flex-wrap tw:items-center tw:gap-[6px] ${acts.pick ? 'tw:mt-2' : gap}`, attrs: { 'data-part': 'acts' } },
-        acts.go ? press(acts.go, true) : null,
-        ...acts.others.map((o) => press(o, false)),
-        h('span', { class: 'tw:flex-1' }),
-        lead ? quiet('Discuss', `Talk it over with ${lead.name}: what you say goes to them about this`, () => discuss(item, lead.id)) : null,
-        acts.ack ? got : null),
+      h('div', { class: `tw:flex tw:flex-col tw:gap-2 ${gap}`, attrs: { 'data-part': 'acts' } },
+        ...choices.map((c) => choiceEl(c, c === acts.go, item, lead)),
+        h('div', { class: 'tw:flex tw:flex-wrap tw:items-center tw:gap-[6px]' },
+          ...buttons.map((b) => press(b, b === acts.go)),
+          h('span', { class: 'tw:flex-1' }),
+          lead ? quiet('Discuss', `Talk it over with ${lead.name}: what you say goes to them about this`, () => discuss(item, lead.id)) : null,
+          acts.ack ? got : null)),
       acts.more
-        ? h('details', { class: 'tw:mt-2 tw:text-[11.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
+        ? h('details', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
           h('div', { class: 'cos-acts tw:mt-2' }, ...merges))
         : null,
     ].filter((e) => e !== null);
@@ -454,25 +483,32 @@ export function openStream(ui: CommsUi): void {
     const got = button('Got it', false, () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
     return h('div', { class: TW.card, attrs: { 'data-part': 'word' } },
       h('div', { class: TW.ch }, 'Word ready · the chief of staff'),
-      h('div', { class: 'tw:text-[12.5px] tw:mt-[3px]' }, item.cos?.message ?? item.what),
+      h('div', { class: 'tw:text-[13.5px] tw:mt-[3px]' }, item.cos?.message ?? item.what),
       h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-[10px]' }, got, send));
   };
 
   const landedCard = (l: LandedItem) => {
     const got = button('Got it', false, () => void busy(got, () => inbox.decideLanded(l.id, { ack: true }).then(refreshInbox), ui.error));
     return h('div', { class: `${TW.card} tw:flex tw:items-center tw:gap-3`, attrs: { 'data-part': 'landed' } },
-      h('div', { class: 'tw:flex-1 tw:min-w-0' }, h('div', { class: TW.ch }, 'Landed in Show'), h('div', { class: 'tw:text-[12.5px] tw:truncate' }, landedWhere(l))),
+      h('div', { class: 'tw:flex-1 tw:min-w-0' }, h('div', { class: TW.ch }, 'Landed in Show'), h('div', { class: 'tw:text-[13.5px] tw:truncate' }, landedWhere(l))),
       got);
   };
 
-  // the lead's preview, while one runs: what they put up to look at is on the strip
+  // the lead's preview, while one runs: a link to each system it runs (web, admin, api…), named as the preview names
+  // it, with whether it's answering
   const previewCard = (lead: Agent): HTMLElement | null => {
     const preview = previewFor(focus.preview(lead.projectId), [...(lead.lead?.landed ?? []), ...(lead.lead?.prs ?? [])]);
-    const live = preview?.status === 'running' ? preview.links[0]?.url : undefined;
-    if (!live) return null;
-    return h('div', { class: `${TW.card} tw:flex tw:items-center tw:gap-3`, attrs: { 'data-part': 'preview' } },
-      h('div', { class: `${TW.ch} tw:flex-1` }, 'Their preview is running'),
-      h('a', { class: TW.btn, href: live, target: '_blank', rel: 'noopener' }, 'Open'));
+    const links = preview?.status === 'running' ? preview.links : [];
+    if (!links.length) return null;
+    const health = { up: 'tw:bg-[#46a758]', error: 'tw:bg-attn', down: 'tw:bg-[#e5484d]' };
+    return h('div', { class: `${TW.card} tw:flex tw:flex-wrap tw:items-center tw:gap-[6px]`, attrs: { 'data-part': 'preview' } },
+      h('div', { class: `${TW.ch} tw:flex-1 tw:min-w-[140px]` }, 'Their preview is running'),
+      ...links.map((l) => h('a', {
+        class: `${TW.btn} tw:gap-[6px] tw:no-underline`, href: l.url, target: '_blank', rel: 'noopener',
+        title: `${l.url}${l.health ? ` · ${l.health}${l.code ? ` (${l.code})` : ''}` : ''}`,
+      },
+        l.health ? h('i', { class: `tw:w-[7px] tw:h-[7px] tw:rounded-full ${health[l.health]}` }) : null,
+        l.name ?? new URL(l.url).host)));
   };
 
   // the muster: what waits outside the goal at the conn, by what each unblocks, and the reports at its foot
@@ -487,11 +523,11 @@ export function openStream(ui: CommsUi): void {
     const reports = words.length + heard.length;
     fill(muster,
       h('div', { class: 'tw:flex tw:justify-between tw:items-baseline' },
-        h('b', { class: 'tw:font-display tw:text-[17px] tw:font-semibold tw:tracking-[.02em]' }, `Muster · ${plural(rows.length, 'decision')}${reports ? `, ${plural(reports, 'report')}` : ''}`),
-        h('span', { class: 'tw:text-muted tw:text-[11.5px]' }, 'by what each unblocks')),
+        h('b', { class: 'tw:font-display tw:text-[19px] tw:font-semibold tw:tracking-[.02em]' }, `Muster · ${plural(rows.length, 'decision')}${reports ? `, ${plural(reports, 'report')}` : ''}`),
+        h('span', { class: 'tw:text-muted tw:text-[12.5px]' }, 'by what each unblocks')),
       ...rows.map((f) => musterRow(f, local.get(f.item.id))),
       reports ? reportsRow(words, heard) : null,
-      rows.length || reports ? null : h('div', { class: 'tw:mt-3 tw:text-muted tw:text-[12.5px]' }, 'Nothing waits on you.'));
+      rows.length || reports ? null : h('div', { class: 'tw:mt-3 tw:text-muted tw:text-[13.5px]' }, 'Nothing waits on you.'));
   };
 
   const row = (report: boolean, g: string, w: string, why: string | null, acts: HTMLElement[], more: HTMLElement | null = null) =>
@@ -499,8 +535,8 @@ export function openStream(ui: CommsUi): void {
       h('span', { class: `tw:self-stretch ${report ? 'tw:bg-line' : 'tw:bg-attn'}` }),
       h('div', { class: 'tw:min-w-0' },
         h('div', { class: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label' }, g),
-        h('div', { class: 'tw:text-[12.5px] tw:truncate', title: w }, w),
-        why ? h('div', { class: 'tw:text-[11px] tw:text-muted' }, why) : null),
+        h('div', { class: 'tw:text-[13.5px] tw:truncate', title: w }, w),
+        why ? h('div', { class: 'tw:text-[12px] tw:text-muted' }, why) : null),
       h('div', { class: 'tw:flex tw:gap-[6px]' }, ...acts),
       more);
 
@@ -534,7 +570,7 @@ export function openStream(ui: CommsUi): void {
     const a = waitingNow().find((x) => hailKey(x) === f.item.id);
     const bar = h('span', { class: 'tw:absolute tw:left-0 tw:top-0 tw:bottom-0 tw:w-1 tw:bg-attn' });
     const hk = h('div', { class: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.14em] tw:uppercase tw:text-attn' }, shown ? `Hail · ${f.item.goal} · ${f.item.who}` : `Hail · ${f.item.goal}`);
-    const ht = h('div', { class: 'tw:text-[12.5px] tw:mt-[2px]' }, f.item.what);
+    const ht = h('div', { class: 'tw:text-[13.5px] tw:mt-[2px]' }, f.item.what);
     if (!shown) {
       hail.onclick = () => { onScreen = f.item.id; render(); };
       hail.classList.add('tw:cursor-pointer');
@@ -546,30 +582,38 @@ export function openStream(ui: CommsUi): void {
     hail.title = '';
     const standBy = button('Stand by', false, () => void busy(standBy, () => callPlugin(CHIEF_OF_STAFF, '/stand-by', { key: f.item.id }), ui.error), 'Into the muster, for when you stand down');
     fill(hail, bar, hk, ht,
-      f.item.cos?.message ? h('div', { class: 'tw:text-[11.5px] tw:text-muted tw:mt-[6px]' }, f.item.cos.message) : null,
+      f.item.cos?.message ? h('div', { class: 'tw:text-[12.5px] tw:text-muted tw:mt-[6px]' }, f.item.cos.message) : null,
       h('div', { class: 'tw:mt-2' }, standBy),
       ...(a ? actsEl(f.item, a, 'tw:mt-2') : []));
   };
 
   // the panel, slid in from the right to talk to the lead: their words and the captain's, and the box
   const renderTalk = (lead: Agent | undefined) => {
-    panel.classList.toggle('tw:translate-x-[260px]', !talking);
-    viewer.classList.toggle('tw:-translate-x-[292px]', talking);
-    viewer.classList.toggle('tw:scale-[.89]', talking);
+    // opening, the panel shows the lead's latest words from their start (what's being asked), once there are some
+    if (talking && panel.classList.contains('tw:hidden')) findLatest = true;
+    show(panel, talking);
+    viewer.classList.toggle('tw:right-3', !talking && !browsing);
+    viewer.classList.toggle('tw:right-[484px]', talking || browsing);
     if (!lead) return;
-    const close = h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[10px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => talk(false) }, 'Close');
+    const close = h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[11px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => talk(false) }, 'Close');
     fill(talkHead, h('span', null, `Comms · ${lead.name}`), close);
     show(topic, !!discussing);
-    fill(topic, discussing ? h('div', null, h('small', { class: 'tw:block tw:text-[10px] tw:text-muted' }, 'Discussing'), discussing.what) : null);
+    fill(topic, discussing ? h('div', null, h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted' }, 'Discussing'), discussing.what) : null);
     box.placeholder = `Talk to ${lead.name}`;
     const key = `${lead.id}|${entries.at(-1)?.at ?? 0}|${entries.length}`;
-    if (said.dataset.key === key) return;
+    if (said.dataset.key !== key) drawSaid(lead, key);
+    if (!findLatest || !talking || !entries.length) return;
+    findLatest = false;
+    const latest = [...said.querySelectorAll<HTMLElement>('[data-from=lead]')].at(-1);
+    said.scrollTop = latest ? latest.offsetTop - said.offsetTop : said.scrollHeight;
+  };
+  const drawSaid = (lead: Agent, key: string) => {
     said.dataset.key = key;
     fill(said, ...conversation(entries).map((e) => {
       const text = h('div', { class: 'cos-md' });
       text.innerHTML = markdownHtml(e.kind === 'lead' || e.kind === 'you' ? e.text : '');
-      return h('div', { class: `tw:text-[12px]/[1.45] ${e.kind === 'you' ? 'tw:pl-2 tw:border-l-2 tw:border-solid tw:border-line' : ''}` },
-        h('small', { class: 'tw:block tw:text-[10px] tw:text-muted tw:mb-px' }, `${e.kind === 'you' ? 'You' : lead.name} · ${clock(e.at)}`), text);
+      return h('div', { class: `tw:text-[14.5px]/[1.65] ${e.kind === 'you' ? 'tw:pl-3 tw:border-0 tw:border-l-2 tw:border-solid tw:border-line' : ''}`, attrs: { 'data-from': e.kind } },
+        h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted tw:mb-1' }, `${e.kind === 'you' ? 'You' : lead.name} · ${clock(e.at)}`), text);
     }));
     said.scrollTop = said.scrollHeight;
   };
@@ -614,6 +658,7 @@ export function openStream(ui: CommsUi): void {
     renderRail(leads, all);
     renderHail(all);
     renderTalk(lead);
+    renderGallery(lead);
     show(muster, mustering);
     if (mustering) renderMuster(all);
     show(viewer, !mustering && !!lead);
@@ -655,7 +700,8 @@ export function openStream(ui: CommsUi): void {
     }, () => undefined);
   }
 
-  // the bridge's keys: M stands down (or brings the muster up), T talks (Esc stops), 1–9 take the conn of a berth
+  // the bridge's keys: M stands down (or brings the muster up), T talks (Esc stops), B beams to the lead at the conn,
+  // 1–9 take the conn of a berth
   const keys = (e: KeyboardEvent) => {
     // Esc puts the panel away before it closes Comms
     if (e.key === 'Escape' && talking) {
@@ -663,16 +709,18 @@ export function openStream(ui: CommsUi): void {
       e.stopPropagation();
       return talk(false);
     }
-    // then folds the strip: the exhibit open under it, then the slice fanned out
-    if (e.key === 'Escape' && (opened || fanned !== null)) {
+    // then the exhibit open on the sheet, then their panel
+    if (e.key === 'Escape' && (opened || browsing)) {
       e.preventDefault();
       e.stopPropagation();
-      return opened ? look(null) : fan(null);
+      return opened ? look(null) : browse(false);
     }
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
     const berth = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'KeyM') muster_();
     else if (e.code === 'KeyT') talk(!talking);
+    else if (e.code === 'KeyB' && conn) ui.goToAgent(conn);
+    else if (e.code === 'KeyE' && conn) browse(!browsing);
     else if (berth) {
       const goal = berths(allLeads(), focus.shown).flatMap((s) => s.goals)[Number(berth[1]) - 1];
       if (goal && goal.id !== conn) take(goal.id);

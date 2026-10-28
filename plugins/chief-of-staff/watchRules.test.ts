@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gradeOf, musterOrder, reachOf, stoodByKept, stripOf, toasts, watchOf } from './watchRules';
+import { exhibitsOf, gradeOf, musterOrder, reachOf, stoodByKept, toasts, watchOf } from './watchRules';
 
 describe('how hard something asks for the captain', () => {
   it('is a word for the lead on carry on and back to the lead, a decision on a card', () => {
@@ -72,33 +72,30 @@ describe('the muster', () => {
   });
 });
 
-describe('the strip', () => {
-  const waypoints = [{ slice: 1, title: 'Quick wins' }, { slice: 2, title: 'PDF parity', learned: ['Fee rows follow the PDF'] }, { slice: 3, heading: 'Signing flow' }];
+describe('the exhibits panel', () => {
+  const waypoints = [{ slice: 1, title: 'Quick wins' }, { slice: 2, title: 'PDF parity' }, { slice: 3, heading: 'Signing flow' }];
+  const artifacts = [
+    { id: 'fees', title: 'Fee table', at: 1, slice: 1 },
+    { id: 'flow', title: 'Flow', at: 4, slice: 3, image: true },
+    { id: 'footer', title: 'PDF footer', at: 3, slice: 1 },
+    { id: 'old', title: 'Old', at: 0 },
+  ];
 
-  it('is a section per slice, the one it’s at last, then the first of the lead’s next ones', () => {
-    const s = stripOf({ waypoints, artifacts: [], prs: [], questions: [] }, ['Portal', 'Reminders']);
-    expect(s.slices.map((x) => [x.slice, x.name, x.now])).toEqual([[1, 'Quick wins', false], [2, 'PDF parity', false], [3, 'Signing flow', true]]);
-    expect(s.next).toBe('Portal');
+  it('groups them by slice, the slice it’s at first, newest first within each, and leaves out a slice with none', () => {
+    expect(exhibitsOf({ waypoints, artifacts }, 'slice').map((g) => [g.label, g.exhibits.map((x) => x.id)])).toEqual([
+      ['3 · Signing flow · now', ['flow', 'old']],
+      ['1 · Quick wins', ['footer', 'fees']],
+    ]);
   });
 
-  it('puts each exhibit in the slice it was last shown in, and one from before that was kept in the current slice', () => {
-    const artifacts = [{ id: 'fees', title: 'Fee table', at: 1, slice: 2 }, { id: 'flow', title: 'Flow', at: 2, slice: 3, image: true }, { id: 'old', title: 'Old', at: 0 }];
-    const s = stripOf({ waypoints, artifacts, prs: [], questions: [] }, []);
-    expect(s.slices.map((x) => x.exhibits.map((e) => e.id))).toEqual([[], ['fees'], ['flow', 'old']]);
-    expect(s.slices[2]?.exhibits[0]).toEqual({ id: 'flow', title: 'Flow', at: 2, image: true });
+  it('lists them all newest first, each with its slice, one shown before slices were kept as the current one', () => {
+    const [all] = exhibitsOf({ waypoints, artifacts }, 'newest');
+    expect(all?.exhibits.map((x) => [x.id, x.slice])).toEqual([['flow', 3], ['footer', 1], ['fees', 1], ['old', 3]]);
+    expect(all?.exhibits[0]).toEqual({ id: 'flow', title: 'Flow', at: 4, slice: 3, image: true });
   });
 
-  it('keeps each slice’s record: its merged pull requests, the questions answered in it, and what it taught', () => {
-    const prs = [{ number: 1268, slice: 2, outcome: 'merged' as const, recap: { title: 'Fee rows follow the PDF' } }, { number: 1270, slice: 2, outcome: 'closed' as const }, { number: 1271, slice: 2, outcome: 'merged' as const }];
-    const questions = [{ slice: 2, question: 'Bill on acceptance?', answer: { at: 5 } }, { slice: 2, question: 'Still open?' }];
-    const two = stripOf({ waypoints, artifacts: [], prs, questions }, []).slices[1];
-    expect(two?.shipped).toEqual(['#1268 Fee rows follow the PDF', '#1271']);
-    expect(two?.decided).toEqual([{ what: 'Bill on acceptance?', at: 5 }]);
-    expect(two?.taught).toEqual(['Fee rows follow the PDF']);
-  });
-
-  it('names a slice by its number until it has a title or heading, and shows no more than there is', () => {
-    expect(stripOf({ waypoints: [{ slice: 1 }], artifacts: [], prs: [], questions: [] }, []).slices[0]?.name).toBe('Slice 1');
-    expect(stripOf({ waypoints: [], artifacts: [], prs: [], questions: [] }, [])).toEqual({ slices: [] });
+  it('has no groups with nothing shown', () => {
+    expect(exhibitsOf({ waypoints, artifacts: [] }, 'slice')).toEqual([]);
+    expect(exhibitsOf({ waypoints: [], artifacts: [] }, 'newest')).toEqual([]);
   });
 });

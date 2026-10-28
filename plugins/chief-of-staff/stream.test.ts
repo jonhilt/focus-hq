@@ -8,17 +8,15 @@ import type { ThreadEntry } from './thread';
 // number) takes the conn and opens the goal's sheet with its decision on it, another goal's card is a count on its
 // berth, a hail drops over the sheet until it's put on screen and stood by, the Muster chip (or M) stands down and the
 // muster comes up, and the lead's name (or T) slides in the panel to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[] } => ({ threads: {}, open: [], waiting: [] }));
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
   lead: {
     station: 0, title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
-    waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1, learned: ['Fees follow the PDF'] }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
+    waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1 }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
     artifacts: [{ id: 'fees', title: 'Fee table', at: 5, slice: 1 }, { id: 'flow', title: 'Flow', at: 6, slice: 2 }],
-    landed: [{ repo: 'acme/shop', number: 12, url: '', slice: 1, outcome: 'merged' }],
-    questions: [{ slice: 1, id: 'q1', question: 'Bill on acceptance?', options: [], at: 3, answer: { at: 4 } }],
   },
 });
 const leads = [agent('a'), agent('b')];
@@ -26,7 +24,7 @@ vi.mock('../../plugin-api/client', async () => {
   const phone = await import('../../plugin-api/phone');
   return {
     ...phone,
-    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => undefined, reviews: new Map(), lines: () => [], shownPrs: () => [], agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
+    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => fake.preview, reviews: new Map(), lines: () => [], shownPrs: () => [], agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
     goalTags: () => [],
     LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac', sky: 'sky', peach: 'peach' },
     markdownHtml: (text: string) => text,
@@ -55,7 +53,7 @@ const { CHIEF_OF_STAFF } = await import('./shared');
 let cleanups: (() => void)[] = [];
 const ui = {
   panels: { open: vi.fn((opts: { body: HTMLElement }) => document.body.replaceChildren(opts.body)), own: (c: () => void) => cleanups.push(c), backTo: vi.fn() },
-  openAgent: vi.fn(), error: vi.fn(),
+  openAgent: vi.fn(), goToAgent: vi.fn(), error: vi.fn(),
 };
 const settle = () => new Promise((r) => setTimeout(r, 50));
 afterEach(() => {
@@ -66,6 +64,7 @@ afterEach(() => {
   fake.open = [];
   fake.waiting = [];
   fake.threads = {};
+  fake.preview = undefined;
 });
 const part = (name: string) => document.querySelector<HTMLElement>(`[data-part=${name}]`);
 const parts = (name: string) => [...document.querySelectorAll<HTMLElement>(`[data-part=${name}]`)];
@@ -106,7 +105,7 @@ describe('the bridge with nobody at the conn', () => {
 });
 
 describe('taking the conn', () => {
-  it('opens the goal’s sheet: its head, its strip and its orders, the other berths dimmed with their counts', async () => {
+  it('opens the goal’s sheet: its head, no orders, the other berths dimmed with their counts', async () => {
     fake.open = [card];
     await open();
     berth('Goal a')?.click();
@@ -115,33 +114,58 @@ describe('taking the conn', () => {
     expect(shown('sheet')).toBe(true);
     expect(shown('empty')).toBe(false);
     expect(document.body.textContent).toContain('On watch · Goal a');
-    expect(parts('slice').map((s) => s.firstElementChild?.textContent)).toEqual(['1 · Quick wins', '2 · Saved list · now', 'Sharing · next']);
-    expect(part('sheet')?.textContent).toContain('Done: Saved items survive a reload');
+    expect(part('sheet')?.textContent).not.toContain('Done: Saved items survive a reload');
     expect(berth('Goal b')?.className).toContain('tw:opacity-50');
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
   });
 
-  it('lays the slice it’s at out on the strip and stacks the ones behind; a stack fans out with its record under, a card opens in place, and Esc folds them', async () => {
+  it('counts the goal’s exhibits in its head, lists them in a panel beside the sheet by slice or newest, and opens one on the sheet', async () => {
     await open();
     berth('Goal a')?.click();
     await settle();
-    expect(parts('card').map((c) => c.textContent)).toEqual(['Flow']);
-    expect(parts('stack').map((c) => c.textContent)).toEqual(['1 exhibit']);
-    part('stack')?.click();
-    expect(parts('card').map((c) => c.textContent)).toEqual(['Fee table']);
-    expect(parts('stack').map((c) => c.textContent)).toEqual(['1 exhibit · now']);
-    expect(part('record')?.textContent).toContain('#12');
-    expect(part('record')?.textContent).toContain('Bill on acceptance?');
-    expect(part('record')?.textContent).toContain('Fees follow the PDF');
-    part('card')?.click();
+    expect(part('exhibits')?.textContent).toBe('Exhibits · 2');
+    part('exhibits')?.click();
+    expect(shown('gallery')).toBe(true);
+    expect(parts('group').map((g) => g.firstElementChild?.textContent)).toEqual(['2 · Saved list · now', '1 · Quick wins']);
+    part('by-newest')?.click();
+    expect(parts('card').map((c) => c.dataset.id)).toEqual(['flow', 'fees']);
+    parts('card')[1]?.click();
     expect(part('exhibit')?.textContent).toContain('Exhibit · Fee table · slice 1');
     expect(part('exhibit')?.querySelector('iframe')?.getAttribute('src')).toContain('fees.html');
+    // talking puts the panel away: one panel beside the sheet at a time
+    part('who')?.click();
+    expect(shown('gallery')).toBe(false);
+    press('KeyE');
+    expect(shown('gallery')).toBe(true);
     press('Escape', 'Escape');
     expect(part('exhibit')).toBeNull();
-    expect(part('record')).not.toBeNull();
     press('Escape', 'Escape');
-    expect(part('record')).toBeNull();
-    expect(parts('card').map((c) => c.textContent)).toEqual(['Flow']);
+    expect(shown('gallery')).toBe(false);
+  });
+
+  it('links each system their preview runs, named as the preview names it', async () => {
+    const work = leads[0]?.lead;
+    if (!work) throw new Error('no lead');
+    work.prs = [{ repo: 'acme/shop', number: 7, url: '' }];
+    fake.preview = { repo: 'acme/shop', number: 7, status: 'running', links: [{ name: 'web', url: 'http://localhost:5173/', health: 'up' }, { name: 'admin', url: 'http://localhost:5174/' }, { url: 'http://localhost:4000/' }] };
+    fake.conn = 'a';
+    await open();
+    work.prs = [];
+    expect([...(part('preview')?.querySelectorAll('a') ?? [])].map((l) => [l.textContent, l.getAttribute('href')])).toEqual([
+      ['web', 'http://localhost:5173/'], ['admin', 'http://localhost:5174/'], ['localhost:4000', 'http://localhost:4000/'],
+    ]);
+  });
+
+  it('beams to a lead’s team room: the one at the conn from its head or B, any other from its berth', async () => {
+    fake.conn = 'a';
+    await open();
+    part('beam-here')?.click();
+    expect(ui.goToAgent).toHaveBeenLastCalledWith('a');
+    press('KeyB');
+    expect(ui.goToAgent).toHaveBeenLastCalledWith('a');
+    berth('Goal b')?.parentElement?.querySelector<HTMLElement>('[data-part=beam]')?.click();
+    expect(ui.goToAgent).toHaveBeenLastCalledWith('b');
+    expect(fake.conn).toBe('a');
   });
 
   it('takes it by a berth’s number too', async () => {
@@ -161,7 +185,7 @@ describe('taking the conn', () => {
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.className).toContain('tw:opacity-0');
   });
 
-  it('answers it with Make it so on the chief of staff’s pick, the other replies named beside it, Discuss and Got it', async () => {
+  it('answers it by pressing a reply, the chief of staff’s pick first and marked, each with the words it sends, then Discuss and Got it', async () => {
     const work = leads[1]?.lead;
     if (!work) throw new Error('no lead');
     work.marks = { [CHIEF_OF_STAFF]: { at: 1000, judged: { route: 2, ask: 'Filters first?', why: 'A pick.', message: '', replies: [{ label: 'Filters', text: 'Filters first.' }, { label: 'Sorting', text: 'Sorting first.' }] } } };
@@ -170,11 +194,19 @@ describe('taking the conn', () => {
     fake.waiting = [{ kind: 'turn', agent: leads[1] }];
     await open();
     delete work.marks;
-    expect(part('decision')?.textContent).toContain('Pick: Filters');
-    expect([...(part('acts')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Make it so', 'Sorting', 'Discuss', 'Got it']);
+    expect(parts('choice').map((c) => c.textContent)).toEqual(['FiltersThe pickFilters first.', 'SortingSorting first.']);
+    expect([...(part('acts')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['FiltersThe pickFilters first.', 'SortingSorting first.', 'Discuss', 'Got it']);
     part('acts')?.querySelector('button')?.click();
     await settle();
     expect(inbox.decide).toHaveBeenCalledWith('turn:b:1000', { text: 'Filters first.' });
+    // answered: the card stays, faded and out of reach, until the lead's next decision comes
+    fake.open = [];
+    fake.waiting = [];
+    fake.state?.();
+    await settle();
+    expect(part('decision')).toBeNull();
+    expect(part('answered')?.textContent).toContain('Answered · Lt. b is on it');
+    expect(part('answered')?.inert).toBe(true);
   });
 
   it('discusses it in the panel: the decision quoted at its top, and what’s said sent to the lead about it', async () => {
@@ -183,7 +215,7 @@ describe('taking the conn', () => {
     fake.waiting = [{ kind: 'turn', agent: leads[1] }];
     await open();
     [...(part('acts')?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Discuss')?.click();
-    expect(part('talk')?.className).not.toContain('tw:translate-x-[260px]');
+    expect(shown('talk')).toBe(true);
     expect(part('topic')?.textContent).toBe('DiscussingFilters first?');
     const box = part('talk')?.querySelector('textarea');
     if (!box) throw new Error('no box to talk to them');
@@ -231,10 +263,10 @@ describe('talking to the lead', () => {
     fake.conn = 'a';
     fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' }, { kind: 'lead', at: 3, text: 'Done.' }];
     await open();
-    expect(part('talk')?.className).toContain('tw:translate-x-[260px]');
+    expect(shown('talk')).toBe(false);
     part('who')?.click();
     await settle();
-    expect(part('talk')?.className).not.toContain('tw:translate-x-[260px]');
+    expect(shown('talk')).toBe(true);
     expect(part('talk')?.textContent).toContain('Done.');
     expect(part('talk')?.textContent).not.toContain('Following it.');
     const box = part('talk')?.querySelector('textarea');
@@ -243,7 +275,7 @@ describe('talking to the lead', () => {
     box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(messageAgent).toHaveBeenCalledWith('a', 'Lt. a', 'Ship it');
     press('Escape', 'Escape');
-    expect(part('talk')?.className).toContain('tw:translate-x-[260px]');
+    expect(shown('talk')).toBe(false);
   });
 });
 
