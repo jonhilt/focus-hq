@@ -4,26 +4,28 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Agent } from '../../plugin-api/client';
 import type { ThreadEntry } from './thread';
 
-// Comms as the captain uses it: a goal's berth on the rail says whether anything is new since they last looked, the
-// goals fold to a strip and back, taking the conn opens a goal's sheet and standing down brings up the muster, a hail
-// from a goal underway sits over the sheet until it's stood by, the quick replies reach the lead, and their workspace
-// has its tabs and the box to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; preview?: unknown; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[] } => ({ threads: {}, open: [], waiting: [] }));
+// Comms as the captain uses it (README.md#the-watch): an empty table with nobody at the conn, a berth pressed (or its
+// number) takes the conn and opens the goal's sheet with its decision on it, another goal's card is a count on its
+// berth, a hail drops over the sheet until it's put on screen and stood by, the Muster chip (or M) stands down and the
+// muster comes up, and the lead's name (or T) slides in the panel to talk to them.
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[] } => ({ threads: {}, open: [], waiting: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
-  status: 'working', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
+  status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
-  lead: { station: 0, title: `Goal ${id}`, repos: [], slice: 1, prs: [] },
+  lead: {
+    station: 0, title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
+    waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1 }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
+  },
 });
-// goal a's lead has put two visuals on their screen and has a pull request open
-const withWork = (a: Agent): Agent => ({ ...a, lead: { station: 0, title: a.lead?.title ?? '', repos: [], slice: 1, artifacts: [{ id: 'old', title: 'Old sketch', at: 50 }, { id: 'flow', title: 'The data flow', at: 100, image: true }], prs: [{ repo: 'acme/shop', number: 5, url: 'https://github.com/acme/shop/pull/5' }] } });
-const leads = [withWork(agent('a')), agent('b')];
+const leads = [agent('a'), agent('b')];
 vi.mock('../../plugin-api/client', async () => {
   const phone = await import('../../plugin-api/phone');
   return {
     ...phone,
-    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => fake.preview, reviews: new Map(), lines: (id: string) => (id === 'a' ? [{ t: 1, kind: 'tool', text: 'Read stream.ts' }, { t: 2, kind: 'text', text: 'Hmm' }] : []), onLines: () => () => undefined, agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
-    LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac' },
+    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => undefined, reviews: new Map(), lines: () => [], shownPrs: () => [], agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
+    goalTags: () => [],
+    LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac', sky: 'sky', peach: 'peach' },
     markdownHtml: (text: string) => text,
     busy: async (_b: HTMLButtonElement, run: () => Promise<unknown>) => { await run(); },
     fill: (el: HTMLElement, ...children: (Node | null)[]) => el.replaceChildren(...children.flatMap((c) => (c ? [c] : []))),
@@ -58,254 +60,158 @@ afterEach(() => {
   fake.stoodBy = undefined;
   fake.open = [];
   fake.waiting = [];
+  fake.threads = {};
 });
-const berth = (goal: string) => [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes(goal));
-
-describe('a goal’s berth on the rail', () => {
-  it('says there is something new when its lead spoke after the captain last looked at its thread', async () => {
-    fake.threads.a = [{ kind: 'lead', at: 5, text: 'Plan?' }];
-    fake.threads.b = [{ kind: 'lead', at: 6, text: 'Hello' }];
-    openStream(ui as never);
-    await settle();
-    berth('Goal a')?.click();
-    await settle();
-    berth('Goal b')?.click();
-    await settle();
-    // goal a's lead speaks again while goal b is at the conn
-    fake.threads.a = [...fake.threads.a, { kind: 'lead', at: 9, text: 'Done.' }];
-    cleanups.forEach((c) => c());
-    cleanups = [];
-    openStream(ui as never);
-    await settle();
-    await settle();
-    expect(document.querySelectorAll('.cos-st-row')[0].classList).toContain('new');
-    expect(document.querySelectorAll('.cos-st-row')[1].classList).not.toContain('new');
-  });
-});
-
-describe('the goals list', () => {
-  it('folds to a strip and opens again, and stays as it was left', async () => {
-    localStorage.clear();
-    openStream(ui as never);
-    await settle();
-    document.querySelector<HTMLElement>('.cos-st-foldbtn')?.click();
-    expect(document.querySelector('.cos-st-row')).toBeNull();
-    expect(document.querySelector('.cos-st-strip')?.textContent).toBe('Goals');
-    cleanups.forEach((c) => c());
-    cleanups = [];
-    openStream(ui as never);
-    await settle();
-    expect(document.querySelector('.cos-st-strip')).not.toBeNull();
-    document.querySelector<HTMLElement>('.cos-st-strip')?.click();
-    expect(document.querySelectorAll('.cos-st-row')).toHaveLength(2);
-  });
-});
-
-describe('the foot of a goal’s thread', () => {
-  it('sends a quick reply to the lead of the goal at the conn', async () => {
-    localStorage.clear();
-    openStream(ui as never);
-    await settle();
-    berth('Goal b')?.click();
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-st-quick button')].find((b) => b.textContent === 'Carry on')?.click();
-    await settle();
-    expect(messageAgent).toHaveBeenCalledWith('b', 'Lt. b', 'Carry on');
-  });
-});
-
-describe('the lead’s workspace', () => {
-  const pickA = async () => {
-    localStorage.clear();
-    openStream(ui as never);
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
-    await settle();
-  };
-  it('has the box to talk to the lead, and what’s written there goes straight to them', async () => {
-    await pickA();
-    expect(document.querySelector('.cos-st-foot textarea')).toBeNull();
-    const box = document.querySelector<HTMLTextAreaElement>('.cos-ws textarea');
-    if (!box) throw new Error('no box in the workspace');
-    box.value = 'Ship the dot';
-    document.querySelector<HTMLElement>('.cos-ws .cos-st-send')?.click();
-    await settle();
-    expect(messageAgent).toHaveBeenCalledWith('a', 'Lt. a', 'Ship the dot');
-  });
-  it('shows their conversation alone, and what they’ve been doing on its own tab', async () => {
-    fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' }, { kind: 'lead', at: 3, text: 'Done.' }];
-    await pickA();
-    await settle();
-    expect(document.querySelector('.cos-ws-body')?.textContent).toContain('Done.');
-    expect(document.querySelector('.cos-ws-body')?.textContent).not.toContain('Following it.');
-    [...document.querySelectorAll<HTMLElement>('.cos-ws-tab')].find((t) => t.textContent?.startsWith('Activity'))?.click();
-    expect(document.querySelector('.cos-ws-body')?.textContent).toContain('Read stream.ts');
-    expect(document.querySelector('.cos-ws-body')?.textContent).not.toContain('Hmm');
-  });
-  it('folds to a strip and opens again', async () => {
-    await pickA();
-    document.querySelector<HTMLElement>('.cos-ws .cos-st-foldbtn')?.click();
-    expect(document.querySelector('.cos-ws')).toBeNull();
-    expect(document.querySelector('.cos-st-side .cos-st-strip')?.textContent).toBe('Lt. a\'s workspace');
-    document.querySelector<HTMLElement>('.cos-st-side .cos-st-strip')?.click();
-    expect(document.querySelector('.cos-ws')).not.toBeNull();
-  });
-});
-
-describe('the lead’s workspace, their screen and browser', () => {
-  const open = async (tab: string) => {
-    localStorage.clear();
-    openStream(ui as never);
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-ws-tab')].find((t) => t.textContent?.startsWith(tab))?.click();
-    return document.querySelector('.cos-ws-body');
-  };
-  it('shows the latest visual on their screen as its picture, the others to pick from', async () => {
-    const body = await open('Screen');
-    expect(body?.querySelector('.cos-ws-art-h b')?.textContent).toBe('The data flow');
-    expect(body?.querySelector<HTMLImageElement>('.cos-ws-pic')?.getAttribute('src')).toContain('/flow.jpg');
-    [...(body?.querySelectorAll<HTMLElement>('.cos-ws-thumb') ?? [])].find((t) => t.textContent?.includes('Old sketch'))?.click();
-    // one with no picture shows as the page itself
-    expect(document.querySelector('.cos-ws-art-h b')?.textContent).toBe('Old sketch');
-    expect(document.querySelector('.cos-ws-body iframe')?.getAttribute('src')).toContain('/old.html');
-  });
-  it('shows the preview when it runs one of their pull requests: the page once it’s up, what it’s doing before', async () => {
-    fake.preview = { projectId: 'p', repo: 'acme/shop', number: 5, title: 'Saved', status: 'running', activity: 'Up', links: [{ url: 'http://localhost:5173/' }] };
-    expect((await open('Browser'))?.querySelector('iframe')?.getAttribute('src')).toBe('http://localhost:5173/');
-    fake.preview = { projectId: 'p', repo: 'acme/shop', number: 5, title: 'Saved', status: 'starting', activity: 'Installing dependencies', links: [] };
-    const starting = await open('Browser');
-    expect(starting?.querySelector('iframe')).toBeNull();
-    expect(starting?.textContent).toContain('Installing dependencies');
-    fake.preview = { projectId: 'p', repo: 'acme/shop', number: 9, title: 'Other', status: 'running', activity: 'Up', links: [{ url: 'http://localhost:5174/' }] };
-    expect((await open('Browser'))?.textContent).toContain('No preview of Lt. a');
-    fake.preview = undefined;
-  });
-});
-
-
-describe('the thread told by the chief of staff', () => {
-  it('has its reading in place of the turn it read, and the turn’s words in the workspace, opened on it from the reading', async () => {
-    localStorage.clear();
-    // the workspace folded, on another tab: the reading's way in unfolds it and turns to the turn
-    localStorage.setItem('cos-stream-workspace-folded', '1');
-    fake.threads.a = [
-      { kind: 'lead', at: 55, text: 'Slice 1 is up: the long report.' },
-      { kind: 'cos', at: 60, route: 2, why: 'A pick.', says: 'Slice 1 is up and wants your pick on the layout.' },
-      { kind: 'you', at: 70, text: 'The left one' },
-      { kind: 'lead', at: 80, text: 'On it.' },
-    ];
-    openStream(ui as never);
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
-    await settle();
-    const centre = document.querySelector('.cos-st-thread');
-    expect(centre?.querySelector('.cos-st-rd-says')?.textContent).toBe('Slice 1 is up and wants your pick on the layout.');
-    expect(centre?.textContent).not.toContain('the long report');
-    // a turn it hasn't read yet stays as the lead said it
-    expect(centre?.textContent).toContain('On it.');
-    // the visual put up before the turn it read was
-    expect([...(centre?.querySelectorAll('.cos-st-rd-chip') ?? [])].map((c) => c.textContent)).toEqual(['Their words ›', '▣ Old sketch']);
-    [...(centre?.querySelectorAll<HTMLElement>('.cos-st-rd-chip') ?? [])].find((c) => c.textContent === 'Their words ›')?.click();
-    expect(document.querySelector('.cos-ws-tab.on')?.textContent).toMatch(/^Conversation/);
-    expect(document.querySelector('.cos-ws-body .hot')?.textContent).toContain('the long report');
-  });
-});
-
-describe('the conversation opened on a turn from its reading', () => {
-  it('goes to the end again when the lead says more, and back to the turn when the reading is pressed again', async () => {
-    localStorage.clear();
-    fake.threads.a = [
-      { kind: 'lead', at: 55, text: 'Slice 1 is up: the long report.' },
-      { kind: 'cos', at: 60, route: 1, why: 'Fine.', says: 'Slice 1 is up. Nothing for you.' },
-    ];
-    openStream(ui as never);
-    await settle();
-    [...document.querySelectorAll<HTMLElement>('.cos-st-row')].find((r) => r.textContent?.includes('Goal a'))?.click();
-    await settle();
-    const body = document.querySelector<HTMLElement>('.cos-ws-body');
-    if (!body) throw new Error('no workspace');
-    // happy-dom lays nothing out: the pane is 900 high in its content, the turn 300 down it
-    Object.defineProperty(body, 'scrollHeight', { configurable: true, get: () => 900 });
-    const words = () => [...document.querySelectorAll<HTMLElement>('.cos-st-rd-chip')].find((c) => c.textContent === 'Their words ›');
-    const top = vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) { return this.classList.contains('hot') ? 300 : 0; });
-    words()?.click();
-    expect(body.scrollTop).toBe(292);
-    // scrolled away, the reading pressed again goes back to the turn
-    body.scrollTop = 0;
-    words()?.click();
-    expect(body.scrollTop).toBe(292);
-    fake.threads.a = [...fake.threads.a, { kind: 'lead', at: 80, text: 'And more.' }];
-    document.querySelector<HTMLElement>('.cos-st-quick button')?.click();
-    await settle();
-    await new Promise((r) => setTimeout(r, 1100));
-    expect(document.querySelector('.cos-ws-body')?.textContent).toContain('And more.');
-    expect(body.scrollTop).toBe(900);
-    top.mockRestore();
-  });
-});
+const part = (name: string) => document.querySelector<HTMLElement>(`[data-part=${name}]`);
+const parts = (name: string) => [...document.querySelectorAll<HTMLElement>(`[data-part=${name}]`)];
+const berth = (goal: string) => parts('berth').find((r) => r.textContent?.includes(goal));
+const shown = (name: string) => !part(name)?.classList.contains('tw:hidden');
+const press = (code: string, key = '') => window.dispatchEvent(new KeyboardEvent('keydown', { code, key, bubbles: true }));
+const open = async () => {
+  localStorage.clear();
+  openStream(ui as never);
+  await settle();
+};
 
 // a card of goal b's lead waits on the captain, and an interrupt from goal a's that can't be undone
-const card = { id: 'turn:b:1000', kind: 'turn', projectId: 'p', agentId: 'b', who: 'Lt. b', goal: 'Goal b', what: 'Filters first?', lane: 'needs-you', cos: { route: 2, ask: 'Filters first?', why: '', message: '' } };
-const hail = { id: 'turn:a:1000', kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. a', goal: 'Goal a', what: 'Read production?', lane: 'needs-you', cos: { route: 3, check: 'irreversible', ask: 'Read production?', why: '', message: '' } };
+const card = { id: 'turn:b:1000', kind: 'turn', projectId: 'p', agentId: 'b', who: 'Lt. b', goal: 'Goal b', what: 'Filters first?', lane: 'needs-you', cos: { route: 2, ask: 'Filters first?', why: 'A pick.', says: 'Filters or sorting next.', message: '' } };
+const hail = { id: 'turn:a:1000', kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. a', goal: 'Goal a', what: 'Read production?', lane: 'needs-you', cos: { route: 3, check: 'irreversible', ask: 'Read production?', why: '', message: 'One read-only query.' } };
 
-describe('the watch', () => {
-  it('opens on the muster with nobody at the conn, and on the goal’s sheet once its conn is taken', async () => {
-    localStorage.clear();
+describe('the bridge with nobody at the conn', () => {
+  it('is an empty table, every goal in its berth with what waits on it counted, the muster chip counting it all', async () => {
     fake.open = [card];
-    openStream(ui as never);
-    await settle();
-    expect(document.querySelector('.cos-bridge')?.classList).toContain('mustering');
-    expect(document.querySelector('.cos-br-status')?.textContent).toBe('Bridge · No watch');
-    expect(document.querySelector('.cos-br-row-what')?.textContent).toBe('Filters first?');
+    await open();
+    expect(shown('empty')).toBe(true);
+    expect(shown('sheet')).toBe(false);
+    expect(document.body.textContent).toContain('No watch');
+    expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
+    expect(part('chip')?.textContent).toBe('Muster1');
+  });
+
+  it('brings the muster up from the chip, by what each unblocks, and puts it away again', async () => {
+    fake.open = [card];
+    await open();
+    part('chip')?.click();
+    expect(shown('muster')).toBe(true);
+    expect(part('row')?.textContent).toContain('Filters first?');
+    expect(part('row')?.textContent).toContain('b idle until you answer');
+    press('KeyM');
+    expect(shown('muster')).toBe(false);
+  });
+});
+
+describe('taking the conn', () => {
+  it('opens the goal’s sheet: its head, its chart and its orders, the other berths dimmed with their counts', async () => {
+    fake.open = [card];
+    await open();
     berth('Goal a')?.click();
     await settle();
     expect(fake.conn).toBe('a');
-    expect(document.querySelector('.cos-bridge')?.classList).not.toContain('mustering');
-    expect(document.querySelector('.cos-br-status')?.textContent).toBe('On watch · Goal a');
-    // the other goal dims in its berth, its decision a count on it
-    expect(berth('Goal b')?.classList).toContain('dim');
-    expect(berth('Goal b')?.querySelector('.cos-br-count')?.textContent).toBe('1');
-    expect(document.querySelector('.cos-br-chip b')?.textContent).toBe('1');
+    expect(shown('sheet')).toBe(true);
+    expect(shown('empty')).toBe(false);
+    expect(document.body.textContent).toContain('On watch · Goal a');
+    expect(part('chart')?.textContent).toBe('Quick winsSaved listSharing · next');
+    expect(part('sheet')?.textContent).toContain('Done: Saved items survive a reload');
+    expect(berth('Goal b')?.className).toContain('tw:opacity-50');
+    expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
   });
 
-  it('brings the muster up as the captain stands down', async () => {
-    localStorage.clear();
-    fake.conn = 'a';
-    openStream(ui as never);
+  it('takes it by a berth’s number too', async () => {
+    await open();
+    press('Digit2');
     await settle();
-    document.querySelector<HTMLElement>('.cos-br-down')?.click();
-    await settle();
-    expect(fake.conn).toBeUndefined();
-    expect(document.querySelector('.cos-bridge')?.classList).toContain('mustering');
+    expect(fake.conn).toBe('b');
   });
 
-  it('puts a hail from a goal underway over the sheet, and tells it to stand by into the muster', async () => {
-    localStorage.clear();
+  it('puts the goal’s own decision on its sheet, with the chief of staff’s reading of it', async () => {
     fake.conn = 'b';
-    fake.open = [hail];
-    openStream(ui as never);
-    await settle();
-    const over = document.querySelector<HTMLElement>('.cos-br-hail');
-    expect(over?.hidden).toBe(false);
-    expect(over?.querySelector('.cos-br-hail-what')?.textContent).toBe('Read production?');
-    [...(over?.querySelectorAll<HTMLElement>('button') ?? [])].find((b) => b.textContent === 'Stand by')?.click();
-    await settle();
-    expect(fake.stoodBy).toEqual(['turn:a:1000']);
-    expect(document.querySelector<HTMLElement>('.cos-br-hail')?.hidden).toBe(true);
-    // in the muster, a hail still: first, and said to be stood by
-    document.querySelector<HTMLElement>('.cos-br-chip')?.click();
-    expect(document.querySelector('.cos-br-row-goal')?.textContent).toBe('Goal a · hail, stood by');
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    expect(part('decision')?.textContent).toContain('Decision · from Lt. b');
+    expect(part('decision')?.textContent).toContain('Filters or sorting next.');
+    expect(berth('Goal b')?.querySelector('[data-part=count]')?.className).toContain('tw:opacity-0');
   });
 
-  it('keeps a card from a goal underway off the sheet: a count on its berth, no hail', async () => {
-    localStorage.clear();
+  it('keeps another goal’s card off the sheet: a count on its berth, no hail', async () => {
     fake.conn = 'a';
     fake.open = [card];
-    openStream(ui as never);
+    await open();
+    expect(shown('hail')).toBe(false);
+    expect(part('decision')).toBeNull();
+    expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
+  });
+});
+
+describe('a hail on watch', () => {
+  it('drops over the sheet, opens in place when pressed, and stands by into the muster', async () => {
+    fake.conn = 'b';
+    fake.open = [hail];
+    await open();
+    expect(shown('hail')).toBe(true);
+    expect(part('hail')?.textContent).toBe('Hail · Goal aRead production?');
+    part('hail')?.click();
+    expect(part('hail')?.textContent).toContain('Hail · Goal a · Lt. a');
+    expect(part('hail')?.textContent).toContain('One read-only query.');
+    [...(part('hail')?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Stand by')?.click();
     await settle();
-    expect(document.querySelector<HTMLElement>('.cos-br-hail')?.hidden).toBe(true);
-    expect(berth('Goal b')?.querySelector('.cos-br-count')?.textContent).toBe('1');
+    expect(fake.stoodBy).toEqual(['turn:a:1000']);
+    expect(shown('hail')).toBe(false);
+    // standing down: the muster comes up, the hail in it, first and said to be stood by
+    part('chip')?.click();
+    await settle();
+    expect(fake.conn).toBeUndefined();
+    expect(shown('muster')).toBe(true);
+    expect(part('row')?.textContent).toContain('Goal a · hail, stood by');
+  });
+});
+
+describe('talking to the lead', () => {
+  it('slides the panel in from the lead’s name with their conversation, sends what’s written, and goes on Esc', async () => {
+    fake.conn = 'a';
+    fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' }, { kind: 'lead', at: 3, text: 'Done.' }];
+    await open();
+    expect(part('talk')?.className).toContain('tw:translate-x-[260px]');
+    part('who')?.click();
+    await settle();
+    expect(part('talk')?.className).not.toContain('tw:translate-x-[260px]');
+    expect(part('talk')?.textContent).toContain('Done.');
+    expect(part('talk')?.textContent).not.toContain('Following it.');
+    const box = part('talk')?.querySelector('textarea');
+    if (!box) throw new Error('no box to talk to them');
+    box.value = 'Ship it';
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(messageAgent).toHaveBeenCalledWith('a', 'Lt. a', 'Ship it');
+    press('Escape', 'Escape');
+    expect(part('talk')?.className).toContain('tw:translate-x-[260px]');
+  });
+});
+
+describe('the bridge while updates stream in', () => {
+  it('keeps the berth under the captain’s press through an update, so the press still lands', async () => {
+    fake.open = [card];
+    await open();
+    const pressed = berth('Goal a');
+    pressed?.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+    // the plugin's state comes in between the press going down and coming up
+    fake.state?.();
+    await settle();
+    expect(berth('Goal a')).toBe(pressed);
+    pressed?.click();
+    expect(fake.conn).toBe('a');
+  });
+
+  it('keeps what the captain is typing into a card through an update that doesn’t change the card', async () => {
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    const box = part('decision')?.querySelector('textarea');
+    if (!box) throw new Error('no box on the decision card');
+    box.value = 'Filters, but only';
+    fake.state?.();
+    await settle();
+    expect(part('decision')?.querySelector('textarea')).toBe(box);
+    expect(box.value).toBe('Filters, but only');
   });
 });

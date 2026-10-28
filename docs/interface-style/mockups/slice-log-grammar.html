@@ -1,0 +1,693 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slice log grammar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens ----------
+   Page: a light spec sheet. Mockups: the bridge as built (bridge.css / bridge-grammar.html), its tokens as is.
+   No new tokens: an exhibit is a card, opened or not, and the waypoint's shelf is a popover. */
+:root {
+  color-scheme: light;
+  --page-ground: #e8e6e1; --page-surface: #fbfaf8; --page-ink: #1c1e22; --page-muted: #61666e; --page-line: rgba(28,30,34,.12);
+  --t-well: #0b0d10; --t-panel: #15181d; --t-surface: #1b1f25; --t-surface2: #1e232b; --t-line: #3a424e;
+  --t-text: #e9edf2; --t-muted: #8a94a3; --t-label: #7d8794;
+  --t-display: 'Chakra Petch', sans-serif; --t-mono: 'IBM Plex Mono', monospace;
+  --read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --attn: #f5a524;
+  --lift-1: 0 1px 0 rgba(0,0,0,.5);
+  --lift-2: 0 6px 16px rgba(0,0,0,.55);
+  --lift-3: 0 14px 36px rgba(0,0,0,.65);
+  --lift-4: 0 20px 50px #000a;
+  --hairline-sheet: #3a424e;
+  --hairline-card: rgba(233,237,242,.10);
+  --spring-paper: 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-card: 420ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-flick: 220ms cubic-bezier(.2,.9,.3,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page-ground); color: var(--page-ink); }
+body { font: 15px/1.55 'IBM Plex Sans', system-ui, sans-serif; overflow-x: hidden; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 80px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--page-line); padding-bottom: 14px; }
+header.top h1 { font: 600 34px/1.1 'Chakra Petch', sans-serif; margin: 0; }
+header.top h1 small { display: block; font: 500 13px/1.4 'IBM Plex Sans', sans-serif; color: var(--page-muted); margin-top: 6px; }
+nav.tabs { display: flex; gap: 2px; background: #dcd9d3; padding: 3px; border-radius: 4px; }
+nav.tabs button { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .06em; text-transform: uppercase; border: 0; background: transparent; padding: 7px 14px; border-radius: 3px; cursor: pointer; color: var(--page-muted); }
+nav.tabs button[aria-selected="true"] { background: var(--page-surface); color: var(--page-ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.lede { font-size: 17px; line-height: 1.6; max-width: 900px; margin: 22px 0 18px; }
+.lede b { font-weight: 600; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 14px 18px; }
+.box h3 { font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; color: var(--page-muted); }
+.box ul { margin: 0; padding-left: 18px; } .box li { margin: 4px 0; font-size: 14px; }
+.losses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--page-line); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; margin: 0 0 16px; }
+.losses div { background: var(--page-surface); padding: 12px 16px; font-size: 13.5px; }
+.losses b { display: block; font: 600 15px 'Chakra Petch', sans-serif; margin-bottom: 2px; }
+.losses code, p code, td code { font: 12.5px 'IBM Plex Mono', monospace; background: #efece6; padding: 0 4px; border-radius: 3px; }
+section.tab { display: none; padding-top: 28px; } section.tab.on { display: block; }
+h2 { font: 600 22px/1.2 'Chakra Petch', sans-serif; margin: 34px 0 10px; }
+h2:first-child { margin-top: 0; }
+p.note { color: var(--page-muted); font-size: 14px; max-width: 860px; }
+table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--page-line); vertical-align: top; }
+th { font: 600 11.5px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--page-muted); background: #f3f1ed; }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 600 10.5px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--page-line); color: var(--page-muted); white-space: nowrap; }
+.tag.new { border-color: #1c1e22; color: #1c1e22; }
+.tag.split, .tag.renamed, .tag.changed { border-color: #61666e; color: #3b3f45; }
+.scroll-x { overflow-x: auto; }
+.nouns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.noun { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.noun h3 { font: 600 19px 'Chakra Petch', sans-serif; margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.noun .purpose { font-size: 15px; margin: 0; }
+.noun dl { display: grid; grid-template-columns: 92px 1fr; gap: 3px 10px; margin: 0; font-size: 13.5px; }
+.noun dt { color: var(--page-muted); font-weight: 500; }
+.noun dd { margin: 0; }
+.tile { background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); border-radius: 4px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.matrix th, .matrix td { text-align: center; padding: 6px 4px; font-size: 13px; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+.matrix thead th { writing-mode: vertical-rl; transform: rotate(180deg); height: 110px; vertical-align: bottom; text-align: left; padding: 8px 4px; }
+.matrix thead th:first-child { writing-mode: horizontal-tb; transform: none; }
+.matrix td.y::after { content: '●'; font-size: 11px; }
+.matrix td.n::after { content: '●'; font-size: 11px; outline: 1px solid #1c1e22; outline-offset: 2px; border-radius: 50%; }
+.matrix td.x::after { content: '×'; color: var(--page-muted); }
+.matrix td:nth-child(odd):not(:first-child) { background: #f6f4f0; }
+.legend { font-size: 13px; color: var(--page-muted); margin: 8px 0 0; }
+.principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.principles div { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 12px 16px; font-size: 14.5px; }
+.principle { max-width: 64ch; margin: 0 0 8px; }
+.principle p { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
+.principle .rule { font: 600 18px/1.45 'IBM Plex Sans', sans-serif; border-left: 3px solid var(--page-ink); padding-left: 14px; margin-bottom: 12px; }
+.stack { display: grid; grid-template-columns: 1.05fr .9fr 1.15fr; gap: 20px; align-items: center; margin-top: 12px; }
+.stack .defs h4 { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; margin: 14px 0 2px; }
+.stack .defs h4:first-child { margin-top: 0; }
+.stack .defs p { margin: 0; font-size: 14px; line-height: 1.6; }
+.iso { position: relative; height: 360px; perspective: 1400px; }
+.iso .rig { position: absolute; left: 50%; top: 60%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-38deg); }
+.iso .pl { position: absolute; border-radius: 3px; display: flex; align-items: flex-end; padding: 7px; font: 600 10.5px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--t-text); }
+.iso .sheet { left: -120px; top: -90px; width: 240px; height: 180px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); transform: translateZ(0); box-shadow: var(--lift-3); }
+.iso .small { width: 54px; height: 38px; top: -10px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(30px); padding: 4px; font-size: 8px; }
+.iso .small.a { left: -100px; } .iso .small.b { left: -40px; } .iso .small.c { left: 20px; }
+.iso .open { left: -100px; top: -80px; width: 150px; height: 64px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(70px); box-shadow: var(--lift-2); }
+.iso .pop { left: 30px; top: -84px; width: 84px; height: 46px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(112px); box-shadow: var(--lift-4); }
+.tokens td, .tokens th { font-size: 12.5px; padding: 6px 8px; }
+.tokens code { font: 11.5px 'IBM Plex Mono', monospace; }
+.scenario { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.55fr); gap: 26px; margin: 26px 0 0; padding: 24px 0 0; border-top: 1px solid var(--page-line); align-items: start; }
+.scenario h3 { font: 600 20px 'Chakra Petch', sans-serif; margin: 0 0 6px; }
+.scenario .today { font-size: 13.5px; background: #f1eee9; border-left: 3px solid #9aa0a8; padding: 8px 12px; margin: 10px 0; border-radius: 0 4px 4px 0; }
+.scenario p { font-size: 14.5px; margin: 8px 0; line-height: 1.6; max-width: 60ch; }
+.scenario p.why { font-size: 13.5px; color: var(--page-muted); border-top: 1px solid var(--page-line); padding-top: 10px; margin-top: 14px; }
+.scenario p.why b { color: var(--page-ink); font-weight: 600; }
+ol.steps { list-style: none; padding: 0; margin: 14px 0 0; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 4px; cursor: pointer; color: var(--page-muted); font-size: 14px; }
+ol.steps li::before { content: counter(s); font: 600 12px 'IBM Plex Mono', monospace; padding-top: 2px; }
+ol.steps li.on { color: var(--page-ink); background: var(--page-surface); box-shadow: inset 2px 0 0 var(--page-ink); }
+ol.steps li.on b { font-weight: 700; }
+.table { position: relative; background: #d9d6d0; border-radius: 8px; padding: 14px; }
+.table .replay { position: absolute; bottom: 6px; right: 14px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: #15181d; color: #e9edf2; cursor: pointer; display: grid; place-items: center; }
+.table .replay svg { width: 15px; height: 15px; }
+.table .cap { font: 500 12px 'IBM Plex Mono', monospace; color: var(--page-muted); margin: 10px 40px 0 2px; min-height: 22px; display: flex; justify-content: space-between; gap: 10px; }
+.mk-wrap { position: relative; width: 100%; aspect-ratio: 760 / 500; overflow: hidden; border-radius: 4px; }
+.handover td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ================= Mockup (the bridge as built) ================= */
+.mk { position: absolute; left: 0; top: 0; width: 760px; height: 500px; transform-origin: 0 0; transform: scale(var(--s, 1)); background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); overflow: hidden;
+  background-image: radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%); }
+.mk * { box-sizing: border-box; }
+.mk .hud { position: absolute; left: 12px; right: 12px; top: 8px; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.mk .where { font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; color: var(--t-muted); display: flex; gap: 8px; }
+.mk .where b { color: var(--t-text); font-weight: 600; }
+.muschip { display: flex; align-items: center; height: 24px; border: 1px solid var(--t-line); background: var(--t-panel); font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; }
+.muschip span { padding: 0 9px; color: var(--t-muted); }
+.muschip .cnt { width: 26px; height: 22px; line-height: 22px; background: var(--attn); color: #111; text-align: center; padding: 0; }
+.mk .rail { position: absolute; left: 12px; top: 46px; width: 150px; }
+.mk .proj { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin: 2px 4px 5px; }
+.berth { display: grid; grid-template-columns: 12px 1fr 22px; align-items: center; gap: 6px; min-height: 30px; padding: 4px 6px 4px 8px; margin-bottom: 4px; background: var(--t-panel); border: 1px solid rgba(58,66,78,.45); box-shadow: var(--lift-1); font-size: 12px; line-height: 1.3; opacity: .5; }
+.berth.at { opacity: 1; background: var(--t-surface); border-color: var(--t-line); }
+.berth .n { width: 22px; height: 16px; font: 600 11px/16px var(--t-mono); text-align: center; color: var(--attn); box-shadow: inset 0 0 0 1px var(--attn); }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.work { background: var(--t-text); }
+.viewer { position: absolute; left: 174px; top: 46px; width: 574px; height: 442px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); box-shadow: var(--lift-3);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.vhead { padding: 12px 18px 9px; border-bottom: 1px solid var(--hairline-card); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.vhead .p { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); }
+.vhead .g { font: 600 16px/1.25 var(--t-display); letter-spacing: .02em; grid-column: 1; }
+.vhead .who { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--t-muted); display: flex; align-items: center; gap: 6px; }
+.since { position: absolute; left: 18px; top: 62px; font-size: 12px; color: var(--t-muted); display: flex; gap: 12px; white-space: nowrap; }
+.since b { color: var(--t-text); font-weight: 500; transition: opacity var(--spring-card); }
+/* the chart, from its left edge: 1 behind, the last waypoint, here, next */
+.chart { position: absolute; left: 18px; top: 84px; width: 538px; height: 50px; }
+.chart svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.chart .lbl { position: absolute; top: 22px; font-size: 10.5px; color: var(--t-muted); white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.chart .lbl.here { color: var(--t-text); }
+/* a waypoint's shelf: the exhibits you've had during its slice, counted */
+.shelf { display: inline-flex; align-items: center; gap: 3px; height: 15px; padding: 0 4px; border: 1px solid var(--hairline-card); font: 500 9.5px var(--t-mono); color: var(--t-muted); overflow: hidden; }
+.shelf::before { content: ''; width: 7px; height: 6px; border: 1px solid var(--t-muted); border-radius: 1px; }
+.shelf .roll { display: flex; flex-direction: column; height: 13px; overflow: hidden; }
+.shelf .roll i { font-style: normal; display: block; height: 13px; line-height: 13px; transition: transform var(--spring-card); }
+.trayk { position: absolute; left: 18px; top: 140px; font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); display: flex; gap: 10px; }
+.trayk span { font: 500 10.5px var(--read); letter-spacing: 0; text-transform: none; color: var(--t-muted); }
+.trayempty { position: absolute; left: 18px; top: 160px; width: 538px; height: 88px; border: 1px dashed var(--t-line); display: grid; place-items: center; color: var(--t-muted); font-size: 12px; transition: opacity var(--spring-card); }
+/* an exhibit, small: resting on the sheet in the tray, in the order it came */
+.ex { position: absolute; top: 160px; width: 126px; height: 88px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 6px; display: flex; flex-direction: column; gap: 5px;
+  transition: transform var(--spring-card), opacity var(--spring-card); }
+.ex .th { height: 50px; background: #f4f2ee; border-radius: 1px; position: relative; overflow: hidden; }
+.ex .tt { display: flex; align-items: center; gap: 5px; font-size: 10.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+.ex .tt span { overflow: hidden; text-overflow: ellipsis; }
+.ex .ver { margin-left: auto; font: 500 9px var(--t-mono); color: var(--t-muted); border: 1px solid var(--hairline-card); padding: 0 3px; flex: none; }
+/* seen: a dot while there's something you haven't opened, a ring once you have */
+.seen { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--t-text); transition: background .3s, box-shadow .3s; }
+.seen.ring { background: none; box-shadow: inset 0 0 0 1.3px var(--t-muted); }
+/* the same exhibit, open in place: it grows from its card, the others step aside to a column */
+.big { position: absolute; left: 18px; top: 160px; width: 400px; height: 268px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 9px 10px; display: flex; flex-direction: column; gap: 7px;
+  transform-origin: 0 0; opacity: 0; pointer-events: none; transition: transform var(--spring-card), opacity var(--spring-flick); }
+.big .bh { display: flex; align-items: center; gap: 8px; }
+.big .ch { font: 600 10px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); white-space: nowrap; }
+.big .acts { margin-left: auto; display: flex; gap: 5px; }
+.big .page { flex: 1; background: #f4f2ee; color: #1c1e22; border-radius: 1px; position: relative; overflow: hidden; }
+.vs { display: flex; gap: 0; font: 500 9.5px var(--t-mono); }
+.vs i { font-style: normal; padding: 1px 5px; border: 1px solid var(--hairline-card); color: var(--t-muted); }
+.vs i.on { color: #111; background: var(--t-text); border-color: var(--t-text); }
+.btn { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font: 600 10px var(--t-display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--t-line); color: var(--t-text); background: var(--t-surface); white-space: nowrap; transition: background .25s, color .25s; }
+.btn.go { background: var(--t-text); color: #111; border-color: var(--t-text); }
+.btn.press { background: var(--t-text); color: #111; }
+/* a new version waiting beside what you're reading */
+.arrived { font-size: 10.5px; color: var(--t-text); border: 1px solid var(--hairline-card); background: var(--t-surface); padding: 2px 6px; display: flex; gap: 6px; align-items: center; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--spring-card), transform var(--spring-card); }
+/* the waypoint's shelf, open: a popover from its waypoint */
+.pop { position: absolute; left: 130px; top: 128px; width: 232px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-4); padding: 9px 10px; transform-origin: 40px 0; transform: translateY(-8px) scale(.9); opacity: 0; transition: transform var(--spring-flick), opacity var(--spring-flick); z-index: 4; }
+.pop .ph { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin-bottom: 6px; }
+.pop .pr { display: grid; grid-template-columns: 34px 1fr auto; gap: 7px; align-items: center; padding: 4px 0; border-top: 1px solid var(--hairline-card); font-size: 11px; transition: opacity var(--spring-card), transform var(--spring-card); }
+.pop .pr .mini { height: 22px; background: #f4f2ee; }
+.pop .pr small { color: var(--t-muted); font-size: 9.5px; font-family: var(--t-mono); }
+
+
+/* ================= The slice log ================= */
+.lab { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); }
+.meta { font-size: 10.5px; color: var(--t-muted); }
+.attn-t { color: var(--attn); }
+.mt { position: relative; display: block; background: #f4f2ee; border-radius: 1px; overflow: hidden; }
+.mt::after { content: ''; position: absolute; left: 12%; right: 12%; top: 30%; height: 16%; background: #e2ded7; border-radius: 1px; box-shadow: 0 8px 0 #e2ded7; }
+
+/* the log: on the sheet itself, no lift; a row per slice, newest at the top */
+.lg { position: absolute; left: 18px; top: 66px; width: 204px; height: 368px; }
+.lg .trk { position: absolute; left: 10px; top: 46px; height: 280px; width: 2px; background: var(--t-line); }
+.lg .trk.d { top: 14px; height: 22px; width: 1.5px; background: repeating-linear-gradient(var(--t-muted) 0 3px, transparent 3px 6px); }
+.row { position: absolute; left: 0; width: 204px; padding: 6px 8px 7px 22px; transition: transform var(--spring-card), opacity var(--spring-card), border-color .3s, box-shadow .3s; border: 1px solid transparent; }
+.row::before { content: ''; position: absolute; left: 6px; top: 11px; width: 9px; height: 9px; border-radius: 50%; background: var(--t-muted); }
+.row.next::before { background: var(--t-surface); box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+.row.now { border-color: var(--hairline-card); background: rgba(233,237,242,.03); }
+.row.now::before { width: 11px; height: 11px; left: 5px; background: var(--t-surface); box-shadow: 0 0 0 2px var(--t-text); }
+.row .lt { font-size: 12px; display: flex; justify-content: space-between; gap: 6px; white-space: nowrap; }
+.row .lt span { overflow: hidden; text-overflow: ellipsis; }
+.row .ask { display: flex; gap: 8px; margin-top: 3px; font-size: 10.5px; color: var(--t-muted); }
+.row .ask .d { color: var(--attn); }
+.row .ask .d::before { content: ''; display: inline-block; width: 6px; height: 6px; background: var(--attn); margin-right: 4px; vertical-align: 1px; }
+.row .ask .x::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--t-text); margin-right: 4px; vertical-align: 1px; }
+.row.home { border-color: var(--t-text); }
+/* a slice's record: what it shipped, decided, had and heard, newest first */
+.recs { position: relative; height: 44px; margin-top: 5px; overflow: hidden; }
+.rl { position: absolute; left: 0; right: 0; top: 0; font-size: 10px; color: var(--t-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 5px; transition: transform var(--spring-card), opacity var(--spring-card); }
+.rl b { font: 600 8.5px var(--t-display); letter-spacing: .1em; text-transform: uppercase; color: var(--t-label); flex: none; width: 44px; padding-top: 1px; }
+.rl small { margin-left: auto; color: var(--t-muted); font: 500 9px var(--t-mono); flex: none; }
+.rl span { overflow: hidden; text-overflow: ellipsis; }
+.rec .k { font: 600 8.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin: 6px 0 2px; }
+.rec .l { display: flex; justify-content: space-between; gap: 6px; font-size: 10px; line-height: 1.35; white-space: nowrap; }
+.rec .l span { overflow: hidden; text-overflow: ellipsis; }
+.rec .l small { color: var(--t-muted); font: 500 9px var(--t-mono); }
+.rec .th { display: flex; gap: 4px; margin: 2px 0; }
+
+/* the desk: what's asking you, highest first */
+.dk { position: absolute; left: 234px; top: 66px; width: 322px; }
+.dlab { position: absolute; left: 234px; display: flex; justify-content: space-between; width: 322px; transition: opacity var(--spring-card); }
+.dec { position: absolute; left: 234px; width: 322px; background: var(--t-surface2); border: 1px solid var(--hairline-card); border-left: 3px solid var(--attn); box-shadow: var(--lift-2); padding: 8px 10px 9px 12px; transform-origin: 0 0; transition: transform var(--spring-card), opacity var(--spring-card); }
+.dec .ch { display: flex; justify-content: space-between; }
+.dec .w { font-size: 12.5px; margin: 3px 0 2px; }
+.dec .acts { display: flex; gap: 5px; margin-top: 7px; }
+.dec .home-t { font: 500 9px var(--t-mono); color: var(--t-muted); border: 1px solid var(--hairline-card); padding: 0 4px; opacity: 1; transition: opacity var(--spring-card); }
+.more { position: absolute; right: 8px; top: -9px; font: 600 9px var(--t-mono); background: var(--attn); color: #111; padding: 0 5px; height: 15px; line-height: 15px; opacity: 0; transition: opacity var(--spring-card); }
+.xc { position: absolute; width: 100px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-1); padding: 5px; transform-origin: 0 0; transition: transform var(--spring-card), opacity var(--spring-card); }
+.xc .tt { display: flex; align-items: center; gap: 4px; font-size: 10px; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+.xc .tt span { overflow: hidden; text-overflow: ellipsis; }
+.xc .from { font: 500 8.5px var(--t-mono); color: var(--t-muted); margin-top: 2px; }
+.rep { position: absolute; left: 234px; width: 322px; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--hairline-card); font-size: 10.5px; color: var(--t-muted); transform-origin: 0 0; transition: transform var(--spring-card), opacity var(--spring-card); }
+.rep b { color: var(--t-text); font-weight: 500; white-space: nowrap; }
+.rep > span:not(.btn) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
+.calm { position: absolute; left: 234px; width: 322px; height: 84px; border: 1px dashed var(--t-line); display: grid; place-items: center; text-align: center; color: var(--t-muted); font-size: 11.5px; opacity: 0; transition: opacity var(--spring-card); }
+.opx { position: absolute; left: 234px; width: 322px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 8px 9px; display: flex; flex-direction: column; gap: 6px; transform-origin: 0 0; opacity: 0; transition: transform var(--spring-card), opacity var(--spring-flick); }
+.opx .bh { display: flex; align-items: center; gap: 6px; }
+.opx .ch { font: 600 9.5px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); white-space: nowrap; }
+.opx .acts { margin-left: auto; display: flex; gap: 5px; }
+.opx .page { flex: 1; background: #f4f2ee; color: #1c1e22; position: relative; overflow: hidden; }
+.lay { position: absolute; background: #fff; border: 1px solid #d8d3ca; border-radius: 3px; }
+.lay i { display: block; background: #e2ded7; border-radius: 2px; margin: 4px; }
+.lay b { position: absolute; left: 4px; top: -12px; font-size: 7.5px; color: #555; }
+
+/* ---------- Scenario 1: what's asking, and answering it ---------- */
+#y1 .r3 { top: 30px; height: 104px; }
+#y1 .r2 { top: 142px; } #y1 .r1 { top: 190px; } #y1 .rn { top: 0; }
+#y1 .A { transform: translateY(0); } #y1 .B { transform: translateY(14px); } #y1 .C { transform: translateY(28px); }
+#y1 .N1, #y1 .N2, #y1 .N3 { opacity: 0; transform: translateY(-10px); }
+#y1 .k2, #y1 .k1b, #y1 .x1 { display: none; }
+#y1 .d1 { top: 84px; } #y1 .d2 { top: 84px; opacity: 0; transform: translateY(-14px); }
+#y1 .e1 { left: 234px; top: 204px; } #y1 .e2 { left: 342px; top: 204px; }
+#y1 .rp { top: 300px; }
+#y1 .l1 { top: 66px; } #y1 .l2 { top: 186px; }
+#y1 .opx { top: 204px; height: 214px; transform: translate(0, 0) scale(.31, .36); }
+#y1 .moreLook { opacity: 0; }
+/* another decision: stacks under the one on top */
+#y1.second .d2 { opacity: 1; transform: translateY(7px) scale(.97); }
+#y1.second .d1 .more { opacity: 1; }
+#y1.second .k1 { display: none; } #y1.second .k2 { display: inline; }
+/* made so: the top one files into its slice; the next rises */
+#y1.madeso .d1 { opacity: 0; transform: translate(-176px, 40px) scale(.12); }
+#y1.madeso .d2 { transform: none; }
+#y1.madeso .k2 { display: none; } #y1.madeso .k1b { display: inline; }
+#y1.madeso .N1 { opacity: 1; transform: translateY(0); } #y1.madeso .A { transform: translateY(14px); } #y1.madeso .B { transform: translateY(28px); } #y1.madeso .C { opacity: 0; transform: translateY(42px); }
+#y1.madeso .r3 { border-color: var(--t-text); }
+/* heard: the reports fold into the slice too */
+#y1.heard .rp { opacity: 0; transform: translate(-196px, -176px) scale(.12); }
+#y1.heard .N2 { opacity: 1; transform: translateY(0); } #y1.heard .N1 { transform: translateY(14px); } #y1.heard .A { transform: translateY(28px); } #y1.heard .B { opacity: 0; transform: translateY(42px); }
+#y1.heard .r3 { border-color: var(--hairline-card); }
+/* looked at: the exhibit opens in place */
+#y1.look .opx { opacity: 1; transform: none; }
+#y1.look .e1 { opacity: 0; }
+#y1.look .e2 { opacity: 0; transform: translateX(20px); }
+#y1.look .moreLook { opacity: 1; }
+/* had: it files, and the desk closes up */
+#y1.had .opx { opacity: 0; transform: translate(-196px, -80px) scale(.08); }
+#y1.had .e1 { opacity: 0; transform: translate(-196px, -80px) scale(.1); }
+#y1.had .e2 { opacity: 1; transform: translateX(-108px); }
+#y1.had .moreLook { opacity: 0; }
+#y1.had .x2 { display: none; } #y1.had .x1 { display: inline; }
+#y1.had .N3 { opacity: 1; transform: translateY(0); } #y1.had .N2 { transform: translateY(14px); } #y1.had .N1 { transform: translateY(28px); } #y1.had .A { opacity: 0; transform: translateY(42px); }
+
+/* ---------- Scenario 2: looking back at a slice ---------- */
+#y2 .rn { top: 0; } #y2 .r3 { top: 30px; height: 78px; }
+#y2 .r2 { top: 116px; } #y2 .r2x { top: 116px; opacity: 0; pointer-events: none; } #y2 .r1 { top: 164px; }
+#y2 .d2 { top: 84px; } #y2 .e2 { left: 234px; top: 204px; }
+#y2 .f { left: 342px; top: 204px; opacity: 0; transform: translate(-290px, 26px) scale(.3); }
+#y2 .rp { display: none; }
+#y2.open2 .r2 { opacity: 0; } #y2.open2 .r2x { opacity: 1; pointer-events: auto; } #y2.open2 .r1 { transform: translateY(166px); }
+#y2.take .f { opacity: 1; transform: none; }
+#y2.take .feeT { box-shadow: 0 0 0 1.5px var(--t-text); opacity: .35; }
+#y2.back .f { opacity: 0; transform: translate(-290px, 26px) scale(.1); }
+#y2.back .r2x { border-color: var(--t-text); }
+
+/* ---------- Scenario 3: a slice lands with something still asking ---------- */
+#y3 .rn { top: 0; } #y3 .r3 { top: 30px; height: 78px; } #y3 .r3f { top: 30px; opacity: 0; }
+#y3 .r4 { top: 0; opacity: 0; } #y3 .rnn { top: 0; opacity: 0; }
+#y3 .r2 { top: 116px; } #y3 .r1 { top: 164px; }
+#y3 .d2 { top: 84px; }
+#y3 .calm { top: 84px; }
+#y3.land .rn { opacity: 0; transform: translateY(30px); }
+#y3.land .rnn { opacity: 1; }
+#y3.land .r4 { opacity: 1; transform: translateY(30px); }
+#y3.land .r3 { opacity: 0; transform: translateY(56px); }
+#y3.land .r3f { opacity: 1; transform: translateY(60px); }
+#y3.land .r2 { transform: translateY(40px); } #y3.land .r1 { transform: translateY(40px); }
+#y3 .d2 .home-t { opacity: 0; }
+#y3.owed .d2 .home-t { opacity: 1; border-color: var(--t-muted); color: var(--t-text); }
+#y3.owed .r3f { border-color: var(--t-line); }
+#y3.madeso .d2 { opacity: 0; transform: translate(-176px, 92px) scale(.12); }
+#y3.madeso .r3f .ask .d { display: none; }
+#y3.madeso .r3f { border-color: var(--t-text); }
+#y3.madeso .calm { opacity: 1; }
+#y3.madeso .dlab0 { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk { transition-property: opacity !important; transition-duration: .3s !important; }
+}
+@media (max-width: 900px) {
+  .cols2, .nouns, .principles, .stack, .scenario, .losses { grid-template-columns: 1fr; }
+  .iso { height: 300px; }
+  header.top h1 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Slice log grammar <small>Focus · the goal at the conn: what's asking you, and where everything lives · brownfield · draft 1, 28 Oct 2026 · alternative B, from first principles</small></h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="nouns">Nouns</button>
+    <button role="tab" aria-selected="false" data-tab="verbs">Verbs</button>
+    <button role="tab" aria-selected="false" data-tab="layers">Layers</button>
+  </nav>
+</header>
+
+<p class="lede">The job: at the conn of one goal, see at once what it's asking of you, deal with it in order, and trust that nothing is lost when you do. The main idea: <b>everything on a goal has a home in its slice.</b> The sheet is two things side by side. On the left the <b>log</b>, every slice as a row, newest at the top: the goal's memory, where things rest when they ask nothing. On the right the <b>desk</b>: whatever is asking you now, as high as it asks. A decision is raised, with amber. An exhibit to look at rests, with a dot. Reports are a line. When you answer, the thing travels back into its slice's row and becomes a line of its record, so you see it filed.</p>
+
+<div class="losses">
+  <div><b>Everything at one height</b>On today's sheet the decision, the exhibit, the chart, the orders and the since line sit side by side, so the eye has to sort what's asking from what's history.</div>
+  <div><b>History is names</b>The chart strip says a slice existed. What it shipped, what you decided in it and what you saw are in the ledger, not on the screen.</div>
+  <div><b>A slice ends, its asks drift</b>When a slice lands, nothing ties a question still open to the slice that raised it; it reads as if it came from the new one.</div>
+</div>
+
+<div class="cols2">
+  <div class="box"><h3>Assumptions</h3><ul>
+    <li>This is the sheet of the goal at the conn on the bridge (#716). The rail, the muster and hails are unchanged.</li>
+    <li>A slice's record can be built from what Focus already keeps: waypoints, the lead's pull requests by slice, <code>captain-decision</code> lines by time, exhibits by the slice each version was shown in.</li>
+    <li>Asks on one goal are few at a time (a decision or two, a few exhibits), so the desk rarely scrolls.</li>
+    <li>Harbour &amp; Lane and the signing redesign are stand-ins.</li>
+  </ul></div>
+  <div class="box"><h3>To confirm</h3><ul>
+    <li>Should a decision you open but don't answer stay raised, or step down to resting until it changes?</li>
+    <li>When a slice lands, should its unanswered asks follow you to the new slice's row, or stay homed to the old one (as drawn)?</li>
+    <li>How much record should the current slice's row show without opening it: the latest three lines (as drawn), or only counts?</li>
+    <li>Do reports need the desk at all, or could they go straight into the record with a quiet count?</li>
+  </ul></div>
+</div>
+
+<!-- ======================= NOUNS ======================= -->
+<section class="tab on" id="nouns">
+<h2>Today → Proposed</h2>
+<div class="scroll-x"><table>
+  <tr><th>Today (bridge #716)</th><th>Proposed</th><th>Change</th><th>Because</th></tr>
+  <tr><td>Waypoint, on the chart strip</td><td><b>Slice</b></td><td><span class="tag">kept</span></td><td>The code's <code>Waypoint</code> is a slice; you say slice.</td></tr>
+  <tr><td>Chart strip, orders row, since line</td><td><b>Log</b></td><td><span class="tag split">merged</span></td><td>Progress, what's agreed and what's new were three strips; they're one column of slices.</td></tr>
+  <tr><td>Ledger lines (<code>captain-decision</code>, <code>merged</code>), not on screen</td><td><b>Record</b></td><td><span class="tag new">new</span></td><td>A slice's history as lines in its row: decided, shipped, had, heard, taught.</td></tr>
+  <tr><td>The sheet's cards area</td><td><b>Desk</b></td><td><span class="tag renamed">renamed</span></td><td>Only what's asking you, ordered by height, not everything about the goal.</td></tr>
+  <tr><td>Decision card</td><td><b>Decision</b></td><td><span class="tag">kept</span></td><td>Raised and stacked; homed to its slice.</td></tr>
+  <tr><td>Exhibit card (latest only), exhibits draft's tray</td><td><b>Exhibit</b></td><td><span class="tag">kept</span></td><td>Rests on the desk while you haven't had it; versions as in the exhibits grammar.</td></tr>
+  <tr><td>Word ready, landed in Show, QA's news</td><td><b>Report</b></td><td><span class="tag split">merged</span></td><td>Each asks only to be heard, so they share one line.</td></tr>
+</table></div>
+
+<h2>The nouns</h2>
+<div class="nouns">
+  <div class="noun"><h3>Slice <span class="tag">kept</span></h3>
+    <p class="purpose">A piece of the goal you agreed, and the home of everything raised during it.</p>
+    <dl><dt>Attributes</dt><dd>Number and name, when it started and landed, what's asking from it, its record.</dd>
+    <dt>States</dt><dd><b>Next</b> (planned) · <b>Now</b> (underway) · <b>Landed</b>.</dd>
+    <dt>Relations</dt><dd>Belongs to one goal. Is home to decisions, exhibits, reports and record lines.</dd></dl></div>
+  <div class="noun"><h3>Log <span class="tag split">merged</span></h3>
+    <p class="purpose">Shows the goal's slices in order, newest at the top.</p>
+    <dl><dt>Attributes</dt><dd>One row per slice; next dashed at the top; the slice underway marked.</dd>
+    <dt>States</dt><dd>At rest · one row open in place.</dd>
+    <dt>Relations</dt><dd>One per goal, down the left of its sheet.</dd></dl></div>
+  <div class="noun"><h3>Record <span class="tag new">new</span></h3>
+    <p class="purpose">What a slice keeps once nothing in it asks you anything.</p>
+    <dl><dt>Attributes</dt><dd>Lines, newest first, each a kind (decided, shipped, had, heard, taught), what, and when.</dd>
+    <dt>States</dt><dd>Lines only add.</dd>
+    <dt>Relations</dt><dd>One per slice. A line points back at what it came from: the decision, the PR, the exhibit.</dd></dl></div>
+  <div class="noun"><h3>Desk <span class="tag">renamed</span></h3>
+    <p class="purpose">Holds whatever is asking you now, highest first.</p>
+    <dl><dt>Attributes</dt><dd>Decisions stacked on top, exhibits to look at below, a reports line at the foot.</dd>
+    <dt>States</dt><dd>Asking · calm ("nothing asking you").</dd>
+    <dt>Relations</dt><dd>Right of the log on the goal's sheet. Everything on it is homed to a slice.</dd></dl></div>
+  <div class="noun"><h3>Decision <span class="tag">kept</span></h3>
+    <p class="purpose">Asks you to choose.</p>
+    <dl><dt>Attributes</dt><dd>What's asked, the lead's pick, who's idle on it, its home slice.</dd>
+    <dt>States</dt><dd>On top · stacked under · made so (a record line).</dd>
+    <dt>Relations</dt><dd>Several stack, ordered by what each unblocks, as the muster is.</dd></dl></div>
+  <div class="noun"><h3>Exhibit <span class="tag">kept</span></h3>
+    <p class="purpose">Asks you to look (exhibits grammar).</p>
+    <dl><dt>Attributes</dt><dd>Title, picture, version, home slice.</dd>
+    <dt>States</dt><dd>New · seen · had (a record line).</dd>
+    <dt>Relations</dt><dd>Each version homed to the slice it was shown in.</dd></dl></div>
+  <div class="noun"><h3>Report <span class="tag split">merged</span></h3>
+    <p class="purpose">Asks only to be heard.</p>
+    <dl><dt>Attributes</dt><dd>Words ready for the lead, a slice landed in Show, QA's verdict, counted on one line.</dd>
+    <dt>States</dt><dd>Waiting · heard (a record line).</dd>
+    <dt>Relations</dt><dd>Homed to the slice they're about.</dd></dl></div>
+</div>
+</section>
+
+<!-- ======================= VERBS ======================= -->
+<section class="tab" id="verbs">
+<h2>Object × action</h2>
+<div class="scroll-x"><table class="matrix">
+  <thead><tr><th></th><th>Open in place</th><th>Make it so</th><th>Got it</th><th>Expand</th><th>Take out</th><th>Mark</th><th>Talk</th></tr></thead>
+  <tr><td>Decision</td><td class="y"></td><td class="y"></td><td class="x"></td><td class="x"></td><td class="x"></td><td class="x"></td><td class="y"></td></tr>
+  <tr><td>Exhibit</td><td class="y"></td><td class="x"></td><td class="y"></td><td class="x"></td><td class="x"></td><td class="y"></td><td class="y"></td></tr>
+  <tr><td>Report</td><td class="n"></td><td class="x"></td><td class="y"></td><td class="x"></td><td class="x"></td><td class="x"></td><td class="x"></td></tr>
+  <tr><td>Slice</td><td class="x"></td><td class="x"></td><td class="x"></td><td class="n"></td><td class="x"></td><td class="x"></td><td class="x"></td></tr>
+  <tr><td>Record line</td><td class="x"></td><td class="x"></td><td class="x"></td><td class="x"></td><td class="n"></td><td class="x"></td><td class="x"></td></tr>
+</table></div>
+<p class="legend">● applies on the bridge today · ◉ new · × doesn't apply. Every answer (make it so, got it) is also a move: the thing goes home.</p>
+
+<h2>Operational principles</h2>
+<div class="principles">
+  <div><b>Desk.</b> You take the conn and look right: the highest thing on the desk is what to do first. You answer it, it travels into its slice's row, and the next thing rises. When the desk is calm, the goal is getting on without you.</div>
+  <div><b>Decision.</b> A lead asks; a raised card lands on the desk's stack, ordered by what it unblocks, its home slice's row counting it in amber. You make it so; it files into that row as "Decided · …".</div>
+  <div><b>Slice.</b> Its row says what it's asking and its latest record. Expand an earlier one and it opens in place in the log, its whole record; take out anything in it and it rises to the desk again.</div>
+  <div><b>Report.</b> What the lead's crew want you to know lands on one line at the foot of the desk. Got it hears them all, and they file as one record line.</div>
+</div>
+
+<h2>Verb → signifier</h2>
+<div class="scroll-x"><table>
+  <tr><th>Verb</th><th>Affordance</th><th>Signifier</th></tr>
+  <tr><td>Open in place</td><td>See a decision or exhibit in full where it sits</td><td>Press the card; it grows over the desk below it</td></tr>
+  <tr><td>Make it so</td><td>Decide; it files as a record line</td><td>Named for the choice, on the decision ("Make it so: below")</td></tr>
+  <tr><td>Got it</td><td>Done with an exhibit, or heard the reports</td><td>On the open exhibit, and on the reports line</td></tr>
+  <tr><td>Expand</td><td>Open a slice's whole record in the log</td><td>Press its row; it grows in place and the rows under it move down</td></tr>
+  <tr><td>Take out</td><td>Bring an exhibit (or decision) back to the desk</td><td>Its thumbnail or line in an expanded row</td></tr>
+  <tr><td>Mark, Talk</td><td>As on the bridge</td><td>Click the page; the lead's name</td></tr>
+</table></div>
+</section>
+
+<!-- ======================= LAYERS ======================= -->
+<section class="tab" id="layers">
+<h2>The stack</h2>
+<div class="principle">
+  <p class="rule">Everything has a home in its slice. It rises out of it while it asks for you, and settles back when you've answered.</p>
+  <p>Height on the desk is how much it asks: deciding is highest and stacked, looking is resting, hearing is a line. Things that ask nothing have no height at all: they're lines in the log, flat on the sheet.</p>
+  <p>Moving between the two is always visible. Answering anything sends it to its row, so you watch it filed rather than trust it vanished.</p>
+</div>
+<div class="stack">
+  <div class="defs">
+    <h4>Sheet</h4><p>The goal at the conn. The log is its left side, the desk its right.</p>
+    <h4>Log</h4><p>Flat on the sheet, no shadow. A row per slice; the one underway outlined.</p>
+    <h4>Resting card</h4><p>An exhibit to look at, or the reports line, on the desk. Barely lifted.</p>
+    <h4>Raised card</h4><p>A decision, with its amber edge. Several stack on the desk's top, a count on the top one.</p>
+    <h4>Panel</h4><p>Talk, from the right edge, as on the bridge.</p>
+  </div>
+  <div class="iso" aria-hidden="true"><div class="rig">
+    <div class="pl sheet">Sheet</div>
+    <div class="pl" style="left:-112px;top:-82px;width:80px;height:164px;transform:translateZ(6px);background:transparent;border:1px solid rgba(233,237,242,.18);align-items:flex-start">Log</div>
+    <div class="pl small b" style="left:-16px;top:16px">Resting</div><div class="pl small c" style="left:44px;top:16px">Resting</div>
+    <div class="pl open" style="left:-20px;top:-80px;width:118px;height:52px;border-left:4px solid var(--attn)">Raised</div>
+    <div class="pl" style="left:78px;top:-84px;width:40px;height:164px;transform:translateZ(110px);background:#15181d;border:1px solid #3a424e;box-shadow:0 20px 50px #000a;writing-mode:vertical-rl;align-items:center;justify-content:flex-start">Panel</div>
+  </div></div>
+  <div class="scroll-x"><table class="tokens">
+    <tr><th>Layer</th><th>Shadow</th><th>Hairline</th><th>Spring</th></tr>
+    <tr><td>Sheet</td><td><code>--lift-3</code></td><td><code>--hairline-sheet</code></td><td><code>--spring-paper</code></td></tr>
+    <tr><td>Log</td><td>none</td><td><code>--hairline-card</code> (the row underway)</td><td><code>--spring-card</code></td></tr>
+    <tr><td>Resting card</td><td><code>--lift-1</code></td><td><code>--hairline-card</code></td><td><code>--spring-card</code></td></tr>
+    <tr><td>Raised card</td><td><code>--lift-2</code></td><td><code>--hairline-card</code> + <code>--attn</code> edge</td><td><code>--spring-card</code></td></tr>
+    <tr><td>Panel</td><td><code>--lift-4</code></td><td><code>--hairline-sheet</code></td><td><code>--spring-paper</code></td></tr>
+  </table><p class="note" style="font-size:12.5px">All bridge tokens; none new.</p></div>
+</div>
+
+<!-- Scenario 1 -->
+<div class="scenario" data-mk="y1">
+  <div>
+    <h3>1 · What's asking, in order</h3>
+    <div class="today"><b>Today:</b> the sheet shows one decision card, the latest exhibit, the chart and the orders at one height. A second decision replaces the first card, and nothing shows where an answer went.</div>
+    <p>The sheet is the log on the left and the desk on the right. On the desk: a decision raised with its amber edge, two exhibits resting with dots, and a line of three reports. Slice 3's row counts them: one to decide, two to look at.</p>
+    <p>A second decision arrives. It slides under the first, which keeps the top because Mensah is idle on it. The top card shows +1, and slice 3 counts two to decide.</p>
+    <p>Making the first so shrinks it down into slice 3's row. A line "Decided · documents below Sign" appears at the top of the row's record. The second decision rises into its place.</p>
+    <p>Got it on the reports folds the line into the row as "Heard · 3 reports".</p>
+    <p>Opening the layout options grows the card in place over the desk below it; the composer steps aside with a count. Got it files it into the row as "Had", and the composer slides into first place.</p>
+    <p class="why"><b>Why.</b> The highest thing is what to do first, so you never sort. Watching an answer file is what lets you trust the desk to empty. Each slice keeps what happened in it.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>At a glance</b>: one to decide, two to look at, reports</span></li>
+      <li data-cls="second"><span><b>Another asks</b>: it stacks under, by what it unblocks</span></li>
+      <li data-cls="second madeso"><span><b>Make it so</b>: it files into slice 3</span></li>
+      <li data-cls="second madeso heard"><span><b>Got it</b>: the reports file too</span></li>
+      <li data-cls="second madeso heard look"><span><b>Look</b>: an exhibit opens in place</span></li>
+      <li data-cls="second madeso heard had"><span><b>Got it</b>: had, filed; the desk closes up</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="y1">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="lg"><div class="trk d"></div><div class="trk"></div>
+          <div class="row next rn"><div class="lt"><span style="color:var(--t-muted)">Portal</span><span class="meta">next</span></div></div>
+          <div class="row now r3"><div class="lt"><b style="font-weight:600">3 · Signing flow</b><span class="meta">now</span></div>
+            <div class="ask"><span class="d"><span class="k1">1 to decide</span><span class="k2">2 to decide</span><span class="k1b">1 to decide</span></span><span class="x"><span class="x2">2 to look at</span><span class="x1">1 to look at</span></span></div>
+            <div class="recs"><div class="rl N3"><b>Had</b><span>Layout options v1</span><small>11:44</small></div><div class="rl N2"><b>Heard</b><span>3 reports</span><small>11:43</small></div><div class="rl N1"><b>Decided</b><span>Documents below Sign</span><small>11:42</small></div><div class="rl A"><b>Decided</b><span>Signers: shared link</span><small>11:20</small></div><div class="rl B"><b>Had</b><span>Data flow v1</span><small>11:05</small></div><div class="rl C"><b>Shipped</b><span>#1273 composer</span><small>10:40</small></div></div></div>
+          <div class="row r2"><div class="lt"><span>2 · PDF parity</span><span class="meta">landed Mon</span></div><div class="meta" style="margin-top:2px">3 decided · 2 shipped · 3 had</div></div>
+          <div class="row r1"><div class="lt"><span>1 · Quick wins</span><span class="meta">landed Fri</span></div><div class="meta" style="margin-top:2px">1 decided · 2 shipped</div></div>
+        </div>
+        <div class="dlab l1"><span class="lab">Asking you</span><span class="meta">by what each unblocks</span></div>
+        <div class="dec d2"><div class="ch"><span class="lab">Decision · Lt. Mensah</span><span class="home-t">slice 3</span></div><div class="w">Send the reminder after 3 days, or 5?</div><div class="meta">Lead's pick: 3 days · nobody waiting yet</div><div class="acts"><span class="btn">Open</span><span class="btn go">Make it so: 3 days</span></div></div>
+        <div class="dec d1"><span class="more">+1</span><div class="ch"><span class="lab">Decision · Lt. Mensah</span><span class="home-t">slice 3</span></div><div class="w">Documents above or below Sign, on phones?</div><div class="meta">Mensah idle until you answer</div><div class="acts"><span class="btn">Open</span><span class="btn go">Make it so: below</span></div></div>
+        <div class="dlab l2"><span class="lab">To look at</span><span class="meta moreLook">1 more beside</span></div>
+        <div class="xc e1"><span class="mt" style="height:46px"></span><div class="tt"><i class="seen"></i><span>Layout options</span></div></div>
+        <div class="xc e2"><span class="mt" style="height:46px"></span><div class="tt"><i class="seen"></i><span>Composer v2</span></div></div>
+        <div class="rep rp"><b>3 reports</b><span>composer built · QA passed #1273 · a word sent back</span><span class="btn">Got it</span></div>
+        <div class="opx"><div class="bh"><span class="ch">Exhibit · Layout options</span><span class="vs"><i class="on">v1</i></span><span class="acts"><span class="btn">Mark</span><span class="btn go">Got it</span></span></div>
+          <div class="page"><div style="position:absolute;left:12px;top:10px;font-weight:700;font-size:11px">Two layouts for the signing page</div><div class="lay" style="left:12px;top:44px;width:136px;height:120px"><b>A · documents first</b><i style="height:22px"></i><i style="height:22px"></i><i style="height:16px;background:#1c1e22"></i></div><div class="lay" style="left:160px;top:44px;width:136px;height:120px"><b>B · sign first</b><i style="height:16px;background:#1c1e22"></i><i style="height:48px"></i></div></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 6</span><span>Signing redesign at the conn</span></div>
+  </div>
+</div>
+
+<!-- Scenario 2 -->
+<div class="scenario" data-mk="y2">
+  <div>
+    <h3>2 · Looking back at a slice</h3>
+    <div class="today"><b>Today:</b> slice 2 is a dot and a name on the chart. To recall what you decided in it, you read the ledger or ask the lead.</div>
+    <p>Slice 3 is underway with a decision on the desk. Slice 2 is a flat row: "3 decided · 2 shipped · 3 had".</p>
+    <p>Pressing slice 2 expands it in place in the log: its exhibits as thumbnails, what it shipped, what you decided and when, what it taught. The rows under it move down.</p>
+    <p>Taking out the fee table lifts it out of the row onto the desk, resting beside the composer, marked as from slice 2.</p>
+    <p>Got it sends it back down into slice 2's row.</p>
+    <p class="why"><b>Why.</b> A slice is something you agreed, so its record should read as one. Taking a thing out puts it where things that ask you sit; putting it back is the same move as filing anything.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>At a glance</b>: slice 2 flat, with its counts</span></li>
+      <li data-cls="open2"><span><b>Expand slice 2</b>: its whole record, in place</span></li>
+      <li data-cls="open2 take"><span><b>Take out the fee table</b>: onto the desk</span></li>
+      <li data-cls="open2 back"><span><b>Got it</b>: home again</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="y2">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="lg"><div class="trk d"></div><div class="trk"></div>
+          <div class="row next rn"><div class="lt"><span style="color:var(--t-muted)">Portal</span><span class="meta">next</span></div></div>
+          <div class="row now r3"><div class="lt"><b style="font-weight:600">3 · Signing flow</b><span class="meta">now</span></div>
+            <div class="ask"><span class="d">1 to decide</span><span class="x">1 to look at</span></div>
+            <div class="recs" style="height:30px"><div class="rl"><b>Had</b><span>Layout options v1</span><small>11:44</small></div><div class="rl" style="transform:translateY(14px)"><b>Heard</b><span>3 reports</span><small>11:43</small></div></div></div>
+          <div class="row r2"><div class="lt"><span>2 · PDF parity</span><span class="meta">landed Mon</span></div><div class="meta" style="margin-top:2px">3 decided · 2 shipped · 3 had</div></div>
+          <div class="row r2x" style="border-color:var(--hairline-card);background:rgba(233,237,242,.03)"><div class="lt"><b style="font-weight:600">2 · PDF parity</b><span class="meta">landed Mon</span></div>
+            <div class="rec"><div class="k">Had</div><div class="th"><span class="mt feeT" style="width:40px;height:26px"></span><span class="mt" style="width:40px;height:26px"></span><span class="mt" style="width:40px;height:26px"></span></div>
+              <div class="k">Shipped</div><div class="l"><span>#1268 Fee rows follow the PDF</span><small>Mon</small></div><div class="l"><span>#1271 Footer: sign in your portal</span><small>Mon</small></div>
+              <div class="k">Decided</div><div class="l"><span>Bill on acceptance, first month</span><small>10:12</small></div><div class="l"><span>Setup fee on its own line</span><small>11:40</small></div><div class="l"><span>Keep the PDF attached</span><small>14:02</small></div>
+              <div class="k">Taught</div><div class="l" style="color:var(--t-muted)"><span>Fee rows must match the PDF's order</span></div></div></div>
+          <div class="row r1"><div class="lt"><span>1 · Quick wins</span><span class="meta">landed Fri</span></div><div class="meta" style="margin-top:2px">1 decided · 2 shipped</div></div>
+        </div>
+        <div class="dlab" style="top:66px"><span class="lab">Asking you</span><span class="meta">by what each unblocks</span></div>
+        <div class="dec d2"><div class="ch"><span class="lab">Decision · Lt. Mensah</span><span class="home-t" style="opacity:1">slice 3</span></div><div class="w">Send the reminder after 3 days, or 5?</div><div class="meta">Lead's pick: 3 days · nobody waiting yet</div><div class="acts"><span class="btn">Open</span><span class="btn go">Make it so: 3 days</span></div></div>
+        <div class="dlab" style="top:186px"><span class="lab">To look at</span></div>
+        <div class="xc e2"><span class="mt" style="height:46px"></span><div class="tt"><i class="seen"></i><span>Composer v2</span></div></div>
+        <div class="xc f"><span class="mt" style="height:46px"></span><div class="tt"><i class="seen ring"></i><span>Fee table v2</span></div><div class="from">from slice 2</div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 4</span><span>Looking back</span></div>
+  </div>
+</div>
+
+<!-- Scenario 3 -->
+<div class="scenario" data-mk="y3">
+  <div>
+    <h3>3 · A slice lands with something still asking</h3>
+    <div class="today"><b>Today:</b> the slice's PR merges and the chart moves on; the open question reads as if it belonged to the new slice.</div>
+    <p>Slice 3 is underway, with one decision on the desk homed to it.</p>
+    <p>Slice 3's pull request merges. Its row drops into the past as "landed just now", still counting one to decide in amber. Portal rises as slice 4, underway, asking nothing yet; a new next row appears above it.</p>
+    <p>The decision stays on top of the desk, now marked "slice 3", so it reads as the old slice's unfinished business.</p>
+    <p>Making it so files it into slice 3's row. The row's amber goes, and the desk is calm: nothing asking you, slice 4 underway.</p>
+    <p class="why"><b>Why.</b> An answer belongs to the work that raised it. A slice that has landed can still be owed something; the log says so, and the desk keeps asking until you answer.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>Slice 3 underway</b>: one decision asking</span></li>
+      <li data-cls="land"><span><b>It lands</b>: slice 4 rises, slice 3 drops back</span></li>
+      <li data-cls="land owed"><span><b>Still owed</b>: the decision stays, marked slice 3</span></li>
+      <li data-cls="land owed madeso"><span><b>Make it so</b>: it files home; the desk is calm</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="y3">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="lg"><div class="trk d"></div><div class="trk"></div>
+          <div class="row next rn"><div class="lt"><span style="color:var(--t-muted)">Portal</span><span class="meta">next</span></div></div>
+          <div class="row next rnn"><div class="lt"><span style="color:var(--t-muted)">Reminders</span><span class="meta">next</span></div></div>
+          <div class="row now r4"><div class="lt"><b style="font-weight:600">4 · Portal</b><span class="meta">now</span></div><div class="ask"><span>nothing asking yet</span></div></div>
+          <div class="row now r3"><div class="lt"><b style="font-weight:600">3 · Signing flow</b><span class="meta">now</span></div>
+            <div class="ask"><span class="d">1 to decide</span></div>
+            <div class="recs" style="height:30px"><div class="rl"><b>Had</b><span>Layout options v1</span><small>11:44</small></div><div class="rl" style="transform:translateY(14px)"><b>Decided</b><span>Documents below Sign</span><small>11:42</small></div></div></div>
+          <div class="row r3f"><div class="lt"><span>3 · Signing flow</span><span class="meta">landed just now</span></div><div class="ask"><span class="d">1 to decide</span></div><div class="meta" style="margin-top:2px">5 decided · 1 shipped · 3 had</div></div>
+          <div class="row r2"><div class="lt"><span>2 · PDF parity</span><span class="meta">landed Mon</span></div><div class="meta" style="margin-top:2px">3 decided · 2 shipped · 3 had</div></div>
+          <div class="row r1"><div class="lt"><span>1 · Quick wins</span><span class="meta">landed Fri</span></div><div class="meta" style="margin-top:2px">1 decided · 2 shipped</div></div>
+        </div>
+        <div class="dlab dlab0" style="top:66px"><span class="lab">Asking you</span><span class="meta">by what each unblocks</span></div>
+        <div class="dec d2"><div class="ch"><span class="lab">Decision · Lt. Mensah</span><span class="home-t">slice 3</span></div><div class="w">Send the reminder after 3 days, or 5?</div><div class="meta">Lead's pick: 3 days · nobody waiting yet</div><div class="acts"><span class="btn">Open</span><span class="btn go">Make it so: 3 days</span></div></div>
+        <div class="calm"><div><b style="display:block;font:600 12px var(--t-display);letter-spacing:.08em;text-transform:uppercase;color:var(--t-text);margin-bottom:2px">Nothing asking you</b>Slice 4 is underway on its orders.</div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 4</span><span>A slice lands</span></div>
+  </div>
+</div>
+
+<h2>Audits</h2>
+<div class="scroll-x"><table>
+  <tr><th>Audit</th><th>Holds because</th></tr>
+  <tr><td>Every surface is a layer</td><td>Log rows are flat on the sheet; exhibits and reports rest; decisions are raised and stacked; an opened card is the same card grown. No modal; the panel is the bridge's.</td></tr>
+  <tr><td>Every action is a verb</td><td>Make it so, got it, open in place, expand, take out; the lead's arrivals. Each answer is also the move home.</td></tr>
+  <tr><td>Principle</td><td>Nothing rises without asking, nothing leaves the desk except by being answered, and everything answered lands in its own slice's row.</td></tr>
+  <tr><td>Colour</td><td>Amber only on decisions (their edge, the stack's count, a row's "to decide"). Exhibits' dots are ink. The record is grey and white.</td></tr>
+  <tr><td>Grounding</td><td>Slices are <code>Waypoint</code>s; records come from the ledger and the lead's PRs by slice; exhibits by the slice each version was shown in. Tokens are the bridge's.</td></tr>
+</table></div>
+
+<h2>If it's signed off</h2>
+<div class="scroll-x"><table class="handover">
+  <tr><th>Piece</th><th>Touches</th><th>Accepted when</th></tr>
+  <tr><td>Homes</td><td>A pure <code>sliceRules.ts</code>: which slice an inbox item, exhibit version, PR and <code>captain-decision</code> line belongs to (by the waypoints' start and land times), tested</td><td>Every ask on the desk names its slice; a slice landing keeps its asks homed to it</td></tr>
+  <tr><td>Record</td><td>Built from the ledger and the lead's work, newest first, per slice; nothing new kept</td><td>Scenario 2: an expanded slice shows what it shipped, decided, had and taught</td></tr>
+  <tr><td>Desk</td><td><code>stream.ts</code>'s cards become the desk: decisions stacked by <code>musterOrder</code>, exhibits resting, reports on one line</td><td>Scenario 1: answering anything sends it into its row</td></tr>
+  <tr><td>Log</td><td>The chart strip, orders and since line become the log column; the current row shows asks and its latest three record lines</td><td>Scenario 3: a slice landing leaves its asks homed and counted in amber</td></tr>
+</table></div>
+</section>
+
+</div>
+
+<script>
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach(b => b.addEventListener('click', () => {
+  tabs.forEach(t => t.setAttribute('aria-selected', String(t === b)));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+  if (location.hash !== '#' + b.dataset.tab) history.replaceState(null, '', '#' + b.dataset.tab);
+  requestAnimationFrame(fit);
+}));
+const start = location.hash.slice(1);
+if (start) document.querySelector(`nav.tabs button[data-tab="${start}"]`)?.click();
+function fit() {
+  document.querySelectorAll('.mk-wrap').forEach(w => {
+    const s = w.clientWidth / 760;
+    if (s > 0) w.querySelector('.mk').style.setProperty('--s', s);
+  });
+}
+new ResizeObserver(fit).observe(document.body);
+fit();
+document.querySelectorAll('.scenario[data-mk]').forEach(sc => {
+  const mk = sc.querySelector('.mk');
+  const steps = [...sc.querySelectorAll('ol.steps li')];
+  const cap = sc.querySelector('.stepcap');
+  let i = 0, timer = null, played = false;
+  const go = n => {
+    i = n;
+    mk.className = ('mk ' + (steps[n].dataset.cls || '')).trim();
+    steps.forEach((li, k) => li.classList.toggle('on', k === n));
+    if (cap) cap.textContent = `Step ${n + 1} of ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const play = () => {
+    stop(); go(0);
+    timer = setInterval(() => { if (i >= steps.length - 1) return stop(); go(i + 1); }, 1900);
+  };
+  steps.forEach((li, k) => li.addEventListener('click', () => { stop(); go(k); }));
+  sc.querySelector('.replay').addEventListener('click', play);
+  go(0);
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !played) { played = true; play(); }
+  }), { threshold: 0.45 }).observe(sc.querySelector('.table'));
+});
+</script>
+</body>
+</html>

@@ -224,6 +224,50 @@ h3, h4 { font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; co
 .panel-body { grid-area: body; overflow: auto; min-height: 0; padding: 14px 8px 14px 20px; }
 .panel-foot { grid-area: foot; padding: 6px 0 10px 20px; }
 
+/* The flight-deck look (docs/interface-style.md, direction B), for a panel that asks for it (`look: 'flight'`): its
+   tokens (as in docs/interface-style/mockups/bridge-grammar.html), a flat hull with a hairline header in place of the
+   LCARS frame, and the core's colours mapped onto it, so what a panel already draws comes out in the new look. */
+.panel.flight {
+  --t-well: #0b0d10; --t-panel: #15181d; --t-surface: #1b1f25; --t-surface2: #1e232b; --t-line: #3a424e;
+  --t-text: #e9edf2; --t-muted: #8a94a3; --t-label: #7d8794;
+  --t-display: 'Chakra Petch', 'Arial Narrow', sans-serif; --t-font: 'IBM Plex Sans', system-ui, sans-serif; --t-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  /* amber is kept for what needs the captain */
+  --attn: #f5a524; --attn-wash: rgb(245 165 36 / 12%);
+  --lift-1: 0 1px 0 rgb(0 0 0 / 50%); --lift-2: 0 6px 16px rgb(0 0 0 / 55%); --lift-3: 0 14px 36px rgb(0 0 0 / 65%); --lift-4: 0 20px 50px #000a;
+  --hairline-rail: rgb(58 66 78 / 45%); --hairline-card: rgb(233 237 242 / 10%);
+  --spring-paper: 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-card: 420ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-flick: 220ms cubic-bezier(.2, .9, .3, 1);
+  --text: var(--t-text); --muted: var(--t-muted); --line: var(--t-line); --surface-2: var(--t-surface2); --ui: var(--t-display);
+  --lcars-orange: var(--t-text); --lcars-peach: var(--t-text); --lcars-lilac: var(--t-muted); --lcars-sky: #a9c1dc; --lcars-gold: var(--attn);
+  --radius: 2px;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: 44px minmax(0, 1fr) auto;
+  grid-template-areas: 'head head' 'nav body' 'nav foot';
+  color: var(--t-text); border: 1px solid var(--t-line); border-radius: 0; padding: 0 16px 16px;
+  background: var(--t-well) radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%);
+  box-shadow: var(--lift-4);
+}
+.panel.flight :is(.panel-elbow, .panel-bar, .panel-side, .panel-base) { display: none; }
+.panel.flight .panel-head { align-items: center; gap: 10px; border-bottom: 1px solid var(--t-line); }
+.panel.flight .panel-head h2 { font: 600 14px/1 var(--t-display); letter-spacing: 0.14em; color: var(--t-text); padding: 0; }
+.panel.flight .panel-close { margin-left: auto; height: 26px; align-items: center; padding: 0 12px; border: 1px solid var(--t-line); border-radius: 0; background: transparent; color: var(--t-muted); font: 600 11px/1 var(--t-display); letter-spacing: 0.1em; }
+.panel.flight .panel-close:hover { background: var(--t-surface2); color: var(--t-text); }
+.panel.flight .panel-head > .btn { align-items: center; height: 26px; padding: 0 10px; }
+.panel.flight .panel-head > .btn:first-child { margin-left: 0; }
+.panel.flight .panel-body { padding: 14px 0 0; }
+.panel.flight .panel-foot { padding: 10px 0 0; }
+.panel.flight .btn {
+  --tone: var(--t-surface); border: 1px solid var(--t-line); border-radius: 0; background: var(--t-surface); color: var(--t-text);
+  font: 600 11px/1.2 var(--t-display); letter-spacing: 0.08em; padding: 6px 12px;
+}
+.panel.flight .btn:hover { background: var(--t-surface2); border-color: var(--t-muted); }
+.panel.flight :is(.btn.primary, .btn.go, .btn.switch.on) { background: var(--t-text); border-color: var(--t-text); color: #111; }
+.panel.flight .btn.warn { background: var(--attn); border-color: var(--attn); color: #111; }
+.panel.flight .btn.danger { background: transparent; border-color: #e5484d; color: #ff8a8d; }
+.panel.flight .btn.small { padding: 4px 10px; font-size: 10.5px; }
+.panel.flight .btn :is(small, .muted) { color: inherit; opacity: 0.7; }
+
 /* the ship's own confirm dialog: a small LCARS frame over whatever panel is open, which stays open underneath */
 .dialog-overlay {
   position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 16px;

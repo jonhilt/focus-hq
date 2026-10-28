@@ -19,6 +19,12 @@ export interface PanelOptions {
   footer?: HTMLElement;
   /** Buttons on the header bar, before the title. */
   headerExtra?: Node[];
+  /**
+   * `flight` draws it in the flight-deck look (docs/interface-style.md, direction B) in place of the LCARS frame: a flat
+   * hull with a hairline header, square buttons, amber only on what needs the captain. LCARS is on its way out, so a
+   * panel moves over as it's redrawn.
+   */
+  look?: 'flight';
 }
 
 /**
@@ -63,7 +69,7 @@ export class Panels {
     const title = typeof opts.title === 'string' ? h('h2', null, opts.title) : opts.title;
     const panel = h(
       'div',
-      { class: `panel${opts.wide ? ' wide' : ''}${opts.full ? ' full' : ''}${opts.nav ? ' has-nav' : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
+      { class: `panel${opts.wide ? ' wide' : ''}${opts.full ? ' full' : ''}${opts.nav ? ' has-nav' : ''}${opts.look ? ` ${opts.look}` : ''}`, style: opts.accent ? `--accent:${opts.accent}` : undefined },
       h('div', { class: 'panel-elbow' }),
       h('div', { class: 'panel-head' },
         ...(opts.headerExtra ?? []),

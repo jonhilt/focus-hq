@@ -1,0 +1,1061 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Exhibits grammar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens ----------
+   Page: a light spec sheet. Mockups: the bridge as built (bridge.css / bridge-grammar.html), its tokens as is.
+   No new tokens: an exhibit is a card, opened or not, and the waypoint's shelf is a popover. */
+:root {
+  color-scheme: light;
+  --page-ground: #e8e6e1; --page-surface: #fbfaf8; --page-ink: #1c1e22; --page-muted: #61666e; --page-line: rgba(28,30,34,.12);
+  --t-well: #0b0d10; --t-panel: #15181d; --t-surface: #1b1f25; --t-surface2: #1e232b; --t-line: #3a424e;
+  --t-text: #e9edf2; --t-muted: #8a94a3; --t-label: #7d8794;
+  --t-display: 'Chakra Petch', sans-serif; --t-mono: 'IBM Plex Mono', monospace;
+  --read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --attn: #f5a524;
+  --lift-1: 0 1px 0 rgba(0,0,0,.5);
+  --lift-2: 0 6px 16px rgba(0,0,0,.55);
+  --lift-3: 0 14px 36px rgba(0,0,0,.65);
+  --lift-4: 0 20px 50px #000a;
+  --hairline-sheet: #3a424e;
+  --hairline-card: rgba(233,237,242,.10);
+  --spring-paper: 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-card: 420ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --spring-flick: 220ms cubic-bezier(.2,.9,.3,1);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page-ground); color: var(--page-ink); }
+body { font: 15px/1.55 'IBM Plex Sans', system-ui, sans-serif; overflow-x: hidden; }
+.wrap { max-width: 1240px; margin: 0 auto; padding: 28px 16px 80px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--page-line); padding-bottom: 14px; }
+header.top h1 { font: 600 34px/1.1 'Chakra Petch', sans-serif; margin: 0; }
+header.top h1 small { display: block; font: 500 13px/1.4 'IBM Plex Sans', sans-serif; color: var(--page-muted); margin-top: 6px; }
+nav.tabs { display: flex; gap: 2px; background: #dcd9d3; padding: 3px; border-radius: 4px; }
+nav.tabs button { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .06em; text-transform: uppercase; border: 0; background: transparent; padding: 7px 14px; border-radius: 3px; cursor: pointer; color: var(--page-muted); }
+nav.tabs button[aria-selected="true"] { background: var(--page-surface); color: var(--page-ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.lede { font-size: 17px; line-height: 1.6; max-width: 900px; margin: 22px 0 18px; }
+.lede b { font-weight: 600; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 14px 18px; }
+.box h3 { font: 600 12px 'Chakra Petch', sans-serif; letter-spacing: .1em; text-transform: uppercase; margin: 0 0 6px; color: var(--page-muted); }
+.box ul { margin: 0; padding-left: 18px; } .box li { margin: 4px 0; font-size: 14px; }
+.losses { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--page-line); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; margin: 0 0 16px; }
+.losses div { background: var(--page-surface); padding: 12px 16px; font-size: 13.5px; }
+.losses b { display: block; font: 600 15px 'Chakra Petch', sans-serif; margin-bottom: 2px; }
+.losses code, p code, td code { font: 12.5px 'IBM Plex Mono', monospace; background: #efece6; padding: 0 4px; border-radius: 3px; }
+section.tab { display: none; padding-top: 28px; } section.tab.on { display: block; }
+h2 { font: 600 22px/1.2 'Chakra Petch', sans-serif; margin: 34px 0 10px; }
+h2:first-child { margin-top: 0; }
+p.note { color: var(--page-muted); font-size: 14px; max-width: 860px; }
+table { width: 100%; border-collapse: collapse; background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; overflow: hidden; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--page-line); vertical-align: top; }
+th { font: 600 11.5px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--page-muted); background: #f3f1ed; }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 600 10.5px 'IBM Plex Mono', monospace; text-transform: uppercase; letter-spacing: .04em; padding: 1px 6px; border-radius: 3px; border: 1px solid var(--page-line); color: var(--page-muted); white-space: nowrap; }
+.tag.new { border-color: #1c1e22; color: #1c1e22; }
+.tag.split, .tag.renamed, .tag.changed { border-color: #61666e; color: #3b3f45; }
+.scroll-x { overflow-x: auto; }
+.nouns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.noun { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.noun h3 { font: 600 19px 'Chakra Petch', sans-serif; margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.noun .purpose { font-size: 15px; margin: 0; }
+.noun dl { display: grid; grid-template-columns: 92px 1fr; gap: 3px 10px; margin: 0; font-size: 13.5px; }
+.noun dt { color: var(--page-muted); font-weight: 500; }
+.noun dd { margin: 0; }
+.tile { background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); border-radius: 4px; padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; align-items: flex-start; }
+.matrix th, .matrix td { text-align: center; padding: 6px 4px; font-size: 13px; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+.matrix thead th { writing-mode: vertical-rl; transform: rotate(180deg); height: 110px; vertical-align: bottom; text-align: left; padding: 8px 4px; }
+.matrix thead th:first-child { writing-mode: horizontal-tb; transform: none; }
+.matrix td.y::after { content: '●'; font-size: 11px; }
+.matrix td.n::after { content: '●'; font-size: 11px; outline: 1px solid #1c1e22; outline-offset: 2px; border-radius: 50%; }
+.matrix td.x::after { content: '×'; color: var(--page-muted); }
+.matrix td:nth-child(odd):not(:first-child) { background: #f6f4f0; }
+.legend { font-size: 13px; color: var(--page-muted); margin: 8px 0 0; }
+.principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.principles div { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 12px 16px; font-size: 14.5px; }
+.principle { max-width: 64ch; margin: 0 0 8px; }
+.principle p { font-size: 15px; line-height: 1.6; margin: 0 0 8px; }
+.principle .rule { font: 600 18px/1.45 'IBM Plex Sans', sans-serif; border-left: 3px solid var(--page-ink); padding-left: 14px; margin-bottom: 12px; }
+.stack { display: grid; grid-template-columns: 1.05fr .9fr 1.15fr; gap: 20px; align-items: center; margin-top: 12px; }
+.stack .defs h4 { font: 600 13px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; margin: 14px 0 2px; }
+.stack .defs h4:first-child { margin-top: 0; }
+.stack .defs p { margin: 0; font-size: 14px; line-height: 1.6; }
+.iso { position: relative; height: 360px; perspective: 1400px; }
+.iso .rig { position: absolute; left: 50%; top: 60%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-38deg); }
+.iso .pl { position: absolute; border-radius: 3px; display: flex; align-items: flex-end; padding: 7px; font: 600 10.5px 'Chakra Petch', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: var(--t-text); }
+.iso .sheet { left: -120px; top: -90px; width: 240px; height: 180px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); transform: translateZ(0); box-shadow: var(--lift-3); }
+.iso .small { width: 54px; height: 38px; top: -10px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(30px); padding: 4px; font-size: 8px; }
+.iso .small.a { left: -100px; } .iso .small.b { left: -40px; } .iso .small.c { left: 20px; }
+.iso .open { left: -100px; top: -80px; width: 150px; height: 64px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(70px); box-shadow: var(--lift-2); }
+.iso .pop { left: 30px; top: -84px; width: 84px; height: 46px; background: var(--t-surface2); border: 1px solid var(--hairline-card); transform: translateZ(112px); box-shadow: var(--lift-4); }
+.tokens td, .tokens th { font-size: 12.5px; padding: 6px 8px; }
+.tokens code { font: 11.5px 'IBM Plex Mono', monospace; }
+.scenario { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(0, 1.55fr); gap: 26px; margin: 26px 0 0; padding: 24px 0 0; border-top: 1px solid var(--page-line); align-items: start; }
+.scenario h3 { font: 600 20px 'Chakra Petch', sans-serif; margin: 0 0 6px; }
+.scenario .today { font-size: 13.5px; background: #f1eee9; border-left: 3px solid #9aa0a8; padding: 8px 12px; margin: 10px 0; border-radius: 0 4px 4px 0; }
+.scenario p { font-size: 14.5px; margin: 8px 0; line-height: 1.6; max-width: 60ch; }
+.scenario p.why { font-size: 13.5px; color: var(--page-muted); border-top: 1px solid var(--page-line); padding-top: 10px; margin-top: 14px; }
+.scenario p.why b { color: var(--page-ink); font-weight: 600; }
+ol.steps { list-style: none; padding: 0; margin: 14px 0 0; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; border-radius: 4px; cursor: pointer; color: var(--page-muted); font-size: 14px; }
+ol.steps li::before { content: counter(s); font: 600 12px 'IBM Plex Mono', monospace; padding-top: 2px; }
+ol.steps li.on { color: var(--page-ink); background: var(--page-surface); box-shadow: inset 2px 0 0 var(--page-ink); }
+ol.steps li.on b { font-weight: 700; }
+.table { position: relative; background: #d9d6d0; border-radius: 8px; padding: 14px; }
+.table .replay { position: absolute; bottom: 6px; right: 14px; z-index: 5; width: 30px; height: 30px; border-radius: 50%; border: 1px solid rgba(255,255,255,.25); background: #15181d; color: #e9edf2; cursor: pointer; display: grid; place-items: center; }
+.table .replay svg { width: 15px; height: 15px; }
+.table .cap { font: 500 12px 'IBM Plex Mono', monospace; color: var(--page-muted); margin: 10px 40px 0 2px; min-height: 22px; display: flex; justify-content: space-between; gap: 10px; }
+.mk-wrap { position: relative; width: 100%; aspect-ratio: 760 / 500; overflow: hidden; border-radius: 4px; }
+.handover td:first-child { font-weight: 600; white-space: nowrap; }
+
+/* ================= Mockup (the bridge as built) ================= */
+.mk { position: absolute; left: 0; top: 0; width: 760px; height: 500px; transform-origin: 0 0; transform: scale(var(--s, 1)); background: var(--t-well); color: var(--t-text); font: 13px/1.45 var(--read); overflow: hidden;
+  background-image: radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%); }
+.mk * { box-sizing: border-box; }
+.mk .hud { position: absolute; left: 12px; right: 12px; top: 8px; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.mk .where { font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; color: var(--t-muted); display: flex; gap: 8px; }
+.mk .where b { color: var(--t-text); font-weight: 600; }
+.muschip { display: flex; align-items: center; height: 24px; border: 1px solid var(--t-line); background: var(--t-panel); font: 600 11px var(--t-display); letter-spacing: .1em; text-transform: uppercase; }
+.muschip span { padding: 0 9px; color: var(--t-muted); }
+.muschip .cnt { width: 26px; height: 22px; line-height: 22px; background: var(--attn); color: #111; text-align: center; padding: 0; }
+.mk .rail { position: absolute; left: 12px; top: 46px; width: 150px; }
+.mk .proj { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin: 2px 4px 5px; }
+.berth { display: grid; grid-template-columns: 12px 1fr 22px; align-items: center; gap: 6px; min-height: 30px; padding: 4px 6px 4px 8px; margin-bottom: 4px; background: var(--t-panel); border: 1px solid rgba(58,66,78,.45); box-shadow: var(--lift-1); font-size: 12px; line-height: 1.3; opacity: .5; }
+.berth.at { opacity: 1; background: var(--t-surface); border-color: var(--t-line); }
+.berth .n { width: 22px; height: 16px; font: 600 11px/16px var(--t-mono); text-align: center; color: var(--attn); box-shadow: inset 0 0 0 1px var(--attn); }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block; flex: none; }
+.dot.work { background: var(--t-text); }
+.viewer { position: absolute; left: 174px; top: 46px; width: 574px; height: 442px; background: var(--t-surface); border: 1px solid var(--hairline-sheet); box-shadow: var(--lift-3);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.vhead { padding: 12px 18px 9px; border-bottom: 1px solid var(--hairline-card); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.vhead .p { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); }
+.vhead .g { font: 600 16px/1.25 var(--t-display); letter-spacing: .02em; grid-column: 1; }
+.vhead .who { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--t-muted); display: flex; align-items: center; gap: 6px; }
+.since { position: absolute; left: 18px; top: 62px; font-size: 12px; color: var(--t-muted); display: flex; gap: 12px; white-space: nowrap; }
+.since b { color: var(--t-text); font-weight: 500; transition: opacity var(--spring-card); }
+/* the chart, from its left edge: 1 behind, the last waypoint, here, next */
+.chart { position: absolute; left: 18px; top: 84px; width: 538px; height: 50px; }
+.chart svg { position: absolute; left: 0; top: 0; overflow: visible; }
+.chart .lbl { position: absolute; top: 22px; font-size: 10.5px; color: var(--t-muted); white-space: nowrap; display: flex; gap: 6px; align-items: center; }
+.chart .lbl.here { color: var(--t-text); }
+/* a waypoint's shelf: the exhibits you've had during its slice, counted */
+.shelf { display: inline-flex; align-items: center; gap: 3px; height: 15px; padding: 0 4px; border: 1px solid var(--hairline-card); font: 500 9.5px var(--t-mono); color: var(--t-muted); overflow: hidden; }
+.shelf::before { content: ''; width: 7px; height: 6px; border: 1px solid var(--t-muted); border-radius: 1px; }
+.shelf .roll { display: flex; flex-direction: column; height: 13px; overflow: hidden; }
+.shelf .roll i { font-style: normal; display: block; height: 13px; line-height: 13px; transition: transform var(--spring-card); }
+.trayk { position: absolute; left: 18px; top: 140px; font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); display: flex; gap: 10px; }
+.trayk span { font: 500 10.5px var(--read); letter-spacing: 0; text-transform: none; color: var(--t-muted); }
+.trayempty { position: absolute; left: 18px; top: 160px; width: 538px; height: 88px; border: 1px dashed var(--t-line); display: grid; place-items: center; color: var(--t-muted); font-size: 12px; transition: opacity var(--spring-card); }
+/* an exhibit, small: resting on the sheet in the tray, in the order it came */
+.ex { position: absolute; top: 160px; width: 126px; height: 88px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 6px; display: flex; flex-direction: column; gap: 5px;
+  transition: transform var(--spring-card), opacity var(--spring-card); }
+.ex .th { height: 50px; background: #f4f2ee; border-radius: 1px; position: relative; overflow: hidden; }
+.ex .tt { display: flex; align-items: center; gap: 5px; font-size: 10.5px; line-height: 1.2; white-space: nowrap; overflow: hidden; }
+.ex .tt span { overflow: hidden; text-overflow: ellipsis; }
+.ex .ver { margin-left: auto; font: 500 9px var(--t-mono); color: var(--t-muted); border: 1px solid var(--hairline-card); padding: 0 3px; flex: none; }
+/* seen: a dot while there's something you haven't opened, a ring once you have */
+.seen { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--t-text); transition: background .3s, box-shadow .3s; }
+.seen.ring { background: none; box-shadow: inset 0 0 0 1.3px var(--t-muted); }
+/* the same exhibit, open in place: it grows from its card, the others step aside to a column */
+.big { position: absolute; left: 18px; top: 160px; width: 400px; height: 268px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 9px 10px; display: flex; flex-direction: column; gap: 7px;
+  transform-origin: 0 0; opacity: 0; pointer-events: none; transition: transform var(--spring-card), opacity var(--spring-flick); }
+.big .bh { display: flex; align-items: center; gap: 8px; }
+.big .ch { font: 600 10px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); white-space: nowrap; }
+.big .acts { margin-left: auto; display: flex; gap: 5px; }
+.big .page { flex: 1; background: #f4f2ee; color: #1c1e22; border-radius: 1px; position: relative; overflow: hidden; }
+.vs { display: flex; gap: 0; font: 500 9.5px var(--t-mono); }
+.vs i { font-style: normal; padding: 1px 5px; border: 1px solid var(--hairline-card); color: var(--t-muted); }
+.vs i.on { color: #111; background: var(--t-text); border-color: var(--t-text); }
+.btn { display: inline-flex; align-items: center; height: 22px; padding: 0 8px; font: 600 10px var(--t-display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--t-line); color: var(--t-text); background: var(--t-surface); white-space: nowrap; transition: background .25s, color .25s; }
+.btn.go { background: var(--t-text); color: #111; border-color: var(--t-text); }
+.btn.press { background: var(--t-text); color: #111; }
+/* a new version waiting beside what you're reading */
+.arrived { font-size: 10.5px; color: var(--t-text); border: 1px solid var(--hairline-card); background: var(--t-surface); padding: 2px 6px; display: flex; gap: 6px; align-items: center; white-space: nowrap; opacity: 0; transform: translateY(-4px); transition: opacity var(--spring-card), transform var(--spring-card); }
+/* the waypoint's shelf, open: a popover from its waypoint */
+.pop { position: absolute; left: 130px; top: 128px; width: 232px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-4); padding: 9px 10px; transform-origin: 40px 0; transform: translateY(-8px) scale(.9); opacity: 0; transition: transform var(--spring-flick), opacity var(--spring-flick); z-index: 4; }
+.pop .ph { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin-bottom: 6px; }
+.pop .pr { display: grid; grid-template-columns: 34px 1fr auto; gap: 7px; align-items: center; padding: 4px 0; border-top: 1px solid var(--hairline-card); font-size: 11px; transition: opacity var(--spring-card), transform var(--spring-card); }
+.pop .pr .mini { height: 22px; background: #f4f2ee; }
+.pop .pr small { color: var(--t-muted); font-size: 9.5px; font-family: var(--t-mono); }
+
+/* the pages inside, in the client's light surfaces */
+.dg { position: absolute; display: grid; place-items: center; border: 1.5px solid #1c1e22; background: #fff; font-weight: 600; border-radius: 3px; }
+.ar { position: absolute; height: 1.5px; background: #1c1e22; }
+.ar::after { content: ''; position: absolute; right: -1px; top: -3px; border: 4px solid transparent; border-left: 6px solid #1c1e22; border-right: 0; }
+.lay { position: absolute; background: #fff; border: 1px solid #d8d3ca; border-radius: 3px; }
+.lay i { display: block; background: #e2ded7; border-radius: 2px; margin: 4px; }
+.lay b { position: absolute; left: 4px; top: -13px; font-size: 8px; color: #555; }
+.ph2 { position: absolute; width: 120px; background: #fff; border: 4px solid #2a3039; border-radius: 12px; padding: 7px; font-size: 7.5px; color: #1c1e22; }
+.ph2 .h { font-weight: 700; font-size: 8.5px; margin: 2px 0 5px; }
+.ph2 .row { background: #f4f2ee; border: 1px solid #dedad3; border-radius: 3px; padding: 3px 5px; margin-top: 4px; display: flex; justify-content: space-between; }
+.ph2 .sign { background: #1c1e22; color: #fff; border-radius: 3px; text-align: center; padding: 4px; margin-top: 5px; font-weight: 600; }
+.ph2 .lb { position: absolute; top: -15px; left: 0; font: 600 8px var(--t-mono); color: #555; }
+.changed { position: absolute; border: 1.5px dashed #1c1e22; border-radius: 5px; }
+
+/* ---------- Scenario 1: one arrives while you read another ---------- */
+#x1 .e1 { left: 18px; } #x1 .e2 { left: 152px; opacity: 0; transform: translateX(24px); }
+#x1 .b1 { transform: translate(0, 0) scale(.315, .328); }
+#x1 .b2 { transform: translate(134px, 0) scale(.315, .328); }
+#x1 .s-new { opacity: 0; }
+#x1.open .e1 { opacity: 0; }
+#x1.open .b1 { opacity: 1; transform: none; pointer-events: auto; }
+#x1.open .e1 .seen { background: none; box-shadow: inset 0 0 0 1.3px var(--t-muted); }
+#x1.more .e2 { opacity: 1; transform: translate(278px, 0); }
+#x1.more .s-new { opacity: 1; }
+#x1.more.open .e2 { transform: translate(278px, 0); }
+#x1.gotit .b1 { opacity: 0; transform: translate(286px, -66px) scale(.04); }
+#x1.gotit .e1 { opacity: 0; transform: translate(286px, -66px) scale(.1); }
+#x1.gotit .sh2 .roll i { transform: translateY(-13px); }
+#x1.gotit .e2 { transform: translate(-134px, 0); }
+#x1.gotit .s-new { opacity: 0; }
+#x1.gotit .b2 { transform: translate(0, 0) scale(.315, .328); }
+#x1.open2 .e2 { opacity: 0; }
+#x1.open2 .b2 { opacity: 1; transform: none; pointer-events: auto; }
+#x1 .t-n2 { display: none; } #x1.more .t-n1 { display: none; } #x1.more .t-n2 { display: inline; } #x1.gotit .t-n2 { display: none; } #x1.gotit .t-n1 { display: inline; }
+
+/* ---------- Scenario 2: the same exhibit, shown again ---------- */
+#x2 .e1 { left: 18px; opacity: 0; }
+#x2 .b1 { opacity: 1; transform: none; }
+#x2 .p2, #x2 .cmp { opacity: 0; transition: opacity var(--spring-card); }
+#x2 .p1 { transition: opacity var(--spring-card); }
+#x2 .v2tag { display: none; }
+#x2.v2 .arrived { opacity: 1; transform: none; }
+#x2.v2 .v2tag, #x2.show2 .v2tag { display: inline; }
+#x2.show2 .arrived { opacity: 0; }
+#x2.show2 .p1 { opacity: 0; } #x2.show2 .p2 { opacity: 1; }
+#x2.show2 .vs .o1 { color: var(--t-muted); background: none; border-color: var(--hairline-card); } #x2.show2 .vs .o2 { color: #111; background: var(--t-text); border-color: var(--t-text); }
+#x2.cmp-on .p2 { opacity: 0; } #x2.cmp-on .cmp { opacity: 1; }
+#x2.cmp-on .bcmp { background: var(--t-text); color: #111; }
+#x2.gotit .b1 { opacity: 0; transform: translate(286px, -66px) scale(.04); }
+#x2.gotit .sh2 .roll i { transform: translateY(-13px); }
+#x2.gotit .trayempty { opacity: 1; }
+#x2 .trayempty, #x3.out .trayempty { opacity: 0; }
+
+/* ---------- Scenario 3: find it again ---------- */
+#x3 .e1 { left: 18px; opacity: 0; transform: translate(150px, -50px) scale(.4); }
+#x3 .b1 { transform: translate(0, 0) scale(.315, .328); }
+#x3.pop-on .pop { opacity: 1; transform: none; }
+#x3.pop-on .shp { border-color: var(--t-text); color: var(--t-text); }
+#x3.out .pop .take { opacity: 0; transform: translateY(30px); }
+#x3.out .e1 { opacity: 1; transform: none; }
+#x3.out .e1 .seen { background: none; box-shadow: inset 0 0 0 1.3px var(--t-muted); }
+#x3.out .sh1 .roll i { transform: translateY(-13px); }
+#x3.out:not(.pop-on) .pop { opacity: 0; }
+#x3.open .e1 { opacity: 0; }
+#x3.open .b1 { opacity: 1; transform: none; }
+#x3.back .b1 { opacity: 0; transform: translate(146px, -66px) scale(.04); }
+#x3.back .e1 { opacity: 0; transform: translate(146px, -66px) scale(.1); }
+#x3.back .sh1 .roll i { transform: translateY(0); }
+#x3.back .trayempty { opacity: 1; }
+
+
+/* ---------- Alternatives: static frames, one idea each ---------- */
+.alts { display: grid; grid-template-columns: 1fr; gap: 26px; margin-top: 14px; }
+.alt { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(0, 1.55fr); gap: 26px; padding-top: 22px; border-top: 1px solid var(--page-line); align-items: start; }
+.alt h3 { font: 600 20px 'Chakra Petch', sans-serif; margin: 0 0 6px; }
+.alt p { font-size: 14.5px; line-height: 1.6; max-width: 60ch; margin: 8px 0; }
+.alt .pc { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; font-size: 13.5px; }
+.alt .pc div { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 8px 12px; }
+.alt .pc b { display: block; font: 600 11px 'Chakra Petch', sans-serif; letter-spacing: .1em; text-transform: uppercase; color: var(--page-muted); margin-bottom: 2px; }
+.alt .pick { font-size: 13.5px; border-left: 3px solid var(--page-ink); padding-left: 12px; }
+.answer { background: var(--page-surface); border: 1px solid var(--page-line); border-radius: 6px; padding: 14px 18px; max-width: 900px; font-size: 14.5px; line-height: 1.6; }
+.answer p { margin: 0 0 8px; } .answer p:last-child { margin: 0; }
+
+/* small pieces the frames share */
+.mt { position: absolute; background: #f4f2ee; border-radius: 1px; overflow: hidden; }
+.mt::after { content: ''; position: absolute; left: 12%; right: 12%; top: 30%; height: 18%; background: #e2ded7; border-radius: 1px; box-shadow: 0 9px 0 #e2ded7; }
+.mc { position: absolute; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 5px; }
+.mc .mt { position: relative; display: block; width: 100%; }
+.mc .tt { display: flex; align-items: center; gap: 4px; font-size: 9.5px; margin-top: 4px; white-space: nowrap; overflow: hidden; }
+.mc .tt span { overflow: hidden; text-overflow: ellipsis; }
+.lab { font: 600 9.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); }
+.meta { font-size: 10.5px; color: var(--t-muted); }
+.attn-t { color: var(--attn); }
+.deccard { position: absolute; background: var(--t-surface2); border: 1px solid var(--hairline-card); border-left: 3px solid var(--attn); box-shadow: var(--lift-2); padding: 9px 12px; }
+.deccard .w { font-size: 12.5px; margin: 3px 0 2px; }
+
+/* B · the log down the side */
+#ab .log { position: absolute; left: 18px; top: 66px; width: 214px; bottom: 14px; }
+#ab .lr { position: relative; padding: 7px 8px 8px 22px; margin-bottom: 6px; border: 1px solid transparent; }
+#ab .lr::before { content: ''; position: absolute; left: 6px; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: var(--t-text); }
+#ab .lr.next::before { background: none; box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#ab .lr.now { background: var(--t-surface2); border-color: var(--hairline-card); box-shadow: var(--lift-2); }
+#ab .lr.now::before { width: 11px; height: 11px; left: 5px; background: var(--t-surface); box-shadow: 0 0 0 2px var(--t-text); }
+#ab .track { position: absolute; left: 10px; top: 20px; bottom: 30px; width: 2px; background: var(--t-text); }
+#ab .track.d { top: 18px; height: 34px; bottom: auto; background: repeating-linear-gradient(var(--t-muted) 0 3px, transparent 3px 6px); width: 1.5px; }
+#ab .lt { font-size: 12px; display: flex; justify-content: space-between; gap: 6px; }
+#ab .thumbs { display: flex; gap: 4px; margin: 6px 0 4px; }
+#ab .thumbs .mt { position: relative; }
+
+/* C · slices as tabs */
+#ac .seg { position: absolute; left: 18px; right: 18px; top: 66px; display: grid; grid-template-columns: 1fr 1fr 1.2fr .8fr; gap: 4px; }
+#ac .sg { border: 1px solid var(--hairline-card); padding: 6px 8px 7px; font-size: 11.5px; position: relative; background: var(--t-surface); }
+#ac .sg small { display: block; font-size: 9.5px; color: var(--t-muted); }
+#ac .sg::after { content: ''; position: absolute; left: -1px; right: -1px; bottom: -1px; height: 3px; background: var(--t-text); }
+#ac .sg.now::after { background: linear-gradient(90deg, var(--t-text) 55%, var(--t-line) 55%); }
+#ac .sg.next { border-style: dashed; color: var(--t-muted); background: none; }
+#ac .sg.next::after { display: none; }
+#ac .sg.sel { background: var(--t-surface2); border-color: var(--t-text); }
+
+/* D · the tray is the timeline */
+#ad .strip { position: absolute; left: 18px; right: 18px; top: 66px; height: 176px; }
+#ad .sec { position: absolute; top: 0; height: 176px; }
+#ad .sec .lab { display: block; margin-bottom: 4px; white-space: nowrap; }
+#ad .rule { position: absolute; left: 0; right: 0; top: 24px; height: 2px; background: var(--t-text); }
+#ad .rule.d { background: repeating-linear-gradient(90deg, var(--t-muted) 0 4px, transparent 4px 8px); height: 1.5px; }
+#ad .pip { position: absolute; top: 20px; width: 9px; height: 9px; border-radius: 50%; background: var(--t-text); }
+#ad .pip.now { width: 12px; height: 12px; top: 19px; background: var(--t-surface); box-shadow: 0 0 0 2px var(--t-text); }
+#ad .pip.next { background: var(--t-surface); box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#ad .slot { position: absolute; border: 1px dashed var(--t-line); display: grid; place-items: center; color: var(--t-muted); font-size: 10.5px; }
+
+/* E · a progress chip and its voyage */
+#ae .chipp { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--t-line); background: var(--t-panel); padding: 3px 8px; font: 600 10.5px var(--t-display); letter-spacing: .08em; text-transform: uppercase; color: var(--t-text); }
+#ae .bar5 { display: flex; gap: 2px; }
+#ae .bar5 i { width: 16px; height: 5px; background: var(--t-text); display: block; }
+#ae .bar5 i.now { background: linear-gradient(90deg, var(--t-text) 50%, var(--t-line) 50%); }
+#ae .bar5 i.todo { background: none; box-shadow: inset 0 0 0 1px var(--t-line); }
+#ae .voy { position: absolute; left: 260px; top: 52px; width: 290px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-4); padding: 10px 12px; z-index: 3; }
+#ae .vr { display: grid; grid-template-columns: 14px 1fr auto; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--hairline-card); font-size: 11.5px; }
+#ae .vr .tb { display: flex; gap: 3px; }
+#ae .vr .tb .mt { position: relative; width: 26px; height: 17px; }
+
+
+/* ---------- B in motion: the log down the side ---------- */
+#bm .lg { position: absolute; left: 18px; top: 66px; width: 214px; height: 368px; }
+#bm .row { position: absolute; left: 0; width: 214px; padding: 7px 8px 8px 22px; transition: transform var(--spring-card), opacity var(--spring-card); }
+#bm .row::before { content: ''; position: absolute; left: 6px; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: var(--t-text); }
+#bm .row.next::before { background: none; box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#bm .row.raised { background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); }
+#bm .row.now::before { width: 11px; height: 11px; left: 5px; background: var(--t-surface); box-shadow: 0 0 0 2px var(--t-text); }
+#bm .lt { font-size: 12px; display: flex; justify-content: space-between; gap: 6px; }
+#bm .th { display: flex; gap: 4px; margin: 6px 0 4px; }
+#bm .th .mt { position: relative; flex: none; transition: opacity var(--spring-card), transform var(--spring-card); }
+#bm .trk { position: absolute; left: 10px; width: 2px; background: var(--t-text); top: 50px; height: 300px; transition: transform var(--spring-card); }
+#bm .trk.d { top: 16px; height: 22px; width: 1.5px; background: repeating-linear-gradient(var(--t-muted) 0 3px, transparent 3px 6px); }
+#bm .rec { margin-top: 6px; font-size: 10.5px; }
+#bm .rec .k { font: 600 8.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin: 6px 0 2px; }
+#bm .rec div.l { display: flex; justify-content: space-between; gap: 6px; color: var(--t-text); line-height: 1.35; white-space: nowrap; }
+#bm .rec div.l span { overflow: hidden; text-overflow: ellipsis; }
+#bm .rec div.l small { color: var(--t-muted); font-size: 9.5px; white-space: nowrap; }
+/* rows, where they sit at rest */
+#bm .r-next { top: 0; }
+#bm .r3 { top: 32px; }
+#bm .r3s { top: 32px; opacity: 0; }
+#bm .r2 { top: 136px; }
+#bm .r2x { top: 92px; opacity: 0; pointer-events: none; }
+#bm .r1 { top: 204px; }
+#bm .new4 { opacity: 0; transform: scale(.6); }
+#bm .m4 { display: none; }
+#bm .tray4 { opacity: 0; transform: translateX(16px); }
+#bm .bigf { opacity: 0; transform: translate(-200px, 40px) scale(.2); }
+/* a new exhibit: into the current slice's row, and onto the tray */
+#bm.arrive .new4, #bm.arrive .tray4 { opacity: 1; transform: none; }
+#bm.arrive .m3 { display: none; } #bm.arrive .m4 { display: inline; }
+/* slice 2 opened in place in the log: the current slice flattens, slice 1 moves down */
+#bm.open2 .r3 { opacity: 0; }
+#bm.open2 .r3s { opacity: 1; }
+#bm.open2 .r2 { opacity: 0; }
+#bm.open2 .r2x { opacity: 1; pointer-events: auto; }
+#bm.open2 .r1 { transform: translateY(150px); }
+/* one of its exhibits, open on the sheet */
+#bm.fee .bigf { opacity: 1; transform: none; }
+#bm.fee .feerow { box-shadow: 0 0 0 1.5px var(--t-text); }
+
+/* ---------- D in motion: the tray is the timeline, carrying the slice's record ---------- */
+#dm .strip { position: absolute; left: 18px; right: 18px; top: 66px; height: 100px; }
+#dm .sec { position: absolute; top: 0; height: 100px; transition: transform var(--spring-card); }
+#dm .sec .lab { display: block; white-space: nowrap; }
+#dm .rule { position: absolute; left: 0; top: 24px; height: 2px; background: var(--t-text); width: 436px; }
+#dm .rule.d { left: 436px; right: 0; width: auto; height: 1.5px; background: repeating-linear-gradient(90deg, var(--t-muted) 0 4px, transparent 4px 8px); }
+#dm .pip { position: absolute; top: 20px; left: 0; width: 9px; height: 9px; border-radius: 50%; background: var(--t-text); }
+#dm .pip.now { width: 12px; height: 12px; top: 19px; background: var(--t-surface); box-shadow: 0 0 0 2px var(--t-text); }
+#dm .pip.next { background: var(--t-surface); box-shadow: inset 0 0 0 1.5px var(--t-muted); }
+#dm .mc { top: 40px; transition: transform var(--spring-card), opacity var(--spring-card); }
+#dm .cnt2 { position: absolute; top: 104px; left: 2px; transition: opacity var(--spring-card); }
+#dm .slot { position: absolute; left: 0; top: 40px; width: 88px; height: 58px; border: 1px dashed var(--t-line); display: grid; place-items: center; color: var(--t-muted); font-size: 10.5px; }
+/* slice 2's stack, and slice 3's cards, at rest */
+#dm .s2a { left: 2px; transform: rotate(-6deg); } #dm .s2b { left: 8px; transform: rotate(-2deg); } #dm .s2c { left: 14px; }
+#dm .s2c .tt .nm { display: none; }
+#dm .c1 { left: 0; } #dm .c2 { left: 54px; } #dm .c3 { left: 108px; } #dm .c4 { left: 162px; opacity: 0; transform: translateX(14px); }
+#dm .lab3 { transition: opacity var(--spring-card); }
+#dm .stack3 { position: absolute; left: 0; top: 40px; opacity: 0; transition: opacity var(--spring-card); }
+#dm .recd { position: absolute; left: 18px; top: 194px; width: 538px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 9px 12px; opacity: 0; transform: translateY(-10px); transition: opacity var(--spring-card), transform var(--spring-card); display: grid; grid-template-columns: 1.1fr 1.3fr 1fr; gap: 14px; }
+#dm .recd .k { font: 600 8.5px var(--t-display); letter-spacing: .14em; text-transform: uppercase; color: var(--t-label); margin-bottom: 3px; }
+#dm .recd .l { font-size: 10.5px; line-height: 1.35; margin-bottom: 4px; }
+#dm .recd .l small { display: block; color: var(--t-muted); font-size: 9.5px; }
+#dm .dec2 { position: absolute; left: 18px; top: 194px; width: 538px; transition: transform var(--spring-card), opacity var(--spring-card); }
+#dm .bigd { position: absolute; left: 18px; top: 66px; width: 538px; height: 300px; background: var(--t-surface2); border: 1px solid var(--hairline-card); box-shadow: var(--lift-2); padding: 9px 10px; display: flex; flex-direction: column; gap: 7px; opacity: 0; transform-origin: 106px 40px; transform: scale(.12); transition: transform var(--spring-card), opacity var(--spring-flick); z-index: 3; }
+#dm .bigd .page { flex: 1; background: #f4f2ee; color: #1c1e22; border-radius: 1px; position: relative; overflow: hidden; }
+#dm .bigd .ch { font: 600 10px var(--t-display); letter-spacing: .12em; text-transform: uppercase; color: var(--t-label); white-space: nowrap; }
+#dm.fee .dec2, #dm.fee .recd { opacity: 0; }
+/* a new exhibit: onto the end of the current slice */
+#dm.arrive .c4 { opacity: 1; transform: none; }
+/* slice 2 fanned out in place: its cards spread, the current slice gathers into a stack, its record opens under the strip */
+#dm.fan .s2a { transform: none; left: 0; } #dm.fan .s2b { transform: translateX(72px); left: 0; } #dm.fan .s2c { transform: translateX(144px); left: 0; }
+#dm.fan .s2c .tt .nm { display: inline; } #dm.fan .s2c .tt .cn { display: none; }
+#dm.fan .cnt2 { opacity: 0; }
+#dm.fan .sec3 { transform: translateX(120px); }
+#dm.fan .c1, #dm.fan .c2, #dm.fan .c3, #dm.fan .c4 { opacity: 0; transform: translateX(-20px) scale(.6); }
+#dm.fan .stack3 { opacity: 1; }
+#dm.fan .lab3 { opacity: 0; }
+#dm.fan .recd { opacity: 1; transform: none; }
+#dm.fan .dec2 { transform: translateY(166px); }
+#dm.fan .rule { width: 556px; } #dm.fan .rule.d { opacity: 0; }
+#dm.fan .sec4 { opacity: 0; }
+/* the fee table, open in place from its card */
+#dm.fee .bigd { opacity: 1; transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk { transition-property: opacity !important; transition-duration: .3s !important; }
+}
+@media (max-width: 900px) {
+  .cols2, .nouns, .principles, .stack, .scenario, .losses, .alt, .alt .pc { grid-template-columns: 1fr; }
+  .iso { height: 300px; }
+  header.top h1 { font-size: 28px; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Exhibits grammar <small>Focus · what a lead shows the captain on the bridge, and how none of it gets lost · brownfield · draft 2, 28 Oct 2026 · extends the bridge grammar</small></h1>
+  <nav class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-tab="nouns">Nouns</button>
+    <button role="tab" aria-selected="false" data-tab="verbs">Verbs</button>
+    <button role="tab" aria-selected="false" data-tab="layers">Layers</button>
+    <button role="tab" aria-selected="false" data-tab="alternatives">Alternatives</button>
+  </nav>
+</header>
+
+<p class="lede">The job: see everything a lead puts in front of you, at your pace, and know which of it you've dealt with. Today an exhibit can vanish before you've looked at it: the sheet shows only the latest, showing it again overwrites it, and a new question takes the old one's place. The main idea: <b>an exhibit stays on the sheet until you've had it.</b> Exhibits arrive as small cards in a tray, in the order they came. You open one in place when you want it, and it shrinks back when you're done. Showing one again adds a version beside it and never swaps it under you. <b>Got it</b> files it on the waypoint of the slice it belongs to, where you can take it out again.</p>
+
+<div class="losses">
+  <div><b>Shown again, overwritten</b><code>show</code> with the same id replaces the page: the version you hadn't seen yet, or had and want to compare against, is gone.</div>
+  <div><b>Shown another, out of sight</b>The sheet shows only the latest exhibit (<code>latestArtifact</code>), so the one before it drops out of view whether you'd read it or not.</div>
+  <div><b>Asked again, replaced</b><code>ask</code> again replaces a question you haven't answered. And Focus keeps no record of which exhibits you've looked at.</div>
+</div>
+
+<div class="cols2">
+  <div class="box"><h3>Assumptions</h3><ul>
+    <li>This sits on the bridge as built (#716): the goal at the conn is the sheet, with its head, chart, orders and cards. Exhibits are one kind of card on it.</li>
+    <li>A lead shows a handful of exhibits per slice, not dozens. The tray holds what you haven't had, so it stays short if you keep up.</li>
+    <li>Looking is the point of an exhibit, so opening one counts as having seen it. Getting it is a separate, deliberate act: it means you're done with it.</li>
+    <li>Content below is a stand-in: Harbour &amp; Lane is the client, the signing redesign the goal.</li>
+  </ul></div>
+  <div class="box"><h3>To confirm</h3><ul>
+    <li>Should exhibits you haven't had count on the goal's berth (a ring, not amber), or only in the since line?</li>
+    <li>Does the lead need a way to withdraw an exhibit ("ignore this one, it was wrong"), or is a new version enough?</li>
+    <li>When the tray holds more than fits (say 5), fold the oldest into "+3 more", or wrap to a second row?</li>
+    <li>Should a question asked again keep the earlier one as its version 1 (as drawn), or as a separate exhibit?</li>
+  </ul></div>
+</div>
+
+<!-- ======================= NOUNS ======================= -->
+<section class="tab on" id="nouns">
+<h2>Today → Proposed</h2>
+<div class="scroll-x"><table>
+  <tr><th>Today</th><th>Proposed</th><th>Change</th><th>Because</th></tr>
+  <tr><td>Artifact (<code>GoalArtifact</code>, the <code>show</code> tool)</td><td><b>Exhibit</b></td><td><span class="tag renamed">kept</span></td><td>Already "exhibit" on the bridge; the code keeps <code>GoalArtifact</code>.</td></tr>
+  <tr><td>Showing the same id again replaces it</td><td><b>Version</b></td><td><span class="tag split">split</span></td><td>An exhibit keeps every version it was shown at, so a change can be seen against what came before.</td></tr>
+  <tr><td>The sheet's exhibit card (the latest one only)</td><td><b>Tray</b></td><td><span class="tag changed">renamed</span></td><td>Every exhibit you haven't had, small, in the order it came, instead of one at a time.</td></tr>
+  <tr><td>The workspace's Screen tab and its thumbnails (removed in #716)</td><td><b>Tray</b></td><td><span class="tag split">merged</span></td><td>The thumbnails were the right idea in the wrong place; they come back on the sheet.</td></tr>
+  <tr><td>Question (<code>ask</code>), replaced by the next one</td><td><b>Question</b></td><td><span class="tag changed">kept</span></td><td>Its options are exhibits; asking again adds a version rather than replacing it.</td></tr>
+  <tr><td>Nothing: Focus doesn't know what you've looked at</td><td><b>Seen</b> and <b>Had</b>, per version</td><td><span class="tag new">new</span></td><td>"New since you looked" can't be told without it.</td></tr>
+  <tr><td>Waypoint (a slice on the chart)</td><td><b>Waypoint's shelf</b></td><td><span class="tag new">new</span></td><td>Where exhibits go once had, so they leave the tray without leaving the ship.</td></tr>
+</table></div>
+
+<h2>The nouns</h2>
+<div class="nouns">
+  <div class="noun">
+    <h3>Exhibit <span class="tag">kept</span></h3>
+    <p class="purpose">Something a lead puts up for you to judge by looking.</p>
+    <dl>
+      <dt>Attributes</dt><dd>Title, a picture, the slice it belongs to, its versions, and whether you've seen and had the latest.</dd>
+      <dt>States</dt><dd><b>New</b> (a version you haven't opened) · <b>Seen</b> (opened, still on the tray) · <b>Had</b> (got, on its waypoint's shelf).</dd>
+      <dt>Relations</dt><dd>Belongs to one goal and one slice. Has one or more versions. May be an option of a question.</dd>
+    </dl>
+    <div class="tile"><span style="display:inline-flex;gap:5px;align-items:center;border:1px solid rgba(233,237,242,.1);background:#1e232b;padding:4px 7px;font-size:11px"><i style="width:7px;height:7px;border-radius:50%;background:#e9edf2;display:inline-block"></i>Layout options</span><span style="display:inline-flex;gap:5px;align-items:center;border:1px solid rgba(233,237,242,.1);background:#1e232b;padding:4px 7px;font-size:11px"><i style="width:7px;height:7px;border-radius:50%;box-shadow:inset 0 0 0 1.3px #8a94a3;display:inline-block"></i>Signing data flow</span></div>
+  </div>
+  <div class="noun">
+    <h3>Version <span class="tag split">split</span></h3>
+    <p class="purpose">One showing of an exhibit, kept when it's shown again.</p>
+    <dl>
+      <dt>Attributes</dt><dd>Its number, when it was shown, and what changed, in the lead's words.</dd>
+      <dt>States</dt><dd>Unseen · seen.</dd>
+      <dt>Relations</dt><dd>Belongs to one exhibit. The latest is what the exhibit shows.</dd>
+    </dl>
+    <div class="tile"><span style="font:500 10px 'IBM Plex Mono';display:flex"><i style="font-style:normal;padding:1px 6px;border:1px solid rgba(233,237,242,.1);color:#8a94a3">v1</i><i style="font-style:normal;padding:1px 6px;background:#e9edf2;color:#111">v2</i></span><span style="font-size:11px;color:#8a94a3">v2 · documents below Sign</span></div>
+  </div>
+  <div class="noun">
+    <h3>Tray <span class="tag">renamed</span></h3>
+    <p class="purpose">Where exhibits you haven't had rest on the sheet.</p>
+    <dl>
+      <dt>Attributes</dt><dd>The exhibits in the order they came, left to right, each as a small card.</dd>
+      <dt>States</dt><dd>Empty · holding · one open in place.</dd>
+      <dt>Relations</dt><dd>One per goal, on its sheet. Nothing leaves it but by Got it.</dd>
+    </dl>
+  </div>
+  <div class="noun">
+    <h3>Question <span class="tag">kept</span></h3>
+    <p class="purpose">A lead asking you to pick by looking.</p>
+    <dl>
+      <dt>Attributes</dt><dd>What's asked, why, and 2–4 options, each an exhibit.</dd>
+      <dt>States</dt><dd>Open · answered. Asked again: a new version of the same question.</dd>
+      <dt>Relations</dt><dd>Is a decision card on the sheet (bridge grammar); its options open in place like any exhibit.</dd>
+    </dl>
+  </div>
+  <div class="noun">
+    <h3>Waypoint's shelf <span class="tag new">new</span></h3>
+    <p class="purpose">Keeps the exhibits you've had during a slice.</p>
+    <dl>
+      <dt>Attributes</dt><dd>A count beside the waypoint's name; open, each exhibit with its versions.</dd>
+      <dt>States</dt><dd>Closed (a count) · open (a popover from the waypoint).</dd>
+      <dt>Relations</dt><dd>One per waypoint on the chart.</dd>
+    </dl>
+    <div class="tile" style="align-items:center"><span style="font-size:11px;color:#8a94a3">PDF parity</span><span class="shelf" style="display:inline-flex;align-items:center;gap:3px;height:15px;padding:0 4px;border:1px solid rgba(233,237,242,.1);font:500 9.5px 'IBM Plex Mono';color:#8a94a3">▢ 3</span></div>
+  </div>
+</div>
+</section>
+
+<!-- ======================= VERBS ======================= -->
+<section class="tab" id="verbs">
+<h2>Object × action</h2>
+<div class="scroll-x"><table class="matrix">
+  <thead><tr><th></th><th>Show (the lead)</th><th>Open in place</th><th>Close</th><th>Got it</th><th>Compare</th><th>Mark</th><th>Take out</th><th>Make it so</th></tr></thead>
+  <tr><td>Exhibit</td><td class="y"></td><td class="n"></td><td class="n"></td><td class="y"></td><td class="x"></td><td class="y"></td><td class="n"></td><td class="x"></td></tr>
+  <tr><td>Version</td><td class="n"></td><td class="n"></td><td class="x"></td><td class="x"></td><td class="n"></td><td class="y"></td><td class="x"></td><td class="x"></td></tr>
+  <tr><td>Question</td><td class="y"></td><td class="n"></td><td class="n"></td><td class="x"></td><td class="n"></td><td class="y"></td><td class="x"></td><td class="y"></td></tr>
+  <tr><td>Waypoint's shelf</td><td class="x"></td><td class="n"></td><td class="n"></td><td class="x"></td><td class="x"></td><td class="x"></td><td class="n"></td><td class="x"></td></tr>
+</table></div>
+<p class="legend">● applies today · ◉ new · × doesn't apply. Removed: <b>replace</b> (show or ask again overwriting what was there).</p>
+
+<h2>Operational principles</h2>
+<div class="principles">
+  <div><b>Exhibit.</b> The lead shows something, and it lands at the end of the tray as a small card with a dot. You open it in place when you're ready; the dot becomes a ring. When you're done, Got it files it on its waypoint and the tray closes up.</div>
+  <div><b>Version.</b> The lead shows the same exhibit again. If you're reading it, a line says v2 has arrived and what changed, and what you're reading stays put. You show v2 when you choose, compare it with v1 if you like, and Got it files both.</div>
+  <div><b>Question.</b> The lead asks you to pick by looking. It's a decision card on the sheet; each option opens in place. Asked again, the new question carries the old one as its first version.</div>
+  <div><b>Waypoint's shelf.</b> Exhibits you've had sit on the waypoint of their slice, counted. Press the count and they list from it; take one out and it goes back on the tray, seen.</div>
+</div>
+
+<h2>Verb → signifier</h2>
+<div class="scroll-x"><table>
+  <tr><th>Verb</th><th>Affordance</th><th>Signifier (how you find it)</th></tr>
+  <tr><td>Show</td><td>The lead adds an exhibit, or a version of one</td><td>A small card slides onto the end of the tray with a dot; the since line counts it</td></tr>
+  <tr><td>Open in place</td><td>See an exhibit large, where it sits</td><td>Press its card; it grows from that spot and the others step aside to a column</td></tr>
+  <tr><td>Close</td><td>Put it back to small, still on the tray</td><td>Press its title bar, or <kbd>Esc</kbd>; it shrinks back to its card</td></tr>
+  <tr><td>Got it</td><td>Done with it: file it on its waypoint</td><td>"Got it" on the open exhibit; it shrinks into its waypoint and the shelf's count goes up</td></tr>
+  <tr><td>Compare</td><td>See two versions side by side</td><td>The version strip (v1 · v2) on the open exhibit, and "Compare" beside it</td></tr>
+  <tr><td>Mark</td><td>Point at a spot and tell the lead (bridge grammar)</td><td>Click on the open exhibit's page; a pin drops with a note</td></tr>
+  <tr><td>Take out</td><td>Bring a had exhibit back to the tray</td><td>The shelf's count on a waypoint; its list's rows</td></tr>
+  <tr><td>Make it so</td><td>Answer a question with one of its options (bridge grammar)</td><td>On the question's card, named for the option</td></tr>
+</table></div>
+</section>
+
+<!-- ======================= LAYERS ======================= -->
+<section class="tab" id="layers">
+<h2>The stack</h2>
+<div class="principle">
+  <p class="rule">An exhibit stays on the sheet until you've had it.</p>
+  <p>The lead only ever adds. A new exhibit goes on the end of the tray, a new version beside the one you're reading. Nothing that arrives takes the place of something already there.</p>
+  <p>Size is yours to choose. Exhibits rest small, and one at a time grows to full size in place. Only Got it moves one off the sheet, and it goes down onto the chart rather than away.</p>
+</div>
+
+<div class="stack">
+  <div class="defs">
+    <h4>Sheet</h4><p>The goal at the conn, as on the bridge. The tray is a row on it, under the chart.</p>
+    <h4>Card, small</h4><p>An exhibit resting in the tray. It has a picture, its title, its version, and a dot or ring.</p>
+    <h4>Card, open in place</h4><p>The same card grown to the tray's width. Its neighbours step aside into a column beside it. At most one is open.</p>
+    <h4>Popover</h4><p>A waypoint's shelf, listed from the waypoint. It's gone once you take something out or look away.</p>
+  </div>
+  <div class="iso" aria-hidden="true"><div class="rig">
+    <div class="pl sheet">Sheet</div>
+    <div class="pl small a">Card</div><div class="pl small b">Card</div><div class="pl small c">Card</div>
+    <div class="pl open">Open in place</div>
+    <div class="pl pop">Popover</div>
+  </div></div>
+  <div class="scroll-x"><table class="tokens">
+    <tr><th>Layer</th><th>Shadow</th><th>Hairline</th><th>Spring</th></tr>
+    <tr><td>Sheet</td><td><code>--lift-3</code></td><td><code>--hairline-sheet</code></td><td><code>--spring-paper</code></td></tr>
+    <tr><td>Card, small</td><td><code>--lift-2</code></td><td><code>--hairline-card</code></td><td><code>--spring-card</code></td></tr>
+    <tr><td>Card, open</td><td><code>--lift-2</code></td><td><code>--hairline-card</code></td><td><code>--spring-card</code></td></tr>
+    <tr><td>Popover</td><td><code>--lift-4</code></td><td><code>--hairline-card</code></td><td><code>--spring-flick</code></td></tr>
+  </table>
+  <p class="note" style="font-size:12.5px">All existing bridge tokens. Opening keeps a card on the card layer: it's the same thing, bigger, not something on top.</p></div>
+</div>
+
+<!-- Scenario 1 -->
+<div class="scenario" data-mk="x1">
+  <div>
+    <h3>1 · One arrives while you read another</h3>
+    <div class="today"><b>Today:</b> you're reading the data flow when the lead shows the layout options. The sheet now shows the layout options, and the data flow is gone from view.</div>
+    <p>The data flow rests in the tray as a small card with a dot. Opening it grows the card in place to the tray's width, and the dot becomes a ring.</p>
+    <p>The lead shows the layout options. A second small card slides onto the end of the tray, into the column beside the open exhibit, with a dot. The since line counts one new exhibit. The data flow doesn't move.</p>
+    <p>Got it on the data flow shrinks it down into the Signing flow waypoint, whose shelf goes from 1 to 2. The layout options card slides back into first place. Opening it grows it in place.</p>
+    <p class="why"><b>Why.</b> What you're reading is yours until you put it down. A dot asks you to look; it doesn't make you look now. You can lose your place, but never an exhibit.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>It rests</b>: the data flow, small, with a dot</span></li>
+      <li data-cls="open"><span><b>Open in place</b>: it grows where it sits</span></li>
+      <li data-cls="open more"><span><b>Another arrives</b>: on the end of the tray, not in its place</span></li>
+      <li data-cls="more gotit"><span><b>Got it</b>: the data flow files on Signing flow</span></li>
+      <li data-cls="more gotit open2"><span><b>Open the next</b>: the layout options, in place</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="x1">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div>
+        <div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div>
+        <div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div>
+        <div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="since"><span>Since your last watch (11:18):</span><b>composer built</b><b class="t-n1">1 new exhibit</b><b class="t-n2">2 new exhibits</b></div>
+        <div class="chart"><svg width="538" height="20"><line x1="8" y1="8" x2="288" y2="8" stroke="#e9edf2" stroke-width="2"/><line x1="288" y1="8" x2="428" y2="8" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="8" cy="8" r="5" fill="#3a424e"/><circle cx="16" cy="8" r="5" fill="#e9edf2"/><circle cx="148" cy="8" r="5" fill="#e9edf2"/><circle cx="288" cy="8" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/><circle cx="428" cy="8" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:2px">1 behind</span><span class="lbl" style="left:142px">PDF parity <span class="shelf"><span class="roll"><i>3</i></span></span></span><span class="lbl here" style="left:282px">Signing flow <span class="shelf sh2"><span class="roll"><i>1</i><i>2</i></span></span></span><span class="lbl" style="left:422px">Portal · next</span></div>
+        <div class="trayk">Exhibits <span>in the order they came</span></div>
+        <div class="ex e1"><div class="th"><div class="dg" style="left:6px;top:15px;width:28px;height:18px;font-size:5px">Email</div><div class="ar" style="left:36px;top:24px;width:14px"></div><div class="dg" style="left:52px;top:15px;width:28px;height:18px;font-size:5px">Portal</div><div class="ar" style="left:82px;top:24px;width:12px"></div><div class="dg" style="left:96px;top:15px;width:14px;height:18px;font-size:5px">✓</div></div><div class="tt"><i class="seen"></i><span>Signing data flow</span><span class="ver">v1</span></div></div>
+        <div class="ex e2"><div class="th"><div class="lay" style="left:8px;top:8px;width:48px;height:36px"><i style="height:6px"></i><i style="height:14px"></i></div><div class="lay" style="left:64px;top:8px;width:48px;height:36px"><i style="height:20px"></i><i style="height:4px"></i></div></div><div class="tt"><i class="seen"></i><span>Layout options</span><span class="ver">v1</span></div></div>
+        <div class="big b1"><div class="bh"><span class="ch">Exhibit · Signing data flow</span><span class="vs"><i class="on">v1</i></span><span class="acts"><span class="btn">Mark</span><span class="btn go">Got it</span></span></div>
+          <div class="page"><div class="dg" style="left:18px;top:86px;width:78px;height:42px;font-size:11px">Email link</div><div class="ar" style="left:100px;top:107px;width:36px"></div><div class="dg" style="left:140px;top:86px;width:86px;height:42px;font-size:11px">Client portal</div><div class="ar" style="left:230px;top:107px;width:36px"></div><div class="dg" style="left:270px;top:86px;width:84px;height:42px;font-size:11px">Signed PDF</div><div style="position:absolute;left:140px;top:150px;width:86px;font-size:9.5px;color:#555;text-align:center">who's signing?<br>then sign</div><div style="position:absolute;left:18px;top:16px;font-weight:700;font-size:12px">How a client signs</div></div></div>
+        <div class="big b2"><div class="bh"><span class="ch">Exhibit · Layout options</span><span class="vs"><i class="on">v1</i></span><span class="acts"><span class="btn">Mark</span><span class="btn go">Got it</span></span></div>
+          <div class="page"><div style="position:absolute;left:18px;top:14px;font-weight:700;font-size:12px">Two layouts for the signing page</div><div class="lay" style="left:18px;top:52px;width:166px;height:150px"><b>A · documents first</b><i style="height:30px"></i><i style="height:30px"></i><i style="height:22px;background:#1c1e22"></i></div><div class="lay" style="left:200px;top:52px;width:166px;height:150px"><b>B · sign first</b><i style="height:22px;background:#1c1e22"></i><i style="height:60px"></i></div></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 5</span><span>Signing redesign at the conn</span></div>
+  </div>
+</div>
+
+<!-- Scenario 2 -->
+<div class="scenario" data-mk="x2">
+  <div>
+    <h3>2 · The same exhibit, shown again</h3>
+    <div class="today"><b>Today:</b> the lead re-shows the signing composer with the documents moved. The page is overwritten in place, and the first version is gone, so there's nothing to set the change against.</div>
+    <p>The signing composer is open in place at v1, seen.</p>
+    <p>The lead shows it again. A line slides in under the card's title: v2 has arrived, documents below Sign. The page you're reading stays at v1.</p>
+    <p>Showing v2 crossfades the page, and the version strip reads v1 · v2. Compare sets v1 and v2 side by side, the part that changed ringed.</p>
+    <p>Got it shrinks the exhibit down into Signing flow's shelf, both versions with it. The tray is empty.</p>
+    <p class="why"><b>Why.</b> A change is easiest to judge against what it changed. Nothing should move under your eyes while you read. Keeping v1 costs a file; losing it costs a conversation.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>Reading v1</b>: open in place, seen</span></li>
+      <li data-cls="v2"><span><b>Shown again</b>: v2 waits beside you</span></li>
+      <li data-cls="show2"><span><b>Show v2</b>: when you choose</span></li>
+      <li data-cls="show2 cmp-on"><span><b>Compare</b>: v1 and v2 side by side</span></li>
+      <li data-cls="show2 gotit"><span><b>Got it</b>: both versions file together</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="x2">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div>
+        <div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div>
+        <div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div>
+        <div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="since"><span>Since your last watch (11:18):</span><b>composer built</b><b class="v2tag">composer v2</b></div>
+        <div class="chart"><svg width="538" height="20"><line x1="8" y1="8" x2="288" y2="8" stroke="#e9edf2" stroke-width="2"/><line x1="288" y1="8" x2="428" y2="8" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="8" cy="8" r="5" fill="#3a424e"/><circle cx="16" cy="8" r="5" fill="#e9edf2"/><circle cx="148" cy="8" r="5" fill="#e9edf2"/><circle cx="288" cy="8" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/><circle cx="428" cy="8" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:2px">1 behind</span><span class="lbl" style="left:142px">PDF parity <span class="shelf"><span class="roll"><i>3</i></span></span></span><span class="lbl here" style="left:282px">Signing flow <span class="shelf sh2"><span class="roll"><i>1</i><i>2</i></span></span></span><span class="lbl" style="left:422px">Portal · next</span></div>
+        <div class="trayk">Exhibits <span>in the order they came</span></div>
+        <div class="trayempty">Nothing on the tray. What you've had is on the chart's waypoints.</div>
+        <div class="ex e1"><div class="th"></div><div class="tt"><i class="seen ring"></i><span>Signing composer</span><span class="ver">v1</span></div></div>
+        <div class="big b1"><div class="bh"><span class="ch">Exhibit · Signing composer</span><span class="vs"><i class="o1 on">v1</i><i class="o2">v2</i></span><span class="acts"><span class="btn bcmp">Compare</span><span class="btn">Mark</span><span class="btn go">Got it</span></span></div>
+          <div class="arrived" style="position:absolute;left:10px;top:36px;z-index:2"><b style="font-weight:600">v2 arrived</b><span style="color:#8a94a3">documents below Sign</span><span class="btn" style="height:18px">Show v2</span></div>
+          <div class="page">
+            <div class="p1" style="position:absolute;inset:0"><div class="ph2" style="left:139px;top:22px"><div style="font-weight:700;font-size:6.5px;color:#555">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div><div class="row"><span>Dana Whitfield</span><span>▾</span></div><div class="sign">Sign</div></div></div>
+            <div class="p2" style="position:absolute;inset:0"><div class="ph2" style="left:139px;top:22px"><div style="font-weight:700;font-size:6.5px;color:#555">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Dana Whitfield</span><span>▾</span></div><div class="sign">Sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div></div></div>
+            <div class="cmp" style="position:absolute;inset:0">
+              <div class="ph2" style="left:52px;top:24px"><span class="lb">v1</span><div style="font-weight:700;font-size:6.5px;color:#555">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div><div class="row"><span>Dana Whitfield</span><span>▾</span></div><div class="sign">Sign</div></div>
+              <div class="ph2" style="left:224px;top:24px"><span class="lb">v2</span><div style="font-weight:700;font-size:6.5px;color:#555">HARBOUR &amp; LANE</div><div class="h">Your proposal is ready to sign</div><div class="row"><span>Dana Whitfield</span><span>▾</span></div><div class="sign">Sign</div><div class="row"><span>Engagement letter</span><span>PDF</span></div><div class="row"><span>Fee schedule</span><span>PDF</span></div></div>
+              <div class="changed" style="left:225px;top:118px;width:122px;height:52px"></div>
+            </div>
+          </div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 5</span><span>The composer, shown again</span></div>
+  </div>
+</div>
+
+<!-- Scenario 3 -->
+<div class="scenario" data-mk="x3">
+  <div>
+    <h3>3 · Find it again</h3>
+    <div class="today"><b>Today:</b> to find the fee table the lead showed two days ago, you look through their screen's switcher, if it's still there, or ask them to show it again.</div>
+    <p>The tray is empty. PDF parity's waypoint carries a shelf of 3.</p>
+    <p>Pressing the shelf lists its exhibits in a popover from the waypoint, each with its version and when you had it.</p>
+    <p>Taking out the fee table lifts it off the list and back onto the tray as a small card, ringed as seen. The shelf goes to 2.</p>
+    <p>Opening it grows it in place. Got it shrinks it back down onto PDF parity, and the shelf is 3 again.</p>
+    <p class="why"><b>Why.</b> Done isn't gone. Exhibits belong to the slice they were for, so that's where you look for them.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>Tray empty</b>: PDF parity holds 3</span></li>
+      <li data-cls="pop-on"><span><b>Open the shelf</b>: a popover from the waypoint</span></li>
+      <li data-cls="out"><span><b>Take out</b>: the fee table, back on the tray</span></li>
+      <li data-cls="out open"><span><b>Open in place</b></span></li>
+      <li data-cls="back"><span><b>Got it</b>: back onto PDF parity</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="x3">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div>
+        <div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div>
+        <div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div>
+        <div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="since"><span>Since your last watch (09:02):</span><b>nothing new</b></div>
+        <div class="chart"><svg width="538" height="20"><line x1="8" y1="8" x2="288" y2="8" stroke="#e9edf2" stroke-width="2"/><line x1="288" y1="8" x2="428" y2="8" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="4 4"/><circle cx="8" cy="8" r="5" fill="#3a424e"/><circle cx="16" cy="8" r="5" fill="#e9edf2"/><circle cx="148" cy="8" r="5" fill="#e9edf2"/><circle cx="288" cy="8" r="7" fill="#1b1f25" stroke="#e9edf2" stroke-width="2"/><circle cx="428" cy="8" r="5" fill="#1b1f25" stroke="#8a94a3" stroke-width="1.5" stroke-dasharray="2 2"/></svg>
+          <span class="lbl" style="left:2px">1 behind</span><span class="lbl" style="left:142px">PDF parity <span class="shelf shp sh1"><span class="roll"><i>3</i><i>2</i></span></span></span><span class="lbl here" style="left:282px">Signing flow <span class="shelf"><span class="roll"><i>2</i></span></span></span><span class="lbl" style="left:422px">Portal · next</span></div>
+        <div class="pop"><div class="ph">PDF parity · had</div>
+          <div class="pr take"><span class="mini" style="background:#f4f2ee"></span><span>Fee table</span><small>v2 · Mon</small></div>
+          <div class="pr"><span class="mini"></span><span>PDF footer wording</span><small>v1 · Mon</small></div>
+          <div class="pr"><span class="mini"></span><span>Portal link copy</span><small>v3 · Tue</small></div></div>
+        <div class="trayk">Exhibits <span>in the order they came</span></div>
+        <div class="trayempty">Nothing on the tray. What you've had is on the chart's waypoints.</div>
+        <div class="ex e1"><div class="th"><div class="lay" style="left:10px;top:8px;width:106px;height:36px"><i style="height:5px"></i><i style="height:5px"></i><i style="height:5px"></i></div></div><div class="tt"><i class="seen"></i><span>Fee table</span><span class="ver">v2</span></div></div>
+        <div class="big b1"><div class="bh"><span class="ch">Exhibit · Fee table</span><span class="vs"><i>v1</i><i class="on">v2</i></span><span class="acts"><span class="btn">Mark</span><span class="btn go">Got it</span></span></div>
+          <div class="page"><div style="position:absolute;left:18px;top:14px;font-weight:700;font-size:12px">Fees, as the PDF lists them</div>
+            <div style="position:absolute;left:18px;top:44px;right:18px;font-size:10px;display:grid;grid-template-columns:1fr auto;gap:6px 12px"><span>Setup</span><b>£450</b><span>Monthly retainer</span><b>£1,200</b><span>Billed on acceptance</span><b>first month</b><span>Annual review</span><b>£300</b></div></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 5</span><span>Signing redesign, a day later</span></div>
+  </div>
+</div>
+
+<h2>Audits</h2>
+<div class="scroll-x"><table>
+  <tr><th>Audit</th><th>Holds because</th></tr>
+  <tr><td>Every surface is a layer</td><td>Small and open exhibits are cards on the sheet; the shelf's list is a popover. There's no modal or overlay, and "up close" is the card itself grown, not a viewer on top.</td></tr>
+  <tr><td>Every action is a verb</td><td>Open in place, close, got it, compare, mark, take out, make it so; the lead's show. "Show v2" is open in place, on a version.</td></tr>
+  <tr><td>Principle</td><td>Arrival adds to the end of the tray or as a version beside what's open; only Got it moves an exhibit off the sheet, and it lands on the chart.</td></tr>
+  <tr><td>Colour</td><td>No amber: an exhibit asks you to look, not to decide. A question's card on the sheet keeps the bridge's amber, as a decision. Dots and rings are ink and grey.</td></tr>
+  <tr><td>Grounding</td><td>Every current noun is in Today → Proposed. Versions use the existing <code>id</code>; the shelf uses the existing <code>slice</code> on each artifact. No new tokens.</td></tr>
+</table></div>
+
+<h2>If it's signed off</h2>
+<div class="scroll-x"><table class="handover">
+  <tr><th>Piece</th><th>Touches</th><th>Accepted when</th></tr>
+  <tr><td>Versions</td><td><code>GoalArtifact</code> gains <code>versions</code> (when, picture, what changed); <code>showArtifact</code> appends rather than replaces, keeping each version's page (<code>&lt;id&gt;@&lt;n&gt;.html</code>); <code>show</code> takes an optional <code>changed</code> and its description says showing again adds a version</td><td>Showing the same id twice serves both versions; v1's page is unchanged</td></tr>
+  <tr><td>Seen and had</td><td>The captain's state per goal, exhibit and version, kept across a restart (the chief of staff's state, beside <code>conn</code>), with an <code>exhibitRules.ts</code> deciding the tray and the shelves, tested; described to the state rules</td><td>Scenario 1 plays in the demo ship: a second exhibit never hides the first, and Got it files it</td></tr>
+  <tr><td>Tray</td><td><code>stream.ts</code>'s exhibit card becomes the tray: small cards in arrival order; one opens in place, the others in a column</td><td>Nothing arriving changes what's open; Esc closes it</td></tr>
+  <tr><td>Shelf</td><td>The chart strip's waypoints carry a count and list their had exhibits by <code>slice</code></td><td>Scenario 3: take out, open, got it</td></tr>
+  <tr><td>Questions</td><td><code>ask</code> again keeps the earlier unanswered question as version 1 of the new one</td><td>Asking twice shows both on the question's card</td></tr>
+</table></div>
+</section>
+
+<!-- ======================= ALTERNATIVES ======================= -->
+<section class="tab" id="alternatives">
+<h2>What's on a slice</h2>
+<div class="answer">
+  <p>In draft 1, a waypoint's shelf holds the exhibits you've <b>had</b> whose slice is that one, where "slice" is the slice the exhibit was <b>last shown in</b> (<code>GoalArtifact.slice</code>). So it isn't everything shown during the slice: an exhibit reworked later moves to the later slice, and one you haven't had isn't on any shelf.</p>
+  <p>A cleaner rule, used in every alternative below: <b>each version belongs to the slice it was shown in.</b> A slice then holds everything put in front of you during it (its exhibits by version, had or not), beside what it shipped (its pull requests) and what you decided (its <code>captain-decision</code> lines, by time). An exhibit reworked across slices appears in both, v1 in the first and v2 in the second. The tray still holds only what you haven't had.</p>
+</div>
+
+<h2>Five ways to show progress</h2>
+<p class="note">A is draft 1 (the scenarios on the Layers tab). B to E each keep the tray and Got it, and change where progress sits and how you reach an earlier slice's exhibits. The same goal in all of them: Signing redesign, three slices in, Portal next.</p>
+
+<div class="alts">
+
+<div class="alt">
+  <div>
+    <h3>B · The log down the side</h3>
+    <p>The sheet's left column is the goal's log, one row per slice: next at the top, dashed, then where you are, then what's landed, newest first. The current slice is a raised row with its exhibits as thumbnails, what's open and what waits on you. Earlier slices are flat rows with tiny thumbnails and a line of what they shipped.</p>
+    <p>Pressing an earlier row opens it in place in the log, its exhibits full-size thumbnails you can open on the sheet. The sheet's right side keeps the decision and the tray.</p>
+    <div class="pc"><div><b>Good</b>Reads like a ship's log. Room for each slice's name, its PRs and decisions as well as its exhibits. Scales to many slices by scrolling.</div><div><b>Costs</b>Takes a column from the sheet. Progress is a list, so "how far along" is less of a glance than a line.</div></div>
+  </div>
+  <div class="table"><div class="mk-wrap"><div class="mk" id="ab">
+    <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+    <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+    <div class="viewer">
+      <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+      <div class="log">
+        <div class="track d"></div><div class="track" style="top:58px"></div>
+        <div class="lr next"><div class="lt"><span style="color:var(--t-muted)">Portal</span><span class="meta">next</span></div></div>
+        <div class="lr now"><div class="lt"><b style="font-weight:600">3 · Signing flow</b><span class="meta">now</span></div>
+          <div class="thumbs"><span class="mt" style="width:52px;height:34px"></span><span class="mt" style="width:52px;height:34px"></span><span class="mt" style="width:52px;height:34px"></span></div>
+          <div class="meta">3 exhibits, 2 new · 1 PR open · <span class="attn-t">1 decision waiting</span></div></div>
+        <div class="lr"><div class="lt"><span>2 · PDF parity</span><span class="meta">landed Mon</span></div>
+          <div class="thumbs"><span class="mt" style="width:26px;height:17px"></span><span class="mt" style="width:26px;height:17px"></span><span class="mt" style="width:26px;height:17px"></span></div>
+          <div class="meta">2 PRs merged · 4 decisions</div></div>
+        <div class="lr"><div class="lt"><span>1 · Quick wins</span><span class="meta">landed Fri</span></div>
+          <div class="thumbs"><span class="mt" style="width:26px;height:17px"></span></div>
+          <div class="meta">2 PRs merged · 1 decision</div></div>
+      </div>
+      <div class="deccard" style="left:246px;top:70px;width:310px"><div class="lab">Decision · from Lt. Mensah</div><div class="w">Documents above or below Sign?</div><div class="meta">Lead's pick: below, on phones</div></div>
+      <div class="lab" style="position:absolute;left:246px;top:150px">Exhibits · slice 3</div>
+      <div class="mc" style="left:246px;top:168px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen ring"></i><span>Data flow</span></div></div>
+      <div class="mc" style="left:352px;top:168px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen"></i><span>Layout options</span></div></div>
+      <div class="mc" style="left:458px;top:168px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen"></i><span>Composer v2</span></div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<div class="alt">
+  <div>
+    <h3>C · Slices as tabs</h3>
+    <p>Under the goal's head, a row of segments, one per slice, each with an underline: full for a slice that's landed, part-full for the one you're in, none for what's next. The row is the progress bar.</p>
+    <p>Pressing an earlier segment scopes the sheet to that slice: its exhibits as a contact sheet, what it merged, what it taught. "Back to now" returns to the current slice, where the decision and the tray are.</p>
+    <div class="pc"><div><b>Good</b>Progress at a glance and one press to any slice. The sheet shows one slice at a time, so nothing mixes.</div><div><b>Costs</b>A past slice replaces the present on the sheet, so a decision waiting goes out of view while you look back. Segments get narrow past six or so slices.</div></div>
+  </div>
+  <div class="table"><div class="mk-wrap"><div class="mk" id="ac">
+    <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+    <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+    <div class="viewer">
+      <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+      <div class="seg">
+        <div class="sg">1 · Quick wins<small>landed Fri</small></div>
+        <div class="sg sel">2 · PDF parity<small>landed Mon</small></div>
+        <div class="sg now">3 · Signing flow<small>now · <span class="attn-t">1 waiting</span></small></div>
+        <div class="sg next">Portal<small>next</small></div>
+      </div>
+      <div style="position:absolute;left:18px;right:18px;top:122px;display:flex;justify-content:space-between;align-items:center"><span><span class="lab">Slice 2 · PDF parity</span> <span class="meta">&nbsp;landed Mon 14:20 · merged #1268, #1271</span></span><span class="btn">Back to now</span></div>
+      <div class="mc" style="left:18px;top:150px;width:170px"><span class="mt" style="height:80px"></span><div class="tt"><i class="seen ring"></i><span>Fee table</span><span class="ver">v2</span></div></div>
+      <div class="mc" style="left:198px;top:150px;width:170px"><span class="mt" style="height:80px"></span><div class="tt"><i class="seen ring"></i><span>PDF footer wording</span></div></div>
+      <div class="mc" style="left:378px;top:150px;width:170px"><span class="mt" style="height:80px"></span><div class="tt"><i class="seen ring"></i><span>Portal link copy</span><span class="ver">v3</span></div></div>
+      <div style="position:absolute;left:18px;right:18px;top:278px"><span class="lab">It taught</span><div style="font-size:12px;margin-top:4px">Fee rows have to match the PDF's line order, or clients query the total.</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<div class="alt">
+  <div>
+    <h3>D · The tray is the timeline</h3>
+    <p>The chart and the tray merge into one strip. Each slice is a section of it, under its name and a pip on one track. Earlier slices are stacks of their exhibits, fanned, with a count. The current slice's exhibits lie out full, and the next slice is a dashed empty slot.</p>
+    <p>Pressing a stack fans it out in place; pressing a card opens it on the sheet. The decision sits under the strip.</p>
+    <div class="pc"><div><b>Good</b>Progress and exhibits are one thing, so there's one place to look. The present gets the room and the past stays a press away. Least chrome of all.</div><div><b>Costs</b>A slice with no exhibits is a thin section with just its name. PRs and decisions aren't on the strip; they'd sit in the fanned stack's footer.</div></div>
+    <p class="pick">Draft pick: D. It answers both asks at once (where are we, and where's that thing I saw) without a second structure.</p>
+  </div>
+  <div class="table"><div class="mk-wrap"><div class="mk" id="ad">
+    <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+    <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+    <div class="viewer">
+      <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+      <div class="strip">
+        <div class="rule" style="right:110px"></div><div class="rule d" style="left:436px"></div>
+        <div class="sec" style="left:0;width:94px"><span class="lab">1 · Quick wins</span><i class="pip" style="left:0"></i>
+          <div class="mc" style="left:4px;top:42px;width:62px;transform:rotate(-4deg)"><span class="mt" style="height:32px"></span></div>
+          <div class="mc" style="left:10px;top:46px;width:62px"><span class="mt" style="height:32px"></span><div class="tt"><span>1 exhibit</span></div></div>
+          <div class="meta" style="position:absolute;top:108px;left:2px">2 PRs</div></div>
+        <div class="sec" style="left:106px;width:100px"><span class="lab">2 · PDF parity</span><i class="pip" style="left:0"></i>
+          <div class="mc" style="left:2px;top:40px;width:72px;transform:rotate(-6deg)"><span class="mt" style="height:36px"></span></div>
+          <div class="mc" style="left:8px;top:43px;width:72px;transform:rotate(-2deg)"><span class="mt" style="height:36px"></span></div>
+          <div class="mc" style="left:14px;top:46px;width:72px"><span class="mt" style="height:36px"></span><div class="tt"><span>3 exhibits</span></div></div>
+          <div class="meta" style="position:absolute;top:112px;left:2px">2 PRs · 4 decisions</div></div>
+        <div class="sec" style="left:222px;width:214px"><span class="lab" style="color:var(--t-text)">3 · Signing flow · now</span><i class="pip now" style="left:0"></i>
+          <div class="mc" style="left:0;top:40px;width:66px"><span class="mt" style="height:40px"></span><div class="tt"><i class="seen ring"></i><span>Data flow</span></div></div>
+          <div class="mc" style="left:72px;top:40px;width:66px"><span class="mt" style="height:40px"></span><div class="tt"><i class="seen"></i><span>Layouts</span></div></div>
+          <div class="mc" style="left:144px;top:40px;width:66px"><span class="mt" style="height:40px"></span><div class="tt"><i class="seen"></i><span>Composer</span></div></div></div>
+        <div class="sec" style="left:448px;width:90px"><span class="lab">Portal · next</span><i class="pip next" style="left:0"></i>
+          <div class="slot" style="left:0;top:40px;width:88px;height:62px">nothing yet</div></div>
+      </div>
+      <div class="deccard" style="left:18px;top:212px;width:538px"><div class="lab">Decision · from Lt. Mensah</div><div class="w">Documents above or below Sign, on phones?</div><div class="meta">Lead's pick: below · see Composer v2</div></div>
+    </div>
+  </div></div></div>
+</div>
+
+<div class="alt">
+  <div>
+    <h3>E · A progress chip, and the voyage on demand</h3>
+    <p>The goal's head carries one chip: "Slice 3 of ~5", with a five-segment bar. The sheet below is all present: the decision and the tray.</p>
+    <p>Pressing the chip drops the voyage as a popover, every slice a row with its exhibits as thumbnails. Pressing one opens it on the sheet, and the popover goes.</p>
+    <div class="pc"><div><b>Good</b>The most room for the work. Progress is a glance; history is one press and gone again.</div><div><b>Costs</b>"~5" needs an estimate the lead may not have. Earlier exhibits are out of sight until you ask, so they're the easiest to forget.</div></div>
+  </div>
+  <div class="table"><div class="mk-wrap"><div class="mk" id="ae">
+    <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+    <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+    <div class="viewer">
+      <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><span class="chipp">Slice 3 of ~5 <span class="bar5"><i></i><i></i><i class="now"></i><i class="todo"></i><i class="todo"></i></span></span></span></div>
+      <div class="voy"><div class="lab" style="margin-bottom:4px">The voyage</div>
+        <div class="vr"><i class="dot" style="background:none;box-shadow:inset 0 0 0 1.5px #8a94a3"></i><span style="color:var(--t-muted)">Portal · next</span><span></span></div>
+        <div class="vr"><i class="dot work"></i><span>3 · Signing flow · now</span><span class="tb"><span class="mt"></span><span class="mt"></span><span class="mt"></span></span></div>
+        <div class="vr"><i class="dot work"></i><span>2 · PDF parity</span><span class="tb"><span class="mt"></span><span class="mt"></span><span class="mt"></span></span></div>
+        <div class="vr"><i class="dot work"></i><span>1 · Quick wins</span><span class="tb"><span class="mt"></span></span></div></div>
+      <div class="deccard" style="left:18px;top:74px;width:538px"><div class="lab">Decision · from Lt. Mensah</div><div class="w">Documents above or below Sign, on phones?</div><div class="meta">Lead's pick: below · see Composer v2</div></div>
+      <div class="lab" style="position:absolute;left:18px;top:150px">Exhibits</div>
+      <div class="mc" style="left:18px;top:168px;width:126px"><span class="mt" style="height:58px"></span><div class="tt"><i class="seen"></i><span>Layout options</span></div></div>
+      <div class="mc" style="left:152px;top:168px;width:126px"><span class="mt" style="height:58px"></span><div class="tt"><i class="seen"></i><span>Signing composer</span><span class="ver">v2</span></div></div>
+    </div>
+  </div></div></div>
+</div>
+
+</div>
+
+<h2>B and D in motion</h2>
+<p class="note">The same four moments in each: the slice at a glance, a new exhibit arriving, looking back at slice 2, and opening something from it. D's look back carries B's record (what the slice shipped, decided and taught), so you can judge whether D loses anything B keeps.</p>
+
+<div class="scenario" data-mk="bm">
+  <div>
+    <h3>B · The log down the side</h3>
+    <p>The log is a column on the sheet's left: next at the top, then slice 3 raised with its exhibits and what's open, then slices 2 and 1, flat. The decision and the tray sit to its right.</p>
+    <p>A new exhibit arrives. It joins slice 3's row as a fourth thumbnail, and the tray on the right as a card with a dot.</p>
+    <p>Pressing slice 2 opens its row in place: its exhibits, what it shipped, what you decided and when, and what it taught. Slice 3 flattens to a line, and slice 1 moves down.</p>
+    <p>Pressing the fee table in slice 2's row opens it on the sheet, beside the log, marked as from slice 2.</p>
+    <p class="why"><b>Why.</b> A slice is a unit of work you agreed, so its record should read as one. The log keeps the present raised and the past one press from whole.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>At a glance</b>: slice 3 raised, 2 and 1 flat</span></li>
+      <li data-cls="arrive"><span><b>One arrives</b>: in slice 3's row and on the tray</span></li>
+      <li data-cls="arrive open2"><span><b>Open slice 2</b>: its whole record, in place</span></li>
+      <li data-cls="arrive open2 fee"><span><b>Open its fee table</b>: on the sheet, from slice 2</span></li>
+      <li data-cls="arrive"><span><b>Back to now</b>: slice 2 folds, slice 3 rises</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="bm">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="lg">
+          <div class="trk d"></div><div class="trk"></div>
+          <div class="row next r-next"><div class="lt"><span style="color:var(--t-muted)">Portal</span><span class="meta">next</span></div></div>
+          <div class="row now raised r3"><div class="lt"><b style="font-weight:600">3 · Signing flow</b><span class="meta">now</span></div>
+            <div class="th"><span class="mt" style="width:42px;height:28px"></span><span class="mt" style="width:42px;height:28px"></span><span class="mt" style="width:42px;height:28px"></span><span class="mt new4" style="width:42px;height:28px"></span></div>
+            <div class="meta"><span class="m3">3 exhibits, 2 new</span><span class="m4">4 exhibits, 3 new</span> · 1 PR open · <span class="attn-t">1 decision waiting</span></div></div>
+          <div class="row now r3s"><div class="lt"><span>3 · Signing flow</span><span class="meta">now · <span class="attn-t">1 waiting</span></span></div></div>
+          <div class="row r2"><div class="lt"><span>2 · PDF parity</span><span class="meta">landed Mon</span></div>
+            <div class="th"><span class="mt" style="width:24px;height:16px"></span><span class="mt" style="width:24px;height:16px"></span><span class="mt" style="width:24px;height:16px"></span></div>
+            <div class="meta">2 PRs merged · 4 decisions</div></div>
+          <div class="row raised r2x"><div class="lt"><b style="font-weight:600">2 · PDF parity</b><span class="meta">landed Mon</span></div>
+            <div class="rec">
+              <div class="k">Exhibits</div>
+              <div class="th"><span class="mt feerow" style="width:42px;height:28px"></span><span class="mt" style="width:42px;height:28px"></span><span class="mt" style="width:42px;height:28px"></span></div>
+              <div class="k">Shipped</div>
+              <div class="l"><span>#1268 Fee rows follow the PDF</span><small>Mon</small></div>
+              <div class="l"><span>#1271 Footer: sign in your portal</span><small>Mon</small></div>
+              <div class="k">Decided</div>
+              <div class="l"><span>Bill on acceptance, first month</span><small>10:12</small></div>
+              <div class="l"><span>Setup fee on its own line</span><small>11:40</small></div>
+              <div class="l"><span>Keep the PDF as an attachment</span><small>14:02</small></div>
+              <div class="k">Taught</div>
+              <div class="l" style="color:var(--t-muted)"><span>Fee rows must match the PDF's order</span></div>
+            </div></div>
+          <div class="row r1"><div class="lt"><span>1 · Quick wins</span><span class="meta">landed Fri</span></div>
+            <div class="th"><span class="mt" style="width:24px;height:16px"></span></div>
+            <div class="meta">2 PRs merged · 1 decision</div></div>
+        </div>
+        <div class="deccard" style="left:246px;top:66px;width:310px"><div class="lab">Decision · from Lt. Mensah</div><div class="w">Documents above or below Sign?</div><div class="meta">Lead's pick: below, on phones</div></div>
+        <div class="lab" style="position:absolute;left:246px;top:146px">Exhibits</div>
+        <div class="mc" style="left:246px;top:164px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen ring"></i><span>Data flow</span></div></div>
+        <div class="mc" style="left:352px;top:164px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen"></i><span>Layout options</span></div></div>
+        <div class="mc" style="left:458px;top:164px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen"></i><span>Composer v2</span></div></div>
+        <div class="mc tray4" style="left:246px;top:246px;width:98px"><span class="mt" style="height:44px"></span><div class="tt"><i class="seen"></i><span>Reminder email</span></div></div>
+        <div class="big bigf" style="left:246px;top:146px;width:310px;height:282px"><div class="bh"><span class="ch">Fee table · from slice 2</span><span class="vs"><i>v1</i><i class="on">v2</i></span><span class="acts"><span class="btn">Mark</span></span></div>
+          <div class="page"><div style="position:absolute;left:14px;top:12px;font-weight:700;font-size:11px">Fees, as the PDF lists them</div>
+            <div style="position:absolute;left:14px;top:38px;right:14px;font-size:9.5px;display:grid;grid-template-columns:1fr auto;gap:5px 10px"><span>Setup</span><b>£450</b><span>Monthly retainer</span><b>£1,200</b><span>Billed on acceptance</span><b>first month</b><span>Annual review</span><b>£300</b></div></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 5</span><span>B · the log</span></div>
+  </div>
+</div>
+
+<div class="scenario" data-mk="dm">
+  <div>
+    <h3>D · The tray is the timeline</h3>
+    <p>One strip runs under the goal's head. Slices 1 and 2 are fanned stacks with their counts, slice 3's exhibits lie out full, and next is a dashed slot. The decision sits under the strip.</p>
+    <p>A new exhibit arrives. It slides onto the end of slice 3, with a dot.</p>
+    <p>Pressing slice 2's stack fans its cards out in place. Slice 3 gathers into a stack beside it, and under the strip slice 2's record opens: what it shipped, what you decided and when, and what it taught. The decision moves down, still on the sheet.</p>
+    <p>Pressing the fee table opens it in place, growing from its card over the strip. Slice 2's record and the decision wait under it until it closes.</p>
+    <p class="why"><b>Why.</b> Exhibits are what you look at most, so they carry the timeline. The record a slice keeps is still all there, one press under its stack.</p>
+    <ol class="steps">
+      <li data-cls=""><span><b>At a glance</b>: stacks behind, slice 3 out full</span></li>
+      <li data-cls="arrive"><span><b>One arrives</b>: on the end of slice 3</span></li>
+      <li data-cls="arrive fan"><span><b>Fan slice 2</b>: its cards out, its record under</span></li>
+      <li data-cls="arrive fan fee"><span><b>Open its fee table</b>: in place, from its card</span></li>
+      <li data-cls="arrive"><span><b>Back to now</b>: slice 2 stacks, slice 3 lies out</span></li>
+    </ol>
+  </div>
+  <div class="table">
+    <button class="replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button>
+    <div class="mk-wrap"><div class="mk" id="dm">
+      <div class="hud"><div class="where"><span>Bridge</span><span>·</span><b>On watch · Signing redesign</b></div><div class="muschip"><span>Muster</span><span class="cnt">2</span></div></div>
+      <div class="rail"><div class="proj">Harbour &amp; Lane</div><div class="berth at"><i class="dot work"></i><span>Signing redesign</span><span></span></div><div class="berth"><i class="dot work"></i><span>Fee structure</span><span class="n">1</span></div><div class="berth"><i class="dot work"></i><span>Proposals API</span><span class="n">1</span></div></div>
+      <div class="viewer">
+        <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who"><i class="dot work"></i>Lt. Mensah · building</span></div>
+        <div class="strip">
+          <div class="rule"></div><div class="rule d"></div>
+          <div class="sec" style="left:0;width:94px"><span class="lab">1 · Quick wins</span><i class="pip"></i>
+            <div class="mc" style="left:4px;width:62px;transform:rotate(-4deg)"><span class="mt" style="height:30px"></span></div>
+            <div class="mc" style="left:10px;width:62px;top:43px"><span class="mt" style="height:30px"></span><div class="tt"><span>1 exhibit</span></div></div></div>
+          <div class="sec" style="left:106px;width:100px"><span class="lab">2 · PDF parity</span><i class="pip"></i>
+            <div class="mc s2a" style="width:66px"><span class="mt" style="height:30px"></span><div class="tt"><span>Fee table</span></div></div>
+            <div class="mc s2b" style="width:66px"><span class="mt" style="height:30px"></span><div class="tt"><span>PDF footer</span></div></div>
+            <div class="mc s2c" style="width:66px"><span class="mt" style="height:30px"></span><div class="tt"><span class="cn">3 exhibits</span><span class="nm">Portal copy</span></div></div>
+            <span class="meta cnt2">2 PRs · 4 decisions</span></div>
+          <div class="sec sec3" style="left:222px;width:214px"><span class="lab lab3" style="color:var(--t-text)">3 · Signing flow · now</span><i class="pip now"></i>
+            <div class="mc c1" style="width:50px"><span class="mt" style="height:30px"></span><div class="tt"><i class="seen ring"></i><span>Flow</span></div></div>
+            <div class="mc c2" style="width:50px"><span class="mt" style="height:30px"></span><div class="tt"><i class="seen"></i><span>Layouts</span></div></div>
+            <div class="mc c3" style="width:50px"><span class="mt" style="height:30px"></span><div class="tt"><i class="seen"></i><span>Composer</span></div></div>
+            <div class="mc c4" style="width:50px"><span class="mt" style="height:30px"></span><div class="tt"><i class="seen"></i><span>Reminder</span></div></div>
+            <div class="stack3"><div class="mc" style="position:absolute;left:0;top:0;width:62px;transform:rotate(-4deg)"><span class="mt" style="height:30px"></span></div><div class="mc" style="position:absolute;left:6px;top:3px;width:62px"><span class="mt" style="height:30px"></span><div class="tt"><span>3 · now · 4</span></div></div></div></div>
+          <div class="sec sec4" style="left:448px;width:90px"><span class="lab">Portal · next</span><i class="pip next"></i><div class="slot">nothing yet</div></div>
+        </div>
+        <div class="recd"><div><div class="k">Shipped</div><div class="l">#1268 Fee rows follow the PDF<small>Mon</small></div><div class="l">#1271 Footer: sign in your portal<small>Mon</small></div></div>
+          <div><div class="k">Decided</div><div class="l">Bill on acceptance, first month<small>Mon 10:12</small></div><div class="l">Setup fee on its own line<small>Mon 11:40</small></div><div class="l">Keep the PDF as an attachment<small>Mon 14:02</small></div></div>
+          <div><div class="k">Taught</div><div class="l">Fee rows must match the PDF's order, or clients query the total.</div></div></div>
+        <div class="deccard dec2"><div class="lab">Decision · from Lt. Mensah</div><div class="w">Documents above or below Sign, on phones?</div><div class="meta">Lead's pick: below · see Composer v2</div></div>
+        <div class="bigd"><div class="bh" style="display:flex;align-items:center;gap:8px"><span class="ch">Exhibit · Fee table · slice 2</span><span class="vs"><i>v1</i><i class="on">v2</i></span><span class="acts" style="margin-left:auto"><span class="btn">Mark</span><span class="btn">Close</span></span></div>
+          <div class="page"><div style="position:absolute;left:18px;top:14px;font-weight:700;font-size:12px">Fees, as the PDF lists them</div>
+            <div style="position:absolute;left:18px;top:44px;right:18px;font-size:10px;display:grid;grid-template-columns:1fr auto;gap:6px 12px"><span>Setup</span><b>£450</b><span>Monthly retainer</span><b>£1,200</b><span>Billed on acceptance</span><b>first month</b><span>Annual review</span><b>£300</b></div></div></div>
+      </div>
+    </div></div>
+    <div class="cap"><span class="stepcap">Step 1 of 5</span><span>D · the strip</span></div>
+  </div>
+</div>
+
+</section>
+
+</div>
+<script>
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach(b => b.addEventListener('click', () => {
+  tabs.forEach(t => t.setAttribute('aria-selected', String(t === b)));
+  document.querySelectorAll('section.tab').forEach(s => s.classList.toggle('on', s.id === b.dataset.tab));
+  if (location.hash !== '#' + b.dataset.tab) history.replaceState(null, '', '#' + b.dataset.tab);
+  requestAnimationFrame(fit);
+}));
+const start = location.hash.slice(1);
+if (start) document.querySelector(`nav.tabs button[data-tab="${start}"]`)?.click();
+function fit() {
+  document.querySelectorAll('.mk-wrap').forEach(w => {
+    const s = w.clientWidth / 760;
+    if (s > 0) w.querySelector('.mk').style.setProperty('--s', s);
+  });
+}
+new ResizeObserver(fit).observe(document.body);
+fit();
+document.querySelectorAll('.scenario[data-mk]').forEach(sc => {
+  const mk = sc.querySelector('.mk');
+  const steps = [...sc.querySelectorAll('ol.steps li')];
+  const cap = sc.querySelector('.stepcap');
+  let i = 0, timer = null, played = false;
+  const go = n => {
+    i = n;
+    mk.className = ('mk ' + (steps[n].dataset.cls || '')).trim();
+    steps.forEach((li, k) => li.classList.toggle('on', k === n));
+    if (cap) cap.textContent = `Step ${n + 1} of ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const play = () => {
+    stop(); go(0);
+    timer = setInterval(() => { if (i >= steps.length - 1) return stop(); go(i + 1); }, 1900);
+  };
+  steps.forEach((li, k) => li.addEventListener('click', () => { stop(); go(k); }));
+  sc.querySelector('.replay').addEventListener('click', play);
+  go(0);
+  new IntersectionObserver(es => es.forEach(e => {
+    if (e.isIntersecting && !played) { played = true; play(); }
+  }), { threshold: 0.45 }).observe(sc.querySelector('.table'));
+});
+</script>
+</body>
+</html>

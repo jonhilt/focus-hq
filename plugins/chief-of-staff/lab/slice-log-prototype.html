@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slice log prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<!-- PROTOTYPE, throwaway: the slice log grammar (docs/interface-style/mockups/slice-log-grammar.html) to click around.
+     Open this file in a browser. Nothing here reaches Focus. -->
+<style>
+:root {
+  --page: #e8e6e1; --paper: #fbfaf8; --ink: #1c1e22; --pmuted: #61666e; --pline: rgba(28,30,34,.12);
+  --well: #0b0d10; --panel: #15181d; --surface: #1b1f25; --surface2: #1e232b; --line: #3a424e;
+  --text: #e9edf2; --muted: #8a94a3; --label: #7d8794; --attn: #f5a524; --hair: rgba(233,237,242,.10);
+  --display: 'Chakra Petch', sans-serif; --mono: 'IBM Plex Mono', monospace; --read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--page); color: var(--ink); font: 14px/1.5 'IBM Plex Sans', system-ui, sans-serif; }
+.wrap { max-width: 1400px; margin: 0 auto; padding: 22px 16px 60px; }
+h1 { font: 600 28px/1.1 var(--display); margin: 0; }
+.q { max-width: 900px; margin: 8px 0 18px; color: var(--pmuted); font-size: 15px; }
+.q b { color: var(--ink); }
+.grid { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 18px; align-items: start; }
+@media (max-width: 1000px) { .grid { grid-template-columns: 1fr; } }
+
+/* ---------- the sheet, in the bridge's look ---------- */
+.sheet { background: var(--surface); color: var(--text); border: 1px solid var(--line); box-shadow: 0 14px 36px rgba(0,0,0,.35); font: 13px/1.45 var(--read); min-height: 640px; display: flex; flex-direction: column;
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.vhead { padding: 14px 18px 10px; border-bottom: 1px solid var(--hair); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+.vhead .p, .lab { font: 600 9.5px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--label); }
+.vhead .g { font: 600 17px/1.25 var(--display); letter-spacing: .02em; }
+.vhead .who { grid-row: 1 / span 2; grid-column: 2; align-self: center; font-size: 12px; color: var(--muted); }
+.body { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 18px; padding: 14px 18px 18px; flex: 1; }
+@media (max-width: 760px) { .body { grid-template-columns: 1fr; } }
+.meta { font-size: 11px; color: var(--muted); }
+.btn { display: inline-flex; align-items: center; height: 24px; padding: 0 9px; font: 600 10.5px var(--display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--line); color: var(--text); background: var(--surface); cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--surface2); border-color: var(--muted); }
+.btn.go { background: var(--text); color: #111; border-color: var(--text); }
+.btn.small { height: 20px; padding: 0 7px; font-size: 9.5px; }
+
+/* the log */
+.log { position: relative; display: flex; flex-direction: column; gap: 6px; }
+.log::before { content: ''; position: absolute; left: 10px; top: 14px; bottom: 14px; width: 2px; background: var(--line); }
+.row { position: relative; padding: 7px 9px 8px 26px; border: 1px solid transparent; cursor: pointer; }
+.row:hover { background: rgba(233,237,242,.03); }
+.row::before { content: ''; position: absolute; left: 6px; top: 12px; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); z-index: 1; }
+.row.next::before { background: var(--surface); box-shadow: inset 0 0 0 1.5px var(--muted); }
+.row.next { cursor: default; color: var(--muted); }
+.row.now { border-color: var(--hair); background: rgba(233,237,242,.03); }
+.row.now::before { width: 11px; height: 11px; left: 5px; background: var(--surface); box-shadow: 0 0 0 2px var(--text); }
+.row.open { border-color: var(--line); background: var(--surface2); }
+.row.flash { border-color: var(--text); }
+.row .lt { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+.row .lt b { font-weight: 600; }
+.ask { display: flex; gap: 10px; margin-top: 3px; font-size: 11px; color: var(--muted); }
+.ask .d { color: var(--attn); }
+.ask .d::before { content: ''; display: inline-block; width: 6px; height: 6px; background: var(--attn); margin-right: 4px; vertical-align: 1px; }
+.ask .x::before { content: ''; display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--text); margin-right: 4px; vertical-align: 1px; }
+.rl { display: grid; grid-template-columns: 54px 1fr auto; gap: 6px; font-size: 11px; line-height: 1.4; align-items: baseline; }
+.rl b { font: 600 8.5px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--label); }
+.rl span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rl small { color: var(--muted); font: 500 9.5px var(--mono); }
+.rl.fresh { background: rgba(233,237,242,.10); outline: 1px solid rgba(233,237,242,.25); }
+.recs { margin-top: 6px; display: flex; flex-direction: column; gap: 1px; }
+.rec .k { font: 600 8.5px var(--display); letter-spacing: .14em; text-transform: uppercase; color: var(--label); margin: 8px 0 2px; }
+.rec .l { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; line-height: 1.5; }
+.rec .l span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rec .l small { color: var(--muted); font: 500 9.5px var(--mono); }
+.rec .out { margin-left: auto; }
+
+/* the desk */
+.desk { display: flex; flex-direction: column; gap: 8px; }
+.dh { display: flex; justify-content: space-between; align-items: baseline; margin-top: 4px; }
+.dec { position: relative; background: var(--surface2); border: 1px solid var(--hair); border-left: 3px solid var(--attn); box-shadow: 0 6px 16px rgba(0,0,0,.45); padding: 9px 12px 10px; }
+.dec .ch { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.dec .w { font-size: 14px; margin: 3px 0 2px; }
+.acts { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.home { font: 500 9.5px var(--mono); color: var(--muted); border: 1px solid var(--hair); padding: 0 5px; }
+.home.past { color: var(--text); border-color: var(--muted); }
+.stackbtn { position: absolute; right: 10px; top: -10px; font: 600 10px var(--mono); background: var(--attn); color: #111; border: 0; padding: 1px 6px; cursor: pointer; }
+.under { margin: -4px 8px 0; display: flex; flex-direction: column; gap: 6px; }
+.under .dec { box-shadow: 0 1px 0 rgba(0,0,0,.5); }
+.behind { height: 7px; margin: -9px 6px 0; background: var(--surface2); border: 1px solid var(--hair); border-top: 0; border-left: 3px solid rgba(245,165,36,.5); }
+.xs { display: flex; flex-wrap: wrap; gap: 8px; }
+.xc { width: 128px; background: var(--surface2); border: 1px solid var(--hair); box-shadow: 0 1px 0 rgba(0,0,0,.5); padding: 6px; cursor: pointer; }
+.xc:hover { border-color: var(--muted); }
+.mt { height: 58px; background: #f4f2ee; position: relative; }
+.mt::after { content: ''; position: absolute; left: 12%; right: 12%; top: 30%; height: 14%; background: #e2ded7; box-shadow: 0 9px 0 #e2ded7; }
+.xc .tt { display: flex; align-items: center; gap: 5px; font-size: 11px; margin-top: 5px; white-space: nowrap; overflow: hidden; }
+.xc .tt span { overflow: hidden; text-overflow: ellipsis; }
+.xc .from { font: 500 9px var(--mono); color: var(--muted); margin-top: 2px; }
+.seen { width: 7px; height: 7px; border-radius: 50%; flex: none; background: var(--text); }
+.seen.ring { background: none; box-shadow: inset 0 0 0 1.3px var(--muted); }
+.ver { margin-left: auto; font: 500 9px var(--mono); color: var(--muted); border: 1px solid var(--hair); padding: 0 3px; flex: none; }
+.opx { background: var(--surface2); border: 1px solid var(--hair); box-shadow: 0 6px 16px rgba(0,0,0,.45); padding: 9px 10px; }
+.opx .bh { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.opx .page { background: #f4f2ee; color: #1c1e22; height: 220px; padding: 14px 16px; font-size: 12px; }
+.opx .page h4 { margin: 0 0 10px; font-size: 14px; }
+.opx .page i { display: block; height: 12px; background: #e2ded7; margin: 7px 0; border-radius: 2px; }
+.rep { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border: 1px solid var(--hair); font-size: 12px; color: var(--muted); }
+.rep b { color: var(--text); font-weight: 500; white-space: nowrap; }
+.rep span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.calm { border: 1px dashed var(--line); padding: 26px; text-align: center; color: var(--muted); }
+.calm b { display: block; font: 600 12px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--text); margin-bottom: 2px; }
+
+/* ---------- the controls (light, around the sheet) ---------- */
+.side { display: flex; flex-direction: column; gap: 14px; }
+.card { background: var(--paper); border: 1px solid var(--pline); border-radius: 6px; padding: 12px 14px; }
+.card h3 { font: 600 11.5px var(--display); letter-spacing: .1em; text-transform: uppercase; color: var(--pmuted); margin: 0 0 8px; }
+.pbtn { display: block; width: 100%; text-align: left; font: 500 13px 'IBM Plex Sans', sans-serif; background: #fff; border: 1px solid var(--pline); border-radius: 4px; padding: 7px 10px; margin: 0 0 6px; cursor: pointer; color: var(--ink); }
+.pbtn:hover { border-color: var(--ink); }
+.pbtn:disabled { color: #aaa; cursor: default; border-color: var(--pline); background: #f6f5f2; }
+.changed { font-size: 13px; background: #f3f1ed; border-left: 3px solid var(--ink); padding: 8px 10px; border-radius: 0 4px 4px 0; min-height: 38px; }
+.stt { font-size: 12.5px; }
+.stt table { width: 100%; border-collapse: collapse; }
+.stt td, .stt th { text-align: left; padding: 3px 4px; border-bottom: 1px solid var(--pline); vertical-align: top; }
+.stt th { font: 600 10px var(--display); letter-spacing: .08em; text-transform: uppercase; color: var(--pmuted); }
+.stt ol { margin: 4px 0 0; padding-left: 18px; }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.tabs button { font: 600 11px var(--display); letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--pline); background: #fff; border-radius: 3px; padding: 5px 8px; cursor: pointer; color: var(--pmuted); }
+.tabs button.on { background: var(--ink); color: #fff; border-color: var(--ink); }
+.wt p { margin: 0 0 8px; font-size: 13px; }
+.wt .step { display: flex; gap: 8px; align-items: center; }
+.wt .step .n { font: 600 11px var(--mono); color: var(--pmuted); width: 16px; }
+.wt .step.done .pbtn { background: #eceae4; color: var(--pmuted); }
+.wt .step.next .pbtn { border-color: var(--ink); box-shadow: inset 3px 0 0 var(--ink); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Slice log, to click around</h1>
+  <p class="q"><b>The question:</b> does "everything has a home in its slice; it rises onto the desk while it asks you, and files back as a record line when you answer" hold up in use? Answer things on the desk, open slices in the log, take exhibits out, and use the buttons on the right to play the lead: send decisions, exhibits and reports, or land the slice. Watch where each thing goes. <span style="color:#8a8f96">Prototype: nothing here reaches Focus.</span></p>
+
+  <div class="grid">
+    <div id="sheet"></div>
+    <div class="side">
+      <div class="card"><h3>Just now</h3><div class="changed" id="changed"></div></div>
+      <div class="card"><h3>Walkthroughs</h3><div class="tabs" id="tabs"></div><div class="wt" id="wt"></div></div>
+      <div class="card"><h3>Play the lead</h3>
+        <button class="pbtn" data-act="decision">A decision arrives</button>
+        <button class="pbtn" data-act="decision-idle">A decision arrives, the lead idle until you answer</button>
+        <button class="pbtn" data-act="exhibit">An exhibit arrives</button>
+        <button class="pbtn" data-act="report">A report arrives</button>
+        <button class="pbtn" data-act="land">The slice's pull request merges</button>
+        <button class="pbtn" data-act="reset" style="margin-top:10px">Start again</button>
+      </div>
+      <div class="card stt"><h3>Where everything is</h3><div id="state"></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ===================== The model (pure: no DOM) =====================
+// Everything on a goal has a home slice. An ask (decision, exhibit, report) sits on the desk while it asks; answering
+// it removes it from the desk and adds a record line to its home slice. Lifts out as sliceRules.ts.
+const SliceLog = (() => {
+  const minute = (t) => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(t % 60).padStart(2, '0')}`;
+
+  function initial() {
+    return {
+      clock: 11 * 60 + 40,
+      seq: 100,
+      slices: [
+        { n: 1, name: 'Quick wins', status: 'landed', when: 'Fri' },
+        { n: 2, name: 'PDF parity', status: 'landed', when: 'Mon' },
+        { n: 3, name: 'Signing flow', status: 'now' },
+        { n: 4, name: 'Portal', status: 'next' },
+      ],
+      asks: [
+        { id: 'd1', kind: 'decision', slice: 3, title: 'Documents above or below Sign, on phones?', pick: 'below', idle: true, since: 1 },
+        { id: 'x1', kind: 'exhibit', slice: 3, title: 'Layout options', ver: 1, seen: false, since: 2 },
+        { id: 'x2', kind: 'exhibit', slice: 3, title: 'Signing composer', ver: 2, seen: false, since: 3 },
+        { id: 'r1', kind: 'report', slice: 3, title: 'Composer built', since: 4 },
+        { id: 'r2', kind: 'report', slice: 3, title: 'QA passed #1273', since: 5 },
+        { id: 'r3', kind: 'report', slice: 3, title: 'A word sent back', since: 6 },
+      ],
+      records: [
+        { id: 'a1', slice: 1, kind: 'shipped', text: '#1251 Copy tweaks', at: 'Fri' },
+        { id: 'a2', slice: 1, kind: 'decided', text: 'Keep the old PDF link', at: 'Fri' },
+        { id: 'a3', slice: 1, kind: 'had', text: 'Copy tweaks v1', at: 'Fri', exhibit: { title: 'Copy tweaks', ver: 1 } },
+        { id: 'b1', slice: 2, kind: 'had', text: 'Fee table v2', at: 'Mon', exhibit: { title: 'Fee table', ver: 2 } },
+        { id: 'b2', slice: 2, kind: 'had', text: 'PDF footer wording v1', at: 'Mon', exhibit: { title: 'PDF footer wording', ver: 1 } },
+        { id: 'b3', slice: 2, kind: 'had', text: 'Portal link copy v3', at: 'Mon', exhibit: { title: 'Portal link copy', ver: 3 } },
+        { id: 'b4', slice: 2, kind: 'shipped', text: '#1268 Fee rows follow the PDF', at: 'Mon' },
+        { id: 'b5', slice: 2, kind: 'shipped', text: '#1271 Footer: sign in your portal', at: 'Mon' },
+        { id: 'b6', slice: 2, kind: 'decided', text: 'Bill on acceptance, first month', at: '10:12' },
+        { id: 'b7', slice: 2, kind: 'decided', text: 'Setup fee on its own line', at: '11:40' },
+        { id: 'b8', slice: 2, kind: 'decided', text: 'Keep the PDF attached', at: '14:02' },
+        { id: 'b9', slice: 2, kind: 'taught', text: "Fee rows must match the PDF's order", at: 'Mon' },
+        { id: 'c1', slice: 3, kind: 'shipped', text: '#1273 Signing composer', at: '10:40' },
+        { id: 'c2', slice: 3, kind: 'had', text: 'Data flow v1', at: '11:05', exhibit: { title: 'Data flow', ver: 1 } },
+        { id: 'c3', slice: 3, kind: 'decided', text: 'Signers: shared link', at: '11:20' },
+      ],
+      open: null,       // the exhibit open in place
+      expanded: null,   // the slice opened in the log
+      fanned: false,    // the decision stack spread out
+      fresh: null,      // the record line just filed
+      changed: 'Signing redesign is at the conn. One decision, two exhibits and three reports are asking you, all homed to slice 3.',
+    };
+  }
+
+  // canned arrivals, in turn
+  const DECISIONS = [
+    { title: 'Send the reminder after 3 days, or 5?', pick: '3 days' },
+    { title: 'Show the fee total on the sign page?', pick: 'yes' },
+    { title: 'Let a client decline from the email?', pick: 'no, from the portal' },
+  ];
+  const EXHIBITS = ['Reminder email', 'Signed confirmation page', 'Decline flow'];
+  const REPORTS = ['QA passed #1275', 'Preview is up for #1276', 'A word sent back', 'Landed in Show #1277'];
+  const NEXT = ['Reminders', 'Decline flow', 'Audit trail'];
+
+  const now = (s) => s.slices.find((x) => x.status === 'now');
+  const name = (s, n) => s.slices.find((x) => x.n === n)?.name ?? `slice ${n}`;
+  const tick = (s) => ({ ...s, clock: s.clock + 1, seq: s.seq + 1 });
+
+  /** The desk, highest first: decisions by what each unblocks (someone idle first, then oldest), exhibits as they came, reports. */
+  function desk(s) {
+    const decisions = s.asks.filter((a) => a.kind === 'decision').sort((a, b) => (b.idle - a.idle) || (a.since - b.since));
+    const exhibits = s.asks.filter((a) => a.kind === 'exhibit').sort((a, b) => a.since - b.since);
+    const reports = s.asks.filter((a) => a.kind === 'report').sort((a, b) => a.since - b.since);
+    return { decisions, exhibits, reports };
+  }
+
+  /** What a slice is asking, counted: its row in the log says so. */
+  const asking = (s, n) => ({
+    decide: s.asks.filter((a) => a.slice === n && a.kind === 'decision').length,
+    look: s.asks.filter((a) => a.slice === n && a.kind === 'exhibit').length,
+    hear: s.asks.filter((a) => a.slice === n && a.kind === 'report').length,
+  });
+
+  const recordsOf = (s, n) => s.records.filter((r) => r.slice === n).slice().reverse();
+
+  // answering anything: off the desk, a line in its home slice's record
+  function file(s, ask, kind, text, said) {
+    const t = tick(s);
+    const line = { id: `r${t.seq}`, slice: ask.slice, kind, text, at: minute(t.clock), ...(kind === 'had' && { exhibit: { title: ask.title, ver: ask.ver } }) };
+    return { ...t, asks: t.asks.filter((a) => a.id !== ask.id), records: [...t.records, line], fresh: line.id, open: t.open === ask.id ? null : t.open, changed: said };
+  }
+
+  function reduce(s, a) {
+    switch (a.type) {
+      case 'reset': return initial();
+      case 'arrive-decision': {
+        const t = tick(s);
+        const c = DECISIONS[(t.seq) % DECISIONS.length];
+        const slice = now(t).n;
+        const top = desk(t).decisions[0];
+        const ask = { id: `d${t.seq}`, kind: 'decision', slice, title: c.title, pick: c.pick, idle: !!a.idle, since: t.seq };
+        const s2 = { ...t, asks: [...t.asks, ask], fresh: null };
+        const nowTop = desk(s2).decisions[0];
+        const where = nowTop.id === ask.id ? (top ? 'It goes on top: the lead is idle until you answer, so it unblocks the most.' : 'It\'s the only decision, so it\'s on top.') : `It stacks under "${nowTop.title}", which ${nowTop.idle ? 'has the lead idle on it, so it unblocks more' : 'came first, and nobody waits on either'}.`;
+        return { ...s2, changed: `A decision arrives from slice ${slice}: "${c.title}" ${where}` };
+      }
+      case 'arrive-exhibit': {
+        const t = tick(s);
+        const title = EXHIBITS[t.seq % EXHIBITS.length];
+        const slice = now(t).n;
+        return { ...t, asks: [...t.asks, { id: `x${t.seq}`, kind: 'exhibit', slice, title, ver: 1, seen: false, since: t.seq }], fresh: null, changed: `An exhibit arrives: "${title}". It rests at the end of "to look at", with a dot; whatever's open stays open.` };
+      }
+      case 'arrive-report': {
+        const t = tick(s);
+        const title = REPORTS[t.seq % REPORTS.length];
+        return { ...t, asks: [...t.asks, { id: `r${t.seq}`, kind: 'report', slice: now(t).n, title, since: t.seq }], fresh: null, changed: `A report arrives: "${title}". It joins the reports line; nothing else moves.` };
+      }
+      case 'make-so': {
+        const ask = s.asks.find((x) => x.id === a.id);
+        if (!ask) return s;
+        const past = s.slices.find((x) => x.n === ask.slice)?.status === 'landed';
+        const s2 = file(s, ask, 'decided', `${ask.title.replace(/\?$/, '')}: ${ask.pick}`, `Made so: "${ask.pick}". It files into slice ${ask.slice}'s record${past ? ', a slice that has already landed, because that\'s where it was asked' : ''}.`);
+        return { ...s2, fanned: s2.fanned && desk(s2).decisions.length > 1 };
+      }
+      case 'got-it': {
+        const ask = s.asks.find((x) => x.id === a.id);
+        if (!ask) return s;
+        return file(s, ask, 'had', `${ask.title} v${ask.ver}`, `Got it: "${ask.title}" files into slice ${ask.slice}'s record as had${ask.out ? ', back where you took it from' : ''}.`);
+      }
+      case 'hear-all': {
+        const reps = desk(s).reports;
+        if (!reps.length) return s;
+        let t = tick(s);
+        const bySlice = new Map();
+        for (const r of reps) bySlice.set(r.slice, [...(bySlice.get(r.slice) ?? []), r]);
+        const lines = [...bySlice].map(([slice, rs], i) => ({ id: `r${t.seq}-${i}`, slice, kind: 'heard', text: `${rs.length} report${rs.length === 1 ? '' : 's'}: ${rs.map((r) => r.title).join(', ')}`, at: minute(t.clock) }));
+        return { ...t, asks: t.asks.filter((x) => x.kind !== 'report'), records: [...t.records, ...lines], fresh: lines[0].id, changed: `Heard: ${reps.length} report${reps.length === 1 ? '' : 's'} file into ${[...bySlice.keys()].map((n) => `slice ${n}`).join(' and ')} as one record line.` };
+      }
+      case 'open': {
+        const ask = s.asks.find((x) => x.id === a.id);
+        if (!ask) return s;
+        return { ...s, open: a.id, asks: s.asks.map((x) => (x.id === a.id ? { ...x, seen: true } : x)), fresh: null, changed: `"${ask.title}" opens in place on the desk. Its dot becomes a ring: seen, but still asking until you say Got it.` };
+      }
+      case 'close': return { ...s, open: null, fresh: null, changed: 'It shrinks back to its card, still on the desk, seen.' };
+      case 'fan': return { ...s, fanned: !s.fanned, fresh: null, changed: s.fanned ? 'The stack gathers again: only the top decision shows.' : 'The stack spreads out: every decision, in the order they unblock.' };
+      case 'expand': {
+        const slice = s.slices.find((x) => x.n === a.n);
+        if (!slice || slice.status === 'next') return s;
+        const shut = s.expanded === a.n;
+        return { ...s, expanded: shut ? null : a.n, fresh: null, changed: shut ? `Slice ${a.n} folds back to its row.` : `Slice ${a.n} opens in place in the log: everything it shipped, decided, had, heard and taught. The desk doesn't change.` };
+      }
+      case 'take-out': {
+        const r = s.records.find((x) => x.id === a.id);
+        if (!r?.exhibit) return s;
+        const t = tick(s);
+        return { ...t, records: t.records.filter((x) => x.id !== r.id), asks: [...t.asks, { id: `x${t.seq}`, kind: 'exhibit', slice: r.slice, title: r.exhibit.title, ver: r.exhibit.ver, seen: true, out: true, since: t.seq }], fresh: null, changed: `"${r.exhibit.title}" lifts out of slice ${r.slice} onto the desk, seen, marked as from slice ${r.slice}. Got it puts it back.` };
+      }
+      case 'land': {
+        const cur = now(s);
+        const nxt = s.slices.find((x) => x.status === 'next');
+        if (!cur || !nxt) return s;
+        let t = tick(s);
+        const plan = NEXT[(cur.n) % NEXT.length];
+        const owed = asking(t, cur.n);
+        const slices = [
+          ...t.slices.map((x) => (x.n === cur.n ? { ...x, status: 'landed', when: 'just now' } : x.n === nxt.n ? { ...x, status: 'now' } : x)),
+          { n: nxt.n + 1, name: plan, status: 'next' },
+        ];
+        const ship = { id: `s${t.seq}`, slice: cur.n, kind: 'shipped', text: `#${1270 + t.seq % 30} ${cur.name}`, at: minute(t.clock) };
+        const still = owed.decide + owed.look + owed.hear;
+        return { ...t, slices, records: [...t.records, ship], fresh: ship.id, changed: `Slice ${cur.n} lands and drops into the past; slice ${nxt.n}, ${nxt.name}, is underway. ${still ? `Slice ${cur.n} still has ${still} thing${still === 1 ? '' : 's'} asking you: they stay on the desk, homed to it, and its row counts them.` : 'Nothing was left asking.'}` };
+      }
+      default: return s;
+    }
+  }
+
+  return { initial, reduce, desk, asking, recordsOf, now, name };
+})();
+
+// ===================== The page (throwaway) =====================
+let state = SliceLog.initial();
+const $ = (sel) => document.querySelector(sel);
+const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+function dispatch(a) {
+  state = SliceLog.reduce(state, a);
+  render();
+}
+
+const KINDS = ['had', 'shipped', 'decided', 'heard', 'taught'];
+function rowHtml(sl) {
+  const s = state;
+  if (sl.status === 'next') return `<div class="row next"><div class="lt"><span>${esc(sl.name)}</span><span class="meta">next</span></div></div>`;
+  const ask = SliceLog.asking(s, sl.n);
+  const recs = SliceLog.recordsOf(s, sl.n);
+  const isOpen = s.expanded === sl.n;
+  const flash = recs.some((r) => r.id === s.fresh) ? ' flash' : '';
+  const askHtml = (ask.decide || ask.look || ask.hear)
+    ? `<div class="ask">${ask.decide ? `<span class="d">${ask.decide} to decide</span>` : ''}${ask.look ? `<span class="x">${ask.look} to look at</span>` : ''}${ask.hear ? `<span>${ask.hear} to hear</span>` : ''}</div>`
+    : (sl.status === 'now' ? '<div class="ask"><span>nothing asking</span></div>' : '');
+  const count = (k) => recs.filter((r) => r.kind === k).length;
+  const counts = ['decided', 'shipped', 'had'].map((k) => `${count(k)} ${k}`).join(' · ');
+  let inner = '';
+  if (isOpen) {
+    inner = `<div class="rec">${KINDS.filter((k) => count(k)).map((k) => `<div class="k">${k}</div>${recs.filter((r) => r.kind === k).map((r) =>
+      `<div class="l${r.id === s.fresh ? ' rl fresh' : ''}"><span>${esc(r.text)}</span>${r.exhibit ? `<button class="btn small out" data-take="${r.id}">Take out</button>` : ''}<small>${esc(r.at)}</small></div>`).join('')}`).join('')}</div>`;
+  } else if (sl.status === 'now') {
+    inner = `<div class="recs">${recs.slice(0, 3).map((r) => `<div class="rl${r.id === s.fresh ? ' fresh' : ''}"><b>${r.kind}</b><span>${esc(r.text)}</span><small>${esc(r.at)}</small></div>`).join('')}</div>`;
+  } else {
+    const fresh = recs.find((r) => r.id === s.fresh);
+    inner = `<div class="meta" style="margin-top:2px">${counts}</div>${fresh ? `<div class="recs"><div class="rl fresh"><b>${fresh.kind}</b><span>${esc(fresh.text)}</span><small>${esc(fresh.at)}</small></div></div>` : ''}`;
+  }
+  return `<div class="row ${sl.status === 'now' ? 'now' : ''}${isOpen ? ' open' : ''}${flash}" data-row="${sl.n}" title="${isOpen ? 'Fold' : 'Open'} slice ${sl.n}'s record">
+    <div class="lt"><span>${sl.status === 'now' ? `<b>${sl.n} · ${esc(sl.name)}</b>` : `${sl.n} · ${esc(sl.name)}`}</span><span class="meta">${sl.status === 'now' ? 'now' : `landed ${esc(sl.when)}`}</span></div>${askHtml}${inner}</div>`;
+}
+
+function decHtml(d, top, more) {
+  const past = state.slices.find((x) => x.n === d.slice)?.status === 'landed';
+  return `<div class="dec">${more ? `<button class="stackbtn" data-fan title="${state.fanned ? 'Gather the stack' : 'Spread the stack'}">${state.fanned ? '−' : `+${more}`}</button>` : ''}
+    <div class="ch"><span class="lab">Decision · Lt. Mensah</span><span class="home${past ? ' past' : ''}">slice ${d.slice}${past ? ' · landed' : ''}</span></div>
+    <div class="w">${esc(d.title)}</div>
+    <div class="meta">${d.idle ? 'Mensah idle until you answer' : `Lead's pick: ${esc(d.pick)} · nobody waiting yet`}</div>
+    <div class="acts"><button class="btn go" data-so="${d.id}">Make it so: ${esc(d.pick)}</button></div></div>`;
+}
+
+function render() {
+  const s = state;
+  const d = SliceLog.desk(s);
+  const order = [...s.slices].sort((a, b) => b.n - a.n);
+  const openX = d.exhibits.find((x) => x.id === s.open);
+  let deskHtml = '';
+  if (!d.decisions.length && !d.exhibits.length && !d.reports.length) {
+    deskHtml = `<div class="calm"><b>Nothing asking you</b>Slice ${SliceLog.now(s)?.n ?? ''} is underway on its orders.</div>`;
+  } else {
+    if (d.decisions.length) {
+      const [top, ...rest] = d.decisions;
+      deskHtml += `<div class="dh"><span class="lab">Asking you</span><span class="meta">by what each unblocks</span></div>`;
+      deskHtml += decHtml(top, true, rest.length);
+      if (rest.length && s.fanned) deskHtml += `<div class="under">${rest.map((x) => decHtml(x, false, 0)).join('')}</div>`;
+      else if (rest.length) deskHtml += '<div class="behind"></div>';
+    }
+    if (d.exhibits.length) {
+      deskHtml += `<div class="dh"><span class="lab">To look at</span>${openX && d.exhibits.length > 1 ? `<span class="meta">${d.exhibits.length - 1} more beside</span>` : ''}</div>`;
+      if (openX) {
+        deskHtml += `<div class="opx"><div class="bh"><span class="lab">Exhibit · ${esc(openX.title)}${openX.out ? ` · from slice ${openX.slice}` : ''}</span><span class="ver">v${openX.ver}</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn" data-close>Close</button><button class="btn go" data-got="${openX.id}">Got it</button></span></div>
+          <div class="page"><h4>${esc(openX.title)}</h4><i style="width:80%"></i><i style="width:64%"></i><i style="width:72%"></i><i style="width:40%;background:#1c1e22"></i></div></div>`;
+      }
+      deskHtml += `<div class="xs">${d.exhibits.filter((x) => x.id !== s.open).map((x) => `<div class="xc" data-open="${x.id}" title="Open in place"><div class="mt"></div><div class="tt"><i class="seen${x.seen ? ' ring' : ''}"></i><span>${esc(x.title)}</span><span class="ver">v${x.ver}</span></div>${x.out || x.slice !== SliceLog.now(s)?.n ? `<div class="from">${x.out ? 'from ' : ''}slice ${x.slice}${state.slices.find((z) => z.n === x.slice)?.status === 'landed' && !x.out ? ' · landed' : ''}</div>` : ''}</div>`).join('')}</div>`;
+    }
+    if (d.reports.length) {
+      const repHomes = [...new Set(d.reports.map((r) => r.slice))].filter((n) => n !== SliceLog.now(s)?.n);
+      deskHtml += `<div class="rep"><b>${d.reports.length} report${d.reports.length === 1 ? '' : 's'}</b>${repHomes.length ? `<span class="home past" style="flex:none">slice ${repHomes.join(', ')}</span>` : ''}<span>${d.reports.map((r) => esc(r.title)).join(' · ')}</span><button class="btn" data-hear>Got it</button></div>`;
+    }
+  }
+  $('#sheet').innerHTML = `<div class="sheet">
+    <div class="vhead"><span class="p">Advisory · Harbour &amp; Lane</span><span class="g">Signing redesign: streamline how clients sign</span><span class="who">Lt. Mensah · building</span></div>
+    <div class="body"><div class="log">${order.map(rowHtml).join('')}</div><div class="desk">${deskHtml}</div></div></div>`;
+  $('#changed').textContent = s.changed;
+
+  const top = d.decisions[0];
+  $('#state').innerHTML = `<table><tr><th>Slice</th><th>Asking</th><th>Record</th></tr>${order.filter((x) => x.status !== 'next').map((x) => {
+    const a = SliceLog.asking(s, x.n);
+    return `<tr><td>${x.n} · ${esc(x.name)}<br><span style="color:#8a8f96">${x.status === 'now' ? 'underway' : 'landed'}</span></td><td>${[a.decide && `${a.decide} decide`, a.look && `${a.look} look`, a.hear && `${a.hear} hear`].filter(Boolean).join(', ') || '—'}</td><td>${SliceLog.recordsOf(s, x.n).length} line${SliceLog.recordsOf(s, x.n).length === 1 ? '' : 's'}</td></tr>`;
+  }).join('')}</table>
+  <div style="margin-top:8px"><b>Desk, top to bottom</b><ol>${[...d.decisions.map((x) => `Decision: ${esc(x.title)} <span style="color:#8a8f96">(slice ${x.slice}${x.idle ? ', lead idle' : ''})</span>`), ...d.exhibits.map((x) => `Exhibit: ${esc(x.title)} <span style="color:#8a8f96">(slice ${x.slice}, ${x.seen ? 'seen' : 'new'})</span>`), ...(d.reports.length ? [`Reports: ${d.reports.length}`] : [])].map((li) => `<li>${li}</li>`).join('') || '<li>nothing</li>'}</ol></div>`;
+  renderWalk();
+}
+
+// the sheet's own controls
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('[data-so],[data-got],[data-open],[data-close],[data-hear],[data-fan],[data-take],[data-row],[data-act]');
+  if (!t) return;
+  if (t.dataset.so) return dispatch({ type: 'make-so', id: t.dataset.so });
+  if (t.dataset.got) return dispatch({ type: 'got-it', id: t.dataset.got });
+  if (t.dataset.open) return dispatch({ type: 'open', id: t.dataset.open });
+  if ('close' in t.dataset) return dispatch({ type: 'close' });
+  if ('hear' in t.dataset) return dispatch({ type: 'hear-all' });
+  if ('fan' in t.dataset) return dispatch({ type: 'fan' });
+  if (t.dataset.take) { e.stopPropagation(); return dispatch({ type: 'take-out', id: t.dataset.take }); }
+  if (t.dataset.row) return dispatch({ type: 'expand', n: Number(t.dataset.row) });
+  const act = t.dataset.act;
+  if (act === 'decision') dispatch({ type: 'arrive-decision', idle: false });
+  if (act === 'decision-idle') dispatch({ type: 'arrive-decision', idle: true });
+  if (act === 'exhibit') dispatch({ type: 'arrive-exhibit' });
+  if (act === 'report') dispatch({ type: 'arrive-report' });
+  if (act === 'land') dispatch({ type: 'land' });
+  if (act === 'reset') { walk = null; dispatch({ type: 'reset' }); }
+});
+
+// ===================== Walkthroughs =====================
+// Each step names what to press; the step's action finds its target in the state at that moment.
+const topDecision = () => SliceLog.desk(state).decisions[0]?.id;
+const exhibitNamed = (t) => SliceLog.desk(state).exhibits.find((x) => x.title === t)?.id;
+const recordNamed = (t) => state.records.find((r) => r.exhibit?.title === t)?.id;
+const WALKS = [
+  { name: 'Answer in order', says: 'The everyday run: a second decision arrives, you answer the top one, hear the reports, look at an exhibit and get it. Watch each answer file into slice 3\'s row, and the next thing rise.', steps: [
+    ['A decision arrives (nobody idle)', () => ({ type: 'arrive-decision', idle: false })],
+    ['Make it so: below', () => ({ type: 'make-so', id: topDecision() })],
+    ['Got it on the reports', () => ({ type: 'hear-all' })],
+    ['Open Layout options', () => ({ type: 'open', id: exhibitNamed('Layout options') })],
+    ['Got it on Layout options', () => ({ type: 'got-it', id: exhibitNamed('Layout options') })],
+  ] },
+  { name: 'Look back', says: 'Open an earlier slice in the log, take its fee table out onto the desk, and put it back. The desk keeps asking what it was asking meanwhile.', steps: [
+    ['Open slice 2 in the log', () => ({ type: 'expand', n: 2 })],
+    ['Take out the fee table', () => ({ type: 'take-out', id: recordNamed('Fee table') })],
+    ['Open it', () => ({ type: 'open', id: exhibitNamed('Fee table') })],
+    ['Got it', () => ({ type: 'got-it', id: exhibitNamed('Fee table') })],
+  ] },
+  { name: 'Lands, still owed', says: 'Slice 3 lands while a decision and two exhibits still ask. They stay on the desk homed to slice 3, and answering them files into the landed slice, not the new one.', steps: [
+    ['Slice 3\'s pull request merges', () => ({ type: 'land' })],
+    ['Make it so: below', () => ({ type: 'make-so', id: topDecision() })],
+    ['A decision arrives in slice 4', () => ({ type: 'arrive-decision', idle: false })],
+    ['Make it so', () => ({ type: 'make-so', id: topDecision() })],
+  ] },
+  { name: 'Who goes on top', says: 'Edge case: the order of the stack. A decision nobody waits on stacks under; one the lead is idle on goes on top, even though it came last. Spread the stack to see them all.', steps: [
+    ['Make it so: below (the idle one)', () => ({ type: 'make-so', id: topDecision() })],
+    ['A decision arrives (nobody idle)', () => ({ type: 'arrive-decision', idle: false })],
+    ['Another (nobody idle)', () => ({ type: 'arrive-decision', idle: false })],
+    ['One the lead is idle on', () => ({ type: 'arrive-decision', idle: true })],
+    ['Spread the stack', () => ({ type: 'fan' })],
+  ] },
+  { name: 'Taken out, then landed', says: 'Edge case: take an exhibit out of slice 2, then let slice 3 land before you get it. Where does it go home to?', steps: [
+    ['Open slice 2 in the log', () => ({ type: 'expand', n: 2 })],
+    ['Take out the fee table', () => ({ type: 'take-out', id: recordNamed('Fee table') })],
+    ['Slice 3\'s pull request merges', () => ({ type: 'land' })],
+    ['Got it on the fee table', () => ({ type: 'got-it', id: exhibitNamed('Fee table') })],
+  ] },
+];
+let walk = null; // { i: walk index, at: next step }
+function renderWalk() {
+  $('#tabs').innerHTML = WALKS.map((w, i) => `<button class="${walk?.i === i ? 'on' : ''}" data-walk="${i}">${w.name}</button>`).join('');
+  if (!walk) { $('#wt').innerHTML = '<p>Pick one: it starts again from the same sheet, then press its steps in order.</p>'; return; }
+  const w = WALKS[walk.i];
+  $('#wt').innerHTML = `<p>${w.says}</p>${w.steps.map(([label], k) => `<div class="step ${k < walk.at ? 'done' : k === walk.at ? 'next' : ''}"><span class="n">${k + 1}</span><button class="pbtn" data-step="${k}" ${k === walk.at ? '' : 'disabled'}>${label}</button></div>`).join('')}${walk.at >= w.steps.length ? '<p style="margin-top:8px;color:#61666e">Done. Pick it again to replay, or carry on by hand.</p>' : ''}`;
+}
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-walk]');
+  if (tab) { walk = { i: Number(tab.dataset.walk), at: 0 }; state = SliceLog.initial(); render(); return; }
+  const step = e.target.closest('[data-step]');
+  if (step && walk && Number(step.dataset.step) === walk.at) {
+    const [, act] = WALKS[walk.i].steps[walk.at];
+    walk.at += 1;
+    dispatch(act());
+  }
+});
+
+render();
+</script>
+</body>
+</html>

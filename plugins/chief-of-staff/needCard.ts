@@ -263,6 +263,9 @@ const beamBox = (ui: CardUi, a: Attention): HTMLElement[] =>
     ? [h('button', { class: 'btn small cos-beam', title: 'Beam to their team room (B)', attrs: { 'data-act': 'beam' }, onclick: () => ui.goToAgent(a.agent.id) }, 'Beam to their room')]
     : [];
 
+/** A hail's answers alone, for a surface that draws its own heading: the bridge's decision cards and its hail. */
+export const answersOf = (ui: CardUi, a: Attention, go: OpenAgent): HTMLElement[] => body(ui, a, go).answers;
+
 /** One hail, large: the goal it's part of, where it's from, what's needed, what to read to decide, and the answers. */
 export function needCard(ui: CardUi, a: Attention, go: OpenAgent): HTMLElement {
   const { icon, what } = lineOf(a, focus.reviews);
