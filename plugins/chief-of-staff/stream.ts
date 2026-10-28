@@ -1,12 +1,13 @@
 import './bridge.css';
-import { busy, callPlugin, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
-import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention } from '../../plugin-api/shared';
+import { allowTool, answerLead, busy, callPlugin, closeGoal, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
+import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, openQuestion } from '../../plugin-api/shared';
+import { aboutIt, type Act, actsOf } from './decisionRules';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import { type LandedItem, landedWhere } from './landed';
-import { answersOf } from './needCard';
-import { CHIEF_OF_STAFF, cosStateOf } from './shared';
+import { mergesOf } from './needCard';
+import { CHIEF_OF_STAFF, cosStateOf, readOf } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import type { ThreadEntry } from './thread';
 import { type Grade, gradeOf, musterOrder, type Reach, reachOf, type StripExhibit, type StripSlice, stripOf, watchOf } from './watchRules';
@@ -119,6 +120,8 @@ export function openStream(ui: CommsUi): void {
   // the muster up in the viewer's place; the panel slid in to talk; a muster row opened; the hail put on screen
   let mustering = false;
   let talking = false;
+  // the decision being discussed in the panel: quoted at its top, and what's said goes to the lead about it
+  let discussing: { id: string; what: string } | null = null;
   let expanded: string | null = null;
   let onScreen: string | null = null;
   // the strip: the slice behind fanned out in place, the exhibit open under it, and the exhibits looked at this watch
@@ -155,23 +158,21 @@ export function openStream(ui: CommsUi): void {
   const said = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:flex tw:flex-col tw:gap-2' });
   const box = h('textarea', { class: 'tw:flex-none tw:h-[34px] tw:min-h-0 tw:border tw:border-solid tw:border-line tw:bg-transparent tw:text-ink tw:text-[11px] tw:p-2 tw:resize-none tw:outline-none tw:rounded-none tw:focus:border-muted tw:font-read' });
   const talkHead = h('div', { class: 'tw:font-display tw:text-[10px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' });
-  const panel = h('div', { class: 'tw:absolute tw:top-[46px] tw:right-3 tw:bottom-3 tw:w-[236px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-[14px] tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:transition-transform tw:duration-[560ms] tw:ease-spring', attrs: { 'data-part': 'talk' } }, talkHead, said, box);
+  const topic = h('div', { class: 'tw:flex-none tw:border-l-2 tw:border-solid tw:border-attn tw:pl-2 tw:text-[11.5px]/[1.4]', attrs: { 'data-part': 'topic' } });
+  const panel = h('div', { class: 'tw:absolute tw:top-[46px] tw:right-3 tw:bottom-3 tw:w-[236px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-[14px] tw:py-3 tw:flex tw:flex-col tw:gap-2 tw:transition-transform tw:duration-[560ms] tw:ease-spring', attrs: { 'data-part': 'talk' } }, talkHead, topic, said, box);
   const hail = h('div', { class: 'tw:absolute tw:top-10 tw:right-3 tw:z-10 tw:w-[304px] tw:max-h-[calc(100%-52px)] tw:overflow-y-auto tw:bg-surface2 tw:border tw:border-solid tw:border-attn tw:shadow-lift-4 tw:pt-[9px] tw:pr-3 tw:pb-[10px] tw:pl-4 tw:origin-top-right cos-drop', attrs: { 'data-part': 'hail' } });
   const body = h('div', {
     class: 'tw:relative tw:h-full tw:min-h-[500px] tw:overflow-hidden tw:bg-well tw:bg-[radial-gradient(ellipse_at_50%_120%,#1a2230_0%,transparent_60%)] tw:text-ink tw:font-read tw:text-[13px]/[1.45]',
     attrs: { 'data-part': 'bridge' },
   }, rail, empty, viewer, muster, panel, hud, hail);
 
-  const openAgent = (id: string) => {
-    ui.openAgent(id);
-    ui.panels.backTo('Comms', () => openStream(ui));
-  };
 
   // taking the conn of a goal, or standing down (null): drawn at once, kept by Focus
   const take = (id: string | null) => {
     conn = id ?? undefined;
     mustering = id === null;
     talking = false;
+    discussing = null;
     expanded = onScreen = opened = null;
     fanned = null;
     ticked.clear();
@@ -195,6 +196,7 @@ export function openStream(ui: CommsUi): void {
   chip.onclick = muster_;
   const talk = (on: boolean) => {
     talking = on && !!conn;
+    if (!talking) discussing = null;
     render();
     if (talking) box.focus();
     else box.blur();
@@ -393,7 +395,58 @@ export function openStream(ui: CommsUi): void {
       h('div', { class: TW.ch }, `Decision · from ${lead.name}`),
       h('div', { class: 'tw:text-[14px] tw:mt-[3px] tw:mb-1' }, item.what),
       item.cos?.says || item.cos?.why ? h('div', { class: 'tw:text-[12px] tw:text-muted' }, item.cos.says ?? item.cos.why) : null,
-      h('div', { class: 'cos-acts tw:mt-[10px]' }, ...answersOf(ui, a, openAgent)));
+      ...actsEl(item, a, 'tw:mt-[10px]'));
+
+  // a decision's actions (actsOf): Make it so on the pick, the other choices named for what they do, then Discuss (the
+  // panel slides in with the decision quoted, and what's said goes to its lead about it) and Got it; their open pull
+  // requests fold under More
+  const actsEl = (item: InboxItem, a: Attention, gap: string): HTMLElement[] => {
+    const lead = 'agent' in a ? a.agent : undefined;
+    const q = lead && a.kind === 'question' ? openQuestion(lead) : undefined;
+    const merges = lead ? mergesOf(ui, lead) : [];
+    const req = lead?.permission;
+    const acts = actsOf({
+      kind: a.kind, lead: lead?.id, replies: readOf(lead)?.judged?.replies, prs: merges.length,
+      ...(q && { question: q }), ...(req && { permission: { id: req.id, tool: req.tool } }),
+    });
+    const press = (act: Act, go: boolean) => {
+      const b = button(act.label, go, () => void busy(b, () => run(act, item, lead), ui.error), act.kind === 'reply' ? `Send “${act.text}”` : undefined);
+      b.dataset.act = act.kind;
+      return b;
+    };
+    const quiet = (label: string, title: string, onclick: () => void) =>
+      h('button', { class: 'tw:bg-transparent tw:border-0 tw:px-1 tw:h-6 tw:text-muted tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:cursor-pointer tw:hover:text-ink', title, onclick }, label);
+    const got = quiet('Got it', 'Read: off your queue until their next turn. Nothing is sent', () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
+    return [
+      acts.pick ? h('div', { class: `tw:text-[11.5px] tw:text-muted ${gap}` }, 'Pick: ', h('b', { class: 'tw:text-ink tw:font-medium' }, acts.pick)) : null,
+      h('div', { class: `tw:flex tw:flex-wrap tw:items-center tw:gap-[6px] ${acts.pick ? 'tw:mt-2' : gap}`, attrs: { 'data-part': 'acts' } },
+        acts.go ? press(acts.go, true) : null,
+        ...acts.others.map((o) => press(o, false)),
+        h('span', { class: 'tw:flex-1' }),
+        lead ? quiet('Discuss', `Talk it over with ${lead.name}: what you say goes to them about this`, () => discuss(item, lead.id)) : null,
+        acts.ack ? got : null),
+      acts.more
+        ? h('details', { class: 'tw:mt-2 tw:text-[11.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
+          h('div', { class: 'cos-acts tw:mt-2' }, ...merges))
+        : null,
+    ].filter((e) => e !== null);
+  };
+  const run = (act: Act, item: InboxItem, lead: Agent | undefined): Promise<unknown> => {
+    switch (act.kind) {
+      case 'reply': return inbox.decide(item.id, { text: act.text }).then(refreshInbox);
+      case 'pick': return answerLead(act.lead, act.question, act.option);
+      case 'allow':
+      case 'decline': return allowTool(act.lead, act.request, act.kind === 'allow');
+      case 'close-goal': return lead ? closeGoal(lead) : Promise.resolve();
+      case 'prs': return Promise.resolve(ui.openBoard(item.projectId, 'prs'));
+    }
+  };
+  // Discuss: at the conn of the decision's goal, the panel in, the decision quoted at its top
+  const discuss = (item: InboxItem, leadId: string) => {
+    if (conn !== leadId) take(leadId);
+    discussing = { id: item.id, what: item.what };
+    talk(true);
+  };
 
   // words the chief of staff has ready for the lead: sent with a press, or heard (Got it), nothing sent
   const wordCard = (item: InboxItem) => {
@@ -456,7 +509,7 @@ export function openStream(ui: CommsUi): void {
     const tag = f.grade === 'hail' ? (f.stoodBy ? ' · hail, stood by' : ' · hail') : '';
     const toggle = a ? [button(isOpen ? 'Close' : 'Open', false, () => { expanded = isOpen ? null : f.item.id; render(); })] : [];
     return row(false, `${f.item.goal}${tag}`, f.item.what, unblocks(f), toggle,
-      isOpen && a ? h('div', { class: 'cos-acts tw:col-start-2 tw:col-span-2' }, ...answersOf(ui, a, openAgent)) : null);
+      isOpen && a ? h('div', { class: 'tw:col-start-2 tw:col-span-2' }, ...actsEl(f.item, a, '')) : null);
   };
 
   // the reports, in a row: heard with one press, nothing sent
@@ -494,7 +547,8 @@ export function openStream(ui: CommsUi): void {
     const standBy = button('Stand by', false, () => void busy(standBy, () => callPlugin(CHIEF_OF_STAFF, '/stand-by', { key: f.item.id }), ui.error), 'Into the muster, for when you stand down');
     fill(hail, bar, hk, ht,
       f.item.cos?.message ? h('div', { class: 'tw:text-[11.5px] tw:text-muted tw:mt-[6px]' }, f.item.cos.message) : null,
-      h('div', { class: 'cos-acts tw:mt-2' }, standBy, ...(a ? answersOf(ui, a, openAgent) : [])));
+      h('div', { class: 'tw:mt-2' }, standBy),
+      ...(a ? actsEl(f.item, a, 'tw:mt-2') : []));
   };
 
   // the panel, slid in from the right to talk to the lead: their words and the captain's, and the box
@@ -505,6 +559,8 @@ export function openStream(ui: CommsUi): void {
     if (!lead) return;
     const close = h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[10px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => talk(false) }, 'Close');
     fill(talkHead, h('span', null, `Comms · ${lead.name}`), close);
+    show(topic, !!discussing);
+    fill(topic, discussing ? h('div', null, h('small', { class: 'tw:block tw:text-[10px] tw:text-muted' }, 'Discussing'), discussing.what) : null);
     box.placeholder = `Talk to ${lead.name}`;
     const key = `${lead.id}|${entries.at(-1)?.at ?? 0}|${entries.length}`;
     if (said.dataset.key === key) return;
@@ -524,7 +580,15 @@ export function openStream(ui: CommsUi): void {
     const words = box.value.trim();
     if (!lead || !words) return;
     box.value = '';
-    void messageAgent(lead.id, lead.name, words).then(() => refreshThread(), (err: Error) => { box.value = words; ui.error(err.message); });
+    const about = discussing;
+    discussing = null;
+    render();
+    void messageAgent(lead.id, lead.name, about ? aboutIt(about.what, words) : words).then(() => refreshThread(), (err: Error) => {
+      box.value = words;
+      discussing = about;
+      render();
+      ui.error(err.message);
+    });
   };
 
   // what streams in (the leads changing, the inbox, the plugin's state, the conversation) is drawn once a frame, however

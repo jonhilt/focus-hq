@@ -46,9 +46,11 @@ vi.mock('../../plugin-api/client', async () => {
   };
 });
 vi.mock('./here', () => ({ waitingNow: () => fake.waiting }));
-vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: fake.open, landed: [], decided: [] }) } }));
+vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: fake.open, landed: [], decided: [] }), decide: vi.fn(() => Promise.resolve({ ok: true })) } }));
 const { openStream } = await import('./stream');
 const { messageAgent } = await import('../../plugin-api/client');
+const { inbox } = await import('./inboxApi');
+const { CHIEF_OF_STAFF } = await import('./shared');
 
 let cleanups: (() => void)[] = [];
 const ui = {
@@ -159,6 +161,38 @@ describe('taking the conn', () => {
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.className).toContain('tw:opacity-0');
   });
 
+  it('answers it with Make it so on the chief of staff’s pick, the other replies named beside it, Discuss and Got it', async () => {
+    const work = leads[1]?.lead;
+    if (!work) throw new Error('no lead');
+    work.marks = { [CHIEF_OF_STAFF]: { at: 1000, judged: { route: 2, ask: 'Filters first?', why: 'A pick.', message: '', replies: [{ label: 'Filters', text: 'Filters first.' }, { label: 'Sorting', text: 'Sorting first.' }] } } };
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    delete work.marks;
+    expect(part('decision')?.textContent).toContain('Pick: Filters');
+    expect([...(part('acts')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Make it so', 'Sorting', 'Discuss', 'Got it']);
+    part('acts')?.querySelector('button')?.click();
+    await settle();
+    expect(inbox.decide).toHaveBeenCalledWith('turn:b:1000', { text: 'Filters first.' });
+  });
+
+  it('discusses it in the panel: the decision quoted at its top, and what’s said sent to the lead about it', async () => {
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    [...(part('acts')?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Discuss')?.click();
+    expect(part('talk')?.className).not.toContain('tw:translate-x-[260px]');
+    expect(part('topic')?.textContent).toBe('DiscussingFilters first?');
+    const box = part('talk')?.querySelector('textarea');
+    if (!box) throw new Error('no box to talk to them');
+    box.value = 'What would sorting cost?';
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    expect(messageAgent).toHaveBeenCalledWith('b', 'Lt. b', 'About “Filters first?”: What would sorting cost?');
+    expect(shown('topic')).toBe(false);
+  });
+
   it('keeps another goal’s card off the sheet: a count on its berth, no hail', async () => {
     fake.conn = 'a';
     fake.open = [card];
@@ -227,17 +261,15 @@ describe('the bridge while updates stream in', () => {
     expect(fake.conn).toBe('a');
   });
 
-  it('keeps what the captain is typing into a card through an update that doesn’t change the card', async () => {
+  it('keeps a card’s buttons through an update that doesn’t change the card, so a press still lands', async () => {
     fake.conn = 'b';
     fake.open = [card];
     fake.waiting = [{ kind: 'turn', agent: leads[1] }];
     await open();
-    const box = part('decision')?.querySelector('textarea');
-    if (!box) throw new Error('no box on the decision card');
-    box.value = 'Filters, but only';
+    const got = part('acts')?.querySelector('button');
+    if (!got) throw new Error('no buttons on the decision card');
     fake.state?.();
     await settle();
-    expect(part('decision')?.querySelector('textarea')).toBe(box);
-    expect(box.value).toBe('Filters, but only');
+    expect(part('acts')?.querySelector('button')).toBe(got);
   });
 });
