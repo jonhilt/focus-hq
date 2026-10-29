@@ -177,6 +177,29 @@ describe('HostRunner', () => {
     await runner.shutDown();
   });
 
+  it('stops one background command by its task id, and the turn carries on to its end', async () => {
+    const fake = makeFakeAdapter({
+      script: (s) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          yield* s.emit({ _tag: 'BackgroundChanged', tasks: [{ id: 't1', description: 'sleep 120' }], waiting: true, source: { _tag: 'Main' } });
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const session = runner.start(request('wait on it'), hooks().h);
+    const s = await Effect.runPromise(fake.session(1));
+    await until(() => s.inTurn, 'the turn');
+    expect(await session.stopTask?.('nope')).toBe(false);
+    // once the turn's conversation is known to it
+    let stopped = false;
+    for (let i = 0; i < 100 && !stopped; i++) stopped = (await session.stopTask?.('t1')) === true || (await new Promise((r) => setTimeout(r, 10)), false);
+    expect(stopped).toBe(true);
+    expect(s.stopped).toEqual(['t1']);
+    expect(await session.done).toMatchObject({ ok: true });
+    expect(await session.stopTask?.('t1')).toBe(false);
+    await runner.shutDown();
+  });
+
   it('a stop ends the turn as stopped', async () => {
     const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
     const runner = new HostRunner(new BrowserPool(), fake, journal());

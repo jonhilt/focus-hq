@@ -184,6 +184,7 @@ class HostTurn {
         if (id) void this.runner.run(Host.use((h) => h.setAutonomy(id, HOST_AUTONOMY[mode]))).catch(() => undefined);
         return true;
       },
+      stopTask: (taskId) => this.stopTask(taskId),
       stop: () => this.stop(),
       done,
     };
@@ -274,6 +275,16 @@ class HostTurn {
     const effort = this.effort;
     void this.runner.run(Host.use((h) => h.send(id, text, effort ? { effort } : {}))).catch(() => undefined);
     return true;
+  }
+
+  /** Stops one of its background commands or monitors; the turn goes on. False when the host has nothing of it running. */
+  private stopTask(taskId: string): Promise<boolean> {
+    const id = this.conversation;
+    if (!id || this.over) return Promise.resolve(false);
+    return this.runner.run(Host.use((h) => h.stopBackground(id, taskId))).then(
+      () => true,
+      () => false,
+    );
   }
 
   private stop(): void {
