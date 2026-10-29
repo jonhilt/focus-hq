@@ -1,7 +1,7 @@
 import type { Layer } from 'effect';
 import { type CaptainAnswer, landed } from '../../shared/captainAnswer';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, CodingAgent, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
@@ -81,7 +81,7 @@ export class AgentManager {
     this.core.ledger.transcripts = transcripts;
   }
 
-  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean } = {}): Agent {
+  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean; agent?: CodingAgent } = {}): Agent {
     return this.core.seating.hire(projectId, repo, issue, how);
   }
 

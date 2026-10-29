@@ -26,6 +26,8 @@ export interface Settings {
   conflictsEffort?: Effort;
   /** Claude model for each room's QA officer and every goal's reviewer. Empty = the `model` setting. */
   qaModel: string;
+  /** Model for developers hired to run on Codex. Empty = Codex's default for your account. */
+  codexModel?: string;
   /** How the board's Merge button, and auto-merge, merge a pull request, unless its project picks another for its repo. */
   mergeMethod: MergeMethod;
   /** Pull requests and QA reports on GitHub name the agent who did the work and mention Focus. */

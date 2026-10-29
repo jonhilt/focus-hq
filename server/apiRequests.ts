@@ -1,6 +1,6 @@
 // What the REST API (routes.ts) makes of a request: the fields it reads from a body or query, and which files it
 // serves and how. Pure, so each is tested next to it; the routes only do the I/O.
-import { type Board, EFFORT_LEVELS, type Effort, type PreviewSet, type Project, type ResumeHow } from '../shared/types';
+import { type Board, type CodingAgent, EFFORT_LEVELS, type Effort, type PreviewSet, type Project, type ResumeHow } from '../shared/types';
 
 export const str = (v: unknown, fallback = '') => (typeof v === 'string' ? v : fallback);
 
@@ -27,6 +27,9 @@ export const effort = (v: unknown): Effort | undefined => {
   if (!level) throw new Error(`Effort must be one of ${EFFORT_LEVELS.join(', ')}`);
   return level;
 };
+
+/** Which coding agent a developer is hired to run on: Codex when asked for, else Claude Code. */
+export const codingAgent = (v: unknown): CodingAgent | undefined => (v === 'codex' ? 'codex' : undefined);
 
 /** What a demo push (`POST /demo-push/…?kind=`) does to the PR: `change` its own code, or (by default) merge its base in. */
 export const pushKind = (v: unknown): 'merge-base' | 'change' => (v === 'change' ? 'change' : 'merge-base');

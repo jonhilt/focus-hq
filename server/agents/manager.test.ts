@@ -439,6 +439,16 @@ describe('AgentManager', () => {
     expect(store.recentLines(id).at(-1)?.text).toMatch(/autonomy to Raise your hand \(from their next turn\)$/);
   });
 
+  it('hires a developer to run on Codex: their sessions say so, and they work on this machine', async () => {
+    const { agents, claude, store, project } = focus();
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { agent: 'codex', cloud: true });
+    await until(() => claude.turns.length === 1);
+    expect(claude.turns[0].req).toMatchObject({ agent: 'codex', cloud: undefined });
+    expect(store.agent(id)).toMatchObject({ agent: 'codex' });
+    expect(store.agent(id).cloud).toBeUndefined();
+    expect(store.recentLines(id).some((l) => l.text.includes('(Codex, default effort)'))).toBe(true);
+  });
+
   it('remembers which of a lead’s turns the captain read, until the next one ends', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

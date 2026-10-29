@@ -5,7 +5,7 @@ import { ledgerWindow } from '../shared/ledgerReview';
 import { isKokoroVoice } from '../shared/voice';
 import { logFrom, personalMark } from '../shared/personalLog';
 import { replay } from './agents/runJournal';
-import { artifactServing, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, codingAgent, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
 import { botChange, botGuard } from './bot';
 import { paths } from './config';
 import { appendFrameStats } from './frameStats';
@@ -99,7 +99,7 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
       str(req.body.title),
       str(req.body.body),
       Array.isArray(req.body.labels) ? req.body.labels.filter((l: unknown) => typeof l === 'string' && l.trim()) : [],
-      req.body.assign === true ? { effort: effort(req.body.effort), cloud: req.body.cloud === true } : undefined,
+      req.body.assign === true ? { effort: effort(req.body.effort), cloud: req.body.cloud === true, agent: codingAgent(req.body.agent) } : undefined,
       req.body.fromDraft === true,
     ),
   ));
@@ -144,7 +144,7 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
       number: Number(req.body.number),
       title: str(req.body.title) || undefined,
       url: str(req.body.url) || undefined,
-    }, { effort: effort(req.body.effort), cloud: req.body.cloud === true }),
+    }, { effort: effort(req.body.effort), cloud: req.body.cloud === true, agent: codingAgent(req.body.agent) }),
   ));
   // a goal: its own lead (the user's own Claude Code session for it, across the project's repos). A project has any
   // number, so it always starts; a `station` sent by an older client is ignored

@@ -9,7 +9,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import { roomTheme, THEME_INFO } from '../world/themes';
-import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
+import { agentPicker, effortPicker, pickedAgent, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
@@ -339,10 +339,12 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
   const labels = h('input', { type: 'text', placeholder: 'bug, enhancement (must already exist on GitHub)' });
   const effort = effortPicker();
   const where = wherePicker();
+  const runsOn = agentPicker(where);
   const assign = new Switch('Assign an agent right away', true, {
     changed: (on) => {
       effort.disabled = !on;
-      where.disabled = !on;
+      runsOn.disabled = !on;
+      where.disabled = !on || pickedAgent(runsOn) === 'codex';
     },
   });
   const submit = h('button', { class: 'btn primary' }, 'Pin it to the board');
@@ -357,6 +359,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       assign: assign.on,
       effort: pickedEffort(effort),
       cloud: pickedCloud(where),
+      agent: pickedAgent(runsOn),
       fromDraft: planner.usedDraft(),
     });
     title.value = '';
@@ -377,6 +380,7 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
     h('div', { class: 'field' }, h('label', null, 'Labels'), labels),
     h('div', { class: 'row', style: 'margin-bottom:14px' },
       assign.el,
+      runsOn,
       effort,
       where,
     ),
@@ -413,6 +417,8 @@ function settingsTab(ui: Ui): HTMLElement {
   // an empty choice clears it on the server (undefined wouldn't survive JSON)
   conflictsEffort.addEventListener('change', () => save({ conflictsEffort: (pickedEffort(conflictsEffort) ?? '') as Effort }));
   const qaModel = h('input', { type: 'text', value: s.qaModel, placeholder: 'Use the model above' });
+  const codexModel = h('input', { type: 'text', value: s.codexModel ?? '', placeholder: "Codex's default" });
+  codexModel.addEventListener('change', () => save({ codexModel: codexModel.value }));
   qaModel.addEventListener('change', () => save({ qaModel: qaModel.value }));
   const merge = h('select', null, ...MERGE_METHODS.map((m) => h('option', { value: m, selected: s.mergeMethod === m }, m)));
   merge.addEventListener('change', () => save({ mergeMethod: merge.value as MergeMethod }));
@@ -435,6 +441,7 @@ function settingsTab(ui: Ui): HTMLElement {
     h('div', { class: 'field' }, h('label', null, 'Model'), model, h('small', null, 'e.g. claude-opus-5-5 or claude-sonnet-5-5. Leave empty for your Claude Code default.')),
     h('div', { class: 'field' }, h('label', null, 'Model and effort for resolving merge conflicts'), h('div', { class: 'row' }, conflictsModel, conflictsEffort), h('small', null, 'For a new agent seated on a pull request to resolve its conflicts, which is usually mechanical work: e.g. claude-sonnet-5-5. Leave empty for the model above. The developer who opened the PR, if still aboard, resolves them in their own session instead.')),
     h('div', { class: 'field' }, h('label', null, 'Model for QA'), qaModel, h('small', null, 'For every room’s QA officer and every goal’s reviewer, from their next review: e.g. claude-sonnet-5-5. Leave empty for the model above. How hard they think is set at each room’s QA station.')),
+    h('div', { class: 'field' }, h('label', null, 'Model for Codex developers'), codexModel, h('small', null, 'For developers hired to run on Codex, from their next session: e.g. gpt-5.5-codex. Leave empty for Codex’s default for your ChatGPT plan. Sign in once with CODEX_HOME=~/.agent-host/codex codex login.')),
     h('div', { class: 'field' }, h('label', null, 'Effort a new goal’s lead starts at'), leadEffort, h('small', null, 'You can pick another when you start a goal. High suits most slices; xhigh and max take longer and cost more.')),
     h('div', { class: 'field' }, h('label', null, 'Compact a lead’s conversation from (thousand tokens)'), leadCompactAt, h('small', null, 'Before a lead’s next turn, Ops compacts their conversation once it holds this much, keeping the goal, the decisions and what the captain prefers. Every step re-reads the whole conversation, so a big one is the costliest part of a goal. 0 = only when you ask.')),
     h('div', { class: 'field' }, h('label', null, 'Merge method for the board’s Merge button'), merge),

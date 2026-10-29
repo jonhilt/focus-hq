@@ -29,6 +29,7 @@ export function changeSettings(settings: Settings, patch: unknown): Settings {
   if (typeof p.conflictsModel === 'string') s.conflictsModel = p.conflictsModel.trim();
   if (p.conflictsEffort !== undefined) s.conflictsEffort = EFFORT_LEVELS.find((e) => e === p.conflictsEffort);
   if (typeof p.qaModel === 'string') s.qaModel = p.qaModel.trim();
+  if (typeof p.codexModel === 'string') s.codexModel = p.codexModel.trim();
   s.mergeMethod = MERGE_METHODS.find((m) => m === p.mergeMethod) ?? s.mergeMethod;
   if (typeof p.attribution === 'boolean') s.attribution = p.attribution;
   if (typeof p.userClaudeMd === 'boolean') s.userClaudeMd = p.userClaudeMd;

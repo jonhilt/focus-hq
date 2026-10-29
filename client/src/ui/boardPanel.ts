@@ -9,11 +9,11 @@ import { reachableUrl } from '../../../shared/previewReach';
 import { previewIncludes, previewSet } from '../../../shared/previewSet';
 import { prKey, qaBadge, sameCommit } from '../../../shared/qa';
 import { triageLabel } from '../../../shared/triageRules';
-import type { Effort } from '../../../shared/types';
+import type { CodingAgent, Effort } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS_STATUS } from '../world/starship';
-import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
+import { agentPicker, effortPicker, pickedAgent, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
 import type { BoardTab, Ui } from './context';
 import { confirmDialog } from './confirmDialog';
 import { busy, fill, h, timeAgo } from './dom';
@@ -47,6 +47,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
   // the board re-renders as agents report progress, so remember each issue's pick across renders
   const efforts = new Map<string, Effort | undefined>();
   const clouds = new Map<string, boolean>();
+  const codingAgents = new Map<string, CodingAgent | undefined>();
 
   const render = () => {
     const p = state.project(projectId);
@@ -66,13 +67,15 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
       effort.onchange = () => efforts.set(key, pickedEffort(effort));
       const where = wherePicker(clouds.get(key));
       where.onchange = () => clouds.set(key, pickedCloud(where));
+      const runsOn = agentPicker(where, codingAgents.get(key));
+      runsOn.onchange = () => codingAgents.set(key, pickedAgent(runsOn));
       const assign = h('button', { class: 'btn small primary', title: full ? 'Agents beyond the limit wait in a queue' : '' }, full ? 'Queue agent' : 'Assign agent');
       const waits = waitsLabel(issue.waitsFor);
       assign.onclick = async () => {
         const warning = assignWarning(issue);
         if (warning && !await confirmDialog({ title: 'Assign agent', message: warning, confirmLabel: 'Assign anyway' })) return;
         void busy(assign, async () => {
-          const agent = await api.hire(projectId, issue, pickedEffort(effort), pickedCloud(where));
+          const agent = await api.hire(projectId, issue, pickedEffort(effort), pickedCloud(where), pickedAgent(runsOn));
           ui.hud.toast('success', `${agent.name} is on #${issue.number}`, { label: 'Watch', run: () => ui.goToAgent(agent.id) });
         }, ui.error);
       };
@@ -88,7 +91,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
             ...issue.labels.slice(0, 4).map((l) => h('span', { class: 'chip' }, l)),
             h('span', null, timeAgo(Date.parse(issue.createdAt))),
           ),
-          h('div', { class: 'actions' }, assign, effort, where, h('a', { class: 'btn small', href: issue.url, target: '_blank', rel: 'noreferrer' }, 'Open ↗')),
+          h('div', { class: 'actions' }, assign, runsOn, effort, where, h('a', { class: 'btn small', href: issue.url, target: '_blank', rel: 'noreferrer' }, 'Open ↗')),
         ),
       );
     }
@@ -112,7 +115,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     for (const a of cols.doing) {
       const note = h('div', { class: `note doing ${a.status}`, title: 'Open their laptop' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[a.avatar.division]};margin-right:6px;vertical-align:-2px` }), `${a.name} · #${a.issue.number} ${a.issue.title}`),
-        h('div', { class: 'm' }, h('span', { class: 'chip', style: `--tone:${LCARS_STATUS[a.status]}` }, a.status), h('span', { class: 'chip' }, `${a.effort ?? 'default'} effort`), a.cloud ? h('span', { class: 'chip' }, 'cloud') : null, multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
+        h('div', { class: 'm' }, h('span', { class: 'chip', style: `--tone:${LCARS_STATUS[a.status]}` }, a.status), h('span', { class: 'chip' }, `${a.effort ?? 'default'} effort`), a.agent === 'codex' ? h('span', { class: 'chip' }, 'Codex') : null, a.cloud ? h('span', { class: 'chip' }, 'cloud') : null, multi ? h('span', { class: 'chip' }, a.repo.split('/')[1]) : null, h('span', null, statusLine(a))),
       );
       note.onclick = () => ui.openAgent(a.id);
       doing.append(note);

@@ -1,4 +1,4 @@
-import type { Board, BotChange, BotStatus, ConflictsOutcome, PluginSecretStatus, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
+import type { Board, BotChange, BotStatus, CodingAgent, ConflictsOutcome, PluginSecretStatus, Effort, Issue, Preview, PreviewSet, Project, PullRequest, RoomTheme, ServerInfo, Settings, ShipPlugins, Snapshot } from '../shared/types';
 import { DESKS_PER_ROOM } from '../shared/types';
 import { freshBoard, type RepoListing } from '../shared/board';
 import { prsOffBoard, staleClosedPrs } from '../shared/boardRules';
@@ -227,7 +227,7 @@ export class Focus {
   // ---------------------------------------------------------------- issues and pull requests
 
   /** `assign` hires an agent for the new issue straight away; `fromDraft` clears the planner's draft once it's filed. */
-  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort; cloud?: boolean }, fromDraft = false) {
+  async createIssue(projectId: string, repo: string, title: string, body: string, labels: string[], assign?: { effort?: Effort; cloud?: boolean; agent?: CodingAgent }, fromDraft = false) {
     const refused = issueRefusal(this.store.project(projectId), repo, title);
     if (refused) throw new Error(refused);
     const issue = await this.fileIssue(projectId, repo, title.trim(), body, labels);

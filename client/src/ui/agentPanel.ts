@@ -3,7 +3,7 @@ import { AUTONOMY_LABEL, AUTONOMY_MODES, effectiveAutonomy } from '../../../shar
 import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
-import type { Agent, Autonomy, BackgroundTask, BrowserFrame, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
+import type { Agent, Autonomy, BackgroundTask, BrowserFrame, CodingAgent, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
 import { EFFORT_LEVELS } from '../../../shared/types';
 import { api } from '../net/api';
 import { markRead } from '../net/attention';
@@ -424,7 +424,7 @@ const autonomyOf = (a: Agent): Autonomy => effectiveAutonomy(a, { autonomy: stat
 
 /** Picks the effort an agent is hired at. The empty value leaves it to the model's default. */
 export function effortPicker(value?: Effort): HTMLSelectElement {
-  return h('select', { class: 'effort', title: 'How hard Claude thinks on this task' },
+  return h('select', { class: 'effort', title: 'How hard the agent thinks on this task' },
     h('option', { value: '', selected: !value }, 'default effort'),
     ...EFFORT_LEVELS.map((e) => h('option', { value: e, selected: e === value }, `${e} effort`)),
   );
@@ -444,6 +444,27 @@ export function wherePicker(cloud = false): HTMLSelectElement {
 }
 
 export const pickedCloud = (picker: HTMLSelectElement): boolean => picker.value === 'cloud';
+
+/**
+ * Picks the coding agent a developer runs on: Claude Code, or Codex (on your ChatGPT plan, signed in once with
+ * `CODEX_HOME=~/.agent-host/codex codex login`). Codex works on this machine only, so picking it sets `where` to local.
+ */
+export function agentPicker(where: HTMLSelectElement, value?: CodingAgent): HTMLSelectElement {
+  const picker = h('select', { class: 'effort', title: 'The coding agent the developer runs on: Claude Code, or Codex on your ChatGPT plan (it works on this machine only)' },
+    h('option', { value: '', selected: value !== 'codex' }, 'Claude Code'),
+    h('option', { value: 'codex', selected: value === 'codex' }, 'Codex'),
+  );
+  const follow = () => {
+    const codex = picker.value === 'codex';
+    if (codex) where.value = '';
+    where.disabled = codex;
+  };
+  picker.addEventListener('change', follow);
+  follow();
+  return picker;
+}
+
+export const pickedAgent = (picker: HTMLSelectElement): CodingAgent | undefined => (picker.value === 'codex' ? 'codex' : undefined);
 
 /** Opens a cloud agent's session on claude.ai, once Claude Code has reported it. */
 export function cloudLink(a: Agent): HTMLElement | null {

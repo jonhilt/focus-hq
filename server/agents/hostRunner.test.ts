@@ -204,6 +204,36 @@ describe('HostRunner', () => {
   });
 });
 
+describe('HostRunner, a Codex developer', () => {
+  it("runs on Codex with the Codex model, and draws its turn from the host's common events", async () => {
+    const claude = makeFakeAdapter({ script: (s, text) => says(s, text) });
+    const codex = makeFakeAdapter({
+      script: (s, text) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          yield* s.emit({ _tag: 'ToolStepStarted', toolUseId: 't1', name: 'shell', input: { command: 'pnpm test' }, source: { _tag: 'Main' } });
+          yield* s.emit({ _tag: 'ToolStepEnded', toolUseId: 't1', ok: true, output: { head: 'all passed', tail: '', totalBytes: 10 }, source: { _tag: 'Main' } });
+          yield* s.emit({ _tag: 'AssistantMessage', text: `done: ${text}`, source: { _tag: 'Main' } });
+          yield* s.endTurn();
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), claude, journal(), codex);
+    const { h, lines } = hooks();
+    let session: string | undefined;
+    h.session = (id) => void (session = id);
+    const req = { ...request('fix the bug'), agent: 'codex' as const, model: 'opus', settings: { ...settings, codexModel: 'gpt-5.5-codex' } };
+    const outcome = await runner.start(req, h).done;
+    expect(outcome).toMatchObject({ ok: true, summary: 'done: fix the bug', started: true });
+    expect(claude.sessions).toHaveLength(0);
+    const s = await Effect.runPromise(codex.session(1));
+    // the Codex model, not the Claude one; none of Claude Code's own tools to switch off
+    expect(s.options).toMatchObject({ model: 'gpt-5.5-codex', disallowedTools: [] });
+    expect(session).toBe(s.agentSessionId);
+    expect(lines.map((l) => l.text)).toEqual(expect.arrayContaining(['⏺ Bash(pnpm test)', '  ⎿  all passed', '✔ Done']));
+    await runner.shutDown();
+  });
+});
+
 describe('HostRunner, a QA officer', () => {
   it('asks the host for the report, and ends the turn once it is in, though a background command still runs (the preview server)', async () => {
     const schema = { type: 'object', properties: { verdict: { type: 'string' } } };

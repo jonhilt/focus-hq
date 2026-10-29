@@ -43,6 +43,9 @@ export const ACTIVE_STATUSES: AgentStatus[] = ['setting-up', 'working', 'testing
 
 export type TermKind = 'system' | 'text' | 'thinking' | 'tool' | 'output' | 'error' | 'success' | 'manager';
 
+/** The coding agents a developer can run on: Claude Code, or Codex (both through agent-host). */
+export type CodingAgent = 'claude' | 'codex';
+
 export interface TermLine {
   t: number;
   kind: TermKind;
@@ -314,6 +317,8 @@ export interface Agent {
   autonomy?: Autonomy;
   /** Claude model chosen for this agent when it was seated (a conflicts agent's). Missing = Focus's `model` setting. */
   model?: string;
+  /** The coding agent its sessions run on, chosen when it's hired (a developer's). Missing = Claude Code. */
+  agent?: CodingAgent;
   /**
    * Works in a Claude Code cloud session instead of on this machine: it pushes its own branch, and `sessionId` is the
    * cloud session's id (session_…). Never set on the QA officer.

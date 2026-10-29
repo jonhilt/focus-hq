@@ -18,6 +18,7 @@ Developers' sessions (an issue, a fix, merge conflicts, a brief's work) and QA's
 - **Its own Claude Code login.** Sessions run under `~/.agent-host/claude`, signed in once there (`CLAUDE_CONFIG_DIR=~/.agent-host/claude claude`, then `/login`), and keep their transcripts there; Focus reads them from both folders. Your own `~/.claude` settings load only with **Your CLAUDE.md** on. A session that began before the move has its transcript copied across once, so it carries on.
 - **Your plan's usage limit pauses a developer** until it resets, across a restart too, and never moves them onto your API key.
 - **A restart.** The host carries a cut-off turn on by itself, telling the agent so; Focus's own pick-up then watches that turn rather than telling them twice.
+- **Claude Code or Codex, per developer.** You choose when hiring (Claude Code unless you pick Codex); the choice stays with the developer. Codex runs on your ChatGPT plan, signed in once under `~/.agent-host/codex` (`CODEX_HOME=~/.agent-host/codex codex login`), on the **Model for Codex developers** setting (empty: Codex's default). It works on this machine only, in Codex's sandbox with the network open, and its lines are drawn from the host's common events in the same shapes as Claude Code's (`server/agents/commonEvents.ts`). Not yet for Codex: commit and scratch-probe detection, the task list, and a digest of the session for the ledger.
 
 ## The run journal: where a run was, and picking up after a restart
 

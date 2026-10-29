@@ -39,6 +39,7 @@ const DEFAULT_SETTINGS: Settings = {
   model: '',
   conflictsModel: '',
   qaModel: '',
+  codexModel: '',
   mergeMethod: 'squash',
   attribution: true,
   userClaudeMd: true,

@@ -2,7 +2,7 @@ import { Effect, FiberMap } from 'effect';
 import { hiredName, randomAvatar } from '../../../shared/crew';
 import { type Closer } from '../../../shared/ledger';
 import { prKey } from '../../../shared/qa';
-import type { Agent, Effort, Planner } from '../../../shared/types';
+import type { Agent, CodingAgent, Effort, Planner } from '../../../shared/types';
 import { ACTIVE_STATUSES, AWAY_DESK } from '../../../shared/types';
 import { newId, slugify } from '../../util';
 import { leadWorktreeId, snapshotMessage } from '../lead';
@@ -17,7 +17,7 @@ export class Seating extends Part {
   private leaving = new Set<string>();
 
   /** `cloud` puts them in a Claude Code cloud session instead of on this machine. */
-  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean } = {}): Agent {
+  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean; agent?: CodingAgent } = {}): Agent {
     const id = newId('agent');
     const title = issue.title ?? `Issue #${issue.number}`;
     const closed = this.store.closedPrs.get(prKey(repo, issue.number));
@@ -34,7 +34,9 @@ export class Seating extends Part {
       branch: `focus/${issue.number}-${slugify(title, 30) || 'issue'}-${id.slice(-4)}`,
       baseBranch: 'main',
       effort: how.effort,
-      cloud: how.cloud || undefined,
+      // a Codex developer works on this machine: the cloud is Claude Code's
+      cloud: (how.agent !== 'codex' && how.cloud) || undefined,
+      ...(how.agent === 'codex' && { agent: 'codex' as const }),
     });
   }
 
@@ -56,7 +58,7 @@ export class Seating extends Part {
   }
 
   /** `crew` is who sits down when it's always the same person (a plugin's, on its brief); otherwise someone new is hired. */
-  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'brief' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud'>, crew?: Planner): Agent {
+  seat(projectId: string, repo: string, work: Pick<Agent, 'id' | 'task' | 'brief' | 'issue' | 'branch' | 'baseBranch' | 'pr' | 'effort' | 'model' | 'cloud' | 'agent'>, crew?: Planner): Agent {
     const project = this.store.project(projectId);
     if (!project.repos.includes(repo)) throw new Refused({ message: `${repo} is not connected to ${project.name}` });
     // QA reviewing the PR, or a goal's lead, isn't working on it the way a developer would; a brief has no issue to share
@@ -85,7 +87,7 @@ export class Seating extends Part {
     this.store.putAgent(agent);
     this.store.journal(agent.id, { kind: 'waiting' });
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `${work.brief ? `──────── ✻ ${name} starts on ${repo}: ${work.brief.icon} ${work.brief.label}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
+    this.print(agent, [{ kind: 'system', text: `${work.brief ? `──────── ✻ ${name} starts on ${repo}: ${work.brief.icon} ${work.brief.label}` : `✻ ${name} joined ${project.name} to work on ${repo}#${work.issue.number}`} (${work.agent === 'codex' ? 'Codex, ' : ''}${work.model ? `${work.model}, ` : ''}${work.effort ?? 'default'} effort${work.cloud ? ', in the cloud' : ''})` }]);
     this.schedule();
     return agent;
   }

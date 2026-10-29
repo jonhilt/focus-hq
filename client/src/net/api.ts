@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, BotChange, BotStatus, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, BotChange, BotStatus, CodingAgent, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -49,7 +49,7 @@ export const api = {
   /** Restarts Focus, under its supervisor: the page reconnects once it's back. */
   restart: () => call<{ restarting: true }>('POST', '/restart'),
 
-  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; cloud?: boolean; fromDraft?: boolean }) =>
+  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; cloud?: boolean; agent?: CodingAgent; fromDraft?: boolean }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
@@ -96,8 +96,8 @@ export const api = {
   previewLogFile: (projectId: string, name: string) =>
     call<{ name: string; text: string; truncated: boolean }>('GET', `/previews/${projectId}/logs/${encodeURIComponent(name)}`),
 
-  hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean) =>
-    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud }),
+  hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean, agent?: CodingAgent) =>
+    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud, agent }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
   /** An agent's run journal replayed: each fact in words, and where the run was after it. */
   run: (id: string) => call<ReplayStep[]>('GET', `/agents/${id}/run`),

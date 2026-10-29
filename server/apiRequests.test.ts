@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Board, PullRequest } from '../shared/types';
-import { artifactServing, effort, picks, pluginSecretChange, pushedPr, pushKind, qaShotServing, resumeHow, str } from './apiRequests';
+import { artifactServing, codingAgent, effort, picks, pluginSecretChange, pushedPr, pushKind, qaShotServing, resumeHow, str } from './apiRequests';
 
 const PAGE_SANDBOX = 'sandbox allow-scripts allow-popups';
 const SVG_SANDBOX = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
@@ -43,6 +43,15 @@ describe('effort', () => {
   it('takes a level, and refuses anything else', () => {
     expect(effort('high')).toBe('high');
     expect(() => effort('extreme')).toThrow(/Effort must be one of/);
+  });
+});
+
+describe('codingAgent', () => {
+  it('hires onto Codex only when asked for it, else Claude Code', () => {
+    expect(codingAgent('codex')).toBe('codex');
+    expect(codingAgent('claude')).toBeUndefined();
+    expect(codingAgent(undefined)).toBeUndefined();
+    expect(codingAgent(42)).toBeUndefined();
   });
 });
 

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type Adapter, type ConversationEvent, Host, type Lent, makeClaudeAdapter, type Tool, type WatchItem, Journal } from 'agent-host';
+import { type Adapter, type ConversationEvent, Host, type Lent, makeClaudeAdapter, makeCodexAdapter, type Tool, type WatchItem, Journal } from 'agent-host';
 import { Effect, Fiber, Layer, ManagedRuntime, Stream } from 'effect';
 import type { Effort } from '../../shared/types';
 import { paths } from '../config';
@@ -9,6 +9,7 @@ import { errorMessage } from '../util';
 import { BackgroundTracker } from './backgroundTasks';
 import { browserTools, type BrowserPool } from './browserTool';
 import { agentEnv, DECLINED } from './claudeRunner';
+import { type CommonContext, handleCommonEvent, newCommonContext } from './commonEvents';
 import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction, runsOnHost } from './hostRunnerRules';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { openScratch, type Scratch } from './scratch';
@@ -19,12 +20,15 @@ import { WorkflowPermits, workflowAsk } from './workflows';
 
 // Developer sessions on agent-host (jonhilt/agent-host): the host keeps each agent's conversation with Claude Code (a
 // journal of its own, resuming a turn a restart cut off, holding at your plan's usage limit), and this runner maps
-// Focus's turns onto it. Each Focus turn watches the conversation until the turn ends; Claude Code's own messages ride
-// along on the host's events, so they're rendered exactly as the old runner renders them (`handleMessage`).
+// Focus's turns onto it, on Claude Code or Codex as the developer was hired to run. Each Focus turn watches the conversation until the turn ends; Claude Code's own messages ride
+// along on the host's events, so they're rendered exactly as the old runner renders them (`handleMessage`); a Codex
+// developer's are rendered from the common events (`handleCommonEvent`).
 
 /** agent-host's own folder: its journal, and the Claude Code config folder its sessions run under (you sign in there once). */
 export const HOST_DIR = path.join(os.homedir(), '.agent-host');
 export const HOST_CLAUDE_DIR = path.join(HOST_DIR, 'claude');
+/** The Codex home its Codex sessions run under (you sign in there once, with `codex login`). */
+export const HOST_CODEX_DIR = path.join(HOST_DIR, 'codex');
 
 /** The label a conversation is found by: the Focus agent whose it is. */
 const AGENT_LABEL = 'focusAgent';
@@ -46,8 +50,9 @@ export class HostRunner implements AgentRunner {
     private readonly browsers: BrowserPool,
     claude: Adapter = makeClaudeAdapter({ configDir: HOST_CLAUDE_DIR, env: agentEnv(false), extend: (id) => this.extend(id) }),
     journalPath = path.join(HOST_DIR, 'journal.sqlite'),
+    codex: Adapter = makeCodexAdapter({ codexHome: HOST_CODEX_DIR, env: agentEnv(false) }),
   ) {
-    const host = Host.layer({ adapters: { claude }, lend: (c) => this.lend(c.id, c.labels[AGENT_LABEL]) });
+    const host = Host.layer({ adapters: { claude, codex }, lend: (c) => this.lend(c.id, c.labels[AGENT_LABEL]) });
     this.runtime = ManagedRuntime.make(host.pipe(Layer.provideMerge(Journal.layer(journalPath))));
   }
 
@@ -153,6 +158,7 @@ class HostTurn {
   private readonly seen = new WeakSet<object>();
   private readonly asks = new Map<string, AbortController>();
   private readonly ctx: RunContext;
+  private readonly common: CommonContext;
   private watching?: Fiber.Fiber<void, unknown>;
 
   constructor(
@@ -161,6 +167,7 @@ class HostTurn {
     private readonly hooks: RunHooks,
   ) {
     this.ctx = { cwd: req.cwd, cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), permits: new WorkflowPermits(), parents: new Map(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set() };
+    this.common = newCommonContext(req.cwd);
     this.ctx.tracker = new BackgroundTracker((id) => (id ? this.ctx.calls.get(id)?.name : undefined));
   }
 
@@ -214,11 +221,12 @@ class HostTurn {
       let after = 0;
       if (plan.kind === 'start') {
         for (const old of plan.stop) yield* host.stop(old).pipe(Effect.ignore);
-        if (plan.resumes) copyTranscript(plan.resumes);
+        const codex = this.req.agent === 'codex';
+        if (plan.resumes && !codex) copyTranscript(plan.resumes);
         id = yield* host.start(
           {
-            agent: 'claude',
-            model: this.req.model || this.req.settings.model || 'opus',
+            agent: codex ? 'codex' : 'claude',
+            model: codex ? (this.req.settings.codexModel ?? '') : this.req.model || this.req.settings.model || 'opus',
             ...(this.req.effort && { effort: this.req.effort }),
             folder: this.req.cwd,
             labels: { [AGENT_LABEL]: agentId },
@@ -227,7 +235,8 @@ class HostTurn {
             allowApiKeyFallback: false,
             firstMessage: this.req.prompt,
             systemAppend: this.req.systemAppend,
-            disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
+            // Claude Code's own: Codex's can't be switched off one by one
+            disallowedTools: codex ? [] : ['AskUserQuestion', 'EnterPlanMode'],
             ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }),
             ...(plan.resumes && { resumeAgentSession: plan.resumes }),
           },
@@ -283,7 +292,12 @@ class HostTurn {
         const result = handleMessage(raw, this.ctx, this.hooks);
         if (result) this.result = result;
       }
-      if (item._tag === 'Journaled') this.onEvent(item.event, resolve);
+      if (item._tag !== 'Journaled') return;
+      if (this.req.agent === 'codex') {
+        handleCommonEvent(item.event, this.common, this.hooks);
+        this.result = this.common.result;
+      }
+      this.onEvent(item.event, resolve);
     });
   }
 

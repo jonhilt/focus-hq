@@ -1,5 +1,5 @@
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
-import type { AgentStatus, AgentTask, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, AgentTask, Autonomy, BrowserFrame, CodingAgent, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, QuestionInput } from './leadRules';
 import type { LeadTool } from '../plugins/contract';
@@ -103,6 +103,8 @@ export interface RunRequest {
   effort?: Effort;
   /** The model chosen for this agent. Missing = `settings.model`. */
   model?: string;
+  /** The coding agent it runs on (a developer's, through agent-host). Missing = Claude Code. */
+  agent?: CodingAgent;
   /** JSON schema for a structured final answer (the QA officer's report). */
   outputSchema?: Record<string, unknown>;
   /** Ops' own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */

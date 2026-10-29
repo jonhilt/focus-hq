@@ -247,6 +247,7 @@ export class AgentSessions extends Part {
       autonomy: effectiveAutonomy(agent, this.store.settings),
       effort: agent.effort,
       model: agent.model,
+      agent: agent.agent,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
       cloud: agent.cloud ? { branch: agent.branch } : undefined,
       brief: agent.task === 'lead' ? { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) } : undefined,
