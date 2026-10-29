@@ -24,9 +24,9 @@ const layout: MachineLayout = {
 
 describe('occupied', () => {
   it('says who is in each state, and every compound state any of them is within', () => {
-    const { at, within } = occupied([run('a', 'turn.cloud.attaching'), run('b', 'idle'), run('c', 'idle')]);
-    expect([...at]).toEqual([['turn.cloud.attaching', ['a']], ['idle', ['b', 'c']]]);
-    expect([...within]).toEqual(['turn', 'turn.cloud']);
+    const { at, within } = occupied([run('a', 'delivering.pushing'), run('b', 'idle'), run('c', 'idle')]);
+    expect([...at]).toEqual([['delivering.pushing', ['a']], ['idle', ['b', 'c']]]);
+    expect([...within]).toEqual(['delivering']);
   });
 });
 

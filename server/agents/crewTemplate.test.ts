@@ -5,8 +5,8 @@ const render = (src: string, values: Record<string, string | boolean>) => render
 
 describe('crew templates', () => {
   it('fills in text, and keeps a section by its flag', () => {
-    expect(render('Hi {{name}}{{#cloud}}, in the cloud{{/cloud}}{{^cloud}}, here{{/cloud}}.', { name: 'Ada', cloud: true })).toBe('Hi Ada, in the cloud.');
-    expect(render('Hi {{name}}{{#cloud}}, in the cloud{{/cloud}}{{^cloud}}, here{{/cloud}}.', { name: 'Ada', cloud: false })).toBe('Hi Ada, here.');
+    expect(render('Hi {{name}}{{#away}}, away{{/away}}{{^away}}, here{{/away}}.', { name: 'Ada', away: true })).toBe('Hi Ada, away.');
+    expect(render('Hi {{name}}{{#away}}, away{{/away}}{{^away}}, here{{/away}}.', { name: 'Ada', away: false })).toBe('Hi Ada, here.');
   });
 
   it('takes a section tag’s line with it when the tag has the line to itself, so no blank lines are left', () => {
@@ -39,10 +39,10 @@ describe('crew templates', () => {
   });
 
   it('refuses a name its role hasn’t got, or one used as the other kind', () => {
-    const vars = { name: 'text', cloud: 'flag' } as const;
-    expect(checkTemplate(parseTemplate('{{name}}{{#cloud}}x{{/cloud}}'), vars)).toBeUndefined();
-    expect(checkTemplate(parseTemplate('a\n{{#cloud}}{{nmae}}{{/cloud}}'), vars)?.message).toBe("{{nmae}} isn't something this role's prompt can refer to: it has name, cloud");
-    expect(checkTemplate(parseTemplate('{{cloud}}'), vars)?.message).toContain('cloud is a flag');
+    const vars = { name: 'text', away: 'flag' } as const;
+    expect(checkTemplate(parseTemplate('{{name}}{{#away}}x{{/away}}'), vars)).toBeUndefined();
+    expect(checkTemplate(parseTemplate('a\n{{#away}}{{nmae}}{{/away}}'), vars)?.message).toBe("{{nmae}} isn't something this role's prompt can refer to: it has name, away");
+    expect(checkTemplate(parseTemplate('{{away}}'), vars)?.message).toContain('away is a flag');
     expect(checkTemplate(parseTemplate('{{^name}}x{{/name}}'), vars)?.message).toContain('name is text');
   });
 });

@@ -89,7 +89,7 @@ export interface QaFile {
 
 /**
  * What Ops knows of how QA covered a pull request's changed files: the files, those its session opened by its
- * own tool calls (missing when Ops couldn't read them: the demo, a cloud session), and how many it was sent back to.
+ * own tool calls (missing when Ops couldn't read them: the demo), and how many it was sent back to.
  */
 export interface FileAccount {
   changed: string[];

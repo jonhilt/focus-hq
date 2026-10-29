@@ -10,7 +10,7 @@ import { Focus } from './focus';
 import { Previews } from './previews';
 import { Voice } from './voice';
 
-it('an empty terminal, browser path or public address in Settings clears what was saved', async () => {
+it('an empty browser path or public address in Settings clears what was saved', async () => {
   const gh = await ManagedRuntime.make(demoLayer).runPromise(GitHub.use(Effect.succeed));
   const github = Layer.succeed(GitHub, gh);
   const o = fakeFocus(demoWorkspace, github);
@@ -19,10 +19,9 @@ it('an empty terminal, browser path or public address in Settings clears what wa
   const focus = new Focus(o.store, hub, provider, new Previews(hub, provider, true), new IssuePlanner(o.store, hub, new DemoDrafter()), new Voice(hub, true), 'test');
   focus.agents = o.agents;
   const held = o.store.settings;
-  focus.updateSettings({ terminal: 'kitty -e', browserPath: '/x/chromium', publicUrl: 'https://focus.ts.net' });
-  expect(o.store.settings).toMatchObject({ terminal: 'kitty -e', browserPath: '/x/chromium', publicUrl: 'https://focus.ts.net' });
-  focus.updateSettings({ terminal: '', browserPath: ' ', publicUrl: '' });
-  expect(o.store.settings).not.toHaveProperty('terminal');
+  focus.updateSettings({ browserPath: '/x/chromium', publicUrl: 'https://focus.ts.net' });
+  expect(o.store.settings).toMatchObject({ browserPath: '/x/chromium', publicUrl: 'https://focus.ts.net' });
+  focus.updateSettings({ browserPath: ' ', publicUrl: '' });
   expect(o.store.settings).not.toHaveProperty('browserPath');
   expect(o.store.settings).not.toHaveProperty('publicUrl');
   // the same object, so code holding it sees the change

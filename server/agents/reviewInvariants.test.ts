@@ -31,7 +31,6 @@ const workspace = (later: Later): WorkspaceOps => ({
   checkoutPullRequest: () => later('checkout', () => Promise.resolve('')),
   sinceVerdict: (_repo, _number, _base, sha) => later('since', () => demoWorkspace.sinceVerdict(_repo, _number, _base, sha)),
   push: () => later('push', () => Promise.resolve()),
-  publish: () => later('publish', () => Promise.resolve()),
   pull: () => later('pull', () => Promise.resolve()),
   runIn: () => Promise.resolve({ code: 1, output: 'AssertionError: expected 1 to be 2' }),
 });

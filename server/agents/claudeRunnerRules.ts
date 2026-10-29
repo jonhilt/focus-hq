@@ -1,6 +1,5 @@
 import type { Autonomy } from '../../shared/types';
 import { errorMessage, truncate } from '../../shared/text';
-import { CLOUD_UNAVAILABLE, cloudRefused } from './cloudRules';
 import type { SoFar } from './claudeRunner';
 import type { TurnResult } from './sdkMessages';
 import { LIMIT_REACHED, type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
@@ -74,17 +73,16 @@ export function endedOutcome(so: SoFar, { stopping, limited }: Interruptions): R
 
 /**
  * What a session comes to when Claude Code throws: the usage limit (unless the captain stopped them), a stop or abort,
- * a cloud session the server refused, or else the error with the last three lines Claude Code wrote to stderr.
+ * or else the error with the last three lines Claude Code wrote to stderr.
  */
 export function failedOutcome(
   so: SoFar,
   err: unknown,
-  { stopping, limited, aborted, cloud, stderr }: Interruptions & { aborted: boolean; cloud: boolean; stderr: string },
+  { stopping, limited, aborted, stderr }: Interruptions & { aborted: boolean; stderr: string },
 ): RunOutcome {
   const { summary, started } = so;
   if (limited && !stopping) return { ok: false, summary, error: LIMIT_REACHED, limited: true, started };
   if (stopping || aborted) return { ok: false, summary, error: STOPPED_BY_CAPTAIN, aborted: true, started };
-  if (cloud && cloudRefused(`${errorMessage(err)}\n${stderr}`)) return { ok: false, summary, error: CLOUD_UNAVAILABLE, started };
   const detail = stderr.trim().split('\n').slice(-3).join(' ');
   return { ok: false, summary, error: `${errorMessage(err)}${detail ? ` — ${truncate(detail, 300)}` : ''}`, started };
 }

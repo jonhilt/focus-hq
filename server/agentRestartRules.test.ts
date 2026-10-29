@@ -47,10 +47,18 @@ describe('agentAfterRestart', () => {
     expect(agentAfterRestart(agent({ status: 'done', activity: 'PR opened' }), 'Shop', randomAvatar)).toMatchObject({ status: 'done', activity: 'PR opened' });
   });
 
-  it('keeps an agent waiting for their cloud session waiting, and stops watching the terminal opened for it', () => {
-    const after = agentAfterRestart(agent({ status: 'working', handover: { since: 1, fresh: true, terminalAt: 5 } }), 'Shop', randomAvatar);
-    expect(after).toMatchObject({ status: 'waiting', activity: 'Waiting for a cloud session', handover: { since: 1, fresh: true } });
-    expect(after.handover?.terminalAt).toBeUndefined();
+  it('brings one saved in a cloud session here, without the cloud session’s id, which doesn’t resume here', () => {
+    const after = agentAfterRestart({ ...agent({ status: 'done', sessionId: 'session_01abc' }), cloud: true }, 'Shop', randomAvatar);
+    expect(after).toMatchObject({ status: 'done', sessionId: undefined });
+    expect(after).not.toHaveProperty('cloud');
+  });
+
+  it('stops one saved waiting for a cloud session, back in their conversation on this machine if they had one', () => {
+    const waiting = { ...agent({ status: 'waiting', sessionId: undefined }), cloud: true, handover: { since: 1, fresh: false, localSessionId: 's1', terminalAt: 5 } };
+    const after = agentAfterRestart(waiting, 'Shop', randomAvatar);
+    expect(after).toMatchObject({ status: 'stopped', sessionId: 's1', activity: expect.stringMatching(/Send a message/) });
+    expect(after).not.toHaveProperty('handover');
+    expect(agentAfterRestart({ ...waiting, handover: {} }, 'Shop', randomAvatar).sessionId).toBeUndefined();
   });
 
   it('hands one held for the plan’s usage limit to the captain', () => {

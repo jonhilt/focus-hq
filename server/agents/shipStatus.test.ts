@@ -47,11 +47,6 @@ describe('summariseShip', () => {
     expect(text).not.toContain('FRAME');
   });
 
-  it('gives a cloud agent no local worktree', () => {
-    const status = summariseShip(snapshot({ agents: [agent({ cloud: true })] }), worktree);
-    expect(status.projects[0].agents[0].worktree).toBeUndefined();
-  });
-
   it('shows each open PR with QA’s verdict and its checks', () => {
     const review = { projectId: 'p1', repo: 'acme/shop', number: 40, status: 'passed', sha: 'abcdef1234' } as QaReview;
     const failing = pr({ number: 41, checks: 'failing', failedChecks: [{ name: 'build' }] });

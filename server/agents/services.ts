@@ -8,7 +8,7 @@ import type { CommandRun } from './qaProofRules';
 import type { EditedRecording } from './recorder';
 import type { PackageFacts } from '../packageManager';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
-import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, CloudTerminalRequest, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -35,13 +35,6 @@ export class QaChatFailed extends Data.TaggedError('QaChatFailed')<{ reason: str
   }
 }
 
-/** Ops couldn't open a terminal to start a cloud session in. */
-export class TerminalFailed extends Data.TaggedError('TerminalFailed')<{ reason: string }> {
-  override get message() {
-    return this.reason;
-  }
-}
-
 /** The agents' checkouts: worktrees of Ops' clones, one per agent (a lead's holds one per repo). */
 export class Workspace extends Context.Service<Workspace, {
   /** A worktree on `branch` from the remote `startPoint`, reclaiming it from an agent who isn't `aboard`. */
@@ -58,7 +51,6 @@ export class Workspace extends Context.Service<Workspace, {
   /** The files a review's checkout changes against its base; none when git can't say (QA's report then isn't checked against them). */
   changedFiles(dir: string, baseBranch: string): Effect.Effect<string[]>;
   push(dir: string, branch: string): Effect.Effect<void, GitFailed>;
-  publish(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   pull(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   checkoutPullRequest(repo: string, id: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
@@ -96,7 +88,6 @@ export class Workspace extends Context.Service<Workspace, {
       branchesSeen: (dir) => git('read the branches a checkout has been on', () => ops.branchesSeen(dir)),
       changedFiles: (dir, baseBranch) => git('list the changed files', () => ops.changedFiles?.(dir, baseBranch) ?? Promise.resolve([])).pipe(Effect.orElseSucceed((): string[] => [])),
       push: (dir, branch) => git(`push ${branch}`, () => ops.push(dir, branch)),
-      publish: (dir, branch) => git(`publish ${branch}`, () => ops.publish(dir, branch)),
       pull: (dir, branch) => git(`fetch ${branch}`, () => ops.pull(dir, branch)),
       checkoutPullRequest: (repo, id, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, id, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
@@ -161,20 +152,10 @@ export class Sessions extends Context.Service<Sessions, {
    * running, so interrupting whoever started it (sending the agent home, say) really stops Claude.
    */
   start(req: RunRequest, hooks: RunHooks): Effect.Effect<AgentSession, never, Scope.Scope>;
-  /**
-   * Opens a terminal on the captain's screen that starts a cloud session (`AgentRunner.cloudTerminal`). `read` is what
-   * it has shown so far; undefined when Ops can't see it.
-   */
-  cloudTerminal(req: CloudTerminalRequest): Effect.Effect<{ read: Effect.Effect<string | undefined> }, TerminalFailed>;
 }>()('focus/agents/Sessions') {
   /** Sessions on a runner: Claude Code through the Agent SDK, or the demo's scripted agents. */
   static fromRunner(runner: AgentRunner): Layer.Layer<Sessions> {
     return Layer.succeed(Sessions, Sessions.of({
-      cloudTerminal: (req) =>
-        Effect.tryPromise({
-          try: () => (runner.cloudTerminal ? runner.cloudTerminal(req) : Promise.reject(new Error('This Focus has no terminal to open'))),
-          catch: (err) => new TerminalFailed({ reason: errorMessage(err) }),
-        }).pipe(Effect.map((terminal) => ({ read: Effect.promise(() => terminal.read().catch(() => '')) }))),
       start: (req, hooks) =>
         Effect.acquireRelease(
           Effect.sync(() => {

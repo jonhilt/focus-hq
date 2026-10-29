@@ -51,8 +51,7 @@ It prints, per session digest: turns, tool calls, wasted and refused calls, capt
 
 ## What it can't see
 
-- A goal whose lead's transcript is gone isn't counted: Claude Code deletes transcripts after 30 days unless told otherwise, and a cloud session's transcript isn't on this machine. The report lists the goals it left out.
+- A goal whose lead's transcript is gone isn't counted: Claude Code deletes transcripts after 30 days unless told otherwise. The report lists the goals it left out.
 - A verdict counts for a pull request's latest ship if it came after that ship. QA reviews commits, not ships, so this is close but not exact. A pull request merged on a stale pass shows its last stretch as **qa**.
 - Rework counts every change to a line within 7 days, a fix or a change of mind alike: the captain trying something and then going another way counts the same as a bug. Read the pull requests it names to tell which. A file renamed counts as its lines reworked.
 - `pnpm run flow` counts only goals the ledger saw close; open goals' flow is on their goal boards, while the plugin's switched on.
-- A cloud lead's transcript isn't on this machine, so its goal board shows no flow.

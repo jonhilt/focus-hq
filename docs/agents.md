@@ -91,23 +91,11 @@ stateDiagram-v2
   state "turn" as run_turn {
     [*] --> run_turn_local
     state "local" as run_turn_local
-    state "cloud" as run_turn_cloud {
-      [*] --> run_turn_cloud_running
-      state "running" as run_turn_cloud_running
-      state "attaching" as run_turn_cloud_attaching
-    }
   }
-  state "attach-again" as run_attach_again
-  state "attach-refused" as run_attach_refused
-  state "attach-failed" as run_attach_failed
   state "sign-in-mismatch" as run_sign_in_mismatch
   state "limited" as run_limited
   state "stopped" as run_stopped
-  state "cloud-carry-on-here" as run_cloud_carry_on_here
-  state "cloud-await" as run_cloud_await
-  state "cloud-to-local" as run_cloud_to_local
   state "fresh-session" as run_fresh_session
-  state "new-cloud-session" as run_new_cloud_session
   state "carry-on" as run_carry_on
   state "fail" as run_fail
   state "finish-review" as run_finish_review
@@ -115,23 +103,16 @@ stateDiagram-v2
   state "deliver" as run_deliver
   [*] --> run_turn
   run_turn_local --> run_fresh_session : gone [a lead, resumed]
-  run_turn_cloud_attaching --> run_attach_again : busy [tries left]
-  run_turn_cloud_attaching --> run_attach_failed : busy | asking | gone | unstarted
-  run_turn_cloud_attaching --> run_attach_refused : refused
-  run_turn_cloud --> run_cloud_to_local : refused [worked there]
-  run_turn_cloud --> run_cloud_carry_on_here : refused [attach refused]
-  run_turn_cloud --> run_cloud_await : refused
-  run_turn_cloud --> run_new_cloud_session : gone | unstarted [resumed]
   run_turn --> run_sign_in_mismatch : mismatch
   run_turn --> run_limited : limited
   run_turn --> run_stopped : stopped
-  run_turn --> run_carry_on : refused | busy | asking | gone | unstarted | failed | done [messages waiting]
-  run_turn --> run_fail : refused | busy | asking | gone | unstarted | failed
+  run_turn --> run_carry_on : gone | unstarted | failed | done [messages waiting]
+  run_turn --> run_fail : gone | unstarted | failed
   run_turn --> run_finish_review : done [QA]
   run_turn --> run_lead_done : done [a lead]
   run_turn --> run_deliver : done
   classDef final fill:#1d3320,stroke:#9fd39f,color:#e8e4d8
-  class run_attach_again,run_attach_refused,run_attach_failed,run_sign_in_mismatch,run_limited,run_stopped,run_cloud_carry_on_here,run_cloud_await,run_cloud_to_local,run_fresh_session,run_new_cloud_session,run_carry_on,run_fail,run_finish_review,run_lead_done,run_deliver final
+  class run_sign_in_mismatch,run_limited,run_stopped,run_fresh_session,run_carry_on,run_fail,run_finish_review,run_lead_done,run_deliver final
 ```
 <!-- run-machine:end -->
 
@@ -144,7 +125,7 @@ stateDiagram-v2
 - an agent the journal says was `held` for your plan's usage limit is held again until it resets, with what was waiting for them; if it reset while Focus was stopped, they carry on;
 - an agent whose journal says they were `waiting` for a free slot is back in line (held for a message instead if going back to their conversation would be on your API key);
 - a developer's, a fixer's, a conflict resolver's, a brief's, a lead's or QA's turn carries on by itself in the same conversation, told it was cut off (with any messages sent into it, in case they never arrived), or asked again if Claude Code never got it, as long as it would be on your plan (QA's review carries on with it: [QA](qa.md#the-review-journal-picking-a-review-up-after-a-restart));
-- on your API key, a cloud agent's, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
+- on your API key, a compaction's, one the captain had just stopped (`stop-requested`), or with no conversation of its own to go back to, the agent waits for a message, saying why.
 
 A turn the captain stops, whether it ends or a restart finds it, leaves what was sent into it as a note for the agent's next message, in case it never arrived (`runJournal.test.ts`): otherwise a stop would lose what a restart keeps.
 
@@ -154,11 +135,11 @@ An agent sent home has a `reset` in their journal, so an id that comes back (a r
 
 ## Scratch dirs
 
-Every local session gets a scratch dir for throwaway files, exported to it as `FOCUS_SCRATCH`. Ops empties it when a run starts and deletes it when the run ends, so their prompts tell them to put probe scripts, scratch repos and test output there and never clean up after themselves. Cloud agents work on a machine of their own and don't get one.
+Every local session gets a scratch dir for throwaway files, exported to it as `FOCUS_SCRATCH`. Ops empties it when a run starts and deletes it when the run ends, so their prompts tell them to put probe scripts, scratch repos and test output there and never clean up after themselves.
 
-Every local session also gets `focus-wait` on its PATH: `focus-wait --until '<check>' --timeout 120 [--every 2]` returns as soon as the check passes, and fails with its last output when time runs out. Claude Code refuses a foreground `sleep N; <check>`, which agents kept writing to wait for a demo, a build or a log, and its refusal left them guessing another way to wait; their prompts now name `focus-wait` instead. Cloud agents don't get it.
+Every local session also gets `focus-wait` on its PATH: `focus-wait --until '<check>' --timeout 120 [--every 2]` returns as soon as the check passes, and fails with its last output when time runs out. Claude Code refuses a foreground `sleep N; <check>`, which agents kept writing to wait for a demo, a build or a log, and its refusal left them guessing another way to wait; their prompts now name `focus-wait` instead.
 
-And every local session's Bash tool runs in bash (through Claude Code's `CLAUDE_CODE_SHELL`), not the captain's own shell. On a Mac that's zsh, where a glob that matches nothing, like `grep -rn x --include=*.ts` or `ls server/**/*.test.ts`, is an error that skips the command ("no matches found"): in about 50 sessions over two weeks a call failed that way, the commonest cause of the ledger's `bash exit code 1`. bash passes the word on as it is. A `CLAUDE_CODE_SHELL` the captain set themselves is kept, and Windows is left to Claude Code (Git Bash). Cloud agents keep their machine's shell.
+And every local session's Bash tool runs in bash (through Claude Code's `CLAUDE_CODE_SHELL`), not the captain's own shell. On a Mac that's zsh, where a glob that matches nothing, like `grep -rn x --include=*.ts` or `ls server/**/*.test.ts`, is an error that skips the command ("no matches found"): in about 50 sessions over two weeks a call failed that way, the commonest cause of the ledger's `bash exit code 1`. bash passes the word on as it is. A `CLAUDE_CODE_SHELL` the captain set themselves is kept, and Windows is left to Claude Code (Git Bash).
 
 If you use [dcg](https://github.com/Dicklesworthstone/destructive_command_guard) (the destructive command guard) as a `PreToolUse` hook, it blocks `rm -rf` outside the temp dirs, so agents used to leave their scratch behind or lose a chained command along with it. Ops lays its own dcg config over yours and the project's, `~/.focus/dcg.toml`, through `DCG_CONFIG` in each session's environment (unless you set `DCG_CONFIG` yourself: then Ops leaves it alone and agents can't `rm -rf` in scratch). It does two things:
 

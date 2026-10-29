@@ -18,7 +18,6 @@ So each interface Focus fakes gets a **contract**: one suite of behavioural expe
 | the local base follows origin's, so an agent's diff against `main` is only theirs | b0ac83c | ✓ | no disk |
 | a push lands after GitHub deleted the branch it last went to | 5e27b8e | ✓ | no origin |
 | someone else's commits on origin's branch are noticed, and a pull brings them in | | ✓ | nobody else pushes |
-| publishing creates the branch, or takes what a cloud session pushed, never overwriting it | | ✓ | no origin |
 | merging the base: up to date, or merged and pushed | | ✓ | always conflicts |
 | merging the base reports the conflicting files and pushes nothing | | ✓ | always `src/header.ts` |
 
@@ -67,4 +66,4 @@ Each external fix's code was reversed onto the code of the day (only its non-tes
 | eab2be2 | a workflow Focus saw start, left out of the background list | ✗ no recording shows a list leaving one out; the stand-in plays it, and the session's promise and reach test catch it ([invariants](invariants.md#does-it-catch-real-bugs)) |
 | c82fc35, 1dc03e5, 9e6c672 | onnxruntime aborting on exit, the browser's voices | ✗ outside any faked interface |
 
-So 2 of the 2 git bugs the contract covers. The Claude Code contract covers the stream's turns and background tasks; the shell, a tool's input as it streams and cloud sessions are still outside it.
+So 2 of the 2 git bugs the contract covers. The Claude Code contract covers the stream's turns and background tasks; the shell and a tool's input as it streams are still outside it.

@@ -16,36 +16,26 @@ import { hasLeadWork } from './leadRules';
 import { AgentManager } from './manager';
 import { type Frames, type Picture, QaChat, Recordings, Renderer, Sessions, ShipRetry, Triage, Workspace } from './services';
 import { DemoQaChat } from './demoQaChat';
-import type { AgentRunner, AgentSession, CloudTerminal, CloudTerminalRequest, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, WorkspaceOps } from './types';
 
 /** A Claude Code stand-in: each turn runs until the test ends it, and remembers being stopped, what it was sent and which background tasks it stopped. */
 export class FakeClaude implements AgentRunner {
   turns: { req: RunRequest; hooks: RunHooks; end: (outcome: RunOutcome) => void; stopped: boolean; sent: string[]; refusing: string[]; modes: Autonomy[]; stoppedTasks: string[] }[] = [];
-  /** The terminals opened to start cloud sessions, and what they show. */
-  terminals: CloudTerminalRequest[] = [];
-  shown = '';
   /** Its sessions have stopped listening: they refuse to stop a background task. */
   deaf = false;
-
-  cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
-    this.terminals.push(req);
-    return Promise.resolve({ read: () => Promise.resolve(this.shown) });
-  }
 
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     let end!: (outcome: RunOutcome) => void;
     const done = new Promise<RunOutcome>((resolve) => (end = resolve));
     const turn: FakeClaude['turns'][number] = { req, hooks, end, stopped: false, sent: [], refusing: [], modes: [], stoppedTasks: [] };
     this.turns.push(turn);
-    // a new cloud session's id comes once it's started, which Claude Code may refuse to do first
-    if (!req.cloud || req.resumeSessionId) hooks.session(req.resumeSessionId ?? 'session-1');
+    hooks.session(req.resumeSessionId ?? 'session-1');
     return {
       // a message the test has it refuse is one its input closed on
       send: (text) => !turn.refusing.includes(text) && (turn.sent.push(text), true),
       // a session whose input has closed can't stop one
       stopTask: (taskId) => Promise.resolve(!this.deaf && (turn.stoppedTasks.push(taskId), true)),
-      // a cloud session's mode waits for its next turn
-      setAutonomy: (mode) => (turn.modes.push(mode), !req.cloud),
+      setAutonomy: (mode) => (turn.modes.push(mode), true),
       stop: () => {
         turn.stopped = true;
         end({ ok: false, summary: '', aborted: true });

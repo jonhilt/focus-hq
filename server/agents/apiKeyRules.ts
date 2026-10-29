@@ -83,7 +83,7 @@ export function afterLimit(costUsd: number | undefined, onKey: boolean): 'carry-
   return onKey && (costUsd === undefined || costUsd < RESUME_WARN_USD) ? 'carry-on' : 'hold';
 }
 
-/** Whether a session that's hit your plan's limit stops to carry on with the key: a local one on your plan, once Ops says so. */
-export function switchesToKey(ctx: Pick<RunContext, 'onKey' | 'cloud'>, keyNow: () => boolean): boolean {
-  return !ctx.onKey && !ctx.cloud && keyNow();
+/** Whether a session that's hit your plan's limit stops to carry on with the key: one on your plan, once Ops says so. */
+export function switchesToKey(ctx: Pick<RunContext, 'onKey'>, keyNow: () => boolean): boolean {
+  return !ctx.onKey && keyNow();
 }

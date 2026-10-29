@@ -62,11 +62,11 @@ export class DemoNumberOne implements NumberOneOfficer {
 
     const agent = (await req.shipStatus()).projects.flatMap((p) => p.agents).find((a) => q.includes(a.name.toLowerCase().replace(/^(lt\.|ensign) /, '')));
     if (agent && /done|so far|progress|up to/.test(q)) {
-      activity(`Reading ${agent.worktree ?? 'their branch'}`);
+      activity(`Reading ${agent.worktree}`);
       await wait(1.5);
       const { files } = demoCode([agent.repo]);
       return said(
-        `${agent.name} is on ${agent.issue}. In their worktree (\`${agent.worktree ?? 'cloud'}\`) they've changed \`${files[0]}\` and \`${files[4]}\` so far, and added a test next to it. It's half-finished: ${agent.activity.toLowerCase()}.`,
+        `${agent.name} is on ${agent.issue}. In their worktree (\`${agent.worktree}\`) they've changed \`${files[0]}\` and \`${files[4]}\` so far, and added a test next to it. It's half-finished: ${agent.activity.toLowerCase()}.`,
         `${agent.name} has made a start on two files and a test. It's not done yet.`,
       );
     }

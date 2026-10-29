@@ -9,7 +9,7 @@ export type AgentStatus =
   | 'setting-up' // cloning the repo / creating a worktree
   | 'working' // Claude is coding
   | 'testing' // Claude is driving the browser
-  | 'waiting' // hand raised: needs the manager to approve a tool call, or to start their cloud session (`handover`)
+  | 'waiting' // hand raised: needs the manager to approve a tool call
   | 'pushing' // pushing the branch and opening the pull request
   | 'done' // pull request is open
   | 'error'
@@ -266,21 +266,6 @@ export interface BackgroundTask {
   summary?: string;
 }
 
-/**
- * An agent waiting for a Claude Code cloud session to take over: the captain moved them to the cloud, or Claude Code
- * wouldn't start the session of a cloud hire without a terminal. The captain starts one (in a terminal Ops opens,
- * or on claude.ai) and Ops attaches to it, which Claude Code does without a terminal.
- */
-export interface CloudHandover {
-  since: number;
-  /** They haven't started: the cloud session gets their task, rather than work in progress to carry on. */
-  fresh: boolean;
-  /** Their conversation on this machine, to go back to if the captain keeps them here. */
-  localSessionId?: string;
-  /** When Ops opened a terminal starting the session; it watches the terminal for the session's id. */
-  terminalAt?: number;
-}
-
 export interface Agent {
   id: string;
   name: string;
@@ -320,13 +305,6 @@ export interface Agent {
   /** The coding agent its sessions run on, chosen when it's hired (a developer's). Missing = Claude Code. */
   agent?: CodingAgent;
   /**
-   * Works in a Claude Code cloud session instead of on this machine: it pushes its own branch, and `sessionId` is the
-   * cloud session's id (session_…). Never set on the QA officer.
-   */
-  cloud?: boolean;
-  /** Waiting for a cloud session to take over their work, which the captain starts (`CloudHandover`). */
-  handover?: CloudHandover;
-  /**
    * On hold while your plan's usage limit is reached: picking their conversation back up on your API key would cost more
    * than Ops spends without asking. They carry on at `until`, when it resets, or when the captain says to.
    */
@@ -344,7 +322,7 @@ export interface Agent {
   sessionId?: string;
   pr?: { number: number; url: string };
   permission?: PermissionRequest;
-  /** The session signed in with your API key rather than your plan (a local session; a cloud one is always on the plan). */
+  /** The session signed in with your API key rather than your plan. */
   onKey?: boolean;
   /** Where their run is, as its journal tells it (server/agents/runJournal.ts). */
   run?: RunView;

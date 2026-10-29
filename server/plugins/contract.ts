@@ -270,8 +270,8 @@ export interface PluginHost {
   /** Every agent aboard now, of every project. */
   agents(): Readonly<Agent>[];
   /**
-   * An agent session's Claude Code transcript (its JSONL) by session id: undefined when it isn't on this machine (a
-   * cloud session's). In the demo, the scripted agents' stand-ins.
+   * An agent session's Claude Code transcript (its JSONL) by session id: undefined when it isn't on this machine. In
+   * the demo, the scripted agents' stand-ins.
    */
   transcript(sessionId: string): Promise<string | undefined>;
   /** The ship's log of how work went, oldest first. */

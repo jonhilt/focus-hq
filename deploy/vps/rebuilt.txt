@@ -6,7 +6,6 @@ planning
 previews
 merges
 checks
-cloud-terminals
 models
 frame-stats
 dcg.toml

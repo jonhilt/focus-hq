@@ -22,11 +22,10 @@ describe('recovery', () => {
     expect(recovery(fold([requested('t2', 'Also the docs', 's1')]), { task: 'lead' }, false)).toEqual({ kind: 'resume', turn: 't2', prompt: 'Also the docs', session: 's1' });
   });
 
-  it('waits for the captain on the API key, for a cloud agent, a compaction, a sign-in stopped, or no conversation', () => {
+  it('waits for the captain on the API key, for a compaction, a sign-in stopped, or no conversation', () => {
     const run = fold([requested('t1'), { kind: 'turn-started', turn: 't1', session: 's1' }]);
     expect(recovery(run, issue, true)).toMatchObject({ kind: 'wait', why: expect.stringContaining('API key') });
     expect(recovery(run, { task: 'review' }, true)).toMatchObject({ kind: 'wait', why: expect.stringContaining('API key') });
-    expect(recovery(run, { ...issue, cloud: true }, false)).toMatchObject({ kind: 'wait', why: INTERRUPTED_ACTIVITY });
     expect(recovery(fold([requested('t1')]), { task: 'issue' }, false)).toMatchObject({ kind: 'wait', why: INTERRUPTED_ACTIVITY });
     expect(recovery(fold([{ kind: 'turn-requested', turn: 'c1', turnKind: 'compact', prompt: '/compact', resumes: 's1' }]), issue, false)).toMatchObject({ kind: 'wait', why: expect.stringContaining('compacting') });
     expect(recovery(fold([requested('t1', 'Go', 's1'), { kind: 'sign-in-mismatch', turn: 't1', observed: 'ANTHROPIC_API_KEY' }]), issue, false)).toMatchObject({ kind: 'wait', why: expect.stringContaining('API key') });
@@ -62,10 +61,9 @@ describe('recovery of a run waiting for a slot', () => {
     expect(recovery(fold([{ kind: 'waiting' }]), { task: 'lead' }, true)).toEqual({ kind: 'requeue' });
   });
 
-  it('holds them when going back to their conversation would be on the key, and leaves the cloud to its own', () => {
+  it('holds them when going back to their conversation would be on the key', () => {
     expect(recovery(waiting, { task: 'issue', sessionId: 's1' }, true)).toMatchObject({ kind: 'hold', why: expect.stringContaining('API key') });
     expect(recovery(waiting, { task: 'review' }, false)).toEqual({ kind: 'requeue' });
-    expect(recovery(waiting, { task: 'issue', cloud: true }, false)).toEqual({ kind: 'none' });
   });
 });
 
@@ -95,7 +93,7 @@ describe('recovery of a delivery', () => {
 });
 
 describe('recovery of a held run', () => {
-  it('holds them again after a restart, QA too, but not the cloud', () => {
+  it('holds them again after a restart, QA too', () => {
     const held = fold([{ kind: 'held', until: 5000 }]);
     expect(recovery(held, { task: 'lead', sessionId: 's1' }, true)).toEqual({ kind: 'hold-again', until: 5000 });
     expect(recovery(held, { task: 'review' }, false)).toEqual({ kind: 'hold-again', until: 5000 });

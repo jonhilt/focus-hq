@@ -57,8 +57,8 @@ export function signInLine(usage: Usage | null): string {
     : `Your Claude plan, then your API key (up to $${usage.keyBudgetUsd}) when it runs out`;
 }
 
-/** What an agent's session signs in with: their cloud session's plan, your API key, or your plan. */
-export const agentSignIn = (a: Pick<Agent, 'cloud' | 'onKey'>): 'cloud' | 'key' | 'plan' => (a.cloud ? 'cloud' : a.onKey ? 'key' : 'plan');
+/** What an agent's session signs in with: your API key, or your plan. */
+export const agentSignIn = (a: Pick<Agent, 'onKey'>): 'key' | 'plan' => (a.onKey ? 'key' : 'plan');
 
 /** The HUD's line on the plan: each limit as "session 9%", and how close the nearest is; null when there's no plan to read. */
 export function usageStat(usage: Usage | null): { text: string; tone: UsageTone } | null {

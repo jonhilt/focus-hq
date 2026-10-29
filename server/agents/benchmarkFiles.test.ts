@@ -47,7 +47,7 @@ describe('the benchmarks’ files', () => {
     expect(wrong('  - name: main\n  - name: main\n')).toBe("qa-catch.yaml:8: name main is another configuration's already");
     expect(wrong('  - name: Main Branch\n')).toContain('qa-catch.yaml:7: name is lowercase letters');
     expect(wrong('  - name: main\n    effort: huge\n')).toContain('qa-catch.yaml:8: effort is one of');
-    expect(wrong('  - name: main\n    runner: cloud\n')).toBe("qa-catch.yaml:8: runner isn't a configuration's: they're name, crew, model, effort");
+    expect(wrong('  - name: main\n    runner: host\n')).toBe("qa-catch.yaml:8: runner isn't a configuration's: they're name, crew, model, effort");
     expect(wrong('  - name: main\n    crew: ""\n')).toContain('qa-catch.yaml:8: crew is a git ref');
     expect(error(() => parseBenchmark('qa-catch', catchFile().replace('configurations:\n  - name: main\n', 'configurations: []\n'), 'qa-catch.yaml'))).toContain('configurations lists at least one');
   });

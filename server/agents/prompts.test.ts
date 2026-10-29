@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent } from '../../shared/types';
-import { carryOnPrompt, conflictsPrompt, pullRequestBody, pushNudge, systemAppend } from './prompts';
+import { conflictsPrompt, pullRequestBody, systemAppend } from './prompts';
 import { PUBLIC_WORDS_RULE } from '../../shared/wording';
 
 const agent = (a: Partial<Agent> = {}): Agent => ({
@@ -22,30 +22,18 @@ const agent = (a: Partial<Agent> = {}): Agent => ({
 });
 
 describe('systemAppend', () => {
-  it('keeps the ship’s terms for people out of a local or cloud agent’s pull requests and commits', () => {
+  it('keeps the ship’s terms for people out of an agent’s pull requests and commits', () => {
     expect(systemAppend(agent())).toContain(PUBLIC_WORDS_RULE);
-    expect(systemAppend(agent({ cloud: true }))).toContain(PUBLIC_WORDS_RULE);
   });
 
-  it('keeps a local agent from pushing and points them at Focus’s browser tools', () => {
+  it('keeps an agent from pushing and points them at Focus’s browser tools', () => {
     const text = systemAppend(agent());
     expect(text).toContain('Do NOT push');
     expect(text).toContain('mcp__browser__');
   });
 
-  it('has a local agent wait with focus-wait, which only their PATH has', () => {
+  it('has an agent wait with focus-wait, which only their PATH has', () => {
     expect(systemAppend(agent())).toContain('focus-wait --until');
-    expect(systemAppend(agent({ cloud: true }))).not.toContain('focus-wait');
-  });
-
-  it('has a cloud agent push their own branch, and only that one', () => {
-    const text = systemAppend(agent({ cloud: true }));
-    expect(text).toContain('git push origin HEAD:focus/7-save-items-for-later-ab12');
-    expect(text).toContain('Never push to any other branch');
-    expect(text).not.toContain('Do NOT push');
-    expect(text).not.toContain('mcp__browser__');
-    // screenshots only reach the laptop screen when they come back through a tool result
-    expect(text).toContain('Read tool');
   });
 
   it('tells an agent on a plugin’s brief what the brief says of the work, or that it’s in their first message once the plugin’s off', () => {
@@ -57,22 +45,10 @@ describe('systemAppend', () => {
   });
 });
 
-describe('cloud follow-ups', () => {
-  it('asks a cloud agent resolving conflicts to push the merge', () => {
-    expect(conflictsPrompt(agent({ task: 'conflicts', cloud: true }))).toContain('git push origin HEAD:focus/7-save-items-for-later-ab12');
+describe('conflictsPrompt', () => {
+  it('has whoever resolves the conflicts commit the merge, and leaves the push to Ops', () => {
+    expect(conflictsPrompt(agent({ task: 'conflicts' }))).toContain('4. Commit the merge.');
     expect(conflictsPrompt(agent({ task: 'conflicts' }))).not.toContain('git push');
-  });
-
-  it('nudges for the branch and the reply Ops still needs', () => {
-    expect(pushNudge(agent({ cloud: true }))).toContain('pull request description');
-    expect(pushNudge(agent({ cloud: true, task: 'fix' }))).toContain('summary for the manager');
-  });
-
-  it('hands a new session the task, the branch and the manager’s message', () => {
-    const text = carryOnPrompt(agent({ cloud: true }), 'Also handle the empty cart');
-    expect(text).toContain('issue #7');
-    expect(text).toContain('git log origin/main..HEAD');
-    expect(text.endsWith('Also handle the empty cart')).toBe(true);
   });
 });
 

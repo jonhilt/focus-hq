@@ -16,7 +16,7 @@ export class PlanLimit extends Part {
   /** What picking the agent's conversation back up costs, while new sessions start on the key; undefined on your plan. */
   resumeCost(agent: Agent): ResumeCost | undefined {
     const resetsAt = keyFallback.resetsAt();
-    if (keyFallback.mode !== 'fallback' || !resetsAt || !keyFallback.onKey() || !agent.sessionId || agent.cloud || !agent.context) return undefined;
+    if (keyFallback.mode !== 'fallback' || !resetsAt || !keyFallback.onKey() || !agent.sessionId || !agent.context) return undefined;
     const tokens = agent.context.tokens;
     return { usd: rereadUsd(tokens, agent.model || this.store.settings.model), tokens, resetsAt };
   }

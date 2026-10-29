@@ -310,14 +310,14 @@ export class Reviews extends Part {
 
   /**
    * The changed files QA's session opened, from its tool calls in its transcript, when Ops can read it (not in
-   * the demo, nor for a cloud session): both rounds, when it was sent back.
+   * the demo): both rounds, when it was sent back.
    */
   private openedBy(agent: Agent): Effect.Effect<Set<string> | undefined> {
     const files = this.rt(agent.id).qaFiles;
     const read = this.core.ledger.readTranscript;
     const sessionId = agent.sessionId;
     return Effect.promise(async () => {
-      if (!files || !read || !sessionId || agent.cloud) return undefined;
+      if (!files || !read || !sessionId) return undefined;
       const text = await read(sessionId).catch(() => undefined);
       return text ? openedFiles(toolCalls(text), files.changed) : undefined;
     });
@@ -636,10 +636,10 @@ export class Reviews extends Part {
       case 'qa': {
         const lead = this.core.goalPrs.ownerOf(review.repo, review.number);
         const goal = lead?.lead && { title: lead.lead.title, brief: lead.lead.brief, lead: lead.name };
-        return fixPrompt(pr, { sha: review.sha, report }, agent.cloud, goal || undefined);
+        return fixPrompt(pr, { sha: review.sha, report }, goal || undefined);
       }
       case 'checks':
-        return checksFixPrompt(pr, review.sha, fixes.checks, agent.cloud);
+        return checksFixPrompt(pr, review.sha, fixes.checks);
     }
   }
 

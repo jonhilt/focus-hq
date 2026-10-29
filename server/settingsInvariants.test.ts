@@ -14,7 +14,7 @@ import { Voice } from './voice';
 // whole, and Focus going down saves what's waiting (the store's exit hook), so a restart falls between changes.
 
 /** What survives: the fields the captain sets and clears, and the whisper Voice goes by of them. */
-type Kept = Pick<Settings, 'terminal' | 'browserPath' | 'publicUrl' | 'autoUpdate' | 'model' | 'speechGpu'> & { whisper: { command: string; model: string } };
+type Kept = Pick<Settings, 'browserPath' | 'publicUrl' | 'autoUpdate' | 'model' | 'speechGpu'> & { whisper: { command: string; model: string } };
 
 /** How a change is made the store's: `replaceSettings`, or a break planted in its place. */
 type Apply = (store: Store, next: Settings) => void;
@@ -35,8 +35,6 @@ const settingsSubject = (apply: Apply): Subject<Kept> => ({
       };
       return {
         actions: () => [
-          { name: 'set the terminal', run: () => change({ terminal: 'kitty -e' }) },
-          { name: 'clear the terminal', run: () => change({ terminal: '' }) },
           { name: 'set the browser', run: () => change({ browserPath: '/x/chromium' }) },
           { name: 'clear the browser', run: () => change({ browserPath: ' ' }) },
           { name: 'set the public address', run: () => change({ publicUrl: 'https://focus.ts.net/' }) },
@@ -50,9 +48,9 @@ const settingsSubject = (apply: Apply): Subject<Kept> => ({
           { name: 'keep the voices off the GPU', run: () => change({ speechGpu: false }) },
         ],
         durable: () => {
-          const { terminal, browserPath, publicUrl, autoUpdate, model, speechGpu } = store.settings;
+          const { browserPath, publicUrl, autoUpdate, model, speechGpu } = store.settings;
           const { whisper, model: whisperModel } = voice.status();
-          return { terminal, browserPath, publicUrl, autoUpdate, model, speechGpu, whisper: { command: whisper.command, model: whisperModel.path } };
+          return { browserPath, publicUrl, autoUpdate, model, speechGpu, whisper: { command: whisper.command, model: whisperModel.path } };
         },
         settle: () => Promise.resolve(),
         // Focus going down saves what's waiting, then starts again on state.json
@@ -72,7 +70,7 @@ const settings = settingsSubject((store, next) => store.replaceSettings(next));
 async function setClearRestart(subject: Subject<Kept>): Promise<Kept> {
   const r = await subject.start((_l, work) => work());
   const take = (name: string) => r.actions().find((a) => a.name === name)?.run();
-  for (const name of ['set the terminal', 'set the browser', 'set the public address', 'clear the terminal', 'clear the public address', 'set whisper', 'set whisper’s model', 'clear whisper’s model']) take(name);
+  for (const name of ['set the browser', 'set the public address', 'clear the public address', 'set whisper', 'set whisper’s model', 'clear whisper’s model']) take(name);
   return (await r.restart((_l, work) => work())).durable();
 }
 
@@ -92,6 +90,6 @@ describe('the captain’s settings, under Focus’s two rules', () => {
 
   it('catches a break with that promise: a change merged into the settings, keeping what was cleared (#610’s QA)', async () => {
     const merged = settingsSubject((store, next) => Object.assign(store.settings, next));
-    expect(await setClearRestart(merged)).toMatchObject({ terminal: 'kitty -e', publicUrl: 'https://focus.ts.net' });
+    expect(await setClearRestart(merged)).toMatchObject({ publicUrl: 'https://focus.ts.net' });
   });
 });

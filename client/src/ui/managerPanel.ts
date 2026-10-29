@@ -9,7 +9,7 @@ import { api } from '../net/api';
 import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import { roomTheme, THEME_INFO } from '../world/themes';
-import { agentPicker, effortPicker, pickedAgent, pickedCloud, pickedEffort, wherePicker } from './agentPanel';
+import { agentPicker, effortPicker, pickedAgent, pickedEffort } from './agentPanel';
 import type { ManagerTab, Ui } from './context';
 import { withMic } from './dictation';
 import { confirmDialog } from './confirmDialog';
@@ -338,13 +338,11 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
   });
   const labels = h('input', { type: 'text', placeholder: 'bug, enhancement (must already exist on GitHub)' });
   const effort = effortPicker();
-  const where = wherePicker();
-  const runsOn = agentPicker(where);
+  const runsOn = agentPicker();
   const assign = new Switch('Assign an agent right away', true, {
     changed: (on) => {
       effort.disabled = !on;
       runsOn.disabled = !on;
-      where.disabled = !on || pickedAgent(runsOn) === 'codex';
     },
   });
   const submit = h('button', { class: 'btn primary' }, 'Pin it to the board');
@@ -358,7 +356,6 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       labels: labels.value.split(',').map((l) => l.trim()).filter(Boolean),
       assign: assign.on,
       effort: pickedEffort(effort),
-      cloud: pickedCloud(where),
       agent: pickedAgent(runsOn),
       fromDraft: planner.usedDraft(),
     });
@@ -382,7 +379,6 @@ export function issueForm(ui: Ui, projectId?: string, onDone?: () => void): HTML
       assign.el,
       runsOn,
       effort,
-      where,
     ),
     h('div', { class: 'row' }, submit),
   );

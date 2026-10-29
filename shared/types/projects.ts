@@ -45,8 +45,6 @@ export interface Settings {
   plugins?: string[];
   /** Pull, rebuild and restart when Focus's checkout's upstream branch moves (server/updater.ts). Missing = on. */
   autoUpdate?: boolean;
-  /** The command that opens a terminal for a cloud session (e.g. "kitty -e"), the script's path after it. Missing = the usual ones, in turn. */
-  terminal?: string;
   /** The browser agents drive (its executable's path). Missing = Playwright's Chromium, else Chrome, else Edge. */
   browserPath?: string;
   /** whisper.cpp's CLI for dictation (a command on the PATH, or its path). Missing = whisper-cli. */
@@ -67,7 +65,6 @@ export interface Settings {
 /** The settings an environment variable can set, each with its name: where it's set, it wins over the captain's. */
 export const SETTINGS_ENV = {
   autoUpdate: 'FOCUS_AUTO_UPDATE',
-  terminal: 'FOCUS_TERMINAL',
   browserPath: 'FOCUS_BROWSER_PATH',
   whisperBin: 'FOCUS_WHISPER_BIN',
   whisperModel: 'FOCUS_WHISPER_MODEL',

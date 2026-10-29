@@ -16,8 +16,7 @@ import { sessionEnv } from './wait';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import { WorkflowPermits, workflowAsk } from './workflows';
 import { BackgroundTracker } from './backgroundTasks';
-import { bundledClaude, openTerminal, readTerminal } from './terminal';
-import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type RunHooks, type RunOutcome, type RunRequest } from './types';
+import { type AgentRunner, type AgentSession, type RunHooks, type RunOutcome, type RunRequest } from './types';
 import { allowedWithoutAsking, answerEnds, endedOutcome, failedOutcome, holdsInput, runningInBackground, showsHeard } from './claudeRunnerRules';
 import { withoutSecrets } from '../secrets';
 
@@ -144,14 +143,12 @@ const ASK_MODE_COMMANDS = [
 export const PERMISSION_MODE: Record<Autonomy, PermissionMode> = { ask: 'acceptEdits', auto: 'auto', full: 'bypassPermissions' };
 
 /**
- * The SDK options for a session's permissions. A cloud session's are fixed for its turn. A local one is set up to switch
- * to any mode while it runs (`Query.setPermissionMode`): bypassing permissions has to be allowed from the start, and it
- * carries ask mode's command rules whatever mode it starts in (in auto mode they only spare the classifier a few calls).
+ * The SDK options for a session's permissions, set up to switch to any mode while it runs (`Query.setPermissionMode`):
+ * bypassing permissions has to be allowed from the start, and it carries ask mode's command rules whatever mode it
+ * starts in (in auto mode they only spare the classifier a few calls).
  */
-export function permissionOptions(autonomy: Autonomy, cloud: boolean, askCommands: string[], canUseTool: CanUseTool): Partial<Options> {
-  if (!cloud) return { permissionMode: PERMISSION_MODE[autonomy], allowDangerouslySkipPermissions: true, allowedTools: askCommands, canUseTool };
-  if (autonomy === 'full') return { permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true };
-  return autonomy === 'auto' ? { permissionMode: 'auto', canUseTool } : { permissionMode: 'acceptEdits', allowedTools: askCommands, canUseTool };
+export function permissionOptions(autonomy: Autonomy, askCommands: string[], canUseTool: CanUseTool): Partial<Options> {
+  return { permissionMode: PERMISSION_MODE[autonomy], allowDangerouslySkipPermissions: true, allowedTools: askCommands, canUseTool };
 }
 
 /** What the captain's asked to approve: a workflow by name, else Claude Code's own title for it, else the tool and what it's on. */
@@ -258,11 +255,6 @@ async function reportContext(q: Query, hooks: RunHooks): Promise<void> {
   }
 }
 
-/**
- * Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. A cloud agent
- * runs through the bundled CLI's headless `--cloud` mode: the CLI starts (or reattaches to) a Claude Code cloud session
- * and relays it in the same message stream, so it renders like a local one.
- */
 /** What a session has come to so far: its last turn's result, and whether Claude Code reported the session. */
 export interface SoFar {
   ok: boolean;
@@ -277,48 +269,28 @@ export function withResult(so: SoFar, result: TurnResult): SoFar {
   return { ...so, ok: !result.isError, summary: result.text, structured: result.structured ?? so.structured, error: result.isError ? result.text : undefined };
 }
 
+/** Runs agents with the Claude Agent SDK, i.e. real Claude Code instances using your local Claude login. */
 export class ClaudeRunner implements AgentRunner {
-  constructor(
-    private readonly browsers: BrowserPool,
-    /** The captain's command for opening a terminal (Settings, or FOCUS_TERMINAL), as it is now. */
-    private readonly terminal: () => string | undefined = () => process.env.FOCUS_TERMINAL,
-  ) {}
-
-  /**
-   * A terminal running `claude --cloud`: Claude Code starts a new cloud session only from a terminal. On macOS and
-   * Linux `script` records what it shows, where the session's id turns up; on Windows the captain pastes the link.
-   */
-  async cloudTerminal(req: CloudTerminalRequest): Promise<CloudTerminal> {
-    const dir = join(paths.cloudTerminals, req.agentId);
-    const log = process.platform === 'win32' ? undefined : join(dir, 'terminal.log');
-    await openTerminal(dir, { cwd: req.cwd, claude: bundledClaude(), description: req.description, agentName: req.agentName, log }, this.terminal());
-    return { read: () => (log ? readTerminal(log) : Promise.resolve(undefined)) };
-  }
+  constructor(private readonly browsers: BrowserPool) {}
 
   start(req: RunRequest, hooks: RunHooks): AgentSession {
     const input = new InputQueue();
     const abort = new AbortController();
-    const cloud = req.cloud;
-    // A new cloud session gets its instructions in the first message: which local options reach it is up to the CLI.
-    input.push(cloud && !req.resumeSessionId ? `${req.systemAppend}\n\n---\n\n${req.prompt}` : req.prompt);
+    input.push(req.prompt);
 
     // the captain can change it while the session runs (`setAutonomy`)
     let autonomy = req.autonomy;
-    // a cloud agent has to push its own branch, and only that one
-    const askCommands = cloud ? [...ASK_MODE_COMMANDS, `Bash(git push origin HEAD:${cloud.branch})`] : ASK_MODE_COMMANDS;
     const permits = new WorkflowPermits();
     const canUseTool = toolPermission(() => autonomy, permits, (tool, summary, signal) => hooks.permission(tool, summary, signal), (input, signal) => hooks.question(input, signal));
 
-    // a cloud session runs on your plan in the cloud, whatever this machine signs in with
-    const onKey = !cloud && keyFallback.onKey();
+    const onKey = keyFallback.onKey();
     hooks.signIn?.(onKey);
-    // a local session's scratch dir for throwaway files, deleted when the run ends, and Focus's focus-wait on its
-    // PATH; a cloud session has its own machine
-    const scratch = cloud ? undefined : openScratch(req.agentId, paths.dcgConfig);
+    // the session's scratch dir for throwaway files, deleted when the run ends, and Focus's focus-wait on its PATH
+    const scratch = openScratch(req.agentId, paths.dcgConfig);
     const base = agentEnv(onKey);
     // its git runs Ops' hooks, which refuse a lead's harmful pushes and hand on to the repo's own
-    if (scratch) writePushHooks(paths.gitHooks);
-    const env = sessionEnv(base, scratch && { ...scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(req.agentId), base) });
+    writePushHooks(paths.gitHooks);
+    const env = sessionEnv(base, { ...scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(req.agentId), base) });
     const resets = keyFallback.resetsAt();
     if (onKey && resets) hooks.lines([{ kind: 'system', text: `✻ On your API key: your plan's usage limit is reached until ${clock(resets)}` }]);
 
@@ -333,17 +305,12 @@ export class ClaudeRunner implements AgentRunner {
       // screen, each option's preview a page; everyone else works on their own
       disallowedTools: req.tools ? ['EnterPlanMode'] : ['AskUserQuestion', 'EnterPlanMode'],
       ...(req.tools && { toolConfig: { askUserQuestion: { previewFormat: 'html' } } }),
-      ...(cloud
-        ? // the cloud VM has its own browser; ours runs on this machine. `--cloud <id>` reattaches to the session.
-          { systemPrompt: { type: 'preset', preset: 'claude_code' }, extraArgs: { cloud: req.resumeSessionId ?? null } }
-        : {
-            // recorded on the first request and reused on every resume (the SDK's default, spelled out): instructions
-            // that change mid-session would be ignored, so whatever changes goes in messages instead
-            systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
-            mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: opsMcpServer(req.tools) }) },
-            resume: req.resumeSessionId,
-            hooks: sessionHooks(req, scratch?.hook),
-          }),
+      // recorded on the first request and reused on every resume (the SDK's default, spelled out): instructions that
+      // change mid-session would be ignored, so whatever changes goes in messages instead
+      systemPrompt: { type: 'preset', preset: 'claude_code', append: req.systemAppend, snapshot: true },
+      mcpServers: { browser: browserMcpServer(this.browsers, req.agentId, hooks), ...(req.tools && { office: opsMcpServer(req.tools) }) },
+      resume: req.resumeSessionId,
+      hooks: sessionHooks(req, scratch.hook),
       outputFormat: req.outputSchema ? { type: 'json_schema', schema: req.outputSchema } : undefined,
       // the lead's helpers sit round their team station: a line every ~30s on what each is doing, for their speech bubbles
       agentProgressSummaries: !!req.tools,
@@ -352,12 +319,12 @@ export class ClaudeRunner implements AgentRunner {
         stderrTail.push(data);
         if (stderrTail.length > 20) stderrTail.shift();
       },
-      ...permissionOptions(autonomy, !!cloud, askCommands, canUseTool),
+      ...permissionOptions(autonomy, ASK_MODE_COMMANDS, canUseTool),
     };
 
     let q: Query | undefined;
     let stopping = false;
-    const ctx: RunContext = { cwd: req.cwd, cloud: !!cloud, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch?.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
+    const ctx: RunContext = { cwd: req.cwd, calls: new Map(), helpers: new Map(), workflows: new Set(), permits, parents: new Map(), modelled: new Set(), scratch: scratch.dir, probes: new Set(), commits: new Map(), onKey, counted: new Set() };
     // a background task still running keeps listening, so a message from the captain reaches the session now
     const listening = new Listening((waited) => {
       if (waited) hooks.lines([{ kind: 'system', text: `✻ Stopped listening: no turn came ${REPORT_TURN_GRACE_MS / 1000}s after the last background task ended` }]);
@@ -381,7 +348,7 @@ export class ClaudeRunner implements AgentRunner {
           if (result) {
             so = withResult(so, result);
             // how full the context is now, asked while the session's still there to answer
-            if (!cloud) await reportContext(q, hooks);
+            await reportContext(q, hooks);
             // leaving the stream ends the session, and whatever it still runs in the background with it
             if (answerEnds(!!req.outputSchema, result)) break;
             // Messages sent mid-turn are folded into that turn, so don't count results per message: finish once the
@@ -391,11 +358,11 @@ export class ClaudeRunner implements AgentRunner {
         }
         return endedOutcome(so, { stopping, limited: !!ctx.limited });
       } catch (err) {
-        return failedOutcome(so, err, { stopping, limited: !!ctx.limited, aborted: abort.signal.aborted, cloud: !!cloud, stderr: stderrTail.join('') });
+        return failedOutcome(so, err, { stopping, limited: !!ctx.limited, aborted: abort.signal.aborted, stderr: stderrTail.join('') });
       } finally {
         listening.dispose();
         input.close();
-        scratch?.close();
+        scratch.close();
         await this.browsers.close(req.agentId);
       }
     })();
@@ -416,22 +383,17 @@ export class ClaudeRunner implements AgentRunner {
         await q.stopTask(taskId);
         return true;
       },
-      // a cloud session's settings live in the cloud: its new effort applies from its next turn
       setEffort: (effort) => {
-        if (!cloud) void q?.applyFlagSettings({ effortLevel: effort }).catch(() => undefined);
+        void q?.applyFlagSettings({ effortLevel: effort }).catch(() => undefined);
       },
-      // a cloud session's permissions are set as its turn starts: its new mode applies from its next turn
       setAutonomy: (mode) => {
-        if (cloud) return false;
         autonomy = mode;
         void q?.setPermissionMode(PERMISSION_MODE[mode]).catch(() => undefined);
         return true;
       },
       stop: () => {
         stopping = true;
-        // Killing the local client alone would leave a cloud session working: interrupt its turn first.
-        if (cloud && q) void Promise.race([q.interrupt(), sleep(5000)]).catch(() => undefined).finally(kill);
-        else kill();
+        kill();
       },
       done,
     };

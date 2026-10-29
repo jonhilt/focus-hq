@@ -19,7 +19,7 @@ export function effectiveAutonomy(agent: { autonomy?: Autonomy }, settings: Pick
 
 /**
  * The line in the agent's terminal when the captain changes their mode: whether it took hold in the session that's
- * running (`live`), waits for their next turn (a running session that can't switch, like a cloud one), or there's no
+ * running (`live`), waits for their next turn (a running session that can't switch), or there's no
  * session running and it applies when they next start.
  */
 export function autonomyChangeLine(name: string, mode: Autonomy, session: 'live' | 'next-turn' | 'none'): string {

@@ -138,12 +138,10 @@ export class HostRunner implements AgentRunner {
   }
 }
 
-/** Developers' sessions on the host, everyone else's (and every cloud session) on `claude`. */
+/** Developers' sessions on the host, everyone else's on `claude`. */
 export function splitRunner(claude: AgentRunner, host: HostRunner): AgentRunner {
-  const cloudTerminal = claude.cloudTerminal?.bind(claude);
   return {
-    start: (req, hooks) => (runsOnHost(req.task, !!req.cloud) ? host : claude).start(req, hooks),
-    ...(cloudTerminal && { cloudTerminal }),
+    start: (req, hooks) => (runsOnHost(req.task) ? host : claude).start(req, hooks),
   };
 }
 
@@ -167,7 +165,7 @@ class HostTurn {
     private readonly req: RunRequest,
     private readonly hooks: RunHooks,
   ) {
-    this.ctx = { cwd: req.cwd, cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), permits: new WorkflowPermits(), parents: new Map(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set() };
+    this.ctx = { cwd: req.cwd, calls: new Map(), helpers: new Map(), workflows: new Set(), permits: new WorkflowPermits(), parents: new Map(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set() };
     this.common = newCommonContext(req.cwd);
     this.ctx.tracker = new BackgroundTracker((id) => (id ? this.ctx.calls.get(id)?.name : undefined));
   }

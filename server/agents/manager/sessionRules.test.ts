@@ -12,9 +12,8 @@ describe('compactRefusal', () => {
     expect(compactRefusal({ ...agent, task: 'review', sessionId: undefined, status: 'working' }, true)).toBe('QA starts each review afresh, so there’s nothing to compact');
   });
 
-  it('refuses an agent with no conversation here: none yet, or one in the cloud', () => {
+  it('refuses an agent with no conversation yet', () => {
     expect(compactRefusal({ ...agent, sessionId: undefined }, false)).toBe('Lt. Rhee has no conversation here to compact');
-    expect(compactRefusal({ ...agent, cloud: true }, false)).toBe('Lt. Rhee has no conversation here to compact');
   });
 
   it('refuses while a turn is under way, whatever their status says', () => {

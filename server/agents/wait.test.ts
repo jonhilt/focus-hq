@@ -62,7 +62,7 @@ describe('withWaitHelper', () => {
     expect(withWaitHelper({}).PATH).toBe(WAIT_BIN);
   });
 
-  it('gives a local session its scratch dir, the helper and bash, and a cloud session none of them', () => {
+  it('gives a session with a scratch dir that dir, the helper and bash, and one without none of them', () => {
     expect(sessionEnv({ PATH: '/usr/bin' }, { FOCUS_SCRATCH: '/tmp/s' })).toEqual({ PATH: `${WAIT_BIN}${path.delimiter}/usr/bin`, FOCUS_SCRATCH: '/tmp/s', CLAUDE_CODE_SHELL: BASH });
     expect(sessionEnv({ PATH: '/usr/bin' })).toEqual({ PATH: '/usr/bin' });
   });

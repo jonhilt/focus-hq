@@ -108,7 +108,6 @@ holdsToWorkspaceContract('the demo workspace', demoWorld, {
   'the local base follows origin’s, so an agent’s own diff against main is only their commits': NO_DISK,
   'a push still lands after GitHub deleted the branch its last push went to': NO_ORIGIN,
   'someone else’s commits on origin’s branch are noticed, and a pull brings them in': 'nobody else ever pushes to a branch',
-  'publishing creates the branch on origin, or takes what a cloud session pushed there without overwriting it': NO_ORIGIN,
   'merging the base: up to date when it hasn’t moved, merged and pushed when it has': 'Ops’ merge always conflicts, so there’s an agent to watch resolving it',
   'merging the base reports the files that conflict, and pushes nothing': 'Ops’ merge always conflicts in src/header.ts, whatever changed',
 });

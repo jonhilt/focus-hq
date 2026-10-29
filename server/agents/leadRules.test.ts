@@ -115,7 +115,6 @@ describe('compactsFirst', () => {
     expect(compactsFirst(big, false, 200_000)).toBe(false);
     expect(compactsFirst(big, true, 0)).toBe(false);
     expect(compactsFirst({ ...big, sessionId: undefined }, true, 200_000)).toBe(false);
-    expect(compactsFirst({ ...big, cloud: true }, true, 200_000)).toBe(false);
     expect(compactsFirst(big, true, 200_000, 's1')).toBe(false);
     expect(compactsFirst(big, true, 200_000, 's0')).toBe(true);
   });

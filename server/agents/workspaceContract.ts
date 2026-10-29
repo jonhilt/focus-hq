@@ -4,7 +4,7 @@ import type { WorkspaceOps } from './types';
 // The contract every `WorkspaceOps` keeps (docs/contracts.md): what Ops relies on git doing, written once and
 // run against the real thing (workspace.ts, on throwaway repos) and against each fake that stands in for it, so a fake
 // can't quietly encode an assumption git doesn't keep. Each expectation is one scenario, told through a `World`: the
-// workspace under test, and what happens around it (the agent committing, the base moving on GitHub, a cloud session
+// workspace under test, and what happens around it (the agent committing, the base moving on GitHub, someone else
 // pushing). A fake that can't play a scenario out says so, with its reason, rather than passing it.
 
 /** A workspace under test, and the world around it. */
@@ -21,7 +21,7 @@ export interface World {
   read(dir: string, file: string): Promise<string | undefined>;
   /** Someone else's change to `file` lands on origin's `main` (a pull request merged, squashed into one commit). */
   land(file: string, text: string): Promise<void>;
-  /** Someone else (a cloud session, Ops' merge) pushes a change to `file` onto origin's `branch`, creating it from `main` if need be. */
+  /** Someone else (Ops' merge, say) pushes a change to `file` onto origin's `branch`, creating it from `main` if need be. */
   pushElsewhere(branch: string, file: string, text: string): Promise<void>;
   /** GitHub deletes `branch` (`gh pr merge --delete-branch`, after its pull request merged). */
   deleteOnOrigin(branch: string): Promise<void>;
@@ -129,28 +129,12 @@ export const WORKSPACE_CONTRACT: Expectation[] = [
       await w.commit(dir, 'a.ts', 'a');
       await w.ops.push(dir, 'focus/shared');
       expect(await w.ops.missingRemoteCommits(dir, 'focus/shared')).toBe(false);
-      await w.pushElsewhere('focus/shared', 'cloud.ts', 'cloud');
+      await w.pushElsewhere('focus/shared', 'theirs.ts', 'theirs');
       expect(await w.ops.missingRemoteCommits(dir, 'focus/shared')).toBe(true);
       await w.ops.pull(dir, 'focus/shared');
       expect(await w.ops.missingRemoteCommits(dir, 'focus/shared')).toBe(false);
       expect(await w.ops.head(dir)).toBe(await w.originHead('focus/shared'));
-      expect(await w.read(dir, 'cloud.ts')).toBe('cloud');
-    },
-  },
-  {
-    name: 'publishing creates the branch on origin, or takes what a cloud session pushed there without overwriting it',
-    run: async (w) => {
-      const fresh = await w.checkout('a1', 'focus/pub-1');
-      await w.commit(fresh, 'a.ts', 'a');
-      await w.ops.publish(fresh, 'focus/pub-1');
-      expect(await w.originHead('focus/pub-1')).toBe(await w.ops.head(fresh));
-
-      await w.pushElsewhere('focus/pub-2', 'cloud.ts', 'cloud');
-      const pushed = await w.originHead('focus/pub-2');
-      const dir = await w.checkout('a2', 'focus/pub-2');
-      await w.ops.publish(dir, 'focus/pub-2');
-      expect(await w.originHead('focus/pub-2')).toBe(pushed);
-      expect(await w.ops.head(dir)).toBe(pushed);
+      expect(await w.read(dir, 'theirs.ts')).toBe('theirs');
     },
   },
   {

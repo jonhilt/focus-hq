@@ -91,16 +91,15 @@ describe('afterLimit', () => {
 });
 
 describe('your plan’s usage limit', () => {
-  it('moves a local session on your plan to the key, once Ops says so', () => {
-    expect(switchesToKey({ onKey: false, cloud: false }, () => true)).toBe(true);
-    expect(switchesToKey({ onKey: false, cloud: false }, () => false)).toBe(false);
+  it('moves a session on your plan to the key, once Ops says so', () => {
+    expect(switchesToKey({ onKey: false }, () => true)).toBe(true);
+    expect(switchesToKey({ onKey: false }, () => false)).toBe(false);
   });
 
-  it('never moves a session already on the key, or a cloud one, and doesn’t ask then', () => {
+  it('never moves a session already on the key, and doesn’t ask then', () => {
     const ask = () => {
       throw new Error('asked');
     };
-    expect(switchesToKey({ onKey: true, cloud: false }, ask)).toBe(false);
-    expect(switchesToKey({ onKey: false, cloud: true }, ask)).toBe(false);
+    expect(switchesToKey({ onKey: true }, ask)).toBe(false);
   });
 });

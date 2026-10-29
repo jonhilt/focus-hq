@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { BrowserFrame, TermLine } from '../../shared/types';
-import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, newCloudId, resultText, screenshotActivity, systemNote, turnResult, type RunContext } from './sdkMessages';
+import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, resultText, screenshotActivity, systemNote, turnResult, type RunContext } from './sdkMessages';
 import { BackgroundTracker, type BackgroundEvent } from './backgroundTasks';
 import type { RunHooks } from './types';
 
 type Line = Omit<TermLine, 't'>;
 const system = (m: Record<string, unknown>) => ({ type: 'system', ...m }) as unknown as Extract<SDKMessage, { type: 'system' }>;
 const context = (over: Partial<RunContext> = {}): RunContext => ({
-  cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set(), ...over,
+  cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set(), ...over,
 });
 
 /** Hooks that record what they're told. */
@@ -30,22 +30,6 @@ const recorder = () => {
   return { said, hooks };
 };
 
-describe('newCloudId', () => {
-  const msg = { cloud_session: { id: 'session_01' } };
-  it('is the cloud session’s id when a cloud agent’s message brings a new one', () => {
-    expect(newCloudId(msg, { cloud: true })).toBe('session_01');
-  });
-
-  it('is nothing for one already known, a local session, or a message without one', () => {
-    expect(newCloudId(msg, { cloud: true, cloudId: 'session_01' })).toBeUndefined();
-    expect(newCloudId(msg, { cloud: false })).toBeUndefined();
-    expect(newCloudId({ cloud_session: { id: 7 } }, { cloud: true })).toBeUndefined();
-    expect(newCloudId({}, { cloud: true })).toBeUndefined();
-    expect(newCloudId(null, { cloud: true })).toBeUndefined();
-    expect(newCloudId({ cloud_session: null }, { cloud: true })).toBeUndefined();
-  });
-});
-
 describe('foregroundTasks', () => {
   it('lists the kinds of task running, leaving out the ambient ones', () => {
     expect(foregroundTasks([{ task_type: 'local_workflow' }, { task_type: 'monitor', ambient: true }, {}])).toEqual(['local_workflow', '']);
@@ -54,27 +38,21 @@ describe('foregroundTasks', () => {
 });
 
 describe('systemNote', () => {
-  it('says which Claude Code, model and permission mode started, and when it’s in the cloud', () => {
+  it('says which Claude Code, model and permission mode started', () => {
     const init = system({ subtype: 'init', claude_code_version: '2.1.0', model: 'opus', permissionMode: 'auto' });
-    expect(systemNote(init, false)).toEqual({ line: { kind: 'system', text: '✻ Claude Code 2.1.0 · opus · auto' } });
-    expect(systemNote(init, true)?.line.text).toBe('✻ Claude Code 2.1.0 · opus · auto · ☁ cloud');
-  });
-
-  it('passes on the CLI’s notes on a cloud session, when there’s something in them', () => {
-    expect(systemNote(system({ subtype: 'cloud_session_status', content: '  Starting up\n' }), true)).toEqual({ line: { kind: 'system', text: '☁ Starting up' } });
-    expect(systemNote(system({ subtype: 'cloud_session_status', content: '  ' }), true)).toBeUndefined();
+    expect(systemNote(init)).toEqual({ line: { kind: 'system', text: '✻ Claude Code 2.1.0 · opus · auto' } });
   });
 
   it('shows an API retry as an error, and waiting on the API as what they’re doing', () => {
-    expect(systemNote(system({ subtype: 'api_retry', error: 'overloaded', attempt: 2, max_retries: 10 }), false)).toEqual({
+    expect(systemNote(system({ subtype: 'api_retry', error: 'overloaded', attempt: 2, max_retries: 10 }))).toEqual({
       line: { kind: 'error', text: '  ⚠ API overloaded – retrying (attempt 2/10)' },
       activity: 'Waiting on the API (overloaded)',
     });
   });
 
   it('notes a compaction, and nothing for the rest', () => {
-    expect(systemNote(system({ subtype: 'compact_boundary' }), false)?.line.text).toBe('✻ Conversation compacted');
-    expect(systemNote(system({ subtype: 'status' }), false)).toBeUndefined();
+    expect(systemNote(system({ subtype: 'compact_boundary' }))?.line.text).toBe('✻ Conversation compacted');
+    expect(systemNote(system({ subtype: 'status' }))).toBeUndefined();
   });
 });
 
@@ -145,18 +123,12 @@ describe('turnResult', () => {
 });
 
 describe('handleMessage', () => {
-  it('reports a cloud session once, with its link, and a local session’s id from init', () => {
+  it('reports the session’s id from init', () => {
     const { said, hooks } = recorder();
-    const ctx = context({ cloud: true });
-    const init = system({ subtype: 'init', session_id: 'worker', claude_code_version: '2', model: 'opus', permissionMode: 'auto', cloud_session: { id: 'session_01' } });
-    handleMessage(init, ctx, hooks);
-    handleMessage(init, ctx, hooks);
-    expect(said.sessions).toEqual(['session_01']);
-    expect(said.lines.map((l) => l.text)).toEqual(['☁ Cloud session: https://claude.ai/code/session_01', '✻ Claude Code 2 · opus · auto · ☁ cloud', '✻ Claude Code 2 · opus · auto · ☁ cloud']);
-
-    const local = recorder();
-    handleMessage(init, context(), local.hooks);
-    expect(local.said.sessions).toEqual(['worker']);
+    const init = system({ subtype: 'init', session_id: 'worker', claude_code_version: '2', model: 'opus', permissionMode: 'auto' });
+    handleMessage(init, context(), hooks);
+    expect(said.sessions).toEqual(['worker']);
+    expect(said.lines.map((l) => l.text)).toEqual(['✻ Claude Code 2 · opus · auto']);
   });
 
   it('shows thinking, and the session’s own text as what they’re doing', () => {

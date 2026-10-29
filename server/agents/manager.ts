@@ -8,7 +8,6 @@ import type { Plugins } from '../plugins/registry';
 import type { Store } from '../store';
 import type { Transcript } from './transcript';
 import { keyFallback } from './apiKey';
-import { CloudMoves } from './manager/cloudMoves';
 import { Comms } from './manager/comms';
 import { Conflicts } from './manager/conflicts';
 import { Delivery } from './manager/delivery';
@@ -31,7 +30,7 @@ import { Core, type ManagerServices } from './manager/core';
  * agents, for the routes and its loops.
  *
  * Each concern is a part of its own in `manager/` (seating, sessions, delivery, conflicts, leads, slices, goal tools,
- * comms, reviews, triages, cloud moves, the ledger, merges, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
+ * comms, reviews, triages, the ledger, merges, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
  * runtime, and each agent's fiber (`runs`), so they never run twice at once and sending them home interrupts it (and
  * with it their Claude Code session). The public methods below each hand over to their part.
  */
@@ -40,7 +39,6 @@ export class AgentManager {
 
   constructor(store: Store, hub: Hub, services: Layer.Layer<ManagerServices>, boardChanged: (projectId: string) => void, version?: string) {
     this.core = new Core(store, hub, services, boardChanged, version);
-    this.core.cloud = new CloudMoves(this.core);
     this.core.comms = new Comms(this.core);
     this.core.conflicts = new Conflicts(this.core);
     this.core.delivery = new Delivery(this.core);
@@ -81,7 +79,7 @@ export class AgentManager {
     this.core.ledger.transcripts = transcripts;
   }
 
-  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; cloud?: boolean; agent?: CodingAgent } = {}): Agent {
+  hire(projectId: string, repo: string, issue: { number: number; title?: string; url?: string }, how: { effort?: Effort; agent?: CodingAgent } = {}): Agent {
     return this.core.seating.hire(projectId, repo, issue, how);
   }
 
@@ -229,22 +227,6 @@ export class AgentManager {
 
   reviewGone(repo: string, number: number, merged: boolean): void {
     this.core.reviews.reviewGone(repo, number, merged);
-  }
-
-  moveToCloud(id: string): Promise<Agent> {
-    return this.core.cloud.moveToCloud(id);
-  }
-
-  openCloudTerminal(id: string): Promise<Agent> {
-    return this.core.cloud.openCloudTerminal(id);
-  }
-
-  attachCloud(id: string, link: string): Promise<Agent> {
-    return this.core.cloud.attachCloud(id, link);
-  }
-
-  stayLocal(id: string, start = true): Promise<Agent> {
-    return this.core.cloud.stayLocal(id, start);
   }
 
   /** The captain ticks off (or un-ticks) a spot-check on a slice of a goal under way. */

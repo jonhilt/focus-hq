@@ -2,7 +2,7 @@ import { h, focus, timeAgo, type Ui } from '../../plugin-api/client';
 import { agentSignIn, signInLine, usageHeadline, usageRows } from './readout';
 import { USAGE, type Usage } from './shared';
 
-const SIGN_IN = { plan: { chip: '', label: 'plan' }, key: { chip: 'warn', label: '🔑 key' }, cloud: { chip: 'off', label: '☁ cloud' } };
+const SIGN_IN = { plan: { chip: '', label: 'plan' }, key: { chip: 'warn', label: '🔑 key' } };
 
 /**
  * Your plan's usage at the top of the engineering panel: a bar per limit, how Focus signs in, and each agent on

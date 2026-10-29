@@ -5,9 +5,8 @@
 # `ssh -t <server> ./setup.sh`. Switch on HTTPS certificates for the tailnet first (admin console → DNS, MagicDNS).
 #
 # Size: about 2 GB of memory per agent at once plus a few for Focus (16 GB, 4–8 vCPUs is comfortable), 80 GB+ disk.
-# On a server: cloud agents need a claude.ai login (`claude`, /login), not just the token; whisper.cpp and Kokoro run
-# on its CPU; any device a person on the tailnet owns controls Focus (FOCUS_ALLOWED_LOGINS narrows it to some; a
-# tagged device reaches only the bot's routes: docs/settings.md#who-reaches-focus). Don't copy your Mac's ~/.claude/settings.json
+# On a server: whisper.cpp and Kokoro run on its CPU; any device a person on the tailnet owns controls Focus
+# (FOCUS_ALLOWED_LOGINS narrows it to some; a tagged device reaches only the bot's routes: docs/settings.md#who-reaches-focus). Don't copy your Mac's ~/.claude/settings.json
 # as it is: hooks with Mac paths fail on every tool call. Other settings go in ~/.config/focus/env, then
 # `sudo systemctl restart focus`. Moving Focus: migrate.sh. Backups: backup.sh (restore: stop focus, untar over
 # ~/.focus, start it). Agents' sessions don't move (Claude Code names transcripts by path): they start new ones.

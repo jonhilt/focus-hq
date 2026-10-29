@@ -65,8 +65,7 @@ describe('signInLine', () => {
 });
 
 describe('agentSignIn', () => {
-  it('is the cloud session’s plan, the key, or your plan', () => {
-    expect(agentSignIn({ cloud: true, onKey: true })).toBe('cloud');
+  it('is the key, or your plan', () => {
     expect(agentSignIn({ onKey: true })).toBe('key');
     expect(agentSignIn({})).toBe('plan');
   });

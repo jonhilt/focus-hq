@@ -1,5 +1,5 @@
-// Settings' card for what's particular to the machine Focus runs on: auto update, the terminal a cloud session opens
-// in, the browser agents drive, where previews are mirrored. Each one an environment variable sets
+// Settings' card for what's particular to the machine Focus runs on: auto update, the browser agents drive, where
+// previews are mirrored. Each one an environment variable sets
 // (`ServerInfo.settingsPinned`) shows as set there, and can't be changed here.
 import type { PinnedSettings, Settings } from '../../../shared/types';
 import { api } from '../net/api';
@@ -17,11 +17,8 @@ export function machineSection(ui: Ui, s: Settings, pinned: PinnedSettings): HTM
   const save = (patch: Partial<Settings>) => void api.updateSettings(patch).catch((e: Error) => ui.error(e.message));
   const autoUpdate = new Switch('Auto update', s.autoUpdate !== false, { changed: (on) => save({ autoUpdate: on }) });
   autoUpdate.el.disabled = pinned.autoUpdate !== undefined;
-  const text = (key: 'terminal' | 'browserPath', placeholder: string) => {
-    const input = h('input', { type: 'text', value: s[key] ?? '', placeholder, style: 'flex:1', disabled: pinned[key] !== undefined });
-    input.addEventListener('change', () => save({ [key]: input.value }));
-    return input;
-  };
+  const browserPath = h('input', { type: 'text', value: s.browserPath ?? '', placeholder: 'Playwright’s Chromium, else Chrome, else Edge', style: 'flex:1', disabled: pinned.browserPath !== undefined });
+  browserPath.addEventListener('change', () => save({ browserPath: browserPath.value }));
 
   // Tailscale (nothing saved), off, or the addresses typed: the addresses' field only shows for the last
   const hosts = s.previewHosts;
@@ -46,13 +43,8 @@ export function machineSection(ui: Ui, s: Settings, pinned: PinnedSettings): HTM
       h('small', null, 'Pulls, rebuilds and restarts Focus when its branch moves upstream, once no agent is busy.'),
     ),
     h('div', { class: 'field' },
-      h('label', null, 'Terminal for cloud sessions'),
-      h('div', { class: 'row' }, text('terminal', 'The usual ones, in turn (e.g. kitty -e)'), pinnedChip(pinned, 'terminal')),
-      h('small', null, 'The command that opens a terminal, the script’s path going after it. Applies to the next one opened.'),
-    ),
-    h('div', { class: 'field' },
       h('label', null, 'Browser for agents'),
-      h('div', { class: 'row' }, text('browserPath', 'Playwright’s Chromium, else Chrome, else Edge'), pinnedChip(pinned, 'browserPath')),
+      h('div', { class: 'row' }, browserPath, pinnedChip(pinned, 'browserPath')),
       h('small', null, 'The path to a Chromium-based browser’s executable. Applies from Focus’s next start.'),
     ),
     h('div', { class: 'field' },

@@ -1,6 +1,5 @@
 import { contextLevel, runLine, statusLine } from '../../../shared/agentStatus';
 import { AUTONOMY_LABEL, AUTONOMY_MODES, effectiveAutonomy } from '../../../shared/autonomy';
-import { cloudSessionUrl } from '../../../shared/cloud';
 import { showsBrowser } from '../../../shared/browserView';
 import { helperFor, UNIFORM } from '../../../shared/crew';
 import type { Agent, Autonomy, BackgroundTask, BrowserFrame, CodingAgent, Effort, Helper, TermLine, Workflow, WorkflowAgent } from '../../../shared/types';
@@ -111,43 +110,6 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     if (a) void busy(close, () => closeGoal(a), ui.error);
   };
 
-  // made once, so it keeps its busy state while their work goes onto GitHub
-  const moveToCloud = h('button', { class: 'btn small', title: 'Carry on in a Claude Code cloud session: their work so far goes onto their branch on GitHub, and you start the session' }, '☁ Move to cloud');
-  moveToCloud.onclick = async () => {
-    const a = state.agents.get(id);
-    if (!a) return;
-    const working = !FINISHED.includes(a.status);
-    if (!await confirmDialog({
-      title: 'Move to cloud',
-      message: `${working ? `${a.name} stops what they're doing, and their` : `${a.name}'s`} work so far is committed and pushed to ${a.branch}. Then you start a cloud session for them to carry on in: Focus can open a terminal that starts it.`,
-      confirmLabel: 'Move to cloud',
-    })) return;
-    void busy(moveToCloud, () => api.moveToCloud(id), ui.error);
-  };
-  let handoverKey = '';
-  /** Starting the cloud session a waiting agent carries on in: a terminal that starts it, or a link to one. */
-  const handoverAsk = (a: Agent) => {
-    const watching = !!a.handover?.terminalAt;
-    const start = h('button', { class: 'btn go', title: 'Opens a terminal on this machine running claude --cloud in their worktree. Claude Code starts a new cloud session only from a terminal; Focus picks it up from there' }, watching ? '▶ Open another terminal' : '▶ Start in a terminal');
-    start.onclick = () => void busy(start, () => api.cloudTerminal(id), ui.error);
-    const link = h('input', { type: 'text', placeholder: '…or paste a claude.ai/code session link', style: 'flex:1;min-width:220px' });
-    const attach = h('button', { class: 'btn' }, 'Use it');
-    const attachLink = () => {
-      if (link.value.trim()) void busy(attach, () => api.attachCloud(id, link.value.trim()), ui.error);
-    };
-    attach.onclick = attachLink;
-    link.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') attachLink();
-    });
-    const stay = h('button', { class: 'btn', title: 'Keep them on this machine instead' }, 'Keep local');
-    stay.onclick = () => void busy(stay, () => api.stayLocal(id), ui.error);
-    return h('div', { class: 'ask' },
-      h('strong', null, '☁ Cloud session'),
-      h('span', { class: 'muted' }, watching ? 'Waiting for the terminal to start it…' : `${a.name} is waiting for one`),
-      start, link, attach, stay,
-    );
-  };
-
   const title = h('h2');
   ui.panels.open({ title, body, footer, nav, full: true, accent: UNIFORM[agent.avatar.division] });
   shown = id;
@@ -190,7 +152,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   };
 
   const renderHeader = (a: Agent) => {
-    // a bar coming or going above the terminal (a hand up, a cloud session to start) leaves it scrolled to the end
+    // a bar coming or going above the terminal (a hand up) leaves it scrolled to the end
     const atEnd = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
     title.replaceChildren(a.name, h('span', { class: 'muted' }, ` · ${a.task === 'lead' ? a.lead?.title ?? 'Goal' : a.brief ? `${a.brief.label}: ${a.issue.title}` : `#${a.issue.number} ${a.issue.title}`}`));
     fill(
@@ -206,11 +168,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
       contextReadout(a),
       readout('Started', timeAgo(a.startedAt), { tone: LCARS.peach }),
       a.costUsd > 0 ? readout('Usage', `~$${a.costUsd.toFixed(2)}`, { tone: LCARS.peach, title: 'Estimated usage (on a subscription this is not billed)' }) : null,
-      !a.cloud ? readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { tone: LCARS.lilac, title: 'What this session signs in to Claude with' }) : null,
-      a.cloud ? readout('Works in', 'Cloud', { tone: LCARS.lilac, title: 'Works in a Claude Code cloud session and pushes their own branch' }) : null,
+      readout('Signs in with', a.onKey ? '🔑 API key' : 'Your plan', { tone: LCARS.lilac, title: 'What this session signs in to Claude with' }),
       readout('Activity', statusLine(a), { grow: true }),
       h('div', { class: 'links' },
-        cloudLink(a),
         a.task === 'issue' ? h('a', { class: 'btn small', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, 'Issue ↗') : null,
         a.task === 'review' ? h('a', { class: 'btn small go', href: a.issue.url, target: '_blank', rel: 'noreferrer' }, `PR #${a.issue.number} ↗`) : null,
         a.task === 'review' ? h('button', { class: 'btn small', onclick: () => ui.openQa(a.projectId) }, 'QA reports') : null,
@@ -220,20 +180,11 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         a.pr && a.status === 'done'
           ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, 'Preview')
           : null,
-        movable(a) ? moveToCloud : null,
         paneToggle,
       ),
     );
     fill(closing, a.lead?.closing ? h('p', { class: 'goal-closing' }, `${a.name} thinks this goal is ready to wrap up: ${a.lead.closing.reason}. Close it, or tell them what's next.`) : null);
-    if (a.handover) {
-      // drawn again only when the hand-over changes, so a link half pasted isn't lost
-      const key = `${a.handover.since}:${a.handover.terminalAt ?? ''}`;
-      if (key !== handoverKey) {
-        handoverKey = key;
-        ask.replaceChildren(handoverAsk(a));
-      }
-    } else if (a.permission) {
-      handoverKey = '';
+    if (a.permission) {
       const req = a.permission;
       const approve = h('button', { class: 'btn go' }, 'Approve');
       const decline = h('button', { class: 'btn danger' }, 'Decline');
@@ -243,7 +194,6 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         h('div', { class: 'ask' }, h('strong', null, `${a.name} wants to run`), h('code', { class: 'grow' }, req.summary), approve, decline),
       );
     } else {
-      handoverKey = '';
       ask.replaceChildren();
     }
     stop.disabled = FINISHED.includes(a.status);
@@ -347,7 +297,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   /** How full their context is, and (between turns) a button to compact it. */
   const contextReadout = (a: Agent) => {
     if (!a.context) return null;
-    const canCompact = a.task !== 'review' && !a.cloud && !!a.sessionId && FINISHED.includes(a.status);
+    const canCompact = a.task !== 'review' && !!a.sessionId && FINISHED.includes(a.status);
     const compact = canCompact ? h('button', { class: 'btn small', style: 'margin-left:8px', title: 'Summarise the conversation now, keeping what the work needs, so the next turn starts lighter' }, 'Compact') : null;
     if (compact) compact.onclick = () => void busy(compact, () => api.compact(id), ui.error);
     return readout('Context', h('span', null, `${a.context.percent}%`, compact), {
@@ -369,8 +319,8 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
   };
 
   /**
-   * What the agent may do without asking, changeable any time for them alone: at once if they're working on this
-   * machine, else from their next turn. Shows the ship-wide setting until the captain picks one for them.
+   * What the agent may do without asking, changeable any time for them alone: at once if they're working, else from
+   * their next turn. Shows the ship-wide setting until the captain picks one for them.
    */
   const autonomyPicker = (a: Agent) => {
     const mode = autonomyOf(a);
@@ -432,42 +382,15 @@ export function effortPicker(value?: Effort): HTMLSelectElement {
 
 export const pickedEffort = (picker: HTMLSelectElement): Effort | undefined => EFFORT_LEVELS.find((e) => e === picker.value);
 
-/** A local agent the captain can move to the cloud (Ops says why not, if it won't). */
-const movable = (a: Agent) => (a.task === 'issue' || a.task === 'fix') && !a.cloud && !a.handover;
-
-/** Picks where an agent works: on this machine, or in a Claude Code cloud session. */
-export function wherePicker(cloud = false): HTMLSelectElement {
-  return h('select', { class: 'effort', title: "Where the agent works: on this machine, or in a Claude Code cloud session (claude.ai/code). If Claude Code won't start the cloud session by itself, the agent waits for you to start it (Focus can open a terminal that does)" },
-    h('option', { value: '', selected: !cloud }, 'local'),
-    h('option', { value: 'cloud', selected: cloud }, 'cloud'),
-  );
-}
-
-export const pickedCloud = (picker: HTMLSelectElement): boolean => picker.value === 'cloud';
-
 /**
  * Picks the coding agent a developer runs on: Claude Code, or Codex (on your ChatGPT plan, signed in once with
- * `CODEX_HOME=~/.agent-host/codex codex login`). Codex works on this machine only, so picking it sets `where` to local.
+ * `CODEX_HOME=~/.agent-host/codex codex login`).
  */
-export function agentPicker(where: HTMLSelectElement, value?: CodingAgent): HTMLSelectElement {
-  const picker = h('select', { class: 'effort', title: 'The coding agent the developer runs on: Claude Code, or Codex on your ChatGPT plan (it works on this machine only)' },
+export function agentPicker(value?: CodingAgent): HTMLSelectElement {
+  return h('select', { class: 'effort', title: 'The coding agent the developer runs on: Claude Code, or Codex on your ChatGPT plan' },
     h('option', { value: '', selected: value !== 'codex' }, 'Claude Code'),
     h('option', { value: 'codex', selected: value === 'codex' }, 'Codex'),
   );
-  const follow = () => {
-    const codex = picker.value === 'codex';
-    if (codex) where.value = '';
-    where.disabled = codex;
-  };
-  picker.addEventListener('change', follow);
-  follow();
-  return picker;
 }
 
 export const pickedAgent = (picker: HTMLSelectElement): CodingAgent | undefined => (picker.value === 'codex' ? 'codex' : undefined);
-
-/** Opens a cloud agent's session on claude.ai, once Claude Code has reported it. */
-export function cloudLink(a: Agent): HTMLElement | null {
-  const url = cloudSessionUrl(a);
-  return url ? h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noreferrer', title: 'Watch or steer the session on claude.ai' }, 'Cloud session ↗') : null;
-}

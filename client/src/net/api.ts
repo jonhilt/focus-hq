@@ -49,7 +49,7 @@ export const api = {
   /** Restarts Focus, under its supervisor: the page reconnects once it's back. */
   restart: () => call<{ restarting: true }>('POST', '/restart'),
 
-  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; cloud?: boolean; agent?: CodingAgent; fromDraft?: boolean }) =>
+  createIssue: (body: { projectId: string; repo: string; title: string; body: string; labels: string[]; assign: boolean; effort?: Effort; agent?: CodingAgent; fromDraft?: boolean }) =>
     call<{ issue: Issue; agent?: Agent }>('POST', '/issues', body),
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
@@ -96,8 +96,8 @@ export const api = {
   previewLogFile: (projectId: string, name: string) =>
     call<{ name: string; text: string; truncated: boolean }>('GET', `/previews/${projectId}/logs/${encodeURIComponent(name)}`),
 
-  hire: (projectId: string, issue: Issue, effort?: Effort, cloud?: boolean, agent?: CodingAgent) =>
-    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, cloud, agent }),
+  hire: (projectId: string, issue: Issue, effort?: Effort, agent?: CodingAgent) =>
+    call<Agent>('POST', '/agents', { projectId, repo: issue.repo, number: issue.number, title: issue.title, url: issue.url, effort, agent }),
   lines: (id: string) => call<TermLine[]>('GET', `/agents/${id}/lines`),
   /** An agent's run journal replayed: each fact in words, and where the run was after it. */
   run: (id: string) => call<ReplayStep[]>('GET', `/agents/${id}/run`),
@@ -128,14 +128,6 @@ export const api = {
   setAutonomy: (id: string, autonomy: Autonomy) => call<Agent>('POST', `/agents/${id}/autonomy`, { autonomy }),
   /** Compacts the agent's conversation between turns, keeping what their work needs. */
   compact: (id: string) => call<Agent>('POST', `/agents/${id}/compact`),
-  /** Moves a local agent's work to a Claude Code cloud session, which the captain then starts. */
-  moveToCloud: (id: string) => call<Agent>('POST', `/agents/${id}/cloud`),
-  /** Opens a terminal on this machine that starts the waiting agent's cloud session. */
-  cloudTerminal: (id: string) => call<Agent>('POST', `/agents/${id}/cloud/terminal`),
-  /** Hands the waiting agent the cloud session at `link` (claude.ai/code/session_…). */
-  attachCloud: (id: string, link: string) => call<Agent>('POST', `/agents/${id}/cloud/attach`, { link }),
-  /** Keeps the waiting agent on this machine. */
-  stayLocal: (id: string) => call<Agent>('POST', `/agents/${id}/cloud/stay`),
 
   voiceStatus: () => call<VoiceStatus>('GET', '/voice/status'),
   downloadVoiceModel: () => call<VoiceStatus>('POST', '/voice/download-model'),

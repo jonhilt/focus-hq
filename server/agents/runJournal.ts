@@ -76,7 +76,7 @@ export type RunFact =
   | { kind: 'decided'; turn: string; target: Target; summary?: string }
   /** Turn `turn`'s work is going onto GitHub, its pull request's description `summary`: written first, so a restart finishes it. */
   | { kind: 'delivering'; turn: string; summary: string }
-  /** Turn `turn`'s branch is on GitHub (pushed, or a cloud session's found there). */
+  /** Turn `turn`'s branch is pushed to GitHub. */
   | { kind: 'pushed'; turn: string }
   /** Turn `turn`'s work is delivered: its pull request open (or updated), or there was nothing to deliver. */
   | { kind: 'delivered'; turn: string; outcome: Delivered; pr?: number }
@@ -231,7 +231,7 @@ export const journalMachine = setup({
     cleared: { actions: assign({ inbox: [], later: [], notes: [], owed: [] }) },
     reset: { target: '.idle', actions: assign(() => ({ ...START, open: undefined, last: undefined, session: undefined, delivery: undefined, asking: undefined, heldUntil: undefined })) },
     held: { target: '.held', actions: assign(({ event }) => ({ heldUntil: event.until })) },
-    // the last turn's work, onto GitHub (a cloud agent's nudge to push may have come between)
+    // the last turn's work, onto GitHub
     delivering: { guard: 'the last turn', target: '.delivering', actions: assign(({ event }) => ({ delivery: { turn: event.turn, summary: event.summary } })) },
     waiting: '.waiting',
     'setting-up': '.setting-up',

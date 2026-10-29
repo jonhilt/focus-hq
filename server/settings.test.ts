@@ -106,12 +106,11 @@ describe('changeSettings', () => {
     expect(changeSettings(set, { publicUrl: '' })).not.toHaveProperty('publicUrl');
   });
 
-  it('takes auto update on or off, and the terminal and browser commands trimmed, empty clearing them', () => {
-    const set = changeSettings(settings, { autoUpdate: false, terminal: ' kitty -e ', browserPath: '/Applications/Chromium.app/x' });
-    expect(set).toMatchObject({ autoUpdate: false, terminal: 'kitty -e', browserPath: '/Applications/Chromium.app/x' });
-    const cleared = changeSettings(set, { autoUpdate: 'no', terminal: '', browserPath: '  ' });
+  it('takes auto update on or off, and the browser’s path trimmed, empty clearing it', () => {
+    const set = changeSettings(settings, { autoUpdate: false, browserPath: ' /Applications/Chromium.app/x ' });
+    expect(set).toMatchObject({ autoUpdate: false, browserPath: '/Applications/Chromium.app/x' });
+    const cleared = changeSettings(set, { autoUpdate: 'no', browserPath: '  ' });
     expect(cleared.autoUpdate).toBe(false);
-    expect(cleared).not.toHaveProperty('terminal');
     expect(cleared).not.toHaveProperty('browserPath');
   });
 
@@ -139,15 +138,15 @@ describe('where preview mirrors listen', () => {
 
 describe('the settings in force', () => {
   it('are the captain’s where no environment variable sets them', () => {
-    const mine = { ...settings, autoUpdate: false, terminal: 'kitty -e' };
+    const mine = { ...settings, autoUpdate: false, browserPath: '/mine' };
     expect(settingsInForce(mine, {})).toEqual(mine);
     expect(pinnedSettings({})).toEqual({});
   });
 
   it('take each an environment variable sets, and say which', () => {
-    const env = { FOCUS_AUTO_UPDATE: '0', FOCUS_TERMINAL: ' wezterm start -- ', FOCUS_BROWSER_PATH: '', PATH: '/bin' };
-    expect(settingsInForce({ ...settings, autoUpdate: true, terminal: 'kitty -e', browserPath: '/mine' }, env)).toMatchObject({ autoUpdate: false, terminal: 'wezterm start --', browserPath: '/mine' });
-    expect(pinnedSettings(env)).toEqual({ autoUpdate: 'FOCUS_AUTO_UPDATE', terminal: 'FOCUS_TERMINAL' });
+    const env = { FOCUS_AUTO_UPDATE: '0', FOCUS_WHISPER_BIN: ' /opt/bin/whisper-cli ', FOCUS_BROWSER_PATH: '', PATH: '/bin' };
+    expect(settingsInForce({ ...settings, autoUpdate: true, whisperBin: 'whisper-cli', browserPath: '/mine' }, env)).toMatchObject({ autoUpdate: false, whisperBin: '/opt/bin/whisper-cli', browserPath: '/mine' });
+    expect(pinnedSettings(env)).toEqual({ autoUpdate: 'FOCUS_AUTO_UPDATE', whisperBin: 'FOCUS_WHISPER_BIN' });
   });
 
   it('take whisper’s command and model, and the GPU for voices, from FOCUS_WHISPER_* and FOCUS_KOKORO_GPU', () => {

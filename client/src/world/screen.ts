@@ -191,7 +191,7 @@ export class StationScreen {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     const what = agent.task === 'lead' ? `${agent.lead?.title ?? 'lead'} · slice ${agent.lead?.slice ?? 1}` : `${agent.repo}#${agent.issue.number}`;
-    ctx.fillText(fitText(ctx, `${agent.name} · ${what} · claude${agent.cloud ? ' ☁ cloud' : ''}`.toUpperCase(), W - 140), 80, 19);
+    ctx.fillText(fitText(ctx, `${agent.name} · ${what} · claude`.toUpperCase(), W - 140), 80, 19);
 
     const footerH = 34;
     const prefs = screenPrefs.current;

@@ -18,10 +18,8 @@ import type { AgentManager } from './manager';
 import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
 import type { WorkspaceOps } from './types';
-import { CLOUD_UNAVAILABLE } from './cloudRules';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
-import { CARRYING_ON_HERE } from './manager/cloudMoves';
 import { leadWorktreeId } from './lead';
 import { refusedFile } from './pushGuard';
 import { BACKGROUND_LINGER_MS } from './backgroundTasks';
@@ -427,25 +425,24 @@ describe('AgentManager', () => {
 
     // anyone else follows Focus's own setting, as it is when their turn starts
     store.settings.autonomy = 'full';
-    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { cloud: true });
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' });
     await until(() => claude.turns.length === 3);
     expect(claude.turns[2].req.autonomy).toBe('full');
     expect(store.agent(id).autonomy).toBeUndefined();
     expect(store.agent(lead.id).autonomy).toBe('auto');
 
-    // a cloud session takes its new mode from its next turn, and says so
+    // their own mode takes hold in their running session
     agents.setAutonomy(id, 'ask');
     expect(claude.turns[2].modes).toEqual(['ask']);
-    expect(store.recentLines(id).at(-1)?.text).toMatch(/autonomy to Raise your hand \(from their next turn\)$/);
+    expect(store.recentLines(id).at(-1)?.text).toMatch(/autonomy to Raise your hand$/);
   });
 
-  it('hires a developer to run on Codex: their sessions say so, and they work on this machine', async () => {
+  it('hires a developer to run on Codex: their sessions say so', async () => {
     const { agents, claude, store, project } = focus();
-    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { agent: 'codex', cloud: true });
+    const { id } = agents.hire(project.id, 'demo/webshop-frontend', { number: 1, title: 'Add a dark mode toggle to the header' }, { agent: 'codex' });
     await until(() => claude.turns.length === 1);
-    expect(claude.turns[0].req).toMatchObject({ agent: 'codex', cloud: undefined });
+    expect(claude.turns[0].req).toMatchObject({ agent: 'codex' });
     expect(store.agent(id)).toMatchObject({ agent: 'codex' });
-    expect(store.agent(id).cloud).toBeUndefined();
     expect(store.recentLines(id).some((l) => l.text.includes('(Codex, default effort)'))).toBe(true);
   });
 
@@ -1617,130 +1614,6 @@ describe('AgentManager', () => {
     claude.turns[0].end({ ok: true, summary: '', structured: { verdict: 'fail', summary: 'Broken.', checks: [], commands: [], files: [] } });
     await until(() => claude.turns.length === 2);
     expect(claude.turns[1].req.prompt).toContain(`#${number}`);
-  });
-
-  describe('moving to the cloud', () => {
-    const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
-
-    it('moves a working agent to a cloud session a terminal starts, carrying on from their branch', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
-      await until(() => claude.turns.length === 1);
-      expect(claude.turns[0].req.cloud).toBeUndefined();
-
-      await agents.moveToCloud(id);
-      expect(claude.turns[0].stopped).toBe(true);
-      const waiting = store.agent(id);
-      expect(waiting).toMatchObject({ status: 'waiting', cloud: true, handover: { fresh: false, localSessionId: 'session-1' } });
-      expect(waiting.sessionId).toBeUndefined();
-
-      // the terminal shows the session's link once it has started it
-      claude.shown = 'Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/session_01abcDEF234\x1b[0m';
-      await agents.openCloudTerminal(id);
-      expect(claude.terminals).toEqual([{ agentId: id, agentName: waiting.name, cwd: `/demo/${id}`, description: expect.stringMatching(/reply only with the word Ready\.$/) }]);
-      await until(() => claude.turns.length === 2);
-      const attach = claude.turns[1].req;
-      expect(attach).toMatchObject({ resumeSessionId: 'session_01abcDEF234', cloud: { branch: waiting.branch } });
-      // a session the captain started gets Ops' instructions with the work
-      expect(attach.prompt).toMatch(/^# You are .*\n---\n\nYou're taking over GitHub issue #1/s);
-      expect(store.agent(id)).toMatchObject({ handover: undefined, cloud: true, sessionId: 'session_01abcDEF234', status: 'working' });
-    });
-
-    it('has a cloud hire Claude Code won’t start without a terminal wait for the session the captain pastes', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
-      await until(() => claude.turns.length === 1);
-      claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => !!store.agent(id).handover);
-      expect(store.agent(id)).toMatchObject({ status: 'waiting', cloud: true, handover: { fresh: true } });
-
-      agents.message(id, 'Use CSS variables');
-      await expect(agents.attachCloud(id, 'https://claude.ai/code')).rejects.toThrow(/isn’t a cloud session/);
-      await agents.attachCloud(id, 'https://claude.ai/code/session_01XYZabc999');
-      await until(() => claude.turns.length === 2);
-      expect(claude.turns[1].req.resumeSessionId).toBe('session_01XYZabc999');
-      // they start their task there, and hear what the captain said meanwhile
-      expect(claude.turns[1].req.prompt).toContain('Add a dark mode toggle to the header');
-      expect(claude.turns[1].sent).toEqual(['Use CSS variables']);
-
-      // a session Ops couldn't attach to leaves them waiting for another
-      claude.turns[1].end({ ok: false, summary: '', error: 'cloud session session_01XYZabc999 not found' });
-      await until(() => !!store.agent(id).handover);
-      expect(store.agent(id)).toMatchObject({ status: 'waiting', handover: { fresh: true } });
-      expect(claude.turns).toHaveLength(2);
-    });
-
-    it('carries a cloud hire on here when Claude Code won’t attach to the session the captain started, and stops sending later ones to wait', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
-      await until(() => claude.turns.length === 1);
-      claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => !!store.agent(id).handover);
-      await agents.attachCloud(id, 'https://claude.ai/code/session_01XYZabc999');
-      await until(() => claude.turns.length === 2);
-
-      // Claude Code refuses --cloud <session_id> with the SDK's stream-json: they start their task on this machine
-      claude.turns[1].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => claude.turns.length === 3);
-      expect(claude.turns[2].req).toMatchObject({ cloud: undefined, resumeSessionId: undefined });
-      expect(claude.turns[2].req.prompt).toContain('Add a dark mode toggle to the header');
-      expect(store.agent(id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined, sessionId: 'session-1' });
-      const said = store.recentLines(id).map((l) => l.text);
-      expect(said.filter((t) => t === CARRYING_ON_HERE)).toHaveLength(1);
-      expect(said.some((t) => t.includes('Couldn’t attach') || t.includes("Couldn't attach"))).toBe(false);
-
-      // the next cloud hire Claude Code won't start a session for carries on here rather than waiting for one
-      const next = agents.hire(project.id, 'demo/webshop-api', { number: 2, title: 'Rate-limit the login endpoint' }, { cloud: true });
-      await until(() => claude.turns.length === 4);
-      claude.turns[3].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => claude.turns.length === 5);
-      expect(claude.turns[4].req).toMatchObject({ cloud: undefined, resumeSessionId: undefined });
-      expect(store.agent(next.id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined });
-      expect(store.recentLines(next.id).map((l) => l.text)).toContain(CARRYING_ON_HERE);
-    });
-
-    it('carries a moved agent on here, in their own conversation, when Claude Code won’t attach to their cloud session', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
-      await until(() => claude.turns.length === 1);
-      await agents.moveToCloud(id);
-      await agents.attachCloud(id, 'https://claude.ai/code/session_01XYZabc999');
-      await until(() => claude.turns.length === 2);
-
-      claude.turns[1].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => claude.turns.length === 3);
-      expect(claude.turns[2].req).toMatchObject({ cloud: undefined, resumeSessionId: 'session-1' });
-      expect(claude.turns[2].req.prompt).toMatch(/^Carry on with the work from where it was left off/);
-      expect(store.agent(id)).toMatchObject({ status: 'working', handover: undefined, cloud: undefined, sessionId: 'session-1' });
-    });
-
-    it('keeps a waiting agent here: one who hasn’t started starts their task on this machine', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue, { cloud: true });
-      await until(() => claude.turns.length === 1);
-      claude.turns[0].end({ ok: false, summary: '', error: CLOUD_UNAVAILABLE });
-      await until(() => !!store.agent(id).handover);
-
-      await agents.stayLocal(id);
-      await until(() => claude.turns.length === 2);
-      expect(claude.turns[1].req).toMatchObject({ cloud: undefined, resumeSessionId: undefined });
-      expect(store.agent(id)).toMatchObject({ handover: undefined, cloud: undefined });
-    });
-
-    it('takes back a moved agent who stays, with their own conversation, until the captain says carry on', async () => {
-      const { agents, claude, store, project } = focus();
-      const { id } = agents.hire(project.id, 'demo/webshop-frontend', issue);
-      await until(() => claude.turns.length === 1);
-      await agents.moveToCloud(id);
-      await expect(agents.moveToCloud(id)).rejects.toThrow(/already waiting/);
-
-      agents.stop(id);
-      await until(() => !store.agent(id).handover);
-      expect(store.agent(id)).toMatchObject({ status: 'stopped', cloud: undefined, sessionId: 'session-1' });
-      agents.message(id, 'Carry on here');
-      await until(() => claude.turns.length === 2);
-      expect(claude.turns[1].req).toMatchObject({ resumeSessionId: 'session-1', cloud: undefined, prompt: 'Carry on here' });
-    });
   });
 
   describe('when the plan’s usage limit is reached', () => {

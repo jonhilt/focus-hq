@@ -48,7 +48,6 @@
   "server/agents/scratch.ts": 1,
   "server/agents/shipStatus.ts": 1,
   "server/agents/statechart.ts": 2,
-  "server/agents/terminal.ts": 1,
   "server/fileLock.ts": 2,
   "server/flows.ts": 1,
   "server/github/provider.ts": 1,

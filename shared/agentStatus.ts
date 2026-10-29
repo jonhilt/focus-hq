@@ -52,7 +52,7 @@ export function statusLine(agent: Agent): string {
   if (agent.held) return `On hold till ${clock(agent.held.until)}: your plan's usage limit`;
   switch (agent.status) {
     case 'waiting':
-      return agent.handover ? 'Needs you to start their cloud session' : 'Needs your approval!';
+      return 'Needs your approval!';
     case 'done':
       return agent.pr ? `PR #${agent.pr.number} ready for review` : agent.activity;
     case 'error':

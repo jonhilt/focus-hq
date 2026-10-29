@@ -13,12 +13,12 @@ export class GoalTools extends Part {
   /**
    * Reads the lead's brief, ./brief.md in their workspace, and takes what it says onto the goal (`briefedGoal`): as an
    * edit of it finishes, and as each of their turns starts and ends. A brief that isn't there (not written yet, or a
-   * reopened goal's, gone with its old workspace) leaves the goal as it was; a cloud lead's isn't here to read.
+   * reopened goal's, gone with its old workspace) leaves the goal as it was.
    */
   readBrief(leadId: string): Effect.Effect<void, never, Workspace> {
     return Effect.gen({ self: this }, function* () {
       const before = this.store.agents.get(leadId);
-      if (!before?.lead || before.cloud) return;
+      if (!before?.lead) return;
       const workspace = yield* Workspace;
       const text = yield* workspace.readIn(workspace.dir(leadId), BRIEF_FILE);
       const lead = this.store.agents.get(leadId);
@@ -34,7 +34,7 @@ export class GoalTools extends Part {
    */
   briefMoved(leadId: string): string | undefined {
     const lead = this.store.agents.get(leadId);
-    if (!lead?.lead || lead.cloud || !needsBrief(lead.lead)) return undefined;
+    if (!lead?.lead || !needsBrief(lead.lead)) return undefined;
     this.update(lead, { lead: { ...lead.lead, briefAsked: true } });
     return briefMovedNote(lead.lead);
   }

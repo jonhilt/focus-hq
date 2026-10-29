@@ -123,7 +123,7 @@ describe('transcriptReader', () => {
     expect(await read('s1')).toBe('grown');
   });
 
-  it('reads nothing for a session that isn’t in the agents’ folders (a cloud session’s, or someone else’s)', async () => {
+  it('reads nothing for a session that isn’t in the agents’ folders (someone else’s)', async () => {
     const { root, workspaces, write } = projects();
     const mine = path.join(root, '-home-me-code-shop');
     fs.mkdirSync(mine);

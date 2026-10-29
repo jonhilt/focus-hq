@@ -4,9 +4,8 @@ import { autoQaFor } from '../../../shared/qaRules';
 import type { Agent } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage } from '../../util';
-import { afterCloudRun } from '../cloudRules';
 import type { RunFact } from '../runJournal';
-import { COMMIT_NUDGE, pullRequestBody, pushNudge } from '../prompts';
+import { COMMIT_NUDGE, pullRequestBody } from '../prompts';
 import { Workspace } from '../services';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
 
@@ -42,29 +41,19 @@ export class Delivery extends Part {
     });
   }
 
-  /** The agent's work, onto GitHub: they're asked once to commit (or, in the cloud, push) what they left behind. */
+  /** The agent's work, onto GitHub: they're asked once to commit what they left behind. */
   private ship(agent: Agent, summary: string, journal: (fact: (turn: string) => RunFact) => void): Effect.Effect<void, WorkError, ManagerServices> {
     const rt = this.rt(agent.id);
     return Effect.gen({ self: this }, function* () {
       const github = yield* GitHub;
       const workspace = yield* Workspace;
       const dir = workspace.dir(agent.id);
-      if (agent.cloud) {
-        // a cloud agent pushed its work to GitHub: bring it into the worktree, where the checks below look
-        const before = yield* workspace.head(dir);
-        this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
-        yield* workspace.pull(dir, agent.branch);
-        if (afterCloudRun({ before, after: yield* workspace.head(dir), nudged: rt.nudged }) === 'nudge') {
-          rt.nudged = true;
-          this.print(agent, [{ kind: 'system', text: `✻ Nothing new on ${agent.branch} – asking the agent to push their work` }]);
-          return yield* this.core.sessions.runSession(agent, pushNudge(agent), agent.sessionId);
-        }
-      } else if (!rt.nudged && (yield* workspace.hasUncommittedChanges(dir))) {
+      if (!rt.nudged && (yield* workspace.hasUncommittedChanges(dir))) {
         rt.nudged = true;
         this.print(agent, [{ kind: 'system', text: '✻ Uncommitted changes left behind – asking the agent to commit them' }]);
         return yield* this.core.sessions.runSession(agent, COMMIT_NUDGE, agent.sessionId);
       }
-      // past asking them to commit (or push) anything more: what's there goes onto GitHub, and a restart finishes it
+      // past asking them to commit anything more: what's there goes onto GitHub, and a restart finishes it
       journal((t) => ({ kind: 'delivering', turn: t, summary }));
       const fixing = this.core.reviews.fixing(agent);
       if (fixing?.sha && sameCommit(yield* workspace.head(dir), fixing.sha)) {
@@ -80,17 +69,13 @@ export class Delivery extends Part {
         this.hub.toast('info', `${agent.name} finished #${agent.issue.number} without code changes`, agent.id);
         return;
       }
-      if (agent.cloud) {
-        this.print(agent, [{ kind: 'system', text: `✻ ${ahead} commit${ahead === 1 ? '' : 's'} on ${agent.branch}, pushed from the cloud session` }]);
-      } else {
-        // the push is forced, and every worktree of the repo shares its remote-tracking refs, so the lease alone wouldn't stop it
-        if (yield* workspace.missingRemoteCommits(dir, agent.branch)) {
-          return yield* new Refused({ message: `Someone else pushed to ${agent.branch} meanwhile: merge it in with \`git pull --no-rebase origin ${agent.branch}\` before this can ship` });
-        }
-        this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
-        this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
-        yield* this.retrying(agent, 'the push', workspace.push(dir, agent.branch));
+      // the push is forced, and every worktree of the repo shares its remote-tracking refs, so the lease alone wouldn't stop it
+      if (yield* workspace.missingRemoteCommits(dir, agent.branch)) {
+        return yield* new Refused({ message: `Someone else pushed to ${agent.branch} meanwhile: merge it in with \`git pull --no-rebase origin ${agent.branch}\` before this can ship` });
       }
+      this.update(agent, { status: 'pushing', activity: `Pushing ${ahead} commit${ahead === 1 ? '' : 's'}` });
+      this.print(agent, [{ kind: 'system', text: `✻ Pushing ${agent.branch}` }]);
+      yield* this.retrying(agent, 'the push', workspace.push(dir, agent.branch));
       journal((t) => ({ kind: 'pushed', turn: t }));
 
       let pr = agent.pr ?? (yield* this.retrying(agent, 'looking for the pull request', github.findPullRequest(agent.repo, agent.branch)));

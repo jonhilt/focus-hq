@@ -46,12 +46,12 @@ export class Ledger extends Part {
   /**
    * Digests what's new in the agent's session since its last digest (`sessionDigest.ts`): when they go home, when QA
    * gives a verdict, and when a lead's slice lands. A span already digested comes out empty, so it's safe to call at
-   * each; a cloud session's transcript isn't on this machine, so it isn't digested.
+   * each.
    */
   digestSession(agent: Agent, prs: { repo: string; pr: number }[]): void {
     const read = this.readTranscript;
     const sessionId = agent.sessionId;
-    if (!read || !sessionId || agent.cloud) return;
+    if (!read || !sessionId) return;
     // as they are now: the agent may be gone by the time the transcript's read
     const who = { id: agent.id, name: agent.name, task: agent.task, sessionId, costUsd: agent.costUsd };
     const goal = agent.lead?.title ?? prs.map((p) => this.core.goalPrs.ownerOf(p.repo, p.pr)?.lead?.title).find(Boolean);

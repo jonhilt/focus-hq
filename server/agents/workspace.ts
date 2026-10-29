@@ -498,14 +498,7 @@ export async function pushBranch(dir: string, branch: string): Promise<void> {
   await git(dir, ['push', '--force-with-lease', '-u', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
 }
 
-/** Creates `branch` on origin at the worktree's commit, unless it's already there: then the worktree takes what's there. */
-export async function publishBranch(dir: string, branch: string): Promise<void> {
-  const exists = (await git(dir, ['ls-remote', '--heads', 'origin', `refs/heads/${branch}`], 60_000)).trim().length > 0;
-  if (exists) await pullBranch(dir, branch);
-  else await git(dir, ['push', '-u', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
-}
-
-/** Resets the worktree to what's on origin's `branch`: a cloud agent pushes there, and nothing local is kept. */
+/** Resets the worktree to what's on origin's `branch`: nothing local is kept. */
 export async function pullBranch(dir: string, branch: string): Promise<void> {
   await git(dir, ['fetch', 'origin', `+refs/heads/${branch}:refs/remotes/origin/${branch}`], 5 * 60_000);
   await git(dir, ['reset', '--hard', `origin/${branch}`]);
@@ -602,7 +595,6 @@ export const liveWorkspace: WorkspaceOps = {
   branchesSeen: branchesSeen,
   changedFiles: changedFiles,
   push: pushBranch,
-  publish: publishBranch,
   pull: pullBranch,
   checkoutPullRequest: checkoutPullRequest,
   mergeBase: mergeBase,

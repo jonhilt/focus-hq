@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { withResult, type SoFar } from './claudeRunner';
 import { allowedWithoutAsking, answerEnds, endedOutcome, failedOutcome, holdsInput, runningInBackground, showsHeard } from './claudeRunnerRules';
-import { CLOUD_UNAVAILABLE } from './cloudRules';
 import { LIMIT_REACHED, STOPPED_BY_CAPTAIN } from './types';
 
 describe('holdsInput', () => {
@@ -70,7 +69,7 @@ describe('a session’s outcome', () => {
   const fresh: SoFar = { ok: false, summary: '', started: true };
   const answered = withResult(fresh, { text: 'Done', isError: false, queued: 0, structured: { verdict: 'pass' } });
   const calm = { stopping: false, limited: false };
-  const failure = { ...calm, aborted: false, cloud: false, stderr: '' };
+  const failure = { ...calm, aborted: false, stderr: '' };
 
   it('is its last turn’s result, keeping the structured answer when a later turn gives none', () => {
     const later = withResult(answered, { text: 'And a follow-up', isError: false, queued: 0 });
@@ -97,12 +96,6 @@ describe('a session’s outcome', () => {
 
   it('is a stop when Claude Code throws because the session was aborted', () => {
     expect(failedOutcome(fresh, new Error('Claude Code process aborted'), { ...failure, aborted: true })).toEqual({ ok: false, summary: '', error: STOPPED_BY_CAPTAIN, aborted: true, started: true });
-  });
-
-  it('is the cloud being unavailable when the CLI refused to start a cloud session, and only for a cloud session', () => {
-    const refusal = { ...failure, stderr: 'Error: --cloud requires an interactive terminal\n' };
-    expect(failedOutcome({ ...fresh, started: false }, new Error('exited with code 1'), { ...refusal, cloud: true })).toEqual({ ok: false, summary: '', error: CLOUD_UNAVAILABLE, started: false });
-    expect(failedOutcome(fresh, new Error('exited with code 1'), refusal).error).not.toBe(CLOUD_UNAVAILABLE);
   });
 
   it('is the error, with the last three lines Claude Code wrote, otherwise', () => {

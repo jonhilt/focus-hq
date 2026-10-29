@@ -39,7 +39,7 @@ describe('a subagent’s messages', () => {
       ...(withTranscripts && { helperLines: (id: string, l: Line[]) => theirs.set(id, [...(theirs.get(id) ?? []), ...l]) }),
     } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
+    const ctx = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
   };
@@ -77,7 +77,7 @@ describe('a workflow', () => {
     const helpers: unknown[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: (e: unknown) => helpers.push(e), workflow: (e: WorkflowEvent) => events.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
+    const ctx = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) runner.handle(m, ctx, hooks);
     expect(events).toEqual([
       { kind: 'started', id: 'w1', name: 'review-changes', description: 'Review the diff', script },
@@ -95,7 +95,7 @@ describe('a script run from the scratch dir', () => {
     const probes: ProbeEvent[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, helper: () => undefined, helperLines: () => undefined, probe: (e: ProbeEvent) => probes.push(e) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: '/tmp/focus-scratch/lead_x', probes: new Set(), commits: new Map() };
+    const ctx = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), scratch: '/tmp/focus-scratch/lead_x', probes: new Set(), commits: new Map() };
     for (const m of messages) runner.handle(m as SDKMessage, ctx, hooks);
     return probes;
   };
@@ -211,7 +211,7 @@ describe('Listening', () => {
 describe('the background tasks', () => {
   it('are what Claude Code last listed, leaving out the ambient ones', () => {
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx: { background?: string[] } & Record<string, unknown> = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), parents: new Map() };
+    const ctx: { background?: string[] } & Record<string, unknown> = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), parents: new Map() };
     const hooks = { lines: () => undefined, activity: () => undefined } as unknown as RunHooks;
     const changed = (tasks: unknown[]) => ({ type: 'system', subtype: 'background_tasks_changed', tasks }) as unknown as SDKMessage;
     runner.handle(changed([{ task_id: 'w1', task_type: 'local_workflow', description: 'Review' }, { task_id: 'm1', task_type: 'monitor', description: 'Watch', ambient: true }]), ctx, hooks);
@@ -228,7 +228,7 @@ describe('a commit', () => {
     const commits: (string | undefined)[] = [];
     const hooks = { lines: () => undefined, activity: () => undefined, commit: (m?: string) => commits.push(m) } as unknown as RunHooks;
     const runner = new ClaudeRunner(null as unknown as BrowserPool) as unknown as { handle(m: SDKMessage, ctx: unknown, h: RunHooks): unknown };
-    const ctx = { cwd: '/w', cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map() };
+    const ctx = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map() };
     const heredoc = `git commit -m "$(cat <<'EOF'\nShow the slice under way\n\nBody\nEOF\n)"`;
     for (const m of [bash('t1', 'git add -A && git commit -m "Heading on the chart"'), result('t1'), bash('t2', 'git commit -m "Nothing to commit"'), result('t2', true), bash('t3', heredoc), result('t3')]) runner.handle(m as SDKMessage, ctx, hooks);
     expect(commits).toEqual(['Heading on the chart', 'Show the slice under way']);
@@ -362,16 +362,10 @@ describe('permissionOptions', () => {
   const canUseTool = () => Promise.resolve({ behavior: 'allow' as const, updatedInput: {} });
   const rules = ['Bash(git status:*)'];
 
-  it('starts a local session able to switch to any mode', () => {
+  it('starts a session able to switch to any mode', () => {
     for (const [mode, permissionMode] of [['ask', 'acceptEdits'], ['auto', 'auto'], ['full', 'bypassPermissions']] as const) {
-      expect(permissionOptions(mode, false, rules, canUseTool)).toEqual({ permissionMode, allowDangerouslySkipPermissions: true, allowedTools: rules, canUseTool });
+      expect(permissionOptions(mode, rules, canUseTool)).toEqual({ permissionMode, allowDangerouslySkipPermissions: true, allowedTools: rules, canUseTool });
     }
-  });
-
-  it("gives a cloud session only what its turn's mode needs", () => {
-    expect(permissionOptions('full', true, rules, canUseTool)).toEqual({ permissionMode: 'bypassPermissions', allowDangerouslySkipPermissions: true });
-    expect(permissionOptions('auto', true, rules, canUseTool)).toEqual({ permissionMode: 'auto', canUseTool });
-    expect(permissionOptions('ask', true, rules, canUseTool)).toEqual({ permissionMode: 'acceptEdits', allowedTools: rules, canUseTool });
   });
 });
 

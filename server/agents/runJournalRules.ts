@@ -34,7 +34,6 @@ export type Recovery =
 export interface RecoveryAgent {
   task: string;
   sessionId?: string;
-  cloud?: unknown;
 }
 
 /** The tasks whose conversation carries on after a restart: QA's too, with the review it was at (`reviewRecovery`). */
@@ -56,7 +55,7 @@ export function recovery(state: RunState, agent: RecoveryAgent, onKey: boolean):
   const session = turn.session ?? turn.resumes;
   if (turn.stopped) return { kind: 'wait', turn: turn.id, why: 'Stopped by the captain just before Focus shut down. Send a message to pick it back up.' };
   if (turn.kind === 'compact') return { kind: 'wait', turn: turn.id, why: 'Focus shut down while compacting the conversation. Send a message to carry on.' };
-  if (!RESUMES.has(agent.task) || agent.cloud || !session) return { kind: 'wait', turn: turn.id, why: INTERRUPTED_ACTIVITY };
+  if (!RESUMES.has(agent.task) || !session) return { kind: 'wait', turn: turn.id, why: INTERRUPTED_ACTIVITY };
   if (turn.mismatch) return { kind: 'wait', turn: turn.id, why: 'Stopped for signing in with the API key. Send a message to pick it back up.' };
   if (onKey) return { kind: 'wait', turn: turn.id, why: 'Interrupted when Focus shut down. Picking it back up would be on your API key, so send a message when you want it to.' };
   return { kind: 'resume', turn: turn.id, prompt: turn.session ? resumedNote(turn.sent ?? []) : turn.prompt, session };
@@ -84,7 +83,7 @@ function inPhase(state: RunState, phase: string): boolean {
 
 /** An agent that was waiting for a free slot: in line again, unless that would pick a conversation up on your API key. */
 function requeue(agent: RecoveryAgent, onKey: boolean): Recovery {
-  if (!RESUMES.has(agent.task) || agent.cloud) return { kind: 'none' };
+  if (!RESUMES.has(agent.task)) return { kind: 'none' };
   if (onKey && agent.sessionId) return { kind: 'hold', why: 'Was waiting for a free slot when Focus shut down. Picking their conversation back up would be on your API key, so send a message when you want it to.' };
   return { kind: 'requeue' };
 }

@@ -6,7 +6,7 @@ let usage: Usage | undefined;
 const agents = [
   { name: 'Ens. Park', costUsd: 0.5, onKey: true },
   { name: 'Lt. Okoro', costUsd: 2.25 },
-  { name: 'Cmdr. Vale', costUsd: 0, cloud: true },
+  { name: 'Cmdr. Vale', costUsd: 0 },
 ];
 
 // the browser's plugin API brings every plugin's client part with it: the readout needs its state, the agents aboard,
@@ -83,7 +83,7 @@ describe('the usage plugin in the browser', () => {
     expect(text).toContain('Your Claude plan, then your API key (up to $20) when it runs out');
     expect([...(top?.querySelectorAll('.usage-row') ?? [])].map((r) => r.className)).toEqual(['usage-row warn', 'usage-row ok', 'usage-row ok']);
     // the costliest session first, with what each signs in with
-    expect([...(top?.querySelectorAll('td') ?? [])].map((td) => td.textContent)).toEqual(['Lt. Okoro', 'plan', '~$2.25', 'Ens. Park', '🔑 key', '~$0.50', 'Cmdr. Vale', '☁ cloud', '–']);
+    expect([...(top?.querySelectorAll('td') ?? [])].map((td) => td.textContent)).toEqual(['Lt. Okoro', 'plan', '~$2.25', 'Ens. Park', '🔑 key', '~$0.50', 'Cmdr. Vale', 'plan', '–']);
     top?.querySelector('button')?.click();
     expect(ui.showOnMsd).toHaveBeenCalledWith({ plugin: 'usage' });
   });

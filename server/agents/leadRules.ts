@@ -14,8 +14,8 @@ export const hasLeadWork = (agent: Agent): agent is LeadAgent => agent.lead !== 
  * back up and it held `at` tokens or more at the end of the last one (0 = never), unless compacting it already failed.
  * Every call in a turn reads the whole conversation again, so a big one costs on every step, not just once.
  */
-export function compactsFirst(lead: Pick<Agent, 'sessionId' | 'cloud' | 'context'>, resuming: boolean, at: number, failedIn?: string): boolean {
-  return at > 0 && resuming && !lead.cloud && !!lead.sessionId && lead.sessionId !== failedIn && (lead.context?.tokens ?? 0) >= at;
+export function compactsFirst(lead: Pick<Agent, 'sessionId' | 'context'>, resuming: boolean, at: number, failedIn?: string): boolean {
+  return at > 0 && resuming && !!lead.sessionId && lead.sessionId !== failedIn && (lead.context?.tokens ?? 0) >= at;
 }
 
 export const ARTIFACT_LIMITS = { id: 40, title: 80, count: 12, bytes: 2_000_000 } as const;

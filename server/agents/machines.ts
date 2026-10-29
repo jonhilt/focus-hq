@@ -58,7 +58,7 @@ export function leafOf(value: StateValue): string {
 /** Focus's machines, drawn: the order they're shown in. */
 export const MACHINES: readonly MachineGraph[] = [
   machineGraph(journalMachine, { id: 'run', title: 'A crew member’s run', about: 'Where an agent’s run is, from its journal: waiting, setting up, in a turn, delivering, held.', runs: 'crew member' }),
-  machineGraph(runMachine, { id: 'turn', title: 'What follows a turn', about: 'What Ops does once a turn ends, by where it ran and how it ended.', runs: 'crew member' }),
+  machineGraph(runMachine, { id: 'turn', title: 'What follows a turn', about: 'What Ops does once a turn ends, by who they are and how it ended.', runs: 'crew member' }),
   machineGraph(reviewMachine, { id: 'review', title: 'QA’s review', about: 'A pull request’s review by QA: queued, checked, tested, reported.', runs: 'pull request' }),
 ];
 
@@ -80,7 +80,7 @@ export function machineRuns(from: RunSources): MachineRun[] {
     const who = { key: agent.id, label: agent.name, projectId: agent.projectId };
     if (!agent.run) continue;
     runs.push({ machine: 'run', ...who, state: agent.run.phase, seq: agent.run.seq });
-    runs.push({ machine: 'turn', ...who, state: agent.run.target ?? (agent.cloud ? 'turn.cloud.running' : 'turn.local'), seq: agent.run.seq });
+    runs.push({ machine: 'turn', ...who, state: agent.run.target ?? 'turn.local', seq: agent.run.seq });
   }
   for (const review of from.reviews) {
     const repo = review.key.slice(0, review.key.lastIndexOf('#'));

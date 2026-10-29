@@ -14,7 +14,7 @@ import { compactsFirst, hasLeadWork } from '../leadRules';
 import { mismatchError, turnEnding, type TurnKind } from '../runJournal';
 import { recovery, signInMismatch } from '../runJournalRules';
 import { compactRefusal } from './sessionRules';
-import { carryOnPrompt, COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
+import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { type Recordings, Sessions, Workspace } from '../services';
 import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
@@ -62,13 +62,7 @@ export class AgentSessions extends Part {
         : agent.task === 'fix' && this.core.goalPrs.ownerOf(agent.repo, agent.issue.number) ? `${agent.branch}-fix-${agent.id.slice(-4)}`
         : undefined;
       yield* workspace.create(agent.repo, agent.id, agent.branch, startPoint, (id) => this.store.agents.has(id), local);
-      // a cloud session works in a clone of its own, so it installs there
-      if (!agent.cloud) yield* this.install(agent, workspace.dir(agent.id));
-      if (agent.cloud) {
-        // a cloud session clones its branch from GitHub, so a new one has to be there first
-        this.update(agent, { activity: 'Publishing the branch for the cloud session' });
-        yield* workspace.publish(workspace.dir(agent.id), agent.branch);
-      }
+      yield* this.install(agent, workspace.dir(agent.id));
       if (!this.store.agents.has(agent.id) || agent.status === 'stopped') return;
       rt.notes = rt.inbox.take();
       yield* this.runSession(agent, withNotes(prompt, rt.notes));
@@ -249,7 +243,6 @@ export class AgentSessions extends Part {
       model: agent.model,
       agent: agent.agent,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
-      cloud: agent.cloud ? { branch: agent.branch } : undefined,
       brief: agent.task === 'lead' ? { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) } : undefined,
       scripted: this.core.plugins.brief(agent.brief)?.demo,
       tools: agent.task === 'lead'
@@ -306,7 +299,7 @@ export class AgentSessions extends Part {
           rt.turn = undefined;
           // Focus shutting down stops every turn: each stays open in the journal, to carry on at the next start
           if (this.core.closing) return;
-          // interrupted (sent home, moved to the cloud): it's over as much as a stop is
+          // interrupted (sent home): it's over as much as a stop is
           this.store.journal(agent.id, { kind: 'turn-ended', turn, outcome: Exit.isSuccess(exit) ? turnEnding(exit.value) : { ok: false, aborted: true } });
         }),
       ),
@@ -319,7 +312,7 @@ export class AgentSessions extends Part {
    */
   private compact(agent: Agent, keep: string): Effect.Effect<boolean, never, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
-      if (!agent.sessionId || agent.cloud) return false;
+      if (!agent.sessionId) return false;
       const rt = this.rt(agent.id);
       const wasBusy = rt.busy;
       rt.busy = true;
@@ -366,7 +359,7 @@ export class AgentSessions extends Part {
       // a new turn: what the plugins noted of the last one is over, and a mark on it that comes later is refused
       this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined, ...(agent.lead && { lead: { ...agent.lead, marks: undefined, turnStarted: Date.now() } }) });
       this.core.plugins.turn(agent, 'start');
-      // a turn that's interrupted (sent home, moved to the cloud) still ends, for the plugins
+      // a turn that's interrupted (sent home) still ends, for the plugins
       const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true).pipe(
         Effect.ensuring(Effect.sync(() => this.core.plugins.turn(agent, 'end'))),
       );
@@ -378,76 +371,28 @@ export class AgentSessions extends Part {
       rt.inbox.release();
       if (!this.store.agents.has(agent.id)) return;
 
-      const ended: TurnEnd = { outcome, prompt, resumeSessionId, lead, review, attaching: rt.attaching, mismatch: this.store.run(agent.id).last?.mismatch };
+      const ended: TurnEnd = { outcome, prompt, resumeSessionId, lead, review, mismatch: this.store.run(agent.id).last?.mismatch };
       return yield* this.follow(agent, this.decide(agent, ended, carryOn), ended);
     });
   }
 
   /**
-   * What follows the turn, from the run's state machine (`runMachine.ts`): where it ran and what its end was say
+   * What follows the turn, from the run's state machine (`runMachine.ts`): who they are and what its end was say
    * where the run goes next, and the journal has it.
    */
   private decide(agent: Agent, ended: TurnEnd, carryOn: boolean): Target {
-    const { attaching } = ended;
-    const next = step(attaching ? 'attaching' : agent.cloud ? 'cloud' : 'local', turnEvent(ended.outcome, ended.mismatch), {
+    const next = step(turnEvent(ended.outcome, ended.mismatch), {
       role: ended.review ? 'review' : ended.lead ? 'lead' : 'work',
       resumed: !!ended.resumeSessionId,
-      hasSession: !!agent.sessionId,
-      tries: attaching?.tries ?? 0,
-      attachRefused: this.core.cloud.attachRefused,
       carryOn,
     });
-    if (attaching && next !== 'attach-again') this.rt(agent.id).attaching = undefined;
     const last = this.store.run(agent.id).last;
     if (last) this.store.journal(agent.id, { kind: 'decided', turn: last.id, target: next, ...(next === 'deliver' && { summary: ended.outcome.summary }) });
     return next;
   }
 
-  /** Does what the run's machine decided follows the turn. */
-  private follow(agent: Agent, next: Target, ended: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
-    if (next === 'attach-again' || next === 'attach-refused' || next === 'attach-failed') {
-      // only a turn attaching to a cloud session ends here
-      return ended.attaching ? this.afterAttaching(agent, next, ended.attaching, ended.outcome, ended.prompt, ended.resumeSessionId) : Effect.void;
-    }
-    if (next === 'cloud-carry-on-here' || next === 'cloud-await' || next === 'cloud-to-local' || next === 'new-cloud-session') return this.afterCloud(agent, next, ended);
-    return this.afterWork(agent, next, ended);
-  }
-
-  /** A cloud turn's session couldn't be had: carry on here, wait for the captain to start one, or start a new one. */
-  private afterCloud(agent: Agent, next: 'cloud-carry-on-here' | 'cloud-await' | 'cloud-to-local' | 'new-cloud-session', { outcome, prompt }: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
-    return Effect.gen({ self: this }, function* () {
-      const rt = this.rt(agent.id);
-      switch (next) {
-        case 'cloud-carry-on-here':
-          // they haven't started, and Claude Code wouldn't attach to a session the captain started either
-          rt.nudged = false;
-          return yield* this.core.cloud.carryOnHere(agent, { since: Date.now(), fresh: true });
-        case 'cloud-await':
-          // they haven't started: the captain starts their cloud session, which a terminal can, or keeps them here
-          rt.nudged = false;
-          this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session without a terminal" }]);
-          return this.core.cloud.awaitCloud(agent, { since: Date.now(), fresh: true });
-        case 'cloud-to-local': {
-          // a session id from the cloud means it already worked there: its pushes may be on GitHub but not in the worktree
-          rt.nudged = false;
-          this.update(agent, { cloud: undefined, sessionId: undefined });
-          this.print(agent, [{ kind: 'system', text: "✻ Claude Code won't start a cloud session from Focus – carrying on here as a 💻 local agent" }]);
-          this.update(agent, { activity: `Fetching ${agent.branch} from GitHub` });
-          const workspace = yield* Workspace;
-          yield* workspace.pull(workspace.dir(agent.id), agent.branch);
-          // only a new session gets refused, so this is already a carry-on prompt with the manager's message in it
-          return yield* this.runSession(agent, prompt);
-        }
-        case 'new-cloud-session':
-          // everything the old session did is on the branch: a new one picks it up from there
-          this.print(agent, [{ kind: 'system', text: `✻ Couldn't get back into the cloud session (${truncate(outcome.error ?? 'no reason given', 200)}) – starting a new one on ${agent.branch}` }]);
-          return yield* this.runSession(agent, carryOnPrompt(agent, prompt));
-      }
-    });
-  }
-
-  /** The turn's work is over, or it stopped: what comes of it, by who they are and how it ended. */
-  private afterWork(agent: Agent, next: Exclude<Target, 'attach-again' | 'attach-refused' | 'attach-failed' | 'cloud-carry-on-here' | 'cloud-await' | 'cloud-to-local' | 'new-cloud-session'>, { outcome, prompt, lead, review, mismatch }: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
+  /** Does what the run's machine decided follows the turn: what comes of it, by who they are and how it ended. */
+  private follow(agent: Agent, next: Target, { outcome, prompt, lead, review, mismatch }: TurnEnd): Effect.Effect<void, WorkError, ManagerServices> {
     return Effect.gen({ self: this }, function* () {
       switch (next) {
         case 'sign-in-mismatch':
@@ -491,34 +436,6 @@ export class AgentSessions extends Part {
     });
   }
 
-  /** A turn attaching to the cloud session the captain started has ended: try again, carry on here, or wait for the captain. */
-  private afterAttaching(
-    agent: Agent,
-    next: 'attach-again' | 'attach-refused' | 'attach-failed',
-    attaching: NonNullable<Runtime['attaching']>,
-    outcome: RunOutcome,
-    prompt: string,
-    resumeSessionId?: string,
-  ): Effect.Effect<void, WorkError, ManagerServices> {
-    return Effect.gen({ self: this }, function* () {
-      switch (next) {
-        case 'attach-again':
-          // the session the captain started may still be answering its first message
-          attaching.tries++;
-          this.update(agent, { activity: 'Waiting for the cloud session to finish its first reply' });
-          yield* Effect.sleep('15 seconds');
-          return yield* this.runSession(agent, prompt, resumeSessionId);
-        case 'attach-refused':
-          // Claude Code won't attach from Focus at all: no session the captain starts would do, so they carry on here
-          this.core.cloud.attachRefused = true;
-          return yield* this.core.cloud.carryOnHere(agent, attaching.handover);
-        case 'attach-failed':
-          this.print(agent, [{ kind: 'error', text: `✘ Couldn't attach to the cloud session: ${outcome.error ?? 'no reason given'}` }]);
-          return this.core.cloud.awaitCloud(agent, attaching.handover);
-      }
-    });
-  }
-
   /**
    * After a restart, each agent's run picks up from their journal: messages taken for a turn that was never requested
    * go back in their inbox, and a turn that was in flight is interrupted, then carries on in the same conversation where
@@ -534,8 +451,7 @@ export class AgentSessions extends Part {
     const next = recovery(run, agent, onKey);
     if (next.kind === 'resume' || next.kind === 'wait') this.store.journal(agent.id, { kind: 'interrupted', turn: next.turn });
     if (this.store.run(agent.id).owed.length) this.store.journal(agent.id, { kind: 'restored' });
-    // a cloud agent waiting for the captain to start its session waits as it was
-    if (next.kind === 'none' || agent.handover) return;
+    if (next.kind === 'none') return;
     if (next.kind === 'wait' || next.kind === 'hold') {
       if (agent.status === 'stopped') this.update(agent, { activity: next.why });
       return;
@@ -589,7 +505,6 @@ interface TurnEnd {
   resumeSessionId?: string;
   lead?: LeadAgent;
   review: boolean;
-  attaching?: Runtime['attaching'];
   /** How Claude Code signed in, when it wasn't the way Focus meant. */
   mismatch?: string;
 }

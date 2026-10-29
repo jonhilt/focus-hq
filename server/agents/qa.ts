@@ -491,7 +491,7 @@ export function qaPrompt(repo: string, pr: PullRequestDetail, issues: IssueDetai
  * QA's findings on a failed round, for whoever has to fix them. On a goal's pull request (`goal`), its lead isn't there to
  * ask: the fixer hears what the goal is for, and leaves to the lead any finding that's a call about it rather than a defect.
  */
-export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }, cloud = false, goal?: { title: string; brief?: string; lead: string }): string {
+export function fixPrompt(pr: { number: number; branch: string }, review: Pick<QaReview, 'sha'> & { report: QaReport }, goal?: { title: string; brief?: string; lead: string }): string {
   return [
     `QA failed pull request #${pr.number}${review.sha ? ` (commit ${review.sha.slice(0, 7)})` : ''} and sent it back to you. Please fix it.`,
     '',
@@ -499,7 +499,7 @@ export function fixPrompt(pr: { number: number; branch: string }, review: Pick<Q
     ...proofsToKeep(review.report),
     ...(goal ? ['', ...goalForFixer(pr, goal)] : []),
     '',
-    fixAndPush('what QA found', pr.branch, cloud),
+    fixAndPush('what QA found', pr.branch),
   ].join('\n');
 }
 
@@ -513,7 +513,7 @@ function goalForFixer(pr: { number: number }, goal: { title: string; brief?: str
 }
 
 /** For a PR QA passed whose checks on GitHub still fail after a re-run. */
-export function checksFixPrompt(pr: { number: number; branch: string }, sha: string | undefined, checks: FailedCheck[], cloud = false): string {
+export function checksFixPrompt(pr: { number: number; branch: string }, sha: string | undefined, checks: FailedCheck[]): string {
   return [
     `QA passed pull request #${pr.number}, but its checks on GitHub fail${sha ? ` on commit ${sha.slice(0, 7)}` : ''}, and failed again when re-run. It was sent back to you. Please fix it.`,
     '',
@@ -522,14 +522,12 @@ export function checksFixPrompt(pr: { number: number; branch: string }, sha: str
     '',
     'For GitHub Actions, `gh run view <run id> --log-failed` shows what went wrong.',
     '',
-    fixAndPush('the failing checks', pr.branch, cloud),
+    fixAndPush('the failing checks', pr.branch),
   ].join('\n');
 }
 
-function fixAndPush(what: string, branch: string, cloud: boolean): string {
-  return cloud
-    ? `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, commit, and push with \`git push origin HEAD:${branch}\`. That updates the pull request and QA tests it again.`
-    : `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. Ops pushes your commits to the same pull request and QA tests it again.`;
+function fixAndPush(what: string, branch: string): string {
+  return `Fix ${what} on \`${branch}\`, run the tests, type checks and linters, and commit. Ops pushes your commits to the same pull request and QA tests it again.`;
 }
 
 /**

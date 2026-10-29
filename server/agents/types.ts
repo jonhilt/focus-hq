@@ -110,11 +110,6 @@ export interface RunRequest {
   /** Ops' own tools for this session (a goal's lead's), exposed to Claude Code as mcp__office__*. */
   tools?: OpsTools;
   /**
-   * Run in a Claude Code cloud session that works on `branch` and pushes it. `resumeSessionId` is then the cloud
-   * session's id, and `systemAppend` goes into the first message.
-   */
-  cloud?: { branch: string };
-  /**
    * A goal lead's brief, ./brief.md in `cwd` (`briefFile.ts`): `edited` as the lead's Write or Edit of it finishes, for
    * Ops to read it again, and `afterCompact` what Claude Code gives the lead once their conversation's compacted.
    */
@@ -167,7 +162,7 @@ export interface RunOutcome {
   structured?: unknown;
   error?: string;
   aborted?: boolean;
-  /** Claude Code got as far as reporting the session. A cloud session that couldn't be reattached to never does. */
+  /** Claude Code got as far as reporting the session. */
   started?: boolean;
   /** Your plan's usage limit stopped the session, which can carry on with your API key. */
   limited?: boolean;
@@ -188,22 +183,6 @@ export interface AgentSession {
 
 export interface AgentRunner {
   start(req: RunRequest, hooks: RunHooks): AgentSession;
-  /** Opens a terminal on the captain's screen, in `cwd`, that starts a cloud session. Missing where there's no terminal to open. */
-  cloudTerminal?(req: CloudTerminalRequest): Promise<CloudTerminal>;
-}
-
-export interface CloudTerminalRequest {
-  agentId: string;
-  agentName: string;
-  cwd: string;
-  /** The new session's first message: what it's for, while Ops gets ready to send the work. */
-  description: string;
-}
-
-/** A terminal Ops opened to start a cloud session. */
-export interface CloudTerminal {
-  /** What it has shown so far ('' until anything), where the session's id turns up; undefined when Ops can't see it. */
-  read(): Promise<string | undefined>;
 }
 
 /** How a branch in a checkout stands with origin: whether origin has it, and how many commits it hasn't got. */
@@ -246,12 +225,7 @@ export interface WorkspaceOps {
   /** The files HEAD changes against origin's `baseBranch` (a review's checkout): what QA's report accounts for. Missing where there are no real checkouts. */
   changedFiles?(dir: string, baseBranch: string): Promise<string[]>;
   push(dir: string, branch: string): Promise<void>;
-  /**
-   * Makes sure origin has `branch`, for a cloud session to clone: pushes `dir`'s commit if it isn't there yet, and
-   * otherwise brings `dir` up to it (work a cloud session already pushed is never overwritten).
-   */
-  publish(dir: string, branch: string): Promise<void>;
-  /** Brings `dir` up to the remote `branch`, where a cloud agent pushed its work. */
+  /** Brings `dir` up to the remote `branch`, where someone else pushed. */
   pull(dir: string, branch: string): Promise<void>;
   /** Merges origin's `baseBranch` into origin's `branch` on Ops' side, and pushes it if git needed no help. */
   mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;

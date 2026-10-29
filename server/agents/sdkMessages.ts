@@ -1,6 +1,5 @@
 import type { SDKAssistantMessage, SDKMessage, SDKRateLimitEvent, SDKResultMessage, SDKTaskNotificationMessage, SDKTaskProgressMessage, SDKTaskStartedMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
-import { cloudSessionUrl } from '../../shared/cloud';
 import type { TermKind, TermLine } from '../../shared/types';
 import { truncate } from '../util';
 import { keyFallback, requestUsd } from './apiKey';
@@ -23,11 +22,8 @@ type ToolResultBlock = { type: 'tool_result'; tool_use_id: string; is_error?: bo
 /** What one run remembers between messages: tool calls waiting for their results, and the page last pointed at. */
 export interface RunContext {
   cwd: string;
-  cloud: boolean;
   calls: Map<string, ToolCall>;
   lastUrl?: string;
-  /** The cloud session's id, once the CLI has reported it. */
-  cloudId?: string;
   /** Subagents by Claude Code's task id: the Agent tool call that started each, which their messages point back to. */
   helpers: Map<string, string>;
   /** Workflows by Claude Code's task id. */
@@ -107,7 +103,6 @@ export function handleMessage(msg: SDKMessage, ctx: RunContext, hooks: RunHooks)
 // ── system messages ──────────────────────────────────────────────────────────
 
 function systemMessage(msg: SystemMessage, ctx: RunContext, hooks: RunHooks): void {
-  cloudSession(msg, ctx, hooks);
   if (msg.subtype === 'task_started') return taskStarted(msg, ctx, hooks);
   if (msg.subtype === 'task_progress') return taskProgress(msg, ctx, hooks);
   if (msg.subtype === 'task_notification') return taskNotification(msg, ctx, hooks);
@@ -115,29 +110,10 @@ function systemMessage(msg: SystemMessage, ctx: RunContext, hooks: RunHooks): vo
     ctx.background = foregroundTasks(msg.tasks);
     return;
   }
-  if (msg.subtype === 'init' && !ctx.cloud) hooks.session(msg.session_id, msg.apiKeySource);
-  const note = systemNote(msg, ctx.cloud);
+  if (msg.subtype === 'init') hooks.session(msg.session_id, msg.apiKeySource);
+  const note = systemNote(msg);
   if (note) hooks.lines([note.line]);
   if (note?.activity) hooks.activity(null, note.activity);
-}
-
-/**
- * The cloud session's id, when this message brings a new one. Relayed from a cloud session, init (and later
- * cloud_session_delta) carry the cloud session's own id: the one `--cloud <id>` reattaches with. The worker's
- * session_id beside it doesn't reattach.
- */
-export function newCloudId(msg: unknown, ctx: Pick<RunContext, 'cloud' | 'cloudId'>): string | undefined {
-  const id = field(field(msg, 'cloud_session'), 'id');
-  return ctx.cloud && typeof id === 'string' && id !== ctx.cloudId ? id : undefined;
-}
-
-function cloudSession(msg: SystemMessage, ctx: RunContext, hooks: RunHooks): void {
-  const cloudId = newCloudId(msg, ctx);
-  if (!cloudId) return;
-  ctx.cloudId = cloudId;
-  hooks.session(cloudId);
-  const url = cloudSessionUrl({ cloud: true, sessionId: cloudId });
-  if (url) hooks.lines([{ kind: 'system', text: `☁ Cloud session: ${url}` }]);
 }
 
 /** The kinds of background task running, leaving out the ambient ones. */
@@ -145,18 +121,9 @@ export function foregroundTasks(tasks: { task_type?: string; ambient?: boolean }
   return (tasks ?? []).filter((t) => !t.ambient).map((t) => t.task_type ?? '');
 }
 
-/** What the session's own system notes show: Claude Code starting, the CLI's notes on a cloud session, API retries, compaction. */
-export function systemNote(msg: SystemMessage, cloud: boolean): { line: Line; activity?: string } | undefined {
-  // the CLI's cloud notes have a subtype of their own, which the SDK's types don't list
-  const subtype: string = msg.subtype;
-  if (msg.subtype === 'init') {
-    return { line: { kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}${cloud ? ' · ☁ cloud' : ''}` } };
-  }
-  if (subtype === 'cloud_session_status') {
-    // the CLI's own notes on the cloud session (starting up, where to watch it)
-    const content = field(msg, 'content');
-    return typeof content === 'string' && content.trim() ? { line: { kind: 'system', text: `☁ ${truncate(content.trim(), 300)}` } } : undefined;
-  }
+/** What the session's own system notes show: Claude Code starting, API retries, compaction. */
+export function systemNote(msg: SystemMessage): { line: Line; activity?: string } | undefined {
+  if (msg.subtype === 'init') return { line: { kind: 'system', text: `✻ Claude Code ${msg.claude_code_version} · ${msg.model} · ${msg.permissionMode}` } };
   if (msg.subtype === 'api_retry') {
     return { line: { kind: 'error', text: `  ⚠ API ${msg.error} – retrying (attempt ${msg.attempt}/${msg.max_retries})` }, activity: `Waiting on the API (${msg.error})` };
   }

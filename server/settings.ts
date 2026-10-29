@@ -11,14 +11,14 @@ import { EFFORT_LEVELS, MERGE_METHODS, type PinnedSettings, type Settings, SETTI
  * An empty (or unknown) effort for conflict-resolving agents goes back to the model's default. A lead's compaction
  * threshold is 0 (off) or a whole number of tokens from LEAD_COMPACT_MIN to a million. The plugins switched on for the
  * ship keep only what could be plugins' ids, each once. The public address is an http(s) one ('' clears it); the
- * terminal, browser and whisper commands and paths are trimmed, empty clearing them. The preview mirrors' hosts are
+ * browser and whisper commands and paths are trimmed, empty clearing them. The preview mirrors' hosts are
  * 'off' or a list of addresses (`previewHosts`), empty going back to the Tailscale addresses.
  */
 /** Below this, a compacted lead's conversation (some 30–50k tokens) would soon need compacting again. */
 export const LEAD_COMPACT_MIN = 80_000;
 
 /** The settings that are a command or a file's path on this machine. */
-const PATH_SETTINGS = ['terminal', 'browserPath', 'whisperBin', 'whisperModel'] as const;
+const PATH_SETTINGS = ['browserPath', 'whisperBin', 'whisperModel'] as const;
 
 export function changeSettings(settings: Settings, patch: unknown): Settings {
   const p: Partial<Record<keyof Settings, unknown>> = patch !== null && typeof patch === 'object' ? patch : {};

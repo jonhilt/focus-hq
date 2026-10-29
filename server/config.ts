@@ -59,8 +59,6 @@ export const paths = {
   planning: path.join(config.dataDir, 'planning'),
   /** Where Claude Code keeps session transcripts, the agents' among them (one folder per working directory). */
   transcripts: path.join(process.env.CLAUDE_CONFIG_DIR ?? path.join(os.homedir(), '.claude'), 'projects'),
-  /** The terminals Ops opens to start agents' cloud sessions: each one's script and what it showed, a folder per agent. */
-  cloudTerminals: path.join(config.dataDir, 'cloud-terminals'),
   /** The git hooks every local session's git runs, which refuse a lead's harmful pushes and hand on to the repo's own (server/agents/pushGuard.ts). */
   gitHooks: path.join(config.dataDir, 'git-hooks'),
   /** The branches each lead's pushes are refused for, a file per lead, rewritten as their goal's work changes (server/agents/pushGuard.ts). */

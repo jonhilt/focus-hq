@@ -99,7 +99,7 @@ function liveParts(store: Store, browsers: BrowserPool): ShipParts {
   host.warmUp();
   return {
     github: ghCliLayer,
-    runner: splitRunner(new ClaudeRunner(browsers, () => settingsInForce(store.settings).terminal), host),
+    runner: splitRunner(new ClaudeRunner(browsers), host),
     host,
     drafter: new ClaudeDrafter(),
     triager: new ClaudeTriager(),

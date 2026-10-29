@@ -20,8 +20,8 @@ export interface AgentStatusLine {
   status: Agent['status'];
   activity: string;
   pr?: number;
-  /** The agent's worktree on this machine, for the crew to read. Missing for cloud agents. */
-  worktree?: string;
+  /** The agent's worktree on this machine, for the crew to read. */
+  worktree: string;
 }
 
 export interface PrStatusLine {
@@ -163,7 +163,7 @@ export function summariseShip(snapshot: Snapshot, worktree: (agentId: string) =>
         status: a.status,
         activity: truncate(statusLine(a), ACTIVITY),
         ...(a.pr && { pr: a.pr.number }),
-        ...(!a.cloud && { worktree: worktree(a.id) }),
+        worktree: worktree(a.id),
       })),
       openIssues: board?.issues.length ?? 0,
       prs: prs.slice(0, MAX_PRS).map((pr) => ({

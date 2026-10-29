@@ -136,7 +136,7 @@ export function transcriptFolders(projectsDir: string, workspacesDir: string): (
   };
 }
 
-/** Reads an agent session's transcript by its id, wherever under the agents' folders it is; undefined when it isn't on this machine (a cloud session's). */
+/** Reads an agent session's transcript by its id, wherever under the agents' folders it is; undefined when it isn't in them. */
 export function transcriptReader(projectsDir: string, workspacesDir: string): (sessionId: string) => Promise<string | undefined> {
   const prefix = `${workspacesDir.replace(/[^A-Za-z0-9]/g, '-')}-`;
   const found = new Map<string, string>();

@@ -15,7 +15,7 @@ import { renderText, renderToolUse } from './render';
 import { workflowProgress } from './workflows';
 import type { SliceRecap } from './recap';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
-import { type AgentRunner, type AgentSession, type CloudTerminal, type CloudTerminalRequest, type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
+import { type AgentRunner, type AgentSession, type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type WorkspaceOps, STOPPED_BY_CAPTAIN } from './types';
 
 /** The made-up files of each kind of demo repo: a web app's, an API's, a game's. */
 /** The briefs the demo's scripted leads write, by their workspace: the demo workspace reads them back, as Ops reads a real one. */
@@ -82,15 +82,6 @@ export class DemoRunner implements AgentRunner {
   /** A pretend lead's transcript so far, as JSONL, to read as a real one would be. */
   transcript(sessionId: string): string | undefined {
     return this.journals.get(sessionId)?.join('\n');
-  }
-
-  /** A pretend terminal: the cloud session's link shows up in it after a few seconds. */
-  cloudTerminal(_req: CloudTerminalRequest): Promise<CloudTerminal> {
-    const opened = Date.now();
-    const id = `session_demo${randomHex(4)}`;
-    return Promise.resolve({
-      read: () => Promise.resolve(Date.now() - opened < 4000 / demoPace() ? 'Starting a cloud session…' : `Starting a cloud session…\n\x1b[2m☁ https://claude.ai/code/${id}\x1b[0m`),
-    });
   }
 
   start(req: RunRequest, given: RunHooks): AgentSession {
@@ -161,11 +152,6 @@ export class DemoRunner implements AgentRunner {
     const files = FILES[kind];
     const accent = ['#ff8a5b', '#5bc0eb', '#9bc53d', '#c879ff'][issueNumber % 4];
 
-    // a cloud agent pushes its own branch: that's how its work reaches Ops
-    const push = async () => {
-      if (req.cloud) await tool('Bash', { command: `git push origin HEAD:${req.cloud.branch}` }, [`To github.com:${repo}.git`, `   4f2a91c..9e1d0b7  HEAD -> ${req.cloud.branch}`]);
-    };
-
     const handleInbox = async () => {
       for (let message = inbox.shift(); message !== undefined; message = inbox.shift()) {
         await think();
@@ -174,7 +160,6 @@ export class DemoRunner implements AgentRunner {
         await tool('Edit', { file_path: `/work/${file}`, old_string: '// TODO: handle edge case', new_string: '// Handles the edge case the manager pointed out\nif (!input) return fallback;' }, ['Updated 1 file']);
         await tool('Bash', { command: 'npm test' }, ['Tests: 44 passed, 44 total']);
         await tool('Bash', { command: 'git commit -am "Address manager feedback"' }, ['[branch 4f2a91c] Address manager feedback', ' 1 file changed, 3 insertions(+)']);
-        await push();
       }
     };
 
@@ -677,10 +662,9 @@ export class DemoRunner implements AgentRunner {
       if (req.prompt.startsWith('/compact')) return compactScript();
       if (req.outputSchema) return qaScript();
       if (req.tools) return leadScript(req.tools);
-      const sessionId = req.resumeSessionId ?? `${req.cloud ? 'session_demo' : 'demo-'}${randomHex(4)}`;
+      const sessionId = req.resumeSessionId ?? `demo-${randomHex(4)}`;
       hooks.session(sessionId);
-      hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · ${req.model || req.settings.model || 'pretend model'} · acceptEdits${req.cloud ? ' · ☁ cloud' : ''}` }]);
-      if (req.cloud) hooks.lines([{ kind: 'system', text: `☁ Cloud session: https://claude.ai/code/${sessionId}` }]);
+      hooks.lines([{ kind: 'system', text: `✻ Claude Code (demo) · ${req.model || req.settings.model || 'pretend model'} · acceptEdits` }]);
       // a follow-up message, or QA's findings handed to an agent seated on the PR to fix them
       if (req.resumeSessionId || /^QA failed/.test(req.prompt)) {
         inbox.unshift(req.prompt);
@@ -741,18 +725,9 @@ export class DemoRunner implements AgentRunner {
         const pages = ['/', kind === 'game' ? '/play' : '/products/42', kind === 'game' ? '/scores' : '/cart'];
         for (let step = 0; step < 3; step++) {
           const url = `http://localhost:5173${pages[step]}`;
-          if (req.cloud) {
-            // in the cloud there's no Focus browser: a Playwright script saves a screenshot, and reading it puts it on the laptop
-            const file = `/tmp/shots/${step + 1}.png`;
-            await tool('Bash', { command: `node shot.mjs ${url} ${file}` }, [`Saved ${file}`]);
-            await tool('Read', { file_path: file }, ['[screenshot]']);
-            hooks.browser({ url, title: `${step + 1}.png`, mock: { heading: title, accent, step }, at: Date.now() });
-            hooks.activity('testing', `Checking a screenshot of ${url}`);
-          } else {
-            const name = step === 0 ? 'open' : step === 1 ? 'click' : 'screenshot';
-            await tool(`mcp__browser__${name}`, step === 1 ? { text: 'Add to cart' } : { url }, [`URL: ${url}`, '[screenshot]']);
-            hooks.browser({ url, title: title.slice(0, 40), mock: { heading: title, accent, step }, at: Date.now() });
-          }
+          const name = step === 0 ? 'open' : step === 1 ? 'click' : 'screenshot';
+          await tool(`mcp__browser__${name}`, step === 1 ? { text: 'Add to cart' } : { url }, [`URL: ${url}`, '[screenshot]']);
+          hooks.browser({ url, title: title.slice(0, 40), mock: { heading: title, accent, step }, at: Date.now() });
           await wait(1.5, 3);
         }
       }
@@ -762,7 +737,6 @@ export class DemoRunner implements AgentRunner {
         `[focus/issue-${issueNumber} a1b2c3d] ${title}`,
         ' 3 files changed, 58 insertions(+), 9 deletions(-)',
       ]);
-      await push();
       const summary = scripted
         ? scripted.summary
         : `## Summary\n\nResolves "${title}".\n\n- Updated ${pick(files, 2).join(' and ')}\n- Added tests in \`test/issue-${issueNumber}.test.ts\`\n\n## Testing\n\n- \`npm test\` passes${kind !== 'api' ? '\n- Checked the flow in the browser' : ''}`;
@@ -835,7 +809,6 @@ export const demoWorkspace: WorkspaceOps = {
   head: async () => randomHex(5),
   branchesSeen: async (dir) => [...(demoBranches.get(dir) ?? [])],
   push: async () => sleep(800),
-  publish: async () => sleep(400),
   pull: async () => sleep(400),
   // no real checkout: the manager falls back to the PR's head as GitHub reports it
   checkoutPullRequest: async () => {

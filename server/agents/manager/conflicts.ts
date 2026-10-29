@@ -89,7 +89,7 @@ export class Conflicts extends Part {
    */
   private catchUp(owner: Agent, merge: { from: string }): Effect.Effect<void, never, Workspace> {
     return Effect.gen({ self: this }, function* () {
-      if (owner.cloud || !FINISHED.includes(owner.status)) return;
+      if (!FINISHED.includes(owner.status)) return;
       const workspace = yield* Workspace;
       const dir = workspace.dir(owner.id);
       if ((yield* workspace.hasUncommittedChanges(dir)) || (yield* workspace.head(dir)) !== merge.from) return;

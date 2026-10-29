@@ -13,7 +13,7 @@ export function systemAppend(agent: Agent, brief?: Pick<BriefSpec, 'assignment' 
     assignment: crewText('worker', `assignment.${agent.task}`, at),
     summary: crewText('worker', ({ issue: 'summary.pullRequest', conflicts: 'summary.conflicts', fix: 'summary.fix' } as const)[agent.task], at),
   };
-  return crewPrompt('worker', { ...at, name: agent.name, branch: agent.branch, assignment, summary, cloud: !!agent.cloud, ...CREW_RULES }).trim();
+  return crewPrompt('worker', { ...at, name: agent.name, branch: agent.branch, assignment, summary, ...CREW_RULES }).trim();
 }
 
 export function issuePrompt(agent: Agent, issue: IssueDetail): string {
@@ -41,33 +41,9 @@ export function conflictsPrompt(agent: Agent): string {
     `1. \`git fetch origin\`, then \`git merge origin/${agent.baseBranch}\`.`,
     '2. Resolve every conflict so that both sides keep doing what they were meant to do. Read the base branch commits that caused each conflict before choosing.',
     '3. Run the type checks, tests and linters, and fix what the merge broke, before calling it resolved: a merge git makes by itself can still break the build.',
-    agent.cloud ? `4. Commit the merge and push it: \`git push origin HEAD:${agent.branch}\`.` : '4. Commit the merge.',
+    '4. Commit the merge.',
     '',
     'Merge rather than rebase: the pull request is already open, so its history must stay intact.',
-  ].join('\n');
-}
-
-/** For a cloud agent whose session ended without anything new on its branch: the work may still be in the cloud. */
-export function pushNudge(agent: Agent): string {
-  return (
-    `Nothing new has reached \`${agent.branch}\` on GitHub, and Ops can only see what's pushed there. If you changed ` +
-    `anything, commit it (leave out build output, dependencies and secrets) and push it with \`git push origin HEAD:${agent.branch}\` now. ` +
-    `If there was nothing to change, say why. Then reply with your ${agent.task === 'issue' ? 'pull request description' : 'summary for the manager'} again.`
-  );
-}
-
-/**
- * A new cloud session picking up where one Ops couldn't reattach to left off: everything it did is on the
- * branch, but the conversation is gone. `message` is what the manager meant for the old session.
- */
-export function carryOnPrompt(agent: Agent, message: string): string {
-  const what = agent.task === 'issue' ? `GitHub issue #${agent.issue.number} in ${agent.repo}: ${agent.issue.title} (${agent.issue.url})` : `pull request #${agent.pr?.number ?? agent.issue.number} in ${agent.repo}: ${agent.issue.title}`;
-  return [
-    `You're taking over ${what}.`,
-    '',
-    `Whatever was done so far is committed on \`${agent.branch}\`: read the issue and \`git log origin/${agent.baseBranch}..HEAD\` to catch up. Then carry on with this message from your manager:`,
-    '',
-    message,
   ].join('\n');
 }
 

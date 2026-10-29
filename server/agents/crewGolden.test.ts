@@ -48,12 +48,9 @@ describe('a lead’s system prompt', () => {
 describe('a desk agent’s system prompt', () => {
   const tasks = ['issue', 'conflicts', 'fix'] as const;
   for (const task of tasks) {
-    for (const cloud of [false, true]) {
-      it(`is word for word what it was, for ${task} ${cloud ? 'in the cloud' : 'here'}`, async () => {
-        const a = agent({ task, cloud });
-        await expect(systemAppend(a)).toMatchFileSnapshot(golden(`worker-${task}${cloud ? '-cloud' : ''}`));
-      });
-    }
+    it(`is word for word what it was, for ${task}`, async () => {
+      await expect(systemAppend(agent({ task }))).toMatchFileSnapshot(golden(`worker-${task}`));
+    });
   }
 
   it('is word for word what it was, on a plugin’s brief or one whose plugin is off', async () => {

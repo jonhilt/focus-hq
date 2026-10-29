@@ -15,17 +15,24 @@ export function upgradeLead(agent: Agent, projectName: string): Agent {
 }
 
 /**
+ * An agent saved by a Focus that could run them in a Claude Code cloud session: `cloud` when they worked in one, and
+ * `handover` while they waited for one, keeping their conversation on this machine.
+ */
+export type SavedAgent = Agent & { cloud?: boolean; handover?: { localSessionId?: string } };
+
+/**
  * An agent as they pick up after a restart (`projectName` is their room's, for a lead saved before goals): whoever was at
  * work stops, and waits for a message; what doesn't outlive Focus (a lead's subagents, workflows and background work, a hold
- * for the plan's usage limit) goes; and one saved before a field existed gets it (a crew member saved before uniforms
- * gets `newAvatar()`).
+ * for the plan's usage limit) goes; one saved before a field existed gets it (a crew member saved before uniforms
+ * gets `newAvatar()`); and one saved in or waiting for a cloud session works here, in their conversation on this
+ * machine if they had one.
  */
-export function agentAfterRestart(saved: Agent, projectName: string, newAvatar: () => Avatar): Agent {
-  let agent: Agent = { ...saved, task: saved.task ?? 'issue', helpers: undefined, workflows: undefined, background: undefined };
-  if (agent.handover) {
-    // still waiting for the captain to start their cloud session; a terminal opened before isn't watched any more
-    agent = { ...agent, status: 'waiting', activity: 'Waiting for a cloud session', handover: { ...agent.handover, terminalAt: undefined } };
-  } else if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
+export function agentAfterRestart(saved: SavedAgent, projectName: string, newAvatar: () => Avatar): Agent {
+  const { cloud, handover, ...kept } = saved;
+  let agent: Agent = { ...kept, task: saved.task ?? 'issue', helpers: undefined, workflows: undefined, background: undefined };
+  // a cloud session's id doesn't resume here
+  if (cloud || handover) agent = { ...agent, sessionId: handover?.localSessionId };
+  if (ACTIVE_STATUSES.includes(agent.status) || agent.status === 'queued') {
     agent = { ...agent, status: 'stopped', activity: 'Interrupted when Focus shut down. Send a message to pick it back up.', permission: undefined };
   }
   if (agent.held) {

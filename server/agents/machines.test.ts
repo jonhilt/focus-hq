@@ -53,7 +53,7 @@ describe('leafOf', () => {
   it('reads a state value as the leaf it’s in', () => {
     expect(leafOf('idle')).toBe('idle');
     expect(leafOf({ turn: 'started' })).toBe('turn.started');
-    expect(leafOf({ turn: { cloud: 'attaching' } })).toBe('turn.cloud.attaching');
+    expect(leafOf({ turn: { local: 'started' } })).toBe('turn.local.started');
   });
 });
 
@@ -65,7 +65,7 @@ describe('machineRuns', () => {
     const runs = machineRuns({
       agents: [
         agent({ run: { phase: 'turn.started', turns: 1, seq: 4 } }),
-        agent({ id: 'l1', name: 'Lt. Lindqvist', cloud: true, run: { phase: 'ended', turns: 2, seq: 9, target: 'lead-done' }, lead: { title: 'State machines' } as Agent['lead'] }),
+        agent({ id: 'l1', name: 'Lt. Lindqvist', run: { phase: 'ended', turns: 2, seq: 9, target: 'lead-done' }, lead: { title: 'State machines' } as Agent['lead'] }),
         agent({ id: 'new', name: 'Not started' }),
       ],
       projects,
@@ -85,7 +85,7 @@ describe('machineRuns', () => {
   it('puts every run in a state its machine has', () => {
     const states = new Map(MACHINES.map((m) => [m.id, new Set(m.states.map((s) => s.id))]));
     const runs = machineRuns({
-      agents: [agent({ cloud: true, run: { phase: 'delivering.pushing', turns: 1, seq: 2 }, lead: { title: 'x' } as Agent['lead'] })],
+      agents: [agent({ run: { phase: 'delivering.pushing', turns: 1, seq: 2 }, lead: { title: 'x' } as Agent['lead'] })],
       projects,
       reviews: [{ key: 'acme/web#1', phase: 'idle', seq: 0 }],
     });

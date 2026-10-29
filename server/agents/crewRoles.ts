@@ -26,7 +26,7 @@ export const CREW_ROLES = {
   lead: { vars: { name: 'text', project: 'text', shaping: 'flag', ...RULES } },
   /** An agent at a room's desk, on an issue, a pull request's conflicts or its QA fixes, or a plugin's brief: `systemAppend` (prompts.ts). */
   worker: {
-    vars: { name: 'text', repo: 'text', number: 'text', branch: 'text', baseBranch: 'text', assignment: 'text', summary: 'text', cloud: 'flag', ...RULES },
+    vars: { name: 'text', repo: 'text', number: 'text', branch: 'text', baseBranch: 'text', assignment: 'text', summary: 'text', ...RULES },
     texts: ['assignment.issue', 'assignment.conflicts', 'assignment.fix', 'assignment.unknownBrief', 'summary.pullRequest', 'summary.conflicts', 'summary.fix'],
     textVars: { repo: 'text', number: 'text', baseBranch: 'text' },
   },

@@ -63,7 +63,7 @@ export class Flows {
       const text = sessionId && (await this.host.transcript(sessionId));
       // as the goal is now: its lead may have moved on, or gone home, while the transcript was read
       const agent = this.host.agent(agentId);
-      if (!text || !agent || !hasLeadWork(agent) || agent.cloud) return;
+      if (!text || !agent || !hasLeadWork(agent)) return;
       const now = Date.now();
       const flow = leadFlow(goalFlow({ ...goalRecord(agent, now), projectId: agent.projectId }, transcriptMoments(text), this.host.ledger(), this.busy.has(agentId)), now);
       if (flow) this.state.set({ leads: withFlow(this.state.get().leads, agentId, flow, this.open) });

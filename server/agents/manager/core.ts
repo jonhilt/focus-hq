@@ -1,5 +1,5 @@
 import { Data, Effect, type Fiber, FiberMap, type Layer, ManagedRuntime, Scope } from 'effect';
-import type { Agent, AgentStatus, BrowserFrame, CloudHandover, PermissionRequest, TermLine } from '../../../shared/types';
+import type { Agent, AgentStatus, BrowserFrame, PermissionRequest, TermLine } from '../../../shared/types';
 import type { GitHub, GitHubError } from '../../github/service';
 import type { Hub } from '../../hub';
 import { Plugins } from '../../plugins/registry';
@@ -9,7 +9,6 @@ import { type GitFailed, type QaChat, type Recordings, type Renderer, retryServe
 import { Inbox } from '../inbox';
 import type { RunFact } from '../runJournal';
 import type { AgentSession } from '../types';
-import type { CloudMoves } from './cloudMoves';
 import type { Comms } from './comms';
 import type { Conflicts } from './conflicts';
 import type { Delivery } from './delivery';
@@ -86,8 +85,6 @@ export interface Runtime {
   qaFiles?: { changed: string[]; askedAgain: boolean; sentBack?: number };
   /** The screenshots the QA officer took on purpose this review: how many, and the last MAX_SCREENSHOTS of them. */
   shots?: { taken: number; frames: BrowserFrame[] };
-  /** Attaching to a cloud session the captain started: how often it was still busy, and the hand-over to go back to if it fails. */
-  attaching?: { tries: number; handover: CloudHandover };
 }
 
 /** The statuses that are a phase of the run's own, as the fact its journal records. */
@@ -120,7 +117,6 @@ export class Core {
   comms!: Comms;
   reviews!: Reviews;
   triages!: Triages;
-  cloud!: CloudMoves;
   ledger!: Ledger;
   merges!: Merges;
   planLimit!: PlanLimit;
