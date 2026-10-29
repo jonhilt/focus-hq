@@ -2,6 +2,7 @@ import { busy, callPlugin, confirmDialog, fill, focus, h, markdownHtml, pluginSt
 import { isRecord } from '../../plugin-api/shared';
 import { TW } from './bridgeKit';
 import { lineEntries } from './lineList';
+import { startedWaiting } from './lineRules';
 import { CHIEF_OF_STAFF, cosStateOf, freshLine, type LineStart } from './shared';
 
 // The direct line in Comms (README.md#the-direct-line): the user's conversation with the chief of staff, tied to no
@@ -17,6 +18,23 @@ const activityNow = (): string => {
 };
 
 export const lineNow = () => cosStateOf(pluginState<unknown>(CHIEF_OF_STAFF)).line ?? freshLine();
+
+/** The goals it started from the line waiting in the muster (`startedWaiting`), in the shown projects, as this browser has Focus. */
+export function startedNow(): LineStart[] {
+  const { started } = lineNow();
+  const aboard = new Set(started.filter((s) => focus.agent(s.leadId)?.task === 'lead').map((s) => s.leadId));
+  return startedWaiting(started, aboard).filter((s) => !focus.isHidden(s.projectId));
+}
+
+/** Closes a goal it started from the line, from the line or the muster: through Focus, which warns first about work that would be lost. */
+export async function closeStarted(s: LineStart): Promise<void> {
+  const first = await callPlugin<{ warn?: string[] }>(CHIEF_OF_STAFF, '/line/close', { key: s.key });
+  if (!first.warn) return;
+  const title = focus.agent(s.leadId)?.lead?.title ?? s.text;
+  if (await confirmDialog({ title: 'Close goal', message: `Close “${title}”?\n\n${first.warn.join('\n')}`, confirmLabel: 'Close goal', danger: true })) {
+    await callPlugin(CHIEF_OF_STAFF, '/line/close', { key: s.key, force: true });
+  }
+}
 
 /** The direct line's view: its element, drawn again with `render`, and its box to type in. */
 export function lineView(error: (message: string) => void): { el: HTMLElement; render: () => void; focusBox: () => void } {
@@ -36,21 +54,11 @@ export function lineView(error: (message: string) => void): { el: HTMLElement; r
 
   fresh.onclick = () => void busy(fresh, () => callPlugin(CHIEF_OF_STAFF, '/line/new', {}), error);
 
-  // Close on a goal it started: closed through Focus, which warns first about work that would be lost
-  const close = async (s: LineStart) => {
-    const first = await callPlugin<{ warn?: string[] }>(CHIEF_OF_STAFF, '/line/close', { key: s.key });
-    if (!first.warn) return;
-    const title = focus.agent(s.leadId)?.lead?.title ?? s.text;
-    if (await confirmDialog({ title: 'Close goal', message: `Close “${title}”?\n\n${first.warn.join('\n')}`, confirmLabel: 'Close goal', danger: true })) {
-      await callPlugin(CHIEF_OF_STAFF, '/line/close', { key: s.key, force: true });
-    }
-  };
-
   const startedEl = (s: LineStart) => {
     const lead = focus.agent(s.leadId);
     const title = lead?.lead?.title ?? s.text;
     const gone = s.closed !== undefined || !lead;
-    const shut: HTMLButtonElement = h('button', { class: TW.btn, title: 'Close the goal it started: its undo', attrs: { 'data-part': 'line-close' }, onclick: () => void busy(shut, () => close(s), error) }, 'Close');
+    const shut: HTMLButtonElement = h('button', { class: TW.btn, title: 'Close the goal it started: its undo', attrs: { 'data-part': 'line-close' }, onclick: () => void busy(shut, () => closeStarted(s), error) }, 'Close');
     return h('div', { class: `${TW.card} ${gone ? 'tw:opacity-50' : ''}`, attrs: { 'data-part': 'line-started' } },
       h('div', { class: TW.ch }, gone ? `Started · closed` : `Started · ${clock(s.at)}`),
       h('div', { class: 'tw:text-[14.5px]/[1.5] tw:mt-[3px]' }, 'I started ', h('b', { class: 'tw:font-semibold' }, title), ` in ${s.project} because ${s.why.replace(/^\w/, (c) => c.toLowerCase())}`),

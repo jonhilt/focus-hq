@@ -4,6 +4,7 @@
 import './chief-of-staff.css';
 import { agentPanelOpen, callPlugin, type ClientPlugin, focus, h, LCARS, pluginState, type Project, Switch, type Ui } from '../../plugin-api/client';
 import { openStream } from './stream';
+import { startedNow } from './lineView';
 import { hailing } from './here';
 import { type TurnStage, turnStage, turnToast } from './inboxRules';
 import { cosMove } from './moveRules';
@@ -72,7 +73,8 @@ const chiefOfStaff: ClientPlugin = {
   },
   legend: [{ key: 'C', label: 'comms' }],
   hud: () => {
-    const hails = hailing().length;
+    // and each goal it started from its direct line, until the user hears of it or closes it
+    const hails = hailing().length + startedNow().length;
     return { text: `Comms: ${hails} waiting`, el: badge(hails) };
   },
   panel: { label: 'Comms', open: openStream },

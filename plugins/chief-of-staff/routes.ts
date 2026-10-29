@@ -112,18 +112,21 @@ export function threadRoute(host: Pick<PluginHost, 'agent' | 'transcript' | 'all
 
 /**
  * The direct line (README.md#the-direct-line): saying something to the chief of staff, starting the conversation
- * afresh, and closing a goal it started from the line (`key`, its `LineStart.key`; `force` past the warning).
+ * afresh, closing a goal it started from the line (`key`, its `LineStart.key`; `force` past the warning), and
+ * acknowledging one's notice in the muster (`key`), the goal running on.
  */
-export function lineRoutes(line: Pick<DirectLine, 'say' | 'newConversation' | 'close'>): PluginRoute[] {
+export function lineRoutes(line: Pick<DirectLine, 'say' | 'newConversation' | 'close' | 'acknowledge'>): PluginRoute[] {
+  const keyOf = (body: Record<string, unknown>): string => {
+    if (typeof body.key !== 'string' || !body.key) throw new Error('Say which goal: key');
+    return body.key;
+  };
   return [
     { method: 'post', path: '/line/say', handle: ({ body }) => line.say(typeof body.text === 'string' ? body.text : '') },
     { method: 'post', path: '/line/new', handle: () => line.newConversation() },
     {
       method: 'post', path: '/line/close',
-      handle: ({ body }) => {
-        if (typeof body.key !== 'string' || !body.key) throw new Error('Say which goal: key');
-        return line.close(body.key, body.force === true);
-      },
+      handle: ({ body }) => line.close(keyOf(body), body.force === true),
     },
+    { method: 'post', path: '/line/ack', handle: ({ body }) => line.acknowledge(keyOf(body)) },
   ];
 }

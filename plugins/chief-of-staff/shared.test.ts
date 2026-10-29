@@ -62,5 +62,11 @@ describe('what it keeps across a restart, read back', () => {
     expect(cosStateOf({ autoSend: { p: true }, conn: 'lead-1', stoodBy: ['turn:b:4', 7] })).toEqual({ autoSend: { p: true }, jev: {}, conn: 'lead-1', stoodBy: ['turn:b:4'] });
     expect(cosStateOf({ autoSend: {}, conn: '' })).toEqual({ autoSend: {}, jev: {} });
     expect(cosStateOf(undefined)).toEqual({ autoSend: {}, jev: {} });
+    // a goal it started from the line keeps whether the user closed it and whether they heard of it in the muster
+    const kept = cosStateOf({ autoSend: {}, line: { started: [{ key: 'p|x', leadId: 'l', projectId: 'p', project: 'P', text: 'x', why: 'y', at: 1, closed: 3, acked: 2 }, { key: 'p|y', leadId: 'm', acked: 'soon' }] } });
+    expect(kept.line?.started).toEqual([
+      { key: 'p|x', leadId: 'l', projectId: 'p', project: 'P', text: 'x', why: 'y', at: 1, closed: 3, acked: 2 },
+      { key: 'p|y', leadId: 'm', projectId: '', project: '', text: '', why: '', at: 0 },
+    ]);
   });
 });

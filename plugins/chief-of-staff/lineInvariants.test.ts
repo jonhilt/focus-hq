@@ -6,7 +6,8 @@ import type { CosLive, CosState } from './shared';
 
 // The chief of staff's direct line (README.md#the-direct-line) under Focus's two rules (docs/invariants.md): a restart
 // ends as if an action had never started or had finished, and two at once as one after the other would. What it keeps
-// across a restart is its state (the conversation, and the goals it started and told from it); the goals themselves are
+// across a restart is its state (the conversation, and the goals it started and told from it, each with whether the user
+// closed it or heard of it in the muster); the goals themselves are
 // Focus's, out here in `world`, carrying on through a restart as Focus's goals do.
 //
 // Its stand-ins: Claude Code answering is a step through `later`, twice a turn (before its tools run, and its reply),
@@ -20,7 +21,10 @@ import type { CosLive, CosState } from './shared';
 // turn starts it once (not the rules: the reference runs share the flaw); and `close` without its `closing` guard fails
 // the check for two at once (both presses close the goal) and the promise that Close closes it once.
 
-/** What must survive: the goals started from the line (out in Focus), each as the line has it, what leads were told, and whether it's stuck thinking. */
+/**
+ * What must survive: the goals started from the line (out in Focus), each as the line has it (open or closed, and heard
+ * of in the muster or still waiting there), what leads were told, and whether it's stuck thinking.
+ */
 interface Kept {
   goals: string[];
   closed: string[];
@@ -87,12 +91,20 @@ function lineLife(later: Later, world: { leads: Agent[]; started: string[]; clos
           return line.close(open.key);
         },
       },
+      {
+        name: 'the user hears of what it started',
+        run: () => {
+          const waiting = line.current().started.find((s) => s.closed === undefined && s.acked === undefined);
+          if (!waiting) throw new Error('nothing waiting');
+          return line.acknowledge(waiting.key);
+        },
+      },
       { name: 'a new conversation', run: () => line.newConversation() },
     ],
     durable: () => ({
       goals: [...world.started],
       closed: [...world.closed],
-      line: line.current().started.map((s) => `${s.text} ${s.closed !== undefined || !aboard().has(s.leadId) ? 'closed' : 'open'}`),
+      line: line.current().started.map((s) => `${s.text} ${s.closed !== undefined || !aboard().has(s.leadId) ? 'closed' : 'open'}${s.acked !== undefined ? ' heard' : ''}`),
       told: line.current().told.map((t) => t.text),
       thinking: line.current().status === 'thinking',
     }),
@@ -157,6 +169,16 @@ describe('the direct line, under Focus’s two rules', () => {
     expect(after.durable().thinking).toBe(false);
     await take(after, 'the user mentions the footer');
     expect(after.durable().told).toEqual([TOLD_ABOUT]);
+  });
+
+  // README.md: "Got it on its notice in the muster lets the goal run on, and is kept across a restart"
+  it('keeps a goal the user heard of out of the muster across a restart, running on', async () => {
+    const r = await subject.start(answersAtOnce);
+    await take(r, 'the user asks for dark mode');
+    await take(r, 'the user hears of what it started');
+    const after = await r.restart(answersAtOnce);
+    expect(after.durable()).toMatchObject({ goals: ['Add dark mode'], closed: [], line: ['Add dark mode open heard'] });
+    await expect(Promise.resolve().then(() => after.actions().find((a) => a.name === 'the user hears of what it started')?.run())).rejects.toThrow('nothing waiting');
   });
 
   // README.md: "Close closes the goal it started, once however often it's pressed"

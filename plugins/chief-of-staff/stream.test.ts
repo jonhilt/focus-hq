@@ -369,6 +369,38 @@ describe('the direct line to the chief of staff', () => {
     expect(box.value).toBe('');
   });
 
+  // README.md: "each goal it starts waits in the muster until the user hears of it or closes it"
+  it('waits in the muster and on the chip until heard of: Close closes it as the line does, Got it lets it run on', async () => {
+    fake.line = line;
+    await open();
+    expect(part('chip')?.textContent).toBe('Muster1');
+    part('chip')?.click();
+    expect(part('started')?.textContent).toContain('Chief of Staff started Goal b in Shop: You want it before the launch.');
+    expect(part('muster')?.textContent).toContain('Muster · 1 decision');
+    const [close, got] = [...(part('started')?.querySelectorAll('button') ?? [])].filter((b) => b.textContent === 'Close' || b.textContent === 'Got it');
+    close?.click();
+    await settle();
+    expect(fake.said).toEqual([{ path: '/line/close', key: started.key }, { path: '/line/close', key: started.key, force: true }]);
+    got?.click();
+    await settle();
+    expect(fake.said.at(-1)).toEqual({ path: '/line/ack', key: started.key });
+    fake.line = { ...line, started: [{ ...started, acked: 9 }] };
+    fake.state?.();
+    await settle();
+    expect(part('started')).toBeNull();
+    expect(part('chip')?.textContent).toBe('Muster0');
+  });
+
+  it('takes the conn of the goal it started when its title is pressed', async () => {
+    fake.line = line;
+    await open();
+    part('chip')?.click();
+    [...(part('started')?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Goal b')?.click();
+    await settle();
+    expect(fake.conn).toBe('b');
+    expect(shown('sheet')).toBe(true);
+  });
+
   it('is gone from the started notice’s Close once the goal has closed', async () => {
     fake.line = { ...line, started: [{ ...started, closed: 9 }] };
     await open();

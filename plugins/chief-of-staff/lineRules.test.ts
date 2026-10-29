@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { closeStep, goalKey, lineAfterRestart, normalised, sayStep, startStep, tellStep } from './lineRules';
+import { ackStep, closeStep, goalKey, lineAfterRestart, normalised, sayStep, startedWaiting, startStep, tellStep } from './lineRules';
 import { freshLine, type LineStart } from './shared';
 
 const projects = [{ id: 'p', name: 'Web shop' }, { id: 'q', name: 'API' }];
@@ -80,6 +80,35 @@ describe('closing a goal it started', () => {
   it('goes by the latest start of a goal started again after closing', () => {
     const again = started({ leadId: 'lead-2', at: 9 });
     expect(closeStep(again.key, [started({ closed: 5 }), again], new Set(['lead-2']))).toEqual({ kind: 'close', start: again });
+  });
+});
+
+// README.md: "each goal it starts waits in the muster until the user hears of it or closes it"
+describe('the goals it started, waiting in the muster', () => {
+  it('waits while its goal is open and the user hasn’t heard of it, newest first', () => {
+    const older = started();
+    const newer = started({ key: 'p|search', leadId: 'lead-2', at: 5 });
+    expect(startedWaiting([older, newer], new Set(['lead-1', 'lead-2']))).toEqual([newer, older]);
+  });
+
+  it('leaves once acknowledged, closed from the line or the muster, or its lead gone some other way', () => {
+    expect(startedWaiting([started({ acked: 4 })], new Set(['lead-1']))).toEqual([]);
+    expect(startedWaiting([started({ closed: 4 })], new Set(['lead-1']))).toEqual([]);
+    expect(startedWaiting([started()], new Set())).toEqual([]);
+  });
+
+  it('acknowledges one waiting, once however often Got it is pressed, and nothing it never started', () => {
+    const s = started();
+    expect(ackStep(s.key, [s], new Set(['lead-1']))).toEqual({ kind: 'ack', start: s });
+    expect(ackStep(s.key, [started({ acked: 3 })], new Set(['lead-1']))).toEqual({ kind: 'refuse', why: 'That’s no longer waiting on you' });
+    expect(ackStep(s.key, [started({ closed: 3 })], new Set(['lead-1'])).kind).toBe('refuse');
+    expect(ackStep(s.key, [s], new Set()).kind).toBe('refuse');
+    expect(ackStep('p|nope', [s], new Set(['lead-1'])).kind).toBe('refuse');
+  });
+
+  it('goes by the latest start of a goal started again after closing', () => {
+    const again = started({ leadId: 'lead-2', at: 9 });
+    expect(ackStep(again.key, [started({ closed: 5 }), again], new Set(['lead-2']))).toEqual({ kind: 'ack', start: again });
   });
 });
 

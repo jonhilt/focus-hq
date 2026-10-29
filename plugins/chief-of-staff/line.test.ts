@@ -102,6 +102,17 @@ describe('the direct line’s tools', () => {
     expect(line.current().started[0]?.closed).toBeUndefined();
   });
 
+  it('acknowledges a goal it started (Got it in the muster): marked, the goal running on, refused a second time', async () => {
+    const { line, world } = aLine({ turn: async (req) => ({ text: (await tool(req, 'start_goal')?.run({ projectId: 'p', text: 'Add search', why: 'You asked' })) ?? '' }) });
+    line.say('Add search');
+    await line.settled();
+    const key = line.current().started[0]?.key ?? '';
+    expect(line.acknowledge(key).started[0]).toMatchObject({ key, acked: expect.any(Number) });
+    expect(line.current().started[0]?.closed).toBeUndefined();
+    expect(world.leads.map((l) => l.id)).toContain(line.current().started[0]?.leadId);
+    expect(() => line.acknowledge(key)).toThrow('no longer waiting');
+  });
+
   it('refuses a word while it’s thinking, and ends a failed turn failed', async () => {
     const { line } = aLine({ turn: () => Promise.reject(new Error('Gave up after 8 minutes')) });
     line.say('Hi');

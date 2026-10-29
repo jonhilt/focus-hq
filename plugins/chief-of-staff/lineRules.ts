@@ -1,6 +1,6 @@
 // The direct line's decisions (README.md#the-direct-line): whether a goal it's asked to start starts, or is one it
-// started already; whether it may tell a goal's lead something; what closing one it started does; and how the line
-// picks up after a restart. Pure: the I/O is the line's (line.ts).
+// started already; whether it may tell a goal's lead something; what closing one it started does; which goals it
+// started wait in the muster, and what Got it on one does; and how the line picks up after a restart. Pure: the I/O is the line's (line.ts).
 import type { CosLine, LineStart, LineTold } from './shared';
 
 /** A goal's words as its key reads them: lowercase, punctuation and runs of space as one space. */
@@ -57,6 +57,23 @@ export function closeStep(key: string, started: readonly LineStart[], aboard: Re
   if (!start) return { kind: 'refuse', why: 'It didn’t start that goal' };
   if (start.closed !== undefined) return { kind: 'refuse', why: 'That goal is closed already' };
   return aboard.has(start.leadId) ? { kind: 'close', start } : { kind: 'mark', start };
+}
+
+/**
+ * The goals it started from the line that wait in the muster for the user to hear of: each until they acknowledge it
+ * (Got it) or it's closed, from the line or the muster, or its lead is gone some other way. Newest first.
+ */
+export function startedWaiting(started: readonly LineStart[], aboard: ReadonlySet<string>): LineStart[] {
+  return started.filter((s) => s.closed === undefined && s.acked === undefined && aboard.has(s.leadId)).toReversed();
+}
+
+/** What Got it on a goal it started does: marks its notice acknowledged, the goal running on; once, however often it's pressed. */
+export type AckStep = { kind: 'ack'; start: LineStart } | { kind: 'refuse'; why: string };
+
+export function ackStep(key: string, started: readonly LineStart[], aboard: ReadonlySet<string>): AckStep {
+  const start = started.findLast((s) => s.key === key);
+  if (!start) return { kind: 'refuse', why: 'It didn’t start that goal' };
+  return startedWaiting([start], aboard).length ? { kind: 'ack', start } : { kind: 'refuse', why: 'That’s no longer waiting on you' };
 }
 
 /** The line as it picks up after a restart: a turn Focus went down in the middle of ends failed, so the line stays usable. */

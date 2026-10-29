@@ -176,6 +176,8 @@ export interface LineStart {
   at: number;
   /** When the user closed it from the line (its undo): it may be started again after that. */
   closed?: number;
+  /** When the user acknowledged its notice in the muster (Got it): off the muster, the goal running on. */
+  acked?: number;
 }
 
 /** What it told an existing goal's lead from the direct line, in place of starting one. */
@@ -235,7 +237,11 @@ const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
 function lineStartOf(r: Record<string, unknown>): LineStart | undefined {
   if (!str(r.key) || !str(r.leadId)) return undefined;
   const closed = typeof r.closed === 'number' ? r.closed : undefined;
-  return { key: str(r.key), leadId: str(r.leadId), projectId: str(r.projectId), project: str(r.project), text: str(r.text), why: str(r.why), at: num(r.at), ...(closed !== undefined && { closed }) };
+  const acked = typeof r.acked === 'number' ? r.acked : undefined;
+  return {
+    key: str(r.key), leadId: str(r.leadId), projectId: str(r.projectId), project: str(r.project), text: str(r.text), why: str(r.why), at: num(r.at),
+    ...(closed !== undefined && { closed }), ...(acked !== undefined && { acked }),
+  };
 }
 
 /** The direct line, as its state keeps it: what isn't one is left out, so an older or damaged one still reads. */

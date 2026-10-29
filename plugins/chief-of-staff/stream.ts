@@ -6,9 +6,9 @@ import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import { type LandedItem, landedWhere } from './landed';
-import { lineView } from './lineView';
+import { closeStarted, lineView, startedNow } from './lineView';
 import { mergesOf } from './needCard';
-import { CHIEF_OF_STAFF, cosStateOf, readOf } from './shared';
+import { CHIEF_OF_STAFF, cosStateOf, type LineStart, readOf, SENDER } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import type { ThreadEntry } from './thread';
 import { TW } from './bridgeKit';
@@ -231,7 +231,7 @@ export function openStream(ui: CommsUi): void {
   const renderHud = (all: readonly Filed[], lead: Agent | undefined) => {
     const at = lining && !mustering ? 'Direct line · Chief of Staff' : lead ? `On watch · ${lead.lead?.title ?? lead.name}` : 'No watch';
     keyed(where, at, () => fill(where, h('span', null, 'Bridge'), h('span', null, '·'), h('b', { class: 'tw:text-ink tw:font-semibold' }, at)));
-    const n = all.filter((f) => f.reach === 'muster' || f.reach === 'hail').length;
+    const n = all.filter((f) => f.reach === 'muster' || f.reach === 'hail').length + startedNow().filter((s) => s.leadId !== conn).length;
     count.textContent = String(n);
     count.className = `tw:block tw:w-[26px] tw:h-[22px] tw:leading-[22px] tw:text-center ${n ? 'tw:bg-attn tw:text-[#111]' : 'tw:bg-surface2 tw:text-muted'}`;
     chip.title = lead ? 'Stand down: the goal goes back to its berth and the muster comes up (M)' : mustering ? 'Put the muster away (M)' : 'The muster: what waits on you, by what each unblocks (M)';
@@ -537,28 +537,31 @@ export function openStream(ui: CommsUi): void {
   // the muster: what waits outside the goal at the conn, by what each unblocks, and the reports at its foot
   const renderMuster = (all: readonly Filed[]) => {
     const rows = musterOrder(all.filter((f) => f.reach === 'muster' || f.reach === 'hail'));
+    const started = startedNow();
     const words = all.filter((f) => f.reach === 'report');
     const heard = landed.filter((i) => !(conn && i.leadId === conn));
-    const key = JSON.stringify([rows.map((r) => [r.item.id, r.stoodBy, r.idle]), words.map((r) => r.item.id), heard.map((i) => i.id), expanded]);
+    const key = JSON.stringify([rows.map((r) => [r.item.id, r.stoodBy, r.idle]), started.map((s) => [s.key, s.at, titleOf(s)]), words.map((r) => r.item.id), heard.map((i) => i.id), expanded]);
     if (muster.dataset.key === key) return;
     muster.dataset.key = key;
     const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
     const reports = words.length + heard.length;
     fill(muster,
       h('div', { class: 'tw:flex tw:justify-between tw:items-baseline' },
-        h('b', { class: 'tw:font-display tw:text-[19px] tw:font-semibold tw:tracking-[.02em]' }, `Muster · ${plural(rows.length, 'decision')}${reports ? `, ${plural(reports, 'report')}` : ''}`),
+        h('b', { class: 'tw:font-display tw:text-[19px] tw:font-semibold tw:tracking-[.02em]' }, `Muster · ${plural(rows.length + started.length, 'decision')}${reports ? `, ${plural(reports, 'report')}` : ''}`),
         h('span', { class: 'tw:text-muted tw:text-[12.5px]' }, 'by what each unblocks')),
       ...rows.map((f) => musterRow(f, local.get(f.item.id))),
+      ...started.map(startedRow),
       reports ? reportsRow(words, heard) : null,
-      rows.length || reports ? null : h('div', { class: 'tw:mt-3 tw:text-muted tw:text-[13.5px]' }, 'Nothing waits on you.'));
+      rows.length || started.length || reports ? null : h('div', { class: 'tw:mt-3 tw:text-muted tw:text-[13.5px]' }, 'Nothing waits on you.'));
   };
 
-  const row = (report: boolean, g: string, w: string, why: string | null, acts: HTMLElement[], more: HTMLElement | null = null) =>
-    h('div', { class: 'tw:grid tw:grid-cols-[4px_1fr_auto] tw:gap-3 tw:items-center tw:py-[10px] tw:pr-3 tw:pl-0 tw:mt-2 tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card', attrs: { 'data-part': report ? 'reports' : 'row' } },
-      h('span', { class: `tw:self-stretch ${report ? 'tw:bg-line' : 'tw:bg-attn'}` }),
+  // a row of the muster: what it's part of, what's needed (in words, or words and a press), and its answers
+  const row = (part: 'row' | 'reports' | 'started', g: string, w: string | (string | HTMLElement)[], why: string | null, acts: HTMLElement[], more: HTMLElement | null = null) =>
+    h('div', { class: 'tw:grid tw:grid-cols-[4px_1fr_auto] tw:gap-3 tw:items-center tw:py-[10px] tw:pr-3 tw:pl-0 tw:mt-2 tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card', attrs: { 'data-part': part } },
+      h('span', { class: `tw:self-stretch ${part === 'reports' ? 'tw:bg-line' : 'tw:bg-attn'}` }),
       h('div', { class: 'tw:min-w-0' },
         h('div', { class: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label' }, g),
-        h('div', { class: 'tw:text-[13.5px] tw:truncate', title: w }, w),
+        h('div', { class: 'tw:text-[13.5px] tw:truncate', title: typeof w === 'string' ? w : w.map((x) => (typeof x === 'string' ? x : x.textContent)).join('') }, ...[w].flat()),
         why ? h('div', { class: 'tw:text-[12px] tw:text-muted' }, why) : null),
       h('div', { class: 'tw:flex tw:gap-[6px]' }, ...acts),
       more);
@@ -567,8 +570,22 @@ export function openStream(ui: CommsUi): void {
     const isOpen = expanded === f.item.id;
     const tag = f.grade === 'hail' ? (f.stoodBy ? ' · hail, stood by' : ' · hail') : '';
     const toggle = a ? [button(isOpen ? 'Close' : 'Open', false, () => { expanded = isOpen ? null : f.item.id; render(); })] : [];
-    return row(false, `${f.item.goal}${tag}`, f.item.what, unblocks(f), toggle,
+    return row('row', `${f.item.goal}${tag}`, f.item.what, unblocks(f), toggle,
       isOpen && a ? h('div', { class: 'tw:col-start-2 tw:col-span-2' }, ...actsEl(f.item, a, '')) : null);
+  };
+
+  // a goal the chief of staff started from its direct line, until the user hears of it (Got it) or closes it (its
+  // undo, as the line's Close: Focus warns first about work that would be lost); its goal is a press away, at the conn
+  const titleOf = (s: LineStart) => focus.agent(s.leadId)?.lead?.title ?? s.text;
+  const startedRow = (s: LineStart) => {
+    const title = titleOf(s);
+    const shut = button('Close', false, () => void busy(shut, () => closeStarted(s), ui.error), 'Close the goal it started: its undo');
+    const got = button('Got it', false, () => void busy(got, () => callPlugin(CHIEF_OF_STAFF, '/line/ack', { key: s.key }), ui.error), 'Heard: the goal runs on');
+    const goal = h('button', {
+      class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-ink tw:font-semibold tw:cursor-pointer tw:font-read tw:text-[13.5px] tw:hover:underline',
+      title: `Take the conn: ${title}`, onclick: () => take(s.leadId),
+    }, title);
+    return row('started', `${title} · started`, [`${SENDER} started `, goal, ` in ${s.project}: ${s.why}`], null, [shut, got]);
   };
 
   // the reports, in a row: heard with one press, nothing sent
@@ -578,7 +595,7 @@ export function openStream(ui: CommsUi): void {
       ...words.map((f) => inbox.decide(f.item.id, { ack: true })),
       ...heard.map((i) => inbox.decideLanded(i.id, { ack: true })),
     ]).then(refreshInbox), ui.error));
-    return row(true, `Reports · ${words.length + heard.length}`, says, null, [got]);
+    return row('reports', `Reports · ${words.length + heard.length}`, says, null, [got]);
   };
 
   // a hail from a goal underway, dropped from the Muster chip: on screen in place, or told to stand by

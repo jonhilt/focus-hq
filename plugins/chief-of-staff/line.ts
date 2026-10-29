@@ -6,7 +6,7 @@ import type { Agent, ChatProject, PluginGoals, PluginState, Project, SessionTool
 import { errorMessage, truncate } from '../../plugin-api/server';
 import { shownProjects } from '../../plugin-api/shared';
 import { CREW } from './crew';
-import { closeStep, lineAfterRestart, sayStep, startStep, tellStep } from './lineRules';
+import { ackStep, closeStep, lineAfterRestart, sayStep, startStep, tellStep } from './lineRules';
 import { type CosLine, type CosLive, type CosState, freshLine, type LineMessage, type LineStart, readOf, SENDER } from './shared';
 import { doing } from './streamList';
 
@@ -112,10 +112,22 @@ export class DirectLine {
         this.closing.delete(key);
       }
     }
-    const now = this.current();
-    const it = step.start;
-    this.save({ ...now, started: now.started.map((s) => (s.key === it.key && s.leadId === it.leadId && s.at === it.at ? { ...s, closed: Date.now() } : s)) });
+    this.markStarted(step.start, { closed: Date.now() });
     return this.current();
+  }
+
+  /** The user acknowledged a goal it started (Got it in the muster): its notice leaves the muster, the goal runs on. */
+  acknowledge(key: string): CosLine {
+    const step = ackStep(key, this.current().started, this.aboard());
+    if (step.kind === 'refuse') throw new Error(step.why);
+    this.markStarted(step.start, { acked: Date.now() });
+    return this.current();
+  }
+
+  /** Marks a goal it started closed or acknowledged, as the line has it now. */
+  private markStarted(it: LineStart, mark: Pick<LineStart, 'closed' | 'acked'>): void {
+    const now = this.current();
+    this.save({ ...now, started: now.started.map((s) => (s.key === it.key && s.leadId === it.leadId && s.at === it.at ? { ...s, ...mark } : s)) });
   }
 
   /** The projects on the line: shown, and the chief of staff switched on there. */
