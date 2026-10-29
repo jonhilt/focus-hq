@@ -6,9 +6,8 @@ import { STOPPED_BY_CAPTAIN } from './types';
 const conv = (id: string, status: string, agentSessionId?: string): ConversationSummary => ({ id, agent: 'claude', labels: {}, status, ...(agentSessionId && { agentSessionId }) });
 
 describe('runsOnHost', () => {
-  it("runs developers' local sessions on the host, and no one else's", () => {
-    for (const task of ['issue', 'fix', 'conflicts', 'brief'] as const) expect(runsOnHost(task, false)).toBe(true);
-    expect(runsOnHost('review', false)).toBe(false);
+  it("runs developers' and QA's local sessions on the host, and no one else's", () => {
+    for (const task of ['issue', 'fix', 'conflicts', 'brief', 'review'] as const) expect(runsOnHost(task, false)).toBe(true);
     expect(runsOnHost('lead', false)).toBe(false);
     expect(runsOnHost('issue', true)).toBe(false);
     expect(runsOnHost(undefined, false)).toBe(false);
@@ -52,8 +51,8 @@ describe('reaction', () => {
   const main = { _tag: 'Main' as const };
   it('puts a raised hand to the manager, and stops waiting once anyone answers', () => {
     expect(reaction({ _tag: 'PermissionRequested', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)', source: main }, undefined)).toEqual({ kind: 'ask', requestId: 'r', tool: 'Bash', summary: 'Bash(curl x)' });
-    expect(reaction({ _tag: 'PermissionAnswered', requestId: 'r', answer: { _tag: 'AllowOnce' } }, undefined)).toEqual({ kind: 'answered', requestId: 'r' });
-    expect(reaction({ _tag: 'QuestionAnswered', requestId: 'q', answer: { _tag: 'Answers', answers: {} } }, undefined)).toEqual({ kind: 'answered', requestId: 'q' });
+    expect(reaction({ _tag: 'PermissionAnswered', requestId: 'r', answer: { _tag: 'AllowOnce' } }, undefined)).toEqual({ kind: 'resolved', requestId: 'r' });
+    expect(reaction({ _tag: 'QuestionAnswered', requestId: 'q', answer: { _tag: 'Answers', answers: {} } }, undefined)).toEqual({ kind: 'resolved', requestId: 'q' });
   });
 
   it('reports how full the context is, when the usage says', () => {
@@ -66,6 +65,13 @@ describe('reaction', () => {
     expect(held).toMatchObject({ kind: 'say', lines: [{ kind: 'error', text: expect.stringContaining('paused until it resets') }], activity: expect.stringContaining('Paused for the usage limit') });
     expect(reaction({ _tag: 'Released', note: 'n' }, undefined)).toEqual({ kind: 'say', lines: [{ kind: 'system', text: '✻ The usage limit has reset: carrying on' }] });
     expect(reaction({ _tag: 'ResumedAfterRestart', note: 'n' }, undefined)).toEqual({ kind: 'say', lines: [{ kind: 'system', text: '✻ Carrying on where Focus stopped' }] });
+  });
+
+  it('ends a turn that asked for a structured answer once the answer is in, unless a message sent meanwhile is still unread', () => {
+    const answer = { _tag: 'StructuredAnswer' as const, value: { verdict: 'pass' }, source: main };
+    expect(reaction(answer, { text: 'QA passed', isError: false, queued: 0 }, true)).toEqual({ kind: 'answered', outcome: { ok: true, summary: 'QA passed', structured: { verdict: 'pass' }, started: true } });
+    expect(reaction(answer, { text: 'QA passed', isError: false, queued: 1 }, true)).toEqual({ kind: 'none' });
+    expect(reaction(answer, { text: 'QA passed', isError: false, queued: 0 }, false)).toEqual({ kind: 'none' });
   });
 
   it('ends the turn when the host’s turn or the conversation ends', () => {

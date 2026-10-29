@@ -8,9 +8,9 @@ import { type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
 // The HostRunner's decisions (hostRunner.ts runs them): which sessions go to agent-host, which of an agent's host
 // conversations a turn joins, and what a turn comes to. Pure, so they're unit tested (hostRunnerRules.test.ts).
 
-/** The tasks whose sessions run on agent-host: the developers'. QA and the leads move over later. */
+/** The tasks whose sessions run on agent-host: the developers' and QA's. The leads move over later. */
 export function runsOnHost(task: AgentTask | undefined, cloud: boolean): boolean {
-  return !cloud && (task === 'issue' || task === 'fix' || task === 'conflicts' || task === 'brief');
+  return !cloud && (task === 'issue' || task === 'fix' || task === 'conflicts' || task === 'brief' || task === 'review');
 }
 
 export const HOST_AUTONOMY: Record<Autonomy, HostAutonomy> = { ask: 'raise-hand', auto: 'auto', full: 'full' };
@@ -58,23 +58,36 @@ export type Reaction =
   /** A raised hand: put it to the manager. */
   | { kind: 'ask'; requestId: string; tool: string; summary: string }
   /** Someone answered a raised hand or a question: stop waiting on the manager for it. */
-  | { kind: 'answered'; requestId: string }
+  | { kind: 'resolved'; requestId: string }
   /** How full the context window is. */
   | { kind: 'context'; context: { percent: number; tokens: number; max: number } }
   /** Lines for the agent's terminal, and what it's doing, when that changes. */
   | { kind: 'say'; lines: Omit<TermLine, 't'>[]; activity?: string }
   /** The turn is over. */
   | { kind: 'end'; outcome: RunOutcome }
+  /**
+   * The answer the turn was asked for is in: the turn is over, and whatever the agent still has running in the
+   * background goes (a QA officer's preview server would otherwise keep the verdict waiting).
+   */
+  | { kind: 'answered'; outcome: RunOutcome }
   | { kind: 'none' };
 
-/** What a turn does with `event`, given the turn's last result so far. */
-export function reaction(event: ConversationEvent, result: TurnResult | undefined): Reaction {
+/**
+ * What a turn does with `event`, given the turn's last result so far, and whether the turn asked for a structured
+ * answer (`expectsAnswer`).
+ */
+export function reaction(event: ConversationEvent, result: TurnResult | undefined, expectsAnswer = false): Reaction {
   switch (event._tag) {
+    case 'StructuredAnswer':
+      // nothing sent meanwhile is still to be read: the answer is the turn's last word
+      return expectsAnswer && (result?.queued ?? 0) === 0
+        ? { kind: 'answered', outcome: { ok: true, summary: result?.text ?? '', structured: event.value, started: true } }
+        : { kind: 'none' };
     case 'PermissionRequested':
       return { kind: 'ask', requestId: event.requestId, tool: event.tool, summary: event.summary };
     case 'PermissionAnswered':
     case 'QuestionAnswered':
-      return { kind: 'answered', requestId: event.requestId };
+      return { kind: 'resolved', requestId: event.requestId };
     case 'Usage':
       return event.context ? { kind: 'context', context: event.context } : { kind: 'none' };
     case 'Held':

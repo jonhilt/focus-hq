@@ -13,7 +13,7 @@
 
 ## On agent-host
 
-Developers' sessions (an issue, a fix, merge conflicts, a brief's work) run on [agent-host](https://github.com/jonhilt/agent-host), the leads' and QA's still on Focus's own Claude runner until they move over. The host keeps each agent's conversation with Claude Code in a journal of its own and owns what every client of it would otherwise rebuild, so Focus's turns watch the host's conversation rather than run Claude Code themselves (`server/agents/hostRunner.ts`):
+Developers' sessions (an issue, a fix, merge conflicts, a brief's work) and QA's (the room's officer, each goal's reviewer) run on [agent-host](https://github.com/jonhilt/agent-host), the leads' still on Focus's own Claude runner until they move over. A QA turn asks the host for its report as a structured answer and ends as soon as the report is in, letting go of anything it still had running (a preview server), as it did on Focus's own runner. The host keeps each agent's conversation with Claude Code in a journal of its own and owns what every client of it would otherwise rebuild, so Focus's turns watch the host's conversation rather than run Claude Code themselves (`server/agents/hostRunner.ts`):
 
 - **Its own Claude Code login.** Sessions run under `~/.agent-host/claude`, signed in once there (`CLAUDE_CONFIG_DIR=~/.agent-host/claude claude`, then `/login`), and keep their transcripts there; Focus reads them from both folders. Your own `~/.claude` settings load only with **Your CLAUDE.md** on. A session that began before the move has its transcript copied across once, so it carries on.
 - **Your plan's usage limit pauses a developer** until it resets, across a restart too, and never moves them onto your API key.

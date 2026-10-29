@@ -95,6 +95,8 @@ export class HostRunner implements AgentRunner {
     if (this.lendings.get(agentId) !== lending) return;
     lending.scratch.close();
     lending.hooks = undefined;
+    // the browser goes with the session, as it always has
+    void this.browsers.close(agentId);
   }
 
   remember(conversationId: string, agentId: string): void {
@@ -221,6 +223,7 @@ class HostTurn {
             firstMessage: this.req.prompt,
             systemAppend: this.req.systemAppend,
             disallowedTools: ['AskUserQuestion', 'EnterPlanMode'],
+            ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }),
             ...(plan.resumes && { resumeAgentSession: plan.resumes }),
           },
           this.runner.lent(agentId),
@@ -239,7 +242,7 @@ class HostTurn {
         Effect.ensuring(Effect.sync(() => resolve({ ok: false, summary: this.result?.text ?? '', error: 'agent-host stopped watching the conversation', started: true }))),
       );
       const fiber = yield* Effect.forkDetach(watch);
-      if (plan.kind === 'send') yield* host.send(id, this.req.prompt, this.effort ? { effort: this.effort } : {});
+      if (plan.kind === 'send') yield* host.send(id, this.req.prompt, { ...(this.effort && { effort: this.effort }), ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }) });
       for (const text of this.early.splice(0)) yield* host.send(id, text);
       if (this.stopAsked) yield* host.interrupt(id);
       return fiber;
@@ -280,11 +283,11 @@ class HostTurn {
   }
 
   private onEvent(event: ConversationEvent, resolve: (o: RunOutcome) => void): void {
-    const r = reaction(event, this.result);
+    const r = reaction(event, this.result, this.req.outputSchema !== undefined);
     switch (r.kind) {
       case 'ask':
         return this.ask(r.requestId, r.tool, r.summary);
-      case 'answered':
+      case 'resolved':
         this.asks.get(r.requestId)?.abort();
         this.asks.delete(r.requestId);
         return;
@@ -296,6 +299,12 @@ class HostTurn {
         return;
       case 'end':
         return resolve(r.outcome);
+      case 'answered': {
+        resolve(r.outcome);
+        const id = this.conversation;
+        if (id) void this.runner.run(Host.use((h) => h.interrupt(id))).catch(() => undefined);
+        return;
+      }
     }
   }
 

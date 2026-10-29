@@ -162,6 +162,32 @@ describe('HostRunner', () => {
   });
 });
 
+describe('HostRunner, a QA officer', () => {
+  it('asks the host for the report, and ends the turn once it is in, though a background command still runs (the preview server)', async () => {
+    const schema = { type: 'object', properties: { verdict: { type: 'string' } } };
+    let interrupted = false;
+    const fake = makeFakeAdapter({
+      script: (s) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          yield* s.emit({ _tag: 'BackgroundChanged', tasks: [{ id: 'b1', description: 'pnpm dev' }], waiting: false, source: { _tag: 'Main' } });
+          const report = { type: 'result', subtype: 'success', result: 'QA passed', structured_output: { verdict: 'pass' }, is_error: false, duration_ms: 1000, num_turns: 1, total_cost_usd: 0.01, session_id: 's', uuid: crypto.randomUUID() };
+          yield* s.emit({ _tag: 'StructuredAnswer', value: { verdict: 'pass' }, source: { _tag: 'Main' }, raw: report });
+          // the turn stays open on its background command until it's interrupted
+          yield* Effect.callback<void>(() => Effect.sync(() => void (interrupted = true)));
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const req: RunRequest = { ...request('review PR #7'), task: 'review', outputSchema: schema };
+    const outcome = await runner.start(req, hooks().h).done;
+    expect(outcome).toMatchObject({ ok: true, summary: 'QA passed', structured: { verdict: 'pass' }, started: true });
+    const s = await Effect.runPromise(fake.session(1));
+    expect(s.options.outputSchema).toEqual(schema);
+    await until(() => interrupted || !s.inTurn, 'the background let go');
+    await runner.shutDown();
+  });
+});
+
 describe('copyTranscript', () => {
   const folders = () => {
     const root = mkdtempSync(path.join(os.tmpdir(), 'focus-transcripts-'));

@@ -1,4 +1,4 @@
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -6,6 +6,7 @@ import type { Settings, TermLine } from '../../shared/types';
 import type { BackgroundEvent } from './backgroundTasks';
 import { BrowserPool } from './browserTool';
 import { HostRunner } from './hostRunner';
+import { parseQaReport, QA_SCHEMA } from './qa';
 import type { RunHooks, RunRequest } from './types';
 
 // A developer's session through agent-host on real Claude Code, on your plan (signed in under ~/.agent-host/claude).
@@ -59,6 +60,41 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
     // a subagent's lines go, indented, in the session's own
     expect(lines.some((l) => l.text.startsWith('    '))).toBe(true);
     expect(text).toContain('BG-OK');
+    await runner.shutDown();
+  }, 300_000);
+
+  it('runs a QA review end to end and returns its verdict as a structured answer (criterion 14)', async () => {
+    const cwd = mkdtempSync(path.join(os.tmpdir(), 'focus-host-qa-live-'));
+    writeFileSync(path.join(cwd, 'add.js'), 'export const add = (a, b) => a + b;\n');
+    const runner = new HostRunner(new BrowserPool(), undefined, path.join(cwd, 'journal.sqlite'));
+    const lines: Omit<TermLine, 't'>[] = [];
+    const hooks: RunHooks = {
+      lines: (ls) => void lines.push(...ls),
+      activity: () => undefined,
+      browser: () => undefined,
+      screenshot: () => undefined,
+      session: () => undefined,
+      cost: () => undefined,
+      permission: () => Promise.resolve(true),
+      question: () => Promise.resolve(undefined),
+    };
+    const req: RunRequest = {
+      agentId: 'qa_live',
+      agentName: 'Lt. Live',
+      task: 'review',
+      cwd,
+      prompt: 'Review the change in add.js. Acceptance criterion: `add(2, 3)` returns 5. Read the file, check it with `node -e`, then give your report.',
+      systemAppend: '',
+      settings,
+      autonomy: 'full',
+      model: 'haiku',
+      outputSchema: QA_SCHEMA,
+    };
+    const outcome = await runner.start(req, hooks).done;
+    expect(outcome).toMatchObject({ ok: true, started: true });
+    const report = parseQaReport(outcome.structured, outcome.summary);
+    expect(report?.verdict).toBe('pass');
+    expect(report?.checks.length).toBeGreaterThan(0);
     await runner.shutDown();
   }, 300_000);
 });
