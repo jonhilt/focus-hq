@@ -1,18 +1,34 @@
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
-import { RECAP_SCHEMA } from './recapSchema';
+import type { Tool, ToolResult } from 'agent-host';
+import { Effect, Schema, SchemaIssue, SchemaTransformation } from 'effect';
+import { z, type ZodType } from 'zod';
+import { RECAP_SCHEMA, RecapSchema } from './recapSchema';
 import { errorMessage } from '../util';
 import type { ExtraTool, OpsTools, ToolReply } from './types';
 
+/**
+ * What the office server is, as the old runner's MCP server tells Claude. agent-host's tool server has no
+ * instructions to carry it, so a lead on the host is to be told it in its system prompt.
+ */
+export const OPS_INSTRUCTIONS = 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.';
+
 /** One tool's answer: what happened, in words (and any pictures), or (marked as an error) why it didn't. */
-async function answer(run: () => Promise<string | ToolReply>, failed: string): Promise<{ content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean }> {
+async function answer(run: () => Promise<string | ToolReply>, failed: string): Promise<ToolResult> {
   try {
     const reply = await run();
-    if (typeof reply === 'string') return { content: [{ type: 'text', text: reply }] };
-    return { content: [{ type: 'text', text: reply.text }, ...reply.images.map((image) => ({ type: 'image' as const, data: Buffer.from(image).toString('base64'), mimeType: 'image/jpeg' }))] };
+    if (typeof reply === 'string') return { text: reply };
+    return { text: reply.text, images: reply.images.map((data) => ({ data, mimeType: 'image/jpeg' })) };
   } catch (err) {
-    return { content: [{ type: 'text', text: `${failed}: ${errorMessage(err)}` }], isError: true };
+    return { text: `${failed}: ${errorMessage(err)}`, isError: true };
   }
+}
+
+/** A tool's answer as MCP content, as agent-host's tool server gives it too. */
+function mcpContent(result: ToolResult): { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean } {
+  return {
+    content: [{ type: 'text', text: result.text }, ...(result.images ?? []).map((image) => ({ type: 'image' as const, data: Buffer.from(image.data).toString('base64'), mimeType: image.mimeType }))],
+    ...(result.isError && { isError: true }),
+  };
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
@@ -30,7 +46,136 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 }
 
 /**
- * Ops' tools for a goal's lead, as an in-process MCP server: mcp__office__recap, show, ask
+ * A plugin's zod input as an Effect Schema: zod parses it, the tool getting what zod gives back, and a bad one reads
+ * as zod's own summary of what's wrong. Its JSON Schema is the one zod makes, as the MCP server makes it from the same
+ * shape (draft-07, the input's side), carried by a check, as a declaration's own JSON Schema is left open.
+ * Throws when zod can't make one, as the MCP server then leaves the tool out.
+ */
+export function zodInput(shape: Record<string, ZodType>): Schema.Codec<Record<string, unknown>> {
+  const object = z.object(shape);
+  const jsonSchema = z.toJSONSchema(object, { target: 'draft-7', io: 'input' });
+  const json = Schema.Json.check(Schema.makeFilter(() => true, { toJsonSchema: () => jsonSchema }));
+  return Schema.declareConstructor<Record<string, unknown>>()(
+    [],
+    () => (input) => {
+      const parsed = object.safeParse(input);
+      return parsed.success ? Effect.succeed(parsed.data) : Effect.fail(new SchemaIssue.InvalidValue({ message: z.prettifyError(parsed.error) }));
+    },
+    { toCodecJson: () => Schema.link<Record<string, unknown>>()(json, SchemaTransformation.passthrough({ strict: false })) },
+  );
+}
+
+/**
+ * One of a lead's office tools, defined once: `tool` as agent-host serves it, and for the old runner's MCP server its
+ * input as zod (`shape`) and `serve`, which takes what zod parsed and answers as `tool` does.
+ */
+interface OfficeTool {
+  tool: Tool;
+  shape: Record<string, ZodType>;
+  serve(input: Record<string, unknown>): Promise<ToolResult>;
+}
+
+/** One of Ops' own: the MCP server's zod parse is decoded again by `input` (no transforms, so it comes through as it is). */
+function opsTool<A>(name: string, description: string, input: Schema.Codec<A>, shape: Record<string, ZodType>, failed: string, run: (input: A) => Promise<string>): OfficeTool {
+  const handler = (args: A) => Effect.promise(() => answer(() => run(args), failed));
+  return {
+    tool: { name, server: 'office', description, input, handler },
+    shape,
+    serve: (args) => Effect.runPromise(Schema.decodeUnknownEffect(input)(args).pipe(Effect.flatMap(handler))),
+  };
+}
+
+/** A plugin's: zod parses it either way, once. Null when zod can't make its JSON Schema, which the MCP server leaves out too. */
+function pluginTool(t: ExtraTool): OfficeTool | null {
+  let input: Schema.Codec<Record<string, unknown>>;
+  try {
+    input = zodInput(t.input);
+  } catch (err) {
+    console.warn(`The office tool ${t.name} is left out, as its input has no JSON Schema: ${errorMessage(err)}`);
+    return null;
+  }
+  const handler = (args: Record<string, unknown>) => Effect.promise(() => answer(() => t.run(args), `${t.name} failed`));
+  return { tool: { name: t.name, server: 'office', description: t.description, input, handler }, shape: t.input, serve: (args) => Effect.runPromise(handler(args)) };
+}
+
+const Described = (description: string) => Schema.String.annotate({ description });
+
+/** Ops' tools for a goal's lead, and those the plugins switched on add, each defined once for both runners. */
+function officeTools(tools: OpsTools): OfficeTool[] {
+  const say = {
+    repo: 'The pull request\'s repo, owner/name.',
+    number: 'The pull request\'s number.',
+    id: 'A short name for it, lowercase with dashes (like "data-flow"): show the same id again to update it.',
+    title: 'What it is, in a few words (at most 80 characters).',
+    html: 'A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.',
+    question: 'The question, in a sentence (at most 300 characters).',
+    context: 'Why you\'re asking and what matters in choosing, in a few sentences (at most 600 characters): the captain reads it above the options.',
+    label: 'A few words naming this option (at most 60 characters).',
+    detail: 'What this option means and what it trades off, in a sentence or three (at most 500 characters): shown beside its page.',
+    optionHtml: 'A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.',
+    options: '2 to 4 options: the captain sees them lettered A, B, C, D in this order.',
+    reason: 'Why, in a sentence or two.',
+  };
+  return [
+    opsTool(
+      'recap',
+      'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it), which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses one that leaves a file the pull request changes under none of its primitives\' paths (paths start with the repo\'s folder), then puts it in the pull request\'s description and on your station\'s screen. It also picks the lane the pull request merges in once QA passes it: ship merges it by itself, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows. With no recap, a pull request is in ask. Send it again to replace it.',
+      Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }), recap: RecapSchema }),
+      { repo: z.string().describe(say.repo), number: z.number().int().describe(say.number), recap: RECAP_SCHEMA },
+      "Couldn't put the recap on it",
+      (input) => tools.recap(input),
+    ),
+    opsTool(
+      'show',
+      "Put a visual on your station's big screen for the captain: a diagram, a mockup, options side by side. They see a picture of it on the screen, switch between what you've shown, and open each one up close, live. Showing an id again replaces it.",
+      Schema.Struct({ id: Described(say.id), title: Described(say.title), html: Described(say.html) }),
+      { id: z.string().describe(say.id), title: z.string().describe(say.title), html: z.string().describe(say.html) },
+      "Couldn't show it",
+      (input) => tools.show(input),
+    ),
+    opsTool(
+      'ask',
+      "Ask the captain a question best answered by looking: which layout, which diagram reads best, which of a few approaches. Each option is a page of its own, shown on your station's screen; up close, the captain steps through them one at a time, large, and picks one. Say why you're asking in context, and give each option a detail (what it means, what it trades off): they read it beside the page. Their pick comes back to you as a message from them, so end your turn after asking. Asking again replaces a question they haven't answered.",
+      Schema.Struct({
+        question: Described(say.question),
+        context: Schema.optionalKey(Described(say.context)),
+        options: Schema.mutable(Schema.Array(Schema.Struct({ label: Described(say.label), detail: Schema.optionalKey(Described(say.detail)), html: Described(say.optionHtml) }))).annotate({ description: say.options }),
+      }),
+      {
+        question: z.string().describe(say.question),
+        context: z.string().optional().describe(say.context),
+        options: z.array(z.object({
+          label: z.string().describe(say.label),
+          detail: z.string().optional().describe(say.detail),
+          html: z.string().describe(say.optionHtml),
+        })).describe(say.options),
+      },
+      "Couldn't ask",
+      (input) => tools.ask(input),
+    ),
+    opsTool(
+      'propose_close',
+      "Tell the captain you think the goal is done (what done looks like is met), or that nothing worthwhile is left. They close it or carry on. Then tell them why, and stop.",
+      Schema.Struct({ reason: Described(say.reason) }),
+      { reason: z.string().describe(say.reason) },
+      "Couldn't propose closing",
+      ({ reason }) => tools.proposeClose({ reason }),
+    ),
+    ...extraTools(tools.extra ?? []).flatMap((t) => pluginTool(t) ?? []),
+  ];
+}
+
+/**
+ * Ops' tools for a goal's lead as agent-host's tools, served as `office`: mcp__office__recap, show, ask and
+ * propose_close, and those the plugins switched on add. What `opsMcpServer` serves, but for its instructions
+ * (`OPS_INSTRUCTIONS`).
+ */
+export function opsTools(tools: OpsTools): Tool[] {
+  return officeTools(tools).map((t) => t.tool);
+}
+
+/**
+ * Ops' tools for a goal's lead, as the old runner's in-process MCP server: mcp__office__recap, show, ask
  * and propose_close, and those the plugins switched on add.
  */
 export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
@@ -38,49 +183,7 @@ export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
     name: 'office',
     version: '1.0.0',
     alwaysLoad: true,
-    instructions: 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.',
-    tools: [
-      tool(
-        'recap',
-        'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it), which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses one that leaves a file the pull request changes under none of its primitives\' paths (paths start with the repo\'s folder), then puts it in the pull request\'s description and on your station\'s screen. It also picks the lane the pull request merges in once QA passes it: ship merges it by itself, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows. With no recap, a pull request is in ask. Send it again to replace it.',
-        {
-          repo: z.string().describe('The pull request\'s repo, owner/name.'),
-          number: z.number().int().describe('The pull request\'s number.'),
-          recap: RECAP_SCHEMA,
-        },
-        ({ repo, number, recap }) => answer(() => tools.recap({ repo, number, recap }), "Couldn't put the recap on it"),
-      ),
-      tool(
-        'show',
-        "Put a visual on your station's big screen for the captain: a diagram, a mockup, options side by side. They see a picture of it on the screen, switch between what you've shown, and open each one up close, live. Showing an id again replaces it.",
-        {
-          id: z.string().describe('A short name for it, lowercase with dashes (like "data-flow"): show the same id again to update it.'),
-          title: z.string().describe('What it is, in a few words (at most 80 characters).'),
-          html: z.string().describe('A self-contained HTML page: inline CSS and SVG, or a script from a CDN (mermaid, say). The screen shows it at 1280 × 800, so make it read well at that size.'),
-        },
-        (input) => answer(() => tools.show(input), "Couldn't show it"),
-      ),
-      tool(
-        'ask',
-        "Ask the captain a question best answered by looking: which layout, which diagram reads best, which of a few approaches. Each option is a page of its own, shown on your station's screen; up close, the captain steps through them one at a time, large, and picks one. Say why you're asking in context, and give each option a detail (what it means, what it trades off): they read it beside the page. Their pick comes back to you as a message from them, so end your turn after asking. Asking again replaces a question they haven't answered.",
-        {
-          question: z.string().describe('The question, in a sentence (at most 300 characters).'),
-          context: z.string().optional().describe('Why you\'re asking and what matters in choosing, in a few sentences (at most 600 characters): the captain reads it above the options.'),
-          options: z.array(z.object({
-            label: z.string().describe('A few words naming this option (at most 60 characters).'),
-            detail: z.string().optional().describe('What this option means and what it trades off, in a sentence or three (at most 500 characters): shown beside its page.'),
-            html: z.string().describe('A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.'),
-          })).describe('2 to 4 options: the captain sees them lettered A, B, C, D in this order.'),
-        },
-        (input) => answer(() => tools.ask(input), "Couldn't ask"),
-      ),
-      tool(
-        'propose_close',
-        "Tell the captain you think the goal is done (what done looks like is met), or that nothing worthwhile is left. They close it or carry on. Then tell them why, and stop.",
-        { reason: z.string().describe('Why, in a sentence or two.') },
-        ({ reason }) => answer(() => tools.proposeClose({ reason }), "Couldn't propose closing"),
-      ),
-      ...extraTools(tools.extra ?? []).map((t) => tool(t.name, t.description, t.input, (input) => answer(() => t.run(input), `${t.name} failed`))),
-    ],
+    instructions: OPS_INSTRUCTIONS,
+    tools: officeTools(tools).map((t) => tool(t.tool.name, t.tool.description, t.shape, async (input) => mcpContent(await t.serve(input)))),
   });
 }
