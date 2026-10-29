@@ -85,8 +85,8 @@ const open = async () => {
 };
 
 // a card of goal b's lead waits on the captain, and an interrupt from goal a's that can't be undone
-const card = { id: 'turn:b:1000', kind: 'turn', projectId: 'p', agentId: 'b', who: 'Lt. b', goal: 'Goal b', what: 'Filters first?', lane: 'needs-you', cos: { route: 2, ask: 'Filters first?', why: 'A pick.', says: 'Filters or sorting next.', message: '' } };
-const hail = { id: 'turn:a:1000', kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. a', goal: 'Goal a', what: 'Read production?', lane: 'needs-you', cos: { route: 3, check: 'irreversible', ask: 'Read production?', why: '', message: 'One read-only query.' } };
+const card = { id: 'turn:b:1000', kind: 'turn', projectId: 'p', agentId: 'b', who: 'Lt. b', goal: 'Goal b', what: 'Filters first?', lane: 'needs-you', cos: { route: 2, asks: [{ ask: 'Filters first?' }], ask: 'Filters first?', why: 'A pick.', says: 'Filters or sorting next.', message: '' } };
+const hail = { id: 'turn:a:1000', kind: 'turn', projectId: 'p', agentId: 'a', who: 'Lt. a', goal: 'Goal a', what: 'Read production?', lane: 'needs-you', cos: { route: 3, check: 'irreversible', asks: [{ ask: 'Read production?' }], ask: 'Read production?', why: '', message: 'One read-only query.' } };
 
 describe('the bridge with nobody at the conn', () => {
   it('is an empty table, every goal in its berth with what waits on it counted, the muster chip counting it all', async () => {
@@ -214,6 +214,73 @@ describe('taking the conn', () => {
     expect(part('decision')).toBeNull();
     expect(part('answered')?.textContent).toContain('Answered · Lt. b is on it');
     expect(part('answered')?.inert).toBe(true);
+  });
+
+  it('puts a turn of several asks as a block each, answered on its own and held, with what’s held marked and where they stand', async () => {
+    const work = leads[1]?.lead;
+    if (!work) throw new Error('no lead');
+    const asks = [
+      { ask: 'Next slice: shared link or emails?', replies: [{ label: 'Shared link', text: 'Shared link first.' }, { label: 'Emails', text: 'Emails first.' }] },
+      { ask: 'Keep the old endpoint for a release?', replies: [{ label: 'Keep it', text: 'Keep it for a release.' }] },
+      { ask: 'Rename the setting?' },
+    ];
+    const cos = { route: 2, asks, ask: 'Next slice: shared link or emails? (+2 more)', why: 'Three calls.', message: 'Three things.' };
+    work.marks = { [CHIEF_OF_STAFF]: { at: 1000, judged: cos } };
+    fake.conn = 'b';
+    fake.open = [{ ...card, what: cos.ask, cos, answers: [{ ask: 0, text: 'Emails first.' }, { ask: 2, text: 'Leave it.' }] }];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    delete work.marks;
+    expect(part('decision')?.textContent).toContain('Decisions · 3 from Lt. b');
+    expect(parts('ask').map((a) => [a.firstElementChild?.textContent, a.hasAttribute('data-answered')])).toEqual([
+      ['Next slice: shared link or emails?Answered', true], ['Keep the old endpoint for a release?To answer', false], ['Rename the setting?Answered', true],
+    ]);
+    // the reply held is marked as the user's answer, and their own words shown as theirs
+    expect(parts('ask')[0]?.querySelector('[data-chosen]')?.textContent).toBe('EmailsYour answerEmails first.');
+    expect(parts('ask')[2]?.querySelector('[data-part=held]')?.textContent).toBe('Your answer: Leave it.');
+    expect(part('asks-status')?.textContent).toBe('2 of 3 answered · nothing goes to Lt. b until all are, then they go together');
+    // the replies are each ask's own: no pick across them, and nothing sent whole
+    expect(document.body.textContent).not.toContain('The pick');
+    parts('ask')[0]?.querySelectorAll('button')[0]?.click();
+    await settle();
+    expect(inbox.decide).toHaveBeenLastCalledWith('turn:b:1000', { answer: { ask: 0, text: 'Shared link first.' } });
+    const own = parts('ask')[1]?.querySelector('input');
+    if (!own) throw new Error('no box for their own words');
+    own.value = 'Keep it two releases.';
+    own.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(inbox.decide).toHaveBeenLastCalledWith('turn:b:1000', { answer: { ask: 1, text: 'Keep it two releases.' } });
+    expect([...(part('acts')?.querySelectorAll('button') ?? [])].map((x) => x.textContent).slice(-2)).toEqual(['Discuss', 'Got it']);
+  });
+
+  it('fades a turn of several asks once the last answer sends them, every ask shown answered, the last too', async () => {
+    const work = leads[1]?.lead;
+    if (!work) throw new Error('no lead');
+    const asks = [
+      { ask: 'Next slice: shared link or emails?', replies: [{ label: 'Emails', text: 'Emails first.' }] },
+      { ask: 'Keep the old endpoint for a release?', replies: [{ label: 'Keep it', text: 'Keep it for a release.' }] },
+    ];
+    const cos = { route: 2, asks, ask: 'Next slice: shared link or emails? (+1 more)', why: 'Two calls.', message: 'Two things.' };
+    work.marks = { [CHIEF_OF_STAFF]: { at: 1000, judged: cos } };
+    fake.conn = 'b';
+    fake.open = [{ ...card, what: cos.ask, cos, answers: [{ ask: 0, text: 'Emails first.' }] }];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    delete work.marks;
+    // the last answer: all of them go together, and the turn leaves the inbox
+    fake.open = [];
+    fake.waiting = [];
+    parts('ask')[1]?.querySelector<HTMLElement>('[data-part=choice]')?.click();
+    await settle();
+    fake.state?.();
+    await settle();
+    expect(inbox.decide).toHaveBeenLastCalledWith('turn:b:1000', { answer: { ask: 1, text: 'Keep it for a release.' } });
+    expect(part('decision')).toBeNull();
+    const faded = part('answered');
+    expect(faded?.textContent).toContain('Answered · Lt. b is on it');
+    expect([...(faded?.querySelectorAll('[data-part=ask]') ?? [])].map((x) => x.hasAttribute('data-answered'))).toEqual([true, true]);
+    expect([...(faded?.querySelectorAll('[data-chosen]') ?? [])].map((x) => x.textContent)).toEqual(['EmailsYour answerEmails first.', 'Keep itYour answerKeep it for a release.']);
+    expect(faded?.querySelector('[data-part=asks-status]')?.textContent).toBe('All 2 answered: sending them to Lt. b as one message');
   });
 
   it('discusses it in the panel: the decision quoted at its top, and what’s said sent to the lead about it', async () => {

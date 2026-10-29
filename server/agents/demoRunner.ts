@@ -549,6 +549,14 @@ export class DemoRunner implements AgentRunner {
         await say('The workflow is done: its results are on the transporter console.');
         return { ok: true, summary: 'Ran a workflow.' };
       }
+      // asked what's left to decide: several decisions in one turn, one of them a merge the card already has a button for
+      if (/\bleft to decide\b/i.test(req.prompt)) {
+        await think();
+        const pr = this.leads.get(sessionId)?.prs?.[0];
+        const merge = pr ? `Shall I merge ${pr.repo.split('/').pop()}#${pr.number}? ` : '';
+        await say(`The slice is up and QA passed it. A few things for you. ${merge}Next slice: the shared link or the emails? Should we keep the old endpoint for a release? And shall I rename the setting to “Saved lists”?`);
+        return { ok: true, summary: 'Listed what is left to decide.' };
+      }
       const landed = /Slice (\d+) has landed/.exec(req.prompt);
       if (landed) {
         await think();

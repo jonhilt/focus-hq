@@ -9,7 +9,7 @@ import { type CrewRole, crewFolder } from '../../plugin-api/server';
 const ROLES = {
   /** Where a lead's turn goes: `judgeSystemPrompt` (judge.ts). */
   judge: {
-    vars: { orders: 'text', maxReplies: 'text', maxReplyLabel: 'text', pinned: 'flag', route: 'text', routeName: 'text' },
+    vars: { orders: 'text', maxAsks: 'text', maxReplies: 'text', maxReplyLabel: 'text', pinned: 'flag', route: 'text', routeName: 'text' },
     texts: ['noOrders', 'route.1', 'route.2', 'route.3', 'route.4'],
     textVars: {},
   },

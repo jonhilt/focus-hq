@@ -7,6 +7,7 @@ import { hailKey } from './inbox';
 import { inbox } from './inboxApi';
 import { laneOf, lineOf } from './laneRules';
 import { type CosRead, CHIEF_OF_STAFF, readOf } from './shared';
+import { headlineOf } from './askRules';
 
 /** When its words go by themselves, to the minute: the phone's screen is drawn again every few seconds. */
 export function sendsIn(sendsAt: number | undefined, now: number): string {
@@ -44,7 +45,7 @@ function needsYouStrip(host: PhoneHost, attention: Attention[]): HTMLElement {
 export function readyLine(read: CosRead | undefined, now: number): { ask: string; words: string; holdable: boolean; when: string } {
   const judged = read?.judged;
   return {
-    ask: judged?.ask ?? 'Carry on',
+    ask: judged ? headlineOf(judged.asks) : 'Carry on',
     words: judged?.message ?? '',
     holdable: read?.sendsAt !== undefined,
     when: sendsIn(read?.sendsAt, now),

@@ -3,7 +3,7 @@ import type { Agent } from '../../plugin-api/shared';
 import { countdown, cosMove, SENDING_MS } from './moveRules';
 import { CHIEF_OF_STAFF, type CosRead, JUDGING_MS, type Verdict } from './shared';
 
-const verdict = (route: Verdict['route']): Verdict => ({ route, ask: 'Write the wishlist tests next', why: 'w', message: 'm' });
+const verdict = (route: Verdict['route']): Verdict => ({ route, asks: [{ ask: 'Write the wishlist tests next' }], why: 'w', message: 'm' });
 const lead = (read?: CosRead, status: Agent['status'] = 'done'): Pick<Agent, 'status' | 'lead'> => ({
   status,
   lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },

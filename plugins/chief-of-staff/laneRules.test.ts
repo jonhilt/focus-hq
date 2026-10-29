@@ -3,7 +3,7 @@ import type { Agent, LedgerEvent } from '../../plugin-api/shared';
 import { acked, held, heldForRead, judged, laneOf, lineOf, lostRaises, needingYou, reading, unreadShip, waking } from './laneRules';
 import { AUTO_SEND_MS, CHIEF_OF_STAFF, type CosRead, JUDGING_MS, type Verdict } from './shared';
 
-const verdict = (route: Verdict['route']): Verdict => ({ route, ask: route === 3 ? 'Spend $40?' : 'Carry on', why: 'w', message: 'm' });
+const verdict = (route: Verdict['route']): Verdict => ({ route, asks: [{ ask: route === 3 ? 'Spend $40?' : 'Carry on' }], why: 'w', message: 'm' });
 const lead = (read?: CosRead, more: Partial<Agent> = {}): Agent => ({
   id: 'a1', name: 'Lt. Vale', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,

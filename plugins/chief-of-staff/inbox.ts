@@ -2,7 +2,8 @@ import type { LandedItem } from './landed';
 import type { Attention, CaptainAnswer, DecidedVia, LedgerEvent, QaReview, TermLine } from '../../plugin-api/shared';
 import { artifactUrl, isRecord, lastWords, openQuestion, shownThisTurn, turnRead } from '../../plugin-api/shared';
 import { type Lane, laneOf, lineOf } from './laneRules';
-import { ACKNOWLEDGED, readOf, SENT_WORDS, type Verdict } from './shared';
+import { headlineOf } from './askRules';
+import { ACKNOWLEDGED, type AskAnswer, readOf, type Reply, SENT_WORDS, type Verdict } from './shared';
 
 // The captain's inbox, as the chief of staff keeps it (docs/ledger.md#the-captains-inbox-api): each thing that needs
 // them with an id that stays the same from look to look, and what they decided lately, from the ledger's
@@ -49,12 +50,26 @@ export interface InboxItem {
   options?: { id: string; label: string; detail?: string }[];
   /** Whether it needs the captain, or is a lead's turn the chief of staff has words ready for, or is reading (`laneOf`). */
   lane: Lane;
-  /** A lead's turn as the chief of staff judged it: its route, the line on what's decided, why, and its words. */
-  cos?: Verdict;
+  /** A lead's turn as the chief of staff judged it: its route, its asks, why, and its words. */
+  cos?: ItemVerdict;
+  /** The user's answers to a turn's asks so far, held until every ask has one (askRules.ts). */
+  answers?: AskAnswer[];
   /** What the agent said last (`lastWords`), to read before deciding. */
   said?: string;
   /** What a lead showed on their screen this turn (`shownThisTurn`): its live page and its picture, served by the API. */
   shown?: { title: string; html: string; image?: string }[];
+}
+
+/**
+ * A verdict as the API serves it: its `asks`, each answered by itself, and as before a turn could ask several things,
+ * `ask` (its headline: the first ask, and how many more) and, on a turn of one ask, its `replies`, each sent whole as
+ * a `{ text }` decision. A turn of several has none there: each ask's replies answer that ask alone (`{ answer }`).
+ */
+export type ItemVerdict = Verdict & { ask: string; replies?: Reply[] };
+
+export function itemVerdict(v: Verdict): ItemVerdict {
+  const replies = v.asks.length === 1 ? v.asks[0]?.replies : undefined;
+  return { ...v, ask: headlineOf(v.asks), ...(replies?.length && { replies }) };
 }
 
 /** An item as the API serves it; given the agent's terminal `lines`, with what they said and showed. */
@@ -62,7 +77,8 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
   const { what } = lineOf(a, reviews);
   const lane = laneOf(a, now);
   if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane };
-  const cos = a.kind === 'turn' ? readOf(a.agent)?.judged : undefined;
+  const read = a.kind === 'turn' ? readOf(a.agent) : undefined;
+  const cos = read?.judged;
   const { agent } = a;
   const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
   const q = a.kind === 'question' ? openQuestion(agent) : undefined;
@@ -70,7 +86,8 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
   const shown = lines && a.kind !== 'error' ? shownThisTurn(agent.lead?.artifacts, lines) : [];
   return {
     id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what, lane,
-    ...(cos && { cos }),
+    ...(cos && { cos: itemVerdict(cos) }),
+    ...(read?.answers?.length && { answers: read.answers }),
     ...(since !== undefined && { since }),
     ...(a.kind === 'turn' && turnRead(agent) && { read: true }),
     ...(q && { options: q.options.map((o) => ({ id: o.id, label: o.label, ...(o.detail && { detail: o.detail }) })) }),
@@ -81,14 +98,21 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
 
 /**
  * How the captain answers an item: approve or decline a hand, pick a question's option, say something, close the goal,
- * send the chief of staff's words to the lead (a turn in the `ready` lane), or acknowledge a lead's turn (`ack`: read,
- * nothing sent, the lead not woken).
+ * send the chief of staff's words to the lead (a turn in the `ready` lane), acknowledge a lead's turn (`ack`: read,
+ * nothing sent, the lead not woken), or answer one of a turn's asks (`answer`: held until every ask has one, then all
+ * of them sent together, askRules.ts).
  */
-export type Decide = CaptainAnswer | { send: true } | { ack: true };
+export type Decide = CaptainAnswer | { send: true } | { ack: true } | { answer: AskAnswer };
 
 export type { DecidedVia };
 
-const SAY_HOW = 'Say how you decide: allow, option, text, close, send or ack';
+const SAY_HOW = 'Say how you decide: allow, option, text, close, send, ack or answer';
+
+/** An answer to one of a turn's asks, from a body: `{ answer: { ask, text } }`. */
+function askAnswerOf(v: unknown): AskAnswer | undefined {
+  if (!isRecord(v) || typeof v.ask !== 'number' || typeof v.text !== 'string' || !v.text.trim()) return undefined;
+  return { ask: v.ask, text: v.text.trim() };
+}
 
 /** A decision's body, as it comes over the API: one of `Decide`'s shapes, or why not. */
 export function decideOf(body: unknown): Decide {
@@ -99,6 +123,8 @@ export function decideOf(body: unknown): Decide {
   if (body.close === true) return { close: true };
   if (body.send === true) return { send: true };
   if (body.ack === true) return { ack: true };
+  const answer = askAnswerOf(body.answer);
+  if (answer) return { answer };
   throw new Error(SAY_HOW);
 }
 
@@ -109,6 +135,7 @@ export function answerText(d: Decide): string {
   if ('close' in d) return 'Closed the goal';
   if ('send' in d) return SENT_WORDS;
   if ('ack' in d) return ACKNOWLEDGED;
+  if ('answer' in d) return d.answer.text;
   return d.text;
 }
 

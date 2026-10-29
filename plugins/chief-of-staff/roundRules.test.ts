@@ -27,7 +27,7 @@ describe('unattendedRounds', () => {
 });
 
 describe('capped', () => {
-  const carryOn: Verdict = { route: 1, ask: 'Start slice 2', why: 'It said what’s next.', message: 'Carry on with slice 2.', replies: [{ label: 'Close it', text: 'Close the goal.' }] };
+  const carryOn: Verdict = { route: 1, asks: [{ ask: 'Start slice 2', replies: [{ label: 'Close it', text: 'Close the goal.' }] }], why: 'It said what’s next.', message: 'Carry on with slice 2.' };
 
   it('leaves a turn alone until the rounds reach the cap', () => {
     expect(capped(carryOn, UNATTENDED_ROUNDS - 1)).toBe(carryOn);
@@ -37,16 +37,15 @@ describe('capped', () => {
     for (const route of [1, 4] as const) {
       expect(capped({ ...carryOn, route }, UNATTENDED_ROUNDS)).toEqual({
         route: 2,
-        ask: `${UNATTENDED_ROUNDS} rounds without you: Start slice 2`,
+        asks: [{ ask: `${UNATTENDED_ROUNDS} rounds without you: Start slice 2`, replies: [{ label: 'Send its words', text: 'Carry on with slice 2.' }, { label: 'Close it', text: 'Close the goal.' }] }],
         why: `${UNATTENDED_ROUNDS} rounds in a row went back and forth without you, so this one waits for you. It said what’s next.`,
         message: 'It would tell the lead: “Carry on with slice 2.”',
-        replies: [{ label: 'Send its words', text: 'Carry on with slice 2.' }, { label: 'Close it', text: 'Close the goal.' }],
       });
     }
   });
 
   it('leaves a card or an interrupt as it is, and offers no reply for words too long to be one', () => {
     expect(capped({ ...carryOn, route: 3 }, 9)).toEqual({ ...carryOn, route: 3 });
-    expect(capped({ route: 1, ask: 'a', why: 'b', message: 'x'.repeat(501) }, 9)).not.toHaveProperty('replies');
+    expect(capped({ route: 1, asks: [{ ask: 'a' }], why: 'b', message: 'x'.repeat(501) }, 9).asks[0]).not.toHaveProperty('replies');
   });
 });

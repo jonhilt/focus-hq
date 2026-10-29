@@ -23,7 +23,8 @@ describe('deciding an inbox item', () => {
     expect(decideOf({ close: true })).toEqual({ close: true });
     expect(decideOf({ send: true })).toEqual({ send: true });
     expect(decideOf({ ack: true })).toEqual({ ack: true });
-    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }, { ack: 'yes' }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close, send or ack/);
+    expect(decideOf({ answer: { ask: 1, text: ' Emails first. ' } })).toEqual({ answer: { ask: 1, text: 'Emails first.' } });
+    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }, { ack: 'yes' }, { answer: { ask: '1', text: 'x' } }, { answer: { ask: 0, text: ' ' } }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close, send, ack or answer/);
   });
 
   it('says what was decided in a few words', () => {
@@ -33,6 +34,7 @@ describe('deciding an inbox item', () => {
     expect(answerText({ text: 'Go on' })).toBe('Go on');
     expect(answerText({ send: true })).toBe('Sent the chief of staff’s words');
     expect(answerText({ ack: true })).toBe('Acknowledged');
+    expect(answerText({ answer: { ask: 0, text: 'Emails first.' } })).toBe('Emails first.');
   });
 });
 
@@ -104,6 +106,22 @@ describe('a lead’s turn and the chief of staff', () => {
     expect(inboxItem({ kind: 'turn', agent: lead('a', judged(2)) }, new Map(), 2000).lane).toBe('needs-you');
     expect(inboxItem({ kind: 'turn', agent: lead('a', judged(1)) }, new Map(), 2000)).toMatchObject({ lane: 'ready', what: 'Carry on to the settings page', cos: { message: 'Go on to the settings page.' } });
     expect(inboxItem({ kind: 'turn', agent: lead('a', judged(4)) }, new Map(), 2000).lane).toBe('ready');
+  });
+
+  it('heads a turn of several asks by its first, saying how many more, with the answers held so far', () => {
+    const asks = [{ ask: 'Next slice: shared link or emails?', replies: [{ label: 'Emails', text: 'Emails first.' }] }, { ask: 'Keep the old endpoint?' }, { ask: 'Rename the setting?' }];
+    const item = inboxItem({ kind: 'turn', agent: lead('a', { at: 1000, judged: { route: 2, asks, why: 'w', message: 'm' }, answers: [{ ask: 1, text: 'Keep it.' }] }) }, new Map(), 2000);
+    expect(item).toMatchObject({ lane: 'needs-you', what: 'Next slice: shared link or emails? (+2 more)', answers: [{ ask: 1, text: 'Keep it.' }] });
+    // as the API served a turn before there were several: its headline, and no replies sent whole, since each answers one ask
+    expect(item.cos).toMatchObject({ asks, ask: 'Next slice: shared link or emails? (+2 more)' });
+    expect(item.cos).not.toHaveProperty('replies');
+  });
+
+  it('serves a turn of one ask as it always did: its headline and its replies, from a verdict kept before there were several', () => {
+    const replies = [{ label: 'Close it', text: 'Close it.' }];
+    const item = inboxItem({ kind: 'turn', agent: lead('a', { at: 1000, judged: { route: 2, ask: 'Close the goal?', why: 'w', message: 'm', replies } }) }, new Map(), 2000);
+    expect(item.cos).toEqual({ route: 2, asks: [{ ask: 'Close the goal?', replies }], ask: 'Close the goal?', replies, why: 'w', message: 'm' });
+    expect(item).not.toHaveProperty('answers');
   });
 
   it('reads only a lead’s turn: a hand they raise needs the captain whatever it judged', () => {

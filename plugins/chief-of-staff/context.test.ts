@@ -73,6 +73,18 @@ describe('turnContext', () => {
     );
   });
 
+  it('lists the lead’s open pull requests, whose merge buttons the card shows, and none merged or closed', () => {
+    const prs = [
+      { repo: 'acme/api', number: 1287, recap: { title: 'Saved lists endpoint' } },
+      { repo: 'acme/web', number: 41 },
+      { repo: 'acme/web', number: 40, outcome: 'merged' as const },
+    ];
+    const c = turnContext({ ...lead, lead: { ...lead.lead, prs } }, [], []);
+    expect(c.openPrs).toEqual(['acme/api#1287: Saved lists endpoint', 'acme/web#41']);
+    expect(contextText(c)).toContain("THE LEAD'S OPEN PULL REQUESTS (the captain's card shows each with its merge button):\n- acme/api#1287: Saved lists endpoint\n- acme/web#41");
+    expect(turnContext({ ...lead, lead: { ...lead.lead, prs: [prs[2]] } }, [], [])).not.toHaveProperty('openPrs');
+  });
+
   it('leaves out what the goal doesn’t have', () => {
     const c = turnContext({ id: 'g9', projectId: 'p', lead: { title: '' } }, [], []);
     expect(contextText(c)).toBe('GOAL: (untitled)');

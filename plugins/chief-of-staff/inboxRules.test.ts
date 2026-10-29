@@ -21,7 +21,7 @@ describe('deciding an inbox item', () => {
     expect(decideRefusal({ kind: 'turn' }, { close: true })).toMatch(/ready to close/);
     expect(decideRefusal({ kind: 'qa' }, { text: 'merge' })).toMatch(/on the board/);
     // the chief of staff's words are sent only for a turn it has words ready for: carry on, or back to the lead
-    const cos = (route: 1 | 2 | 3 | 4) => ({ route, ask: 'a', why: 'w', message: 'm' });
+    const cos = (route: 1 | 2 | 3 | 4) => ({ route, asks: [{ ask: 'a' }], ask: 'a', why: 'w', message: 'm' });
     expect(decideRefusal({ kind: 'turn', cos: cos(1) }, { send: true })).toBeNull();
     expect(decideRefusal({ kind: 'turn', cos: cos(4) }, { send: true })).toBeNull();
     expect(decideRefusal({ kind: 'turn', cos: cos(2) }, { send: true })).toMatch(/words ready/);
@@ -60,7 +60,7 @@ describe('what waits on the captain', () => {
 
 describe('the toast as a lead’s turn comes to the captain', () => {
   const at = (status: Agent['status'], cos?: object) => agent({ name: 'Lt. Vale', status, lead: { title: 'g', ...(cos && { marks: { [CHIEF_OF_STAFF]: cos } }) } as never });
-  const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1, judged: { route, ask: 'Spend $40?', why: 'w', message: 'm' } });
+  const judged = (route: 1 | 2 | 3 | 4) => ({ at: 1, judged: { route, asks: [{ ask: 'Spend $40?' }], why: 'w', message: 'm' } });
 
   it('says a turn no chief of staff reads is waiting, as it ends', () => {
     expect(turnNews('working', at('done'))).toEqual({ level: 'info', text: '🖖 Lt. Vale is waiting for you' });
@@ -77,8 +77,13 @@ describe('the toast as a lead’s turn comes to the captain', () => {
     expect(turnStage(at('working', judged(3)))).toBe('working');
   });
 
+  it('heads a card of several asks by its first, and how many more', () => {
+    const three = { at: 1, judged: { route: 2, asks: [{ ask: 'Next slice: shared link or emails?' }, { ask: 'Keep the old endpoint?' }, { ask: 'Rename it?' }], why: 'w', message: 'm' } };
+    expect(turnNews('reading', at('done', three))).toEqual({ level: 'info', text: '🗂 Lt. Vale: Next slice: shared link or emails? (+2 more)' });
+  });
+
   it('on watch, toasts the goal at the conn and a hail, and keeps another goal’s card to its berth', () => {
-    const hail = { at: 1, judged: { route: 3, check: 'irreversible', ask: 'Read production?', why: 'w', message: 'm' } };
+    const hail = { at: 1, judged: { route: 3, check: 'irreversible', asks: [{ ask: 'Read production?' }], why: 'w', message: 'm' } };
     expect(turnToast('reading', at('done', judged(2)), 'a1')).toEqual({ level: 'info', text: '🗂 Lt. Vale: Spend $40?' });
     expect(turnToast('reading', at('done', judged(2)), 'other')).toBeNull();
     expect(turnToast('working', at('done'), 'other')).toBeNull();

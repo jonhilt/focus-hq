@@ -1,7 +1,8 @@
 import './bridge.css';
 import { allowTool, answerLead, busy, callPlugin, closeGoal, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
 import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, openQuestion } from '../../plugin-api/shared';
-import { aboutIt, type Act, actsOf, briefOf } from './decisionRules';
+import { answerAsk } from './askRules';
+import { aboutIt, type Act, type AskBlock, askBlocksOf, actsOf, briefOf } from './decisionRules';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -397,7 +398,7 @@ export function openStream(ui: CommsUi): void {
     const mineLanded = landed.filter((i) => i.leadId === lead.id);
     const work = lead.lead;
     // what the cards show, and what their answers depend on (the lead's pull requests, for the merge buttons)
-    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, mineLanded.map((i) => i.id), work?.prs, focus.preview(lead.projectId)]);
+    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, item?.answers, mineLanded.map((i) => i.id), work?.prs, focus.preview(lead.projectId)]);
     keyed(cards, key, () => {
       if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
       const els: HTMLElement[] = [];
@@ -424,10 +425,11 @@ export function openStream(ui: CommsUi): void {
     return el;
   };
 
+  const several = (item: InboxItem) => (item.cos?.asks.length ?? 0) > 1;
   const decisionCard = (item: InboxItem, a: Attention, lead: Agent) =>
     h('div', { class: TW.card, attrs: { 'data-part': 'decision' } },
-      h('div', { class: TW.ch }, `Decision · from ${lead.name}`),
-      h('div', { class: 'tw:text-[16px] tw:mt-[3px] tw:mb-1' }, item.what),
+      h('div', { class: TW.ch }, several(item) ? `Decisions · ${item.cos?.asks.length} from ${lead.name}` : `Decision · from ${lead.name}`),
+      several(item) ? null : h('div', { class: 'tw:text-[16px] tw:mt-[3px] tw:mb-1' }, item.what),
       item.cos ? h('div', { class: 'cos-md tw:text-[14px]/[1.6] tw:text-ink tw:mt-2 tw:max-w-[68ch]', attrs: { 'data-part': 'brief' }, innerHTML: markdownHtml(briefOf(item.cos)) }) : null,
       ...actsEl(item, a, 'tw:mt-[10px]'));
 
@@ -436,25 +438,62 @@ export function openStream(ui: CommsUi): void {
   // requests fold under More
   // a reply as a choice the width of the card, pressed whole: its name, the words it sends under it, and the
   // chief of staff's pick marked
-  const choiceEl = (c: Extract<Act, { kind: 'reply' }>, pick: boolean, item: InboxItem, lead: Agent | undefined) => {
+  const choiceEl = (c: Extract<Act, { kind: 'reply' }>, pick: boolean, item: InboxItem, lead: Agent | undefined, held?: { ask: number; chosen: boolean }) => {
+    const mark = held?.chosen ? 'Your answer' : pick ? 'The pick' : '';
     const b: HTMLButtonElement = h('button', {
-      class: `tw:block tw:w-full tw:text-left tw:px-3 tw:py-[10px] tw:bg-surface tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-[#1e232b] tw:hover:border-muted ${pick ? 'tw:border-ink' : 'tw:border-line'}`,
-      title: `Send this to ${lead?.name ?? 'the lead'}`, attrs: { 'data-part': 'choice', 'data-act': 'reply' },
-      onclick: () => void busy(b, () => run(c, item, lead), ui.error),
+      class: `tw:block tw:w-full tw:text-left tw:px-3 tw:py-[10px] tw:bg-surface tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-[#1e232b] tw:hover:border-muted ${mark ? 'tw:border-ink' : 'tw:border-line'}`,
+      title: held ? `Answer this with it: held until every one is answered, then all go to ${lead?.name ?? 'the lead'} together` : `Send this to ${lead?.name ?? 'the lead'}`,
+      attrs: { 'data-part': 'choice', 'data-act': 'reply', ...(held?.chosen && { 'data-chosen': '' }) },
+      onclick: () => void busy(b, () => (held ? answer(item, held.ask, c.text) : run(c, item, lead)), ui.error),
     },
       h('span', { class: 'tw:flex tw:items-center tw:gap-2' },
         h('span', { class: 'tw:font-display tw:text-[12px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:text-ink' }, c.label),
-        pick ? h('span', { class: 'tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:text-[#111] tw:bg-ink tw:px-[6px] tw:py-px' }, 'The pick') : null),
+        mark ? h('span', { class: 'tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.1em] tw:uppercase tw:text-[#111] tw:bg-ink tw:px-[6px] tw:py-px' }, mark) : null),
       h('span', { class: 'tw:block tw:mt-1 tw:text-[13.5px]/[1.5] tw:text-muted' }, c.text));
     return b;
+  };
+  // an answer to one of a turn's asks: held (on the turn, so a reload or a restart keeps it) until every ask has one,
+  // then all of them go to the lead as one message. The goal's decision card is drawn again with it at once, so the
+  // last answer shows on the card as it fades once they've gone (the inbox then has the turn no more)
+  const answer = (item: InboxItem, ask: number, text: string) => {
+    const lead = item.agentId ? focus.agent(item.agentId) : undefined;
+    const next = answerAsk(item.cos?.asks ?? [], item.answers ?? [], { ask, text });
+    if (lead && next.kind !== 'refuse' && settled?.lead === lead.id && settled.el.isConnected) {
+      const el = decisionCard({ ...item, answers: next.answers }, { kind: 'turn', agent: lead }, lead);
+      settled.el.replaceWith(el);
+      settled = { lead: lead.id, el };
+    }
+    return inbox.decide(item.id, { answer: { ask, text } }).then(refreshInbox);
+  };
+  // one of a turn's asks, a block of its own: its headline, its replies (its answer marked, and changeable until the
+  // last is answered), and a line for the user's own words
+  const askEl = (b: AskBlock, item: InboxItem, lead: Agent | undefined) => {
+    const own = h('input', {
+      class: 'tw:flex-1 tw:min-w-0 tw:h-7 tw:px-2 tw:bg-surface tw:border tw:border-solid tw:border-line tw:text-ink tw:font-read tw:text-[13px] tw:rounded-none',
+      placeholder: b.answer !== undefined && !b.picked ? b.answer : 'Or answer in your own words…', attrs: { 'data-part': 'own-answer' },
+    });
+    const hold = button('Answer', false, () => {
+      const words = own.value.trim();
+      if (words) void busy(hold, () => answer(item, b.index, words), ui.error);
+    }, 'Held until every one is answered, then all go together');
+    own.onkeydown = (e) => { if (e.key === 'Enter') hold.click(); };
+    return h('div', { class: `tw:mt-3 tw:pl-3 tw:border-0 tw:border-l-2 tw:border-solid ${b.answer !== undefined ? 'tw:border-ink' : 'tw:border-attn'}`, attrs: { 'data-part': 'ask', ...(b.answer !== undefined && { 'data-answered': '' }) } },
+      h('div', { class: 'tw:flex tw:items-baseline tw:gap-2' },
+        h('span', { class: 'tw:text-[15px] tw:flex-1' }, b.ask),
+        h('span', { class: `tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.1em] tw:uppercase ${b.answer !== undefined ? 'tw:text-ink' : 'tw:text-attn'}` }, b.answer !== undefined ? 'Answered' : 'To answer')),
+      h('div', { class: 'tw:flex tw:flex-col tw:gap-2 tw:mt-2' }, ...b.choices.map((c) => choiceEl(c, false, item, lead, { ask: b.index, chosen: c.label === b.picked }))),
+      b.answer !== undefined && !b.picked ? h('div', { class: 'tw:mt-2 tw:text-[13.5px]', attrs: { 'data-part': 'held' } }, h('span', { class: 'tw:text-muted' }, 'Your answer: '), b.answer) : null,
+      h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-2' }, own, hold));
   };
   const actsEl = (item: InboxItem, a: Attention, gap: string): HTMLElement[] => {
     const lead = 'agent' in a ? a.agent : undefined;
     const q = lead && a.kind === 'question' ? openQuestion(lead) : undefined;
     const merges = lead ? mergesOf(ui, lead) : [];
     const req = lead?.permission;
+    // the lead's own read of the turn, or the inbox's when the lead has moved on since (a card drawn again as it's answered)
+    const asks = a.kind === 'turn' ? readOf(lead)?.judged?.asks ?? item.cos?.asks ?? [] : [];
     const acts = actsOf({
-      kind: a.kind, lead: lead?.id, replies: readOf(lead)?.judged?.replies, prs: merges.length,
+      kind: a.kind, lead: lead?.id, replies: asks.length === 1 ? asks[0]?.replies : undefined, prs: merges.length,
       ...(q && { question: q }), ...(req && { permission: { id: req.id, tool: req.tool } }),
     });
     const press = (act: Act, go: boolean) => {
@@ -469,8 +508,12 @@ export function openStream(ui: CommsUi): void {
     const isReply = (x: Act | undefined): x is Extract<Act, { kind: 'reply' }> => x?.kind === 'reply';
     const choices = [acts.go, ...acts.others].filter(isReply);
     const buttons = [acts.go, ...acts.others].filter((x): x is Act => !!x && !isReply(x));
+    // a turn of several asks: a block each, answered on its own, and where they stand
+    const held = asks.length > 1 ? askBlocksOf(asks, item.answers ?? [], lead?.name ?? 'the lead') : undefined;
     return [
       h('div', { class: `tw:flex tw:flex-col tw:gap-2 ${gap}`, attrs: { 'data-part': 'acts' } },
+        ...(held ? held.blocks.map((b) => askEl(b, item, lead)) : []),
+        held ? h('div', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted', attrs: { 'data-part': 'asks-status' } }, held.status) : null,
         ...choices.map((c) => choiceEl(c, c === acts.go, item, lead)),
         h('div', { class: 'tw:flex tw:flex-wrap tw:items-center tw:gap-[6px]' },
           ...buttons.map((b) => press(b, b === acts.go)),

@@ -31,6 +31,11 @@ export interface TurnContext {
   intents: string[];
   /** The captain's latest messages to the lead, oldest first. */
   captainSaid: string[];
+  /**
+   * The lead's pull requests still open (`repo#n`, with its recap's title when it has one): the user's card shows each
+   * with its merge button, so the judge makes no ask of merging one (crew/judge.md).
+   */
+  openPrs?: string[];
 }
 
 /**
@@ -44,10 +49,13 @@ export function captainWords(lines: readonly TermLine[], firstWords?: string, co
 }
 
 /** What a lead's turn is read against, from the lead, the ledger and the lead's log. */
-export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { name?: string } & { lead?: { title: string; brief?: string; note?: { done: string } } }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
+type LeadPrs = { prs?: readonly { repo: string; number: number; outcome?: unknown; recap?: { title: string } }[] };
+
+export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { name?: string } & { lead?: { title: string; brief?: string; note?: { done: string } } & LeadPrs }, ledger: readonly LedgerEvent[], lines: readonly TermLine[]): TurnContext {
   const intents = projectIntents([...ledger], lead.projectId);
   const about = intents.find((e) => !e.id);
   const done = lead.lead?.note?.done?.trim();
+  const openPrs = (lead.lead?.prs ?? []).filter((p) => !p.outcome).map((p) => `${p.repo}#${p.number}${p.recap?.title ? `: ${p.recap.title}` : ''}`);
   return {
     goal: lead.lead?.title || '(untitled)',
     ...(lead.name && { lead: lead.name }),
@@ -56,6 +64,7 @@ export function turnContext(lead: Pick<Agent, 'id' | 'projectId'> & { name?: str
     ...(about && { project: { what: about.what, guardrails: [...about.constraints] } }),
     intents: intents.filter((e) => e.id).map((e) => e.what),
     captainSaid: captainWords(lines, lead.lead?.brief),
+    ...(openPrs.length && { openPrs }),
   };
 }
 
@@ -71,6 +80,7 @@ export function contextText(c: TurnContext): string {
     c.project && `THE PROJECT: ${c.project.what}${c.project.guardrails.length ? `\nGuardrails:\n${list(c.project.guardrails)}` : ''}`,
     c.intents.length && `The project's intents:\n${list(c.intents)}`,
     c.captainSaid.length && `THE CAPTAIN'S LATEST WORDS TO THE LEAD (oldest first):\n${list(c.captainSaid.map((s) => s.replace(/\s+/g, ' ')))}`,
+    c.openPrs?.length && `THE LEAD'S OPEN PULL REQUESTS (the captain's card shows each with its merge button):\n${list(c.openPrs)}`,
   ];
   return parts.filter(Boolean).join('\n\n');
 }

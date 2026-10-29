@@ -2,6 +2,7 @@ import type { Agent, Attention, Lane as PrLane, LedgerEvent, PullRequest, QaRevi
 import { ACTIVE_STATUSES, higherLane, laneName, needLine, needsYou } from '../../plugin-api/shared';
 import { forLead } from './cosRules';
 import { AUTO_SEND_MS, type CosRead, JUDGING_MS, readOf, type Verdict } from './shared';
+import { headlineOf } from './askRules';
 
 // Where a hail goes in the captain's inbox once the chief of staff reads the leads' turns (README.md), and its read of a
 // turn as it changes: being read, judged, its words held. And which of a lead's pull requests it has still to read for
@@ -31,7 +32,7 @@ export function needingYou(agents: Agent[], prs: { projectId: string; pr: PullRe
 export function lineOf(a: Attention, reviews: ReadonlyMap<string, QaReview>): { icon: string; what: string } {
   const judged = a.kind === 'turn' ? readOf(a.agent)?.judged : undefined;
   if (!judged) return needLine(a, reviews);
-  return { icon: { 1: '▶', 2: '🗂', 3: '🚨', 4: '↩' }[judged.route], what: judged.ask };
+  return { icon: { 1: '▶', 2: '🗂', 3: '🚨', 4: '↩' }[judged.route], what: headlineOf(judged.asks) };
 }
 
 /** Whether Ops' news for a lead can wake them: `now`, `once-judged` (it's still reading their turn) or `no`. */

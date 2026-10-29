@@ -3,6 +3,7 @@ import type { Agent, Attention } from '../../plugin-api/shared';
 import { hailKey as keyOf } from './inbox';
 import { inbox } from './inboxApi';
 import { lineOf } from './laneRules';
+import { askBlocksOf } from './decisionRules';
 import { type BoardPr, mergePress, openPrsOf } from './mergingRules';
 import { readOf } from './shared';
 import { openZoom, type Zoomable } from './zoom';
@@ -108,9 +109,11 @@ function turnContext(agent: Agent): { context: string; folds: HTMLElement[] } {
 /**
  * The replies the chief of staff suggests to what the lead asked, a button each that sends its words as the captain's
  * (numbered, as a question's picks are), and Got it: the turn's read and off the queue, nothing sent, the lead not woken.
+ * A turn that asks several things has a block for each (`askBlocks`), answered on its own and held until all are.
  */
 function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
-  const replies = readOf(a.agent)?.judged?.replies ?? [];
+  const asks = readOf(a.agent)?.judged?.asks ?? [];
+  const replies = asks.length === 1 ? asks[0]?.replies ?? [] : [];
   const buttons = replies.map((r, i) => {
     const b = h('button', { class: 'btn small primary cos-reply', title: `Send “${r.text}” (${i + 1})`, attrs: { 'data-act': `pick-${i + 1}` } }, `${i + 1} · ${r.label}`);
     b.onclick = () => void busy(b, () => inbox.decide(keyOf(a), { text: r.text }), ui.error);
@@ -118,7 +121,38 @@ function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
   });
   const got = h('button', { class: 'btn small cos-got-it', title: 'You’ve read it: off your queue until their next turn. Nothing is sent, and they aren’t woken (O)', attrs: { 'data-act': 'ack' } }, 'Got it');
   got.onclick = () => void busy(got, () => inbox.decide(keyOf(a), { ack: true }), ui.error);
-  return [h('div', { class: 'row cos-quick' }, ...buttons, got)];
+  return [...(asks.length > 1 ? askBlocks(ui, a) : []), h('div', { class: 'row cos-quick' }, ...buttons, got)];
+}
+
+/**
+ * A turn's asks, a block each: its headline, its replies (the one held marked), and a line for the user's own
+ * words. Each answer is held; once every ask has one, they go to the lead together as one message.
+ */
+function askBlocks(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
+  const read = readOf(a.agent);
+  const { blocks, status } = askBlocksOf(read?.judged?.asks ?? [], read?.answers ?? [], a.agent.name);
+  const answer = (i: number, text: string) => inbox.decide(keyOf(a), { answer: { ask: i, text } });
+  return [
+    ...blocks.map((b) => {
+      const picks = b.choices.map((c) => {
+        const btn = h('button', { class: `btn small ${c.label === b.picked ? 'go' : 'primary'} cos-reply`, title: `Answer with “${c.text}”` }, c.label);
+        btn.onclick = () => void busy(btn, () => answer(b.index, c.text), ui.error);
+        return btn;
+      });
+      const own = h('input', { class: 'cos-card-note', placeholder: 'Or answer in your own words' });
+      const hold = h('button', { class: 'btn small' }, 'Answer');
+      hold.onclick = () => {
+        const words = own.value.trim();
+        if (words) void busy(hold, () => answer(b.index, words), ui.error);
+      };
+      return h('div', { class: 'cos-ask', attrs: { 'data-part': 'ask' } },
+        h('strong', null, b.ask),
+        b.answer !== undefined ? h('small', { class: 'muted' }, `Your answer: ${b.answer}`) : null,
+        h('div', { class: 'row' }, ...picks),
+        h('div', { class: 'row' }, own, hold));
+    }),
+    h('small', { class: 'muted' }, status),
+  ];
 }
 
 /**

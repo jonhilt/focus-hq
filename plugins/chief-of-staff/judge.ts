@@ -1,6 +1,6 @@
 import { isOneOf, isRecord } from '../../plugin-api/shared';
 import { CREW, crewVersion } from './crew';
-import { CHECKS, type CosRoute, MAX_REPLIES, MAX_REPLY_LABEL, repliesOf, ROUTES, type Verdict } from './shared';
+import { asksOf, CHECKS, type CosRoute, MAX_ASKS, MAX_REPLIES, MAX_REPLY_LABEL, ROUTES, type Verdict } from './shared';
 
 export type { Verdict } from './shared';
 
@@ -23,6 +23,7 @@ export const STANDING_ORDERS = 'standing-orders.txt';
 export function judgeSystemPrompt(standingOrders?: string, pinned?: CosRoute): string {
   return CREW.prompt('judge', {
     orders: standingOrders?.trim() || CREW.text('judge', 'noOrders', {}),
+    maxAsks: String(MAX_ASKS),
     maxReplies: String(MAX_REPLIES),
     maxReplyLabel: String(MAX_REPLY_LABEL),
     pinned: !!pinned,
@@ -44,17 +45,29 @@ export const verdictSchema = (pinned?: CosRoute) => ({
   properties: {
     route: { type: 'integer', enum: pinned ? [pinned] : [...ROUTES] },
     check: { type: 'string', enum: [...CHECKS] },
-    ask: { type: 'string' },
+    asks: {
+      type: 'array',
+      minItems: 1,
+      maxItems: MAX_ASKS,
+      items: {
+        type: 'object',
+        properties: {
+          ask: { type: 'string' },
+          replies: {
+            type: 'array',
+            maxItems: MAX_REPLIES,
+            items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'], additionalProperties: false },
+          },
+        },
+        required: ['ask', 'replies'],
+        additionalProperties: false,
+      },
+    },
     why: { type: 'string' },
     says: { type: 'string' },
     message: { type: 'string' },
-    replies: {
-      type: 'array',
-      maxItems: MAX_REPLIES,
-      items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'], additionalProperties: false },
-    },
   },
-  required: ['route', 'check', 'ask', 'why', 'says', 'message', 'replies'],
+  required: ['route', 'check', 'asks', 'why', 'says', 'message'],
   additionalProperties: false,
 });
 
@@ -63,23 +76,24 @@ export const VERDICT_SCHEMA = verdictSchema();
 const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
 
 /**
- * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its headline, its reading for the captain (left out if it
- * gave none), the words it would send (empty if it gave none), and the replies it suggests (`repliesOf`: left out when there are none). With no headline, its reason
- * stands in.
+ * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its asks (each a headline
+ * and the replies to it, `asksOf`; an answer from before there were several, with one `ask` and its `replies`, is a list of one), its reading for
+ * the user (left out if it gave none), and the words it would send (empty if it gave none). With no ask, its reason stands in for one. A
+ * turn with nothing for the user to decide (routes 1 and 4) keeps its first ask alone.
  */
 export function parseVerdict(structured: unknown): Verdict | undefined {
   if (!isRecord(structured) || !isOneOf(ROUTES, structured.route)) return undefined;
   const why = text(structured.why);
   if (!why) return undefined;
-  const replies = repliesOf(structured.replies);
+  const asks = asksOf(structured);
   const says = text(structured.says);
+  const forLead = structured.route === 1 || structured.route === 4;
   return {
     route: structured.route,
     ...(isOneOf(CHECKS, structured.check) && { check: structured.check }),
-    ask: text(structured.ask) || why,
+    asks: asks.length ? (forLead ? asks.slice(0, 1) : asks) : [{ ask: why }],
     why,
     ...(says && { says }),
     message: text(structured.message),
-    ...(replies.length && { replies }),
   };
 }

@@ -53,21 +53,42 @@ export interface Reply {
 export const CHECKS = ['irreversible', 'contradiction', 'overreach', 'compass', 'evidence', 'prepared', 'captains', 'none'] as const;
 export type Check = (typeof CHECKS)[number];
 
-/** A turn as it judged it: its route, the line on what's decided, why, its words, and the replies it suggests. */
+/** How many separate decisions it puts to the user on one turn at most: a block each on the card. */
+export const MAX_ASKS = 4;
+
+/**
+ * One decision a turn puts to the user, answered on its own (askRules.ts): its headline, and the replies that
+ * answer it. On a turn with nothing for the user to decide (routes 1 and 4) there's one, saying in brief what it
+ * would tell the lead.
+ */
+export interface Ask {
+  /** The decision, in a line: the user's inbox leads with the first. */
+  ask: string;
+  /** Replies to this decision alone, a button each; none when a button can't answer it. */
+  replies?: Reply[];
+}
+
+/** A turn as it judged it: its route, the decisions it puts to the user (each with its replies), why, and its words. */
 export interface Verdict {
   route: CosRoute;
   /** The check that decided it: left out by verdicts from before it said. */
   check?: Check;
-  /** What's being decided, in a line: the captain's inbox leads with it. */
-  ask: string;
+  /** One per decision, at least one, `MAX_ASKS` at most; one alone on routes 1 and 4. */
+  asks: Ask[];
   /** Why the turn goes where it does. */
   why: string;
   /** The turn read to the captain, in a few plain sentences, ending on what they need to do: the stream shows it in the lead's place. Left out by verdicts from before it said. */
   says?: string;
   /** The words it would send: to the lead on routes 1 and 4, to the captain on 2 and 3. */
   message: string;
-  /** Replies to what the lead asked or offered, a button each; none when the turn asks nothing a button answers. */
-  replies?: Reply[];
+}
+
+/** An answer the user gave one of a turn's asks, held until every ask has one (askRules.ts). */
+export interface AskAnswer {
+  /** Which ask it answers: its place in the verdict's `asks`. */
+  ask: number;
+  /** The words, as they'll go to the lead. */
+  text: string;
 }
 
 /**
@@ -88,6 +109,11 @@ export interface CosRead {
    * until the lead's next turn, its words don't go by themselves, and the move waits quietly on the captain.
    */
   acked?: number;
+  /**
+   * The user's answers to the turn's asks so far, held rather than sent: once every ask has one, they go to the lead
+   * together as one message (askRules.ts). Kept with the read, so a reload or a restart keeps them.
+   */
+  answers?: AskAnswer[];
 }
 
 const trimmed = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -115,11 +141,38 @@ export function repliesOf(v: unknown): Reply[] {
   return out;
 }
 
-/** A verdict, if `v` is one: one from before it suggested replies reads as suggesting none, one from before it named its check names none. */
-export function verdictOf(v: unknown): Verdict | undefined {
-  if (!isRecord(v) || !isOneOf(ROUTES, v.route) || typeof v.ask !== 'string' || typeof v.why !== 'string' || typeof v.message !== 'string') return undefined;
+/** An ask, if `v` is one: a headline said, and the replies to it (`repliesOf`, left out when there are none). */
+function askOf(v: unknown): Ask | undefined {
+  if (!isRecord(v)) return undefined;
+  const ask = trimmed(v.ask);
   const replies = repliesOf(v.replies);
-  return { route: v.route, ...(isOneOf(CHECKS, v.check) && { check: v.check }), ask: v.ask, why: v.why, message: v.message, ...(replies.length && { replies }) };
+  return ask ? { ask, ...(replies.length && { replies }) } : undefined;
+}
+
+/**
+ * The asks in `v`, `MAX_ASKS` at most: its list of them, or the single `ask` (and its `replies`) a verdict had before
+ * a turn could put several decisions to the user, read as a list of one. None when it has neither.
+ */
+export function asksOf(v: Record<string, unknown>): Ask[] {
+  if (Array.isArray(v.asks)) return v.asks.map(askOf).filter((a): a is Ask => a !== undefined).slice(0, MAX_ASKS);
+  const one = askOf(v);
+  return one ? [one] : [];
+}
+
+/** A verdict, if `v` is one: one from before it suggested replies reads as suggesting none, one from before it named its check names none, one with a single `ask` as a list of one. */
+export function verdictOf(v: unknown): Verdict | undefined {
+  if (!isRecord(v) || !isOneOf(ROUTES, v.route) || typeof v.why !== 'string' || typeof v.message !== 'string') return undefined;
+  const asks = asksOf(v);
+  if (!asks.length) return undefined;
+  return { route: v.route, ...(isOneOf(CHECKS, v.check) && { check: v.check }), asks, why: v.why, message: v.message };
+}
+
+/** The answers held on a read, if `v` lists any: each to an ask by its place, with words, the latest to an ask kept. */
+export function answersOf(v: unknown): AskAnswer[] {
+  if (!Array.isArray(v)) return [];
+  const by = new Map<number, string>();
+  for (const a of v) if (isRecord(a) && Number.isInteger(a.ask) && typeof a.ask === 'number' && a.ask >= 0 && trimmed(a.text)) by.set(a.ask, trimmed(a.text));
+  return [...by].sort(([x], [y]) => x - y).map(([ask, text]) => ({ ask, text }));
 }
 
 /**
@@ -130,11 +183,13 @@ export function cosReadOf(v: unknown): CosRead | undefined {
   if (!isRecord(v) || typeof v.at !== 'number') return undefined;
   const judged = verdictOf(v.judged);
   const acked = typeof v.acked === 'number' ? v.acked : undefined;
+  const answers = judged ? answersOf(v.answers).filter((a) => a.ask < judged.asks.length) : [];
   return {
     at: v.at,
     ...(judged && { judged }),
     ...(judged?.route === 4 && acked === undefined && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }),
     ...(acked !== undefined && { acked }),
+    ...(answers.length && { answers }),
   };
 }
 

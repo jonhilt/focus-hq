@@ -9,6 +9,7 @@ import { CREW } from './crew';
 import { ackStep, closeStep, lineAfterRestart, sayStep, startStep, tellStep } from './lineRules';
 import { type CosLine, type CosLive, type CosState, freshLine, type LineMessage, type LineStart, readOf, SENDER } from './shared';
 import { doing } from './streamList';
+import { headlineOf } from './askRules';
 
 /** Where a goal it starts came from, for the goal's record and its lead. */
 export const LINE_FROM = 'the chief of staff’s direct line';
@@ -267,7 +268,7 @@ const SPEAKERS: Record<LineMessage['from'], string> = { user: 'The user', cos: '
 /** How an open goal reads on the line: its lead's id, title, who leads it, how they stand, and what waits on the user. */
 function goalLine(g: Readonly<Agent>): string {
   const read = readOf(g)?.judged;
-  const waits = read && (read.route === 2 || read.route === 3) ? `; waiting on the user: ${read.ask}` : '';
+  const waits = read && (read.route === 2 || read.route === 3) ? `; waiting on the user: ${headlineOf(read.asks)}` : '';
   return `  - ${g.id}: “${titleOf(g, g.name)}” (${g.name}, ${doing(g.status)}${waits})`;
 }
 

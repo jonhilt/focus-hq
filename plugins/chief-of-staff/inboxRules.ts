@@ -4,6 +4,7 @@ import type { Decide, InboxItem } from './inbox';
 import { laneOf } from './laneRules';
 import { readOf } from './shared';
 import { gradeOf, toasts } from './watchRules';
+import { headlineOf } from './askRules';
 
 // The captain's inbox's decisions (docs/ledger.md#the-captains-inbox-api): what waits on them and in what order, whether
 // an answer fits the item it answers, and where a lead's turn stands for them, with the toast as it changes. Pure, so
@@ -28,6 +29,7 @@ export function waiting(agents: Agent[], prs: { projectId: string; pr: PullReque
 export function decideRefusal({ kind, cos }: Pick<InboxItem, 'kind' | 'cos'>, d: Decide): string | null {
   if ('send' in d) return cos && (cos.route === 1 || cos.route === 4) ? null : 'Only a turn the chief of staff has words ready for can be sent them';
   if ('ack' in d) return kind === 'turn' ? null : 'Only a lead’s turn is acknowledged: answer the rest';
+  if ('answer' in d) return kind === 'turn' && cos ? null : 'Only a lead’s turn the chief of staff has read is answered ask by ask';
   if (kind === 'qa' || kind === 'conflicts') return 'A pull request is decided on the board: merge, close or send it back there';
   if (kind === 'hand') return 'allow' in d ? null : 'A raised hand is approved or declined: allow true or false';
   if ('allow' in d) return 'Only a raised hand is approved or declined';
@@ -54,7 +56,8 @@ export function turnStage(lead: Pick<Agent, 'status' | 'lead'>): TurnStage {
 export function turnNews(before: TurnStage | undefined, lead: Pick<Agent, 'name' | 'status' | 'lead'>): { level: 'info' | 'error'; text: string } | null {
   const now = turnStage(lead);
   if (!before || before === now) return null;
-  const ask = readOf(lead)?.judged?.ask ?? '';
+  const judged = readOf(lead)?.judged;
+  const ask = judged ? headlineOf(judged.asks) : '';
   if (now === 'interrupt') return { level: 'error', text: `🚨 ${lead.name}: ${ask}` };
   if (now === 'card') return { level: 'info', text: `🗂 ${lead.name}: ${ask}` };
   if (now === 'waiting' && before === 'working') return { level: 'info', text: `🖖 ${lead.name} is waiting for you` };

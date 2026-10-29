@@ -114,7 +114,8 @@ describe('the chief of staff', () => {
     o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up. Shall I start slice 2?' });
     await until(() => !!o.read());
     await until(() => !!o.read()?.judged);
-    expect(o.read()?.judged).toEqual({ route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
+    // an answer with one `ask`, as the judge gave before there were several, is filed as a list of one
+    expect(o.read()?.judged).toEqual({ route: 4, asks: [{ ask: 'Run the tests first' }], why: 'It can check itself.', message: 'Run the tests first.' });
     // the lead's next turn starts: what it read of the last is over
     o.agents.message(o.lead().id, 'Go on');
     await until(() => o.claude.turns.length === 2);

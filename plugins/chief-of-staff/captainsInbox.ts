@@ -4,7 +4,8 @@ import { answerText, type Decide, type DecidedVia, type Inbox as InboxView, type
 import { decideRefusal, waiting } from './inboxRules';
 import { type LandedAnswer, landedAnswerText, type LandedItem, landedItems, landedMessage, landedWhere } from './landed';
 import { acked, held } from './laneRules';
-import { readOf, SENDER } from './shared';
+import { answerAsk } from './askRules';
+import { type AskAnswer, readOf, SENDER } from './shared';
 
 // The captain's inbox, as the API serves it (docs/ledger.md#the-captains-inbox-api): what needs them across the shown
 // projects, the same list Comms shows, and each answer recorded in the ledger as a `captain-decision`, whether it came
@@ -84,6 +85,7 @@ export class Inbox {
     if (refusal) throw new Error(refusal);
     const { a, item } = found;
     if (!('agent' in a)) throw new Error('A pull request is decided on the board');
+    if ('answer' in d) return this.answerAsk(a.agent, item, d.answer, via, how);
     const reply = await this.act(a.agent, d, item.cos?.message ?? '', how);
     // Ops asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
     if (!landed(reply)) return reply;
@@ -99,6 +101,25 @@ export class Inbox {
   answered(before: Agent, answer: CaptainAnswer): void {
     const found = this.items([before]).find(({ a, item }) => 'agent' in a && a.agent.id === before.id && !decideRefusal(item, answer));
     if (found) this.record(before, found.item, answer, 'office');
+  }
+
+  /**
+   * The user answered one of a turn's asks: the answer is held on the turn's read (`CosRead.answers`), so a reload or
+   * a restart keeps it, and nothing goes to the lead while any ask is unanswered. The last one sends them all as one
+   * message, recorded as one decision (askRules.ts). It's held before it's sent, so an answer Ops comes back on (about
+   * the cost of picking the lead's conversation back up) is answered again with `how` and nothing is lost.
+   */
+  private answerAsk(agent: Agent, item: InboxItem, answer: AskAnswer, via: DecidedVia, how?: ResumeHow): unknown {
+    const read = readOf(agent);
+    const asks = read?.judged?.asks ?? [];
+    const next = answerAsk(asks, read?.answers ?? [], answer);
+    if (next.kind === 'refuse') throw new Error(next.why);
+    if (!read || !this.host.goals.mark(agent.id, { ...read, answers: next.answers }, read.at)) throw new Error('That turn can’t be answered now: the lead is at work again');
+    if (next.kind === 'hold') return { ok: true, held: next.answers.length, of: asks.length };
+    const reply = this.host.goals.message(agent.id, next.text, { how });
+    if (!landed(reply)) return reply;
+    this.record(agent, item, { text: next.text }, via);
+    return { ok: true };
   }
 
   private record(agent: Agent, item: InboxItem, d: Decide, via: DecidedVia): void {
@@ -162,7 +183,7 @@ export class Inbox {
   }
 
   /** Does what the captain decided. `words` are the chief of staff's, for `send`. */
-  private act(agent: Agent, d: Decide, words: string, how?: ResumeHow): unknown {
+  private act(agent: Agent, d: Exclude<Decide, { answer: AskAnswer }>, words: string, how?: ResumeHow): unknown {
     const { goals } = this.host;
     if ('ack' in d) {
       this.acknowledge(agent);

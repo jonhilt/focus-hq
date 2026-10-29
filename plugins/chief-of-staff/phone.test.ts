@@ -9,7 +9,7 @@ describe('the phone’s Ready to send strip', () => {
   });
 
   it('heads a judged turn with its line and its words, holdable only while they count down', () => {
-    const judged = { route: 1 as const, ask: 'Ship the slice', why: 'it is done', message: 'Go ahead and ship.' };
+    const judged = { route: 1 as const, asks: [{ ask: 'Ship the slice' }], why: 'it is done', message: 'Go ahead and ship.' };
     expect(readyLine({ at: 0, judged, sendsAt: 60_000 }, 0)).toEqual({ ask: 'Ship the slice', words: 'Go ahead and ship.', holdable: true, when: 'Sends itself within a minute' });
     expect(readyLine({ at: 0, judged }, 0)).toEqual({ ask: 'Ship the slice', words: 'Go ahead and ship.', holdable: false, when: 'Waits for you to send' });
   });

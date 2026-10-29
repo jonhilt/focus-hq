@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aboutIt, actsOf, briefOf } from './decisionRules';
+import { aboutIt, askBlocksOf, actsOf, briefOf } from './decisionRules';
 
 describe('a decision’s actions', () => {
   it('puts the chief of staff’s first suggested reply first on a lead’s turn, as the pick, the rest named beside it, with Got it', () => {
@@ -45,5 +45,29 @@ describe('a decision’s actions', () => {
 
   it('sends Discuss’s words after the decision they’re about', () => {
     expect(aboutIt('Filters first?', 'What about sorting?')).toBe('About “Filters first?”: What about sorting?');
+  });
+});
+
+describe('a turn’s asks, a block each', () => {
+  const asks = [
+    { ask: 'Next slice: shared link or emails?', replies: [{ label: 'Shared link', text: 'Shared link first.' }, { label: 'Emails', text: 'Emails first.' }] },
+    { ask: 'Keep the old endpoint for a release?' },
+    { ask: 'Rename the setting?', replies: [{ label: 'Rename it', text: 'Rename it.' }] },
+  ];
+
+  it('gives each ask its own choices, marks the one held, and keeps the user’s own words as their answer', () => {
+    const { blocks, answered, status } = askBlocksOf(asks, [{ ask: 0, text: 'Emails first.' }, { ask: 1, text: 'Keep it a release.' }], 'Vale');
+    expect(blocks).toEqual([
+      { index: 0, ask: asks[0]?.ask, choices: [{ kind: 'reply', label: 'Shared link', text: 'Shared link first.' }, { kind: 'reply', label: 'Emails', text: 'Emails first.' }], answer: 'Emails first.', picked: 'Emails' },
+      { index: 1, ask: asks[1]?.ask, choices: [], answer: 'Keep it a release.' },
+      { index: 2, ask: asks[2]?.ask, choices: [{ kind: 'reply', label: 'Rename it', text: 'Rename it.' }] },
+    ]);
+    expect(answered).toBe(2);
+    expect(status).toBe('2 of 3 answered · nothing goes to Vale until all are, then they go together');
+  });
+
+  it('says they’re going together once every ask has an answer', () => {
+    const all = asks.map((_, ask) => ({ ask, text: 'x' }));
+    expect(askBlocksOf(asks, all, 'Vale').status).toBe('All 3 answered: sending them to Vale as one message');
   });
 });

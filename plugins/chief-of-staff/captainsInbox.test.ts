@@ -43,10 +43,11 @@ async function waitingLead({ verdict, autoSend = false, since = Date.now }: { ve
   const decisions = () => o.store.ledger.filter((e) => e.kind === 'captain-decision');
   if (!inbox.it) throw new Error('the plugin didn’t start');
   const { host } = inbox;
+  if (!host) throw new Error('the plugin didn’t start');
   /** Ops merging one of the lead's pull requests in `lane`, as the ledger has it. */
   const merged = (pr: number, lane: 'ship' | 'show' | 'ask' = 'show', lead = agent.id) =>
-    host?.record(o.project.id, { kind: 'merged', repo: 'demo/webshop-frontend', pr, goal: 'Saved items', by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead, lane });
-  return { ...o, inbox: inbox.it, id: agent.id, decisions, merged, read: () => readOf(o.store.agent(agent.id)) };
+    host.record(o.project.id, { kind: 'merged', repo: 'demo/webshop-frontend', pr, goal: 'Saved items', by: 'office', qa: 'passed', failedRounds: 0, triages: 0, lead, lane });
+  return { ...o, inbox: inbox.it, host, id: agent.id, decisions, merged, read: () => readOf(o.store.agent(agent.id)) };
 }
 
 describe('the captain’s inbox, as the API serves it', () => {
@@ -106,7 +107,7 @@ describe('the captain’s inbox, as the API serves it', () => {
 
 describe('the captain’s inbox, with the chief of staff reading the leads’ turns', () => {
   it('files a turn it would carry on as ready, and sends its words to the lead, from it, when the captain says', async () => {
-    const { inbox, claude, decisions } = await waitingLead({ verdict: { route: 1, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' } });
+    const { inbox, claude, decisions } = await waitingLead({ verdict: { route: 1, asks: [{ ask: 'Carry on to the settings page' }], why: 'Progress.', message: 'Go on to the settings page.' } });
     const [item] = inbox.view().open;
     expect(item).toMatchObject({ kind: 'turn', lane: 'ready', what: 'Carry on to the settings page', cos: { route: 1 } });
     await inbox.decide(item.id, { send: true }, 'office');
@@ -116,7 +117,7 @@ describe('the captain’s inbox, with the chief of staff reading the leads’ tu
   });
 
   it('files a card under needs you, headed by its line, and won’t send words it has none ready for', async () => {
-    const { inbox } = await waitingLead({ verdict: { route: 2, ask: 'Slice 2: filters or drag-reorder first?', why: 'A pick.', message: 'Filters, the lead says.' } });
+    const { inbox } = await waitingLead({ verdict: { route: 2, asks: [{ ask: 'Slice 2: filters or drag-reorder first?' }], why: 'A pick.', message: 'Filters, the lead says.' } });
     const [item] = inbox.view().open;
     expect(item).toMatchObject({ lane: 'needs-you', what: 'Slice 2: filters or drag-reorder first?' });
     await expect(inbox.decide(item.id, { send: true }, 'office')).rejects.toThrow(/words ready/);
@@ -124,17 +125,18 @@ describe('the captain’s inbox, with the chief of staff reading the leads’ tu
 });
 
 describe('acknowledging a lead’s turn (Got it)', () => {
-  const card = { route: 2 as const, ask: 'Keep the goal open, or close it?', why: 'A pick.', message: 'Close it, the lead says.', replies: [{ label: 'Close it', text: 'Close it: it’s done.' }] };
+  const replies = [{ label: 'Close it', text: 'Close it: it’s done.' }];
+  const card = { route: 2 as const, asks: [{ ask: 'Keep the goal open, or close it?', replies }], why: 'A pick.', message: 'Close it, the lead says.' };
 
   it('reads it and takes it off the queue, sends nothing, and records it as the captain’s', async () => {
     const { inbox, claude, id, store, decisions } = await waitingLead({ verdict: card });
     const [item] = inbox.view().open;
-    expect(item.cos?.replies).toEqual(card.replies);
+    expect(item.cos?.replies).toEqual(replies);
     await inbox.decide(item.id, { ack: true }, 'office');
     expect(inbox.view().open).toEqual([]);
     expect(store.agent(id).lead?.readTurn).toBe(store.agent(id).finishedAt);
     expect(readOf(store.agent(id))).toMatchObject({ judged: card, acked: expect.any(Number) });
-    expect(decisions()).toMatchObject([{ item: { id: item.id, kind: 'turn', what: card.ask }, answer: 'Acknowledged', via: 'office' }]);
+    expect(decisions()).toMatchObject([{ item: { id: item.id, kind: 'turn', what: 'Keep the goal open, or close it?' }, answer: 'Acknowledged', via: 'office' }]);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(claude.turns).toHaveLength(1);
     await expect(inbox.decide(item.id, { ack: true }, 'office')).rejects.toThrow(/no longer waiting/);
@@ -155,7 +157,7 @@ describe('acknowledging a lead’s turn (Got it)', () => {
   });
 
   it('stops its words going by themselves', async () => {
-    const { inbox, claude, read } = await waitingLead({ verdict: { route: 4, ask: 'Test it first', why: 'No evidence.', message: 'Test it first.' }, autoSend: true });
+    const { inbox, claude, read } = await waitingLead({ verdict: { route: 4, asks: [{ ask: 'Test it first' }], why: 'No evidence.', message: 'Test it first.' }, autoSend: true });
     const sendsAt = read()?.sendsAt ?? 0;
     await inbox.decide(inbox.view().open[0].id, { ack: true }, 'office');
     expect(read()?.sendsAt).toBeUndefined();
@@ -164,9 +166,84 @@ describe('acknowledging a lead’s turn (Got it)', () => {
   });
 });
 
+describe('a turn that asks several things, each answered on its own', () => {
+  const asks = [
+    { ask: 'Next slice: shared link or emails?', replies: [{ label: 'Shared link', text: 'Shared link first.' }, { label: 'Emails', text: 'Emails first.' }] },
+    { ask: 'Keep the old endpoint for a release?', replies: [{ label: 'Keep it', text: 'Keep it for a release.' }] },
+    { ask: 'Rename the setting?' },
+  ];
+  const card = { route: 2 as const, asks, why: 'Three calls.', message: 'Three things to decide.' };
+  const answer = (ask: number, text: string) => ({ answer: { ask, text } });
+
+  it('holds each answer on the turn, sending the lead nothing, and lets one be changed', async () => {
+    const { inbox, claude, decisions, read } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    expect(item).toMatchObject({ what: 'Next slice: shared link or emails? (+2 more)', lane: 'needs-you' });
+    expect(await inbox.decide(item.id, answer(0, 'Emails first.'), 'office')).toEqual({ ok: true, held: 1, of: 3 });
+    await inbox.decide(item.id, answer(0, 'Shared link first.'), 'office');
+    await inbox.decide(item.id, answer(2, 'Yes, call it “Saved lists”.'), 'api');
+    expect(read()?.answers).toEqual([{ ask: 0, text: 'Shared link first.' }, { ask: 2, text: 'Yes, call it “Saved lists”.' }]);
+    expect(inbox.view().open[0]).toMatchObject({ id: item.id, answers: read()?.answers });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(claude.turns).toHaveLength(1);
+    expect(decisions()).toEqual([]);
+  });
+
+  it('keeps what’s held where the turn’s read is, so an inbox started afresh (a reload, a restart) still has it', async () => {
+    const { inbox, host, read } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    await inbox.decide(item.id, answer(1, 'Keep it for a release.'), 'office');
+    const afresh = new Inbox(host, () => false);
+    expect(afresh.view().open[0]?.answers).toEqual([{ ask: 1, text: 'Keep it for a release.' }]);
+    expect(read()?.answers).toEqual([{ ask: 1, text: 'Keep it for a release.' }]);
+  });
+
+  it('sends every answer to the lead together, as one message under each ask’s headline, once the last is answered', async () => {
+    const { inbox, claude, decisions } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    await inbox.decide(item.id, answer(0, 'Shared link first.'), 'office');
+    await inbox.decide(item.id, answer(2, 'Leave it as it is.'), 'office');
+    expect(await inbox.decide(item.id, answer(1, 'Keep it for a release.'), 'office')).toEqual({ ok: true });
+    await until(() => claude.turns.length === 2);
+    const together = '**Next slice: shared link or emails?**\nShared link first.\n\n**Keep the old endpoint for a release?**\nKeep it for a release.\n\n**Rename the setting?**\nLeave it as it is.';
+    expect(claude.turns[1].req.prompt).toContain(together);
+    expect(claude.turns[1].req.prompt).not.toContain('[Chief of Staff]');
+    expect(decisions()).toMatchObject([{ item: { id: item.id, what: item.what }, answer: together, via: 'office' }]);
+    expect(inbox.view().open).toEqual([]);
+  });
+
+  it('clears the whole turn with Got it, sending nothing of what was held', async () => {
+    const { inbox, claude, decisions } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    await inbox.decide(item.id, answer(0, 'Emails first.'), 'office');
+    await inbox.decide(item.id, { ack: true }, 'office');
+    expect(inbox.view().open).toEqual([]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(claude.turns).toHaveLength(1);
+    expect(decisions()).toMatchObject([{ answer: 'Acknowledged' }]);
+  });
+
+  it('refuses an ask the turn doesn’t have, and an answer on what isn’t a judged turn', async () => {
+    const { inbox } = await waitingLead({ verdict: card });
+    const [item] = inbox.view().open;
+    await expect(inbox.decide(item.id, answer(3, 'x'), 'api')).rejects.toThrow(/no such ask/);
+    const unjudged = await waitingLead();
+    await expect(unjudged.inbox.decide(unjudged.inbox.view().open[0]?.id ?? '', answer(0, 'x'), 'api')).rejects.toThrow(/ask by ask/);
+  });
+
+  it('answers a turn of one ask at once, as its suggested reply always did', async () => {
+    const { inbox, claude, decisions } = await waitingLead({ verdict: { ...card, asks: [asks[0] ?? { ask: '' }] } });
+    const [item] = inbox.view().open;
+    await inbox.decide(item.id, answer(0, 'Emails first.'), 'api');
+    await until(() => claude.turns.length === 2);
+    expect(claude.turns[1].req.prompt).toContain('Emails first.');
+    expect(decisions()).toMatchObject([{ answer: 'Emails first.', via: 'api' }]);
+  });
+});
+
 describe('the chief of staff’s words, sent by themselves where the captain lets it', () => {
-  const sendBack = { route: 4 as const, ask: 'Show the settings page working', why: 'It says it works with nothing behind it.', message: 'Show the settings page working before it goes to the captain.' };
-  const carryOn = { route: 1 as const, ask: 'Carry on to the settings page', why: 'Progress.', message: 'Go on to the settings page.' };
+  const sendBack = { route: 4 as const, asks: [{ ask: 'Show the settings page working' }], why: 'It says it works with nothing behind it.', message: 'Show the settings page working before it goes to the captain.' };
+  const carryOn = { route: 1 as const, asks: [{ ask: 'Carry on to the settings page' }], why: 'Progress.', message: 'Go on to the settings page.' };
 
   it('sends a turn back to the lead once they’re due, recorded as sent by the chief of staff', async () => {
     const { inbox, claude, decisions, read } = await waitingLead({ verdict: sendBack, autoSend: true });
@@ -190,7 +267,7 @@ describe('the chief of staff’s words, sent by themselves where the captain let
   });
 
   it('never sends by itself what it would put to the captain, words carrying a lead on, or where it isn’t let', async () => {
-    const card = await waitingLead({ verdict: { route: 2, ask: 'Filters or drag-reorder?', why: 'A pick.', message: 'Filters.' }, autoSend: true });
+    const card = await waitingLead({ verdict: { route: 2, asks: [{ ask: 'Filters or drag-reorder?' }], why: 'A pick.', message: 'Filters.' }, autoSend: true });
     expect(card.read()?.sendsAt).toBeUndefined();
     const onwards = await waitingLead({ verdict: carryOn, autoSend: true });
     expect(onwards.read()).toMatchObject({ judged: { route: 1 } });

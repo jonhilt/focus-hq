@@ -42,7 +42,7 @@ vi.mock('./inboxApi', () => ({ inbox: { decide: calls.decide, hold: calls.hold }
 const { needCard } = await import('./needCard');
 const { fitScale, zoomStep } = await import('./zoom');
 
-const verdict = (route: Verdict['route']): Verdict => ({ route, ask: 'Ship slice 2?', why: 'It changes the checkout.', message: 'Go ahead with the tests first.' });
+const verdict = (route: Verdict['route']): Verdict => ({ route, asks: [{ ask: 'Ship slice 2?' }], why: 'It changes the checkout.', message: 'Go ahead with the tests first.' });
 const lead = (more: Partial<Agent> = {}, read?: CosRead): Agent => ({
   id: 'a1', name: 'Lt. Vale', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -166,13 +166,25 @@ describe('a card in Comms', () => {
 
   it('sends a reply it suggests as the captain’s own, numbered for the keys, beside a typed one', async () => {
     const replies = [{ label: 'Keep it open', text: 'Keep the goal open.' }, { label: 'Close it', text: 'Close it: it’s done.' }];
-    const el = card({ kind: 'turn', agent: lead({}, { at: 1000, judged: { ...verdict(2), replies } }) });
+    const el = card({ kind: 'turn', agent: lead({}, { at: 1000, judged: { ...verdict(2), asks: [{ ask: 'Ship slice 2?', replies }] } }) });
     expect([...el.querySelectorAll('[data-act^="pick-"]')].map((b) => [b.getAttribute('data-act'), b.textContent])).toEqual([['pick-1', '1 · Keep it open'], ['pick-2', '2 · Close it']]);
     button(el, '2 · Close it').click();
     await settle();
     expect(calls.decide).toHaveBeenCalledWith('turn:a1:1000', { text: 'Close it: it’s done.' });
     expect(calls.messageAgent).not.toHaveBeenCalled();
     expect(el.querySelector('textarea')).not.toBeNull();
+  });
+
+  it('puts a turn of several asks as a block each, its answers held, and no reply that sends the whole turn', async () => {
+    const asks = [{ ask: 'Next slice: shared link or emails?', replies: [{ label: 'Emails', text: 'Emails first.' }] }, { ask: 'Rename the setting?' }];
+    const el = card({ kind: 'turn', agent: lead({}, { at: 1000, judged: { ...verdict(2), asks }, answers: [{ ask: 1, text: 'Leave it.' }] }) });
+    expect([...el.querySelectorAll('[data-part=ask] strong')].map((x) => x.textContent)).toEqual(['Next slice: shared link or emails?', 'Rename the setting?']);
+    expect(el.textContent).toContain('Your answer: Leave it.');
+    expect(el.textContent).toContain('1 of 2 answered');
+    expect(el.querySelectorAll('[data-act^="pick-"]')).toHaveLength(0);
+    button(el, 'Emails').click();
+    await settle();
+    expect(calls.decide).toHaveBeenCalledWith('turn:a1:1000', { answer: { ask: 0, text: 'Emails first.' } });
   });
 
   it('acknowledges any lead’s turn with Got it, judged or not, sending nothing', async () => {

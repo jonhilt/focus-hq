@@ -32,13 +32,13 @@ export function unattendedRounds(ledger: readonly LedgerEvent[], lead: Pick<Agen
  */
 export function capped(verdict: Verdict, rounds: number): Verdict {
   if (rounds < UNATTENDED_ROUNDS || (verdict.route !== 1 && verdict.route !== 4)) return verdict;
+  const [first] = verdict.asks;
   const words = verdict.message.length <= MAX_REPLY_TEXT ? [{ label: 'Send its words', text: verdict.message }] : [];
-  const replies = [...words, ...(verdict.replies ?? [])].slice(0, MAX_REPLIES);
+  const replies = [...words, ...(first?.replies ?? [])].slice(0, MAX_REPLIES);
   return {
     route: 2,
-    ask: `${rounds} rounds without you: ${verdict.ask}`,
+    asks: [{ ask: `${rounds} rounds without you: ${first?.ask ?? ''}`, ...(replies.length && { replies }) }],
     why: `${rounds} rounds in a row went back and forth without you, so this one waits for you. ${verdict.why}`,
     message: `It would tell the lead: “${verdict.message}”`,
-    ...(replies.length && { replies }),
   };
 }

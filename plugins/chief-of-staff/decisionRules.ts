@@ -1,4 +1,6 @@
 import type { Attention } from '../../plugin-api/shared';
+import { answerTo } from './askRules';
+import type { Ask, AskAnswer } from './shared';
 
 // A decision's actions on the bridge (README.md#the-watch): the grammar's "Make it so" on the pick, the other choices
 // named for what they do, never a letter, and nothing else on the card. Pure, so it's tested (decisionRules.test.ts).
@@ -34,6 +36,7 @@ export interface DecisionActs {
 export function actsOf(d: {
   kind: Attention['kind'];
   lead?: string;
+  /** A turn's replies: those of its one ask (a turn of several asks has its replies in each ask's block, `askBlocksOf`). */
   replies?: readonly { label: string; text: string }[];
   question?: { id: string; options: readonly { id: string; label: string }[] };
   permission?: { id: string; tool: string };
@@ -74,3 +77,33 @@ export const briefOf = (cos: { route: number; message: string; says?: string; wh
 
 /** What Discuss sends the lead: the captain's words, after the decision they're about. */
 export const aboutIt = (what: string, words: string): string => `About “${what}”: ${words}`;
+
+/** One of a turn's asks, as its block on a card: its headline, its replies, and the answer held to it, if any. */
+export interface AskBlock {
+  /** Its place in the verdict's asks: what an answer to it names. */
+  index: number;
+  ask: string;
+  choices: Extract<Act, { kind: 'reply' }>[];
+  /** The answer held to it: one of its choices' words, or the user's own. */
+  answer?: string;
+  /** The choice the held answer is, by label; none for the user's own words. */
+  picked?: string;
+}
+
+/**
+ * A turn's asks as blocks on its card, each answered on its own, and where they stand: how many have an answer held,
+ * and in a line, that they go to the lead together once every ask has one.
+ */
+export function askBlocksOf(asks: readonly Ask[], answers: readonly AskAnswer[], lead: string): { blocks: AskBlock[]; answered: number; status: string } {
+  const blocks = asks.map((a, index): AskBlock => {
+    const choices = (a.replies ?? []).map((r) => ({ kind: 'reply' as const, label: r.label, text: r.text }));
+    const answer = answerTo(answers, index);
+    const picked = answer === undefined ? undefined : choices.find((c) => c.text === answer)?.label;
+    return { index, ask: a.ask, choices, ...(answer !== undefined && { answer }), ...(picked && { picked }) };
+  });
+  const answered = blocks.filter((b) => b.answer !== undefined).length;
+  const status = answered === asks.length
+    ? `All ${asks.length} answered: sending them to ${lead} as one message`
+    : `${answered} of ${asks.length} answered · nothing goes to ${lead} until all are, then they go together`;
+  return { blocks, answered, status };
+}

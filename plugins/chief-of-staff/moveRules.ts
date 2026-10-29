@@ -1,6 +1,7 @@
 import type { Agent } from '../../plugin-api/shared';
 import { forLead } from './cosRules';
 import { AUTO_SEND_EVERY, type CosRead, JUDGING_MS, readOf, type Verdict } from './shared';
+import { headlineOf } from './askRules';
 
 // Whether the chief of staff holds a goal's next move, on the screen over its pod (`GoalPart.move`, README.md): while
 // it reads the lead's turn, and while its words for the lead count down to sending themselves; or whether it hands the
@@ -34,7 +35,7 @@ const yours = (why: string): CosMove => ({ why, captain: true });
  * down, going now, or waiting on the captain.
  */
 function wordsMove(judged: Verdict, sendsAt: CosRead['sendsAt'], now: number): CosMove {
-  const what = `${judged.route === 1 ? 'Carry on' : 'Back to the lead'}: ${judged.ask}`;
+  const what = `${judged.route === 1 ? 'Carry on' : 'Back to the lead'}: ${headlineOf(judged.asks)}`;
   if (sendsAt === undefined || now >= sendsAt + SENDING_MS) return yours(`${what} — ready for you to send from Comms`);
   return { why: now < sendsAt ? `${what} — sends by itself unless you hold it` : `${what} — sending it now`, counter: countdown(sendsAt - now) };
 }
@@ -52,6 +53,6 @@ export function cosMove(lead: Pick<Agent, 'status' | 'lead'>, now: number): CosM
   if (read.acked !== undefined) return ACKED_MOVE;
   const { judged, sendsAt } = read;
   if (!judged) return now - read.at < JUDGING_MS ? { why: 'Reading the turn, to see where it goes' } : yours('The chief of staff couldn’t read the turn in time: it’s yours');
-  if (!forLead(judged)) return yours(`${judged.route === 2 ? 'A card' : 'An interrupt'} for you: ${judged.ask}`);
+  if (!forLead(judged)) return yours(`${judged.route === 2 ? 'A card' : 'An interrupt'} for you: ${headlineOf(judged.asks)}`);
   return wordsMove(judged, sendsAt, now);
 }
