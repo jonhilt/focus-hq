@@ -2,6 +2,7 @@ import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy as HostAutonomy, ConversationEvent, ConversationSummary } from 'agent-host';
 import { clock } from '../../shared/clock';
 import type { AgentTask, Autonomy, TermLine } from '../../shared/types';
+import { fieldsOf } from '../../shared/records';
 import type { TurnResult } from './sdkMessages';
 import { type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
 
@@ -48,6 +49,23 @@ export function outcome(ended: Extract<ConversationEvent, { _tag: 'TurnEnded' }>
   return { ok: !result?.isError, summary, structured: result?.structured, ...(result?.isError && { error: result.text }), started: true };
 }
 
+/**
+ * A raised hand, with which helper raised it and the call's id from Claude Code's request (`raw`), for the workflows
+ * the manager approved.
+ */
+function asking(event: Extract<ConversationEvent, { _tag: 'PermissionRequested' }>): Extract<Reaction, { kind: 'ask' }> {
+  const { agentID, toolUseID } = fieldsOf(event.raw);
+  return {
+    kind: 'ask',
+    requestId: event.requestId,
+    tool: event.tool,
+    input: fieldsOf(event.input),
+    summary: event.summary,
+    ...(typeof agentID === 'string' && { agentId: agentID }),
+    ...(typeof toolUseID === 'string' && { toolUseId: toolUseID }),
+  };
+}
+
 /** Whether something an agent-host event carries is one of Claude Code's own messages (what Focus renders). */
 export function isSdkMessage(raw: unknown): raw is SDKMessage {
   return typeof raw === 'object' && raw !== null && 'type' in raw && typeof raw.type === 'string' && ('session_id' in raw || 'uuid' in raw || raw.type === 'result');
@@ -56,7 +74,7 @@ export function isSdkMessage(raw: unknown): raw is SDKMessage {
 /** What a turn does with one of the host's journaled events. */
 export type Reaction =
   /** A raised hand: put it to the manager. */
-  | { kind: 'ask'; requestId: string; tool: string; summary: string }
+  | { kind: 'ask'; requestId: string; tool: string; input: Record<string, unknown>; summary: string; agentId?: string; toolUseId?: string }
   /** Someone answered a raised hand or a question: stop waiting on the manager for it. */
   | { kind: 'resolved'; requestId: string }
   /** How full the context window is. */
@@ -84,7 +102,7 @@ export function reaction(event: ConversationEvent, result: TurnResult | undefine
         ? { kind: 'answered', outcome: { ok: true, summary: result?.text ?? '', structured: event.value, started: true } }
         : { kind: 'none' };
     case 'PermissionRequested':
-      return { kind: 'ask', requestId: event.requestId, tool: event.tool, summary: event.summary };
+      return asking(event);
     case 'PermissionAnswered':
     case 'QuestionAnswered':
       return { kind: 'resolved', requestId: event.requestId };

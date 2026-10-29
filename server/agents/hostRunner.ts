@@ -9,11 +9,13 @@ import { errorMessage } from '../util';
 import { BackgroundTracker } from './backgroundTasks';
 import { browserTools, type BrowserPool } from './browserTool';
 import { agentEnv, DECLINED } from './claudeRunner';
-import { HOST_AUTONOMY, isSdkMessage, joining, reaction, runsOnHost } from './hostRunnerRules';
+import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction, runsOnHost } from './hostRunnerRules';
+import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { openScratch, type Scratch } from './scratch';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest } from './types';
 import { sessionEnv } from './wait';
+import { WorkflowPermits, workflowAsk } from './workflows';
 
 // Developer sessions on agent-host (jonhilt/agent-host): the host keeps each agent's conversation with Claude Code (a
 // journal of its own, resuming a turn a restart cut off, holding at your plan's usage limit), and this runner maps
@@ -103,13 +105,16 @@ export class HostRunner implements AgentRunner {
     this.agentOf.set(conversationId, agentId);
   }
 
-  /** What an agent's sessions are lent: the browser, and the scratch dir's environment (focus-wait, bash, dcg). */
+  /** What an agent's sessions are lent: the browser, and the scratch dir's environment (focus-wait, bash, dcg) with the push guard's. */
   lent(agentId: string): Lent {
     const lending = this.lendings.get(agentId) ?? { scratch: openScratch(agentId, paths.dcgConfig) };
     this.lendings.set(agentId, lending);
     const hooks = (): Pick<RunHooks, 'browser' | 'screenshot'> => lending.hooks ?? { browser: () => undefined, screenshot: () => undefined };
     const tools: Tool[] = browserTools(this.browsers, agentId, hooks);
-    return { tools, env: definedOnly(sessionEnv(agentEnv(false), lending.scratch.env)) };
+    // its git runs Ops' hooks, which refuse a lead's harmful pushes and hand on to the repo's own
+    writePushHooks(paths.gitHooks);
+    const base = agentEnv(false);
+    return { tools, env: definedOnly(sessionEnv(base, { ...lending.scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(agentId), base) })) };
   }
 
   /** The host opening a conversation Focus didn't start in this run (one it resumes after a restart). */
@@ -155,7 +160,7 @@ class HostTurn {
     private readonly req: RunRequest,
     private readonly hooks: RunHooks,
   ) {
-    this.ctx = { cwd: req.cwd, cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set() };
+    this.ctx = { cwd: req.cwd, cloud: false, calls: new Map(), helpers: new Map(), workflows: new Set(), permits: new WorkflowPermits(), parents: new Map(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set() };
     this.ctx.tracker = new BackgroundTracker((id) => (id ? this.ctx.calls.get(id)?.name : undefined));
   }
 
@@ -286,7 +291,7 @@ class HostTurn {
     const r = reaction(event, this.result, this.req.outputSchema !== undefined);
     switch (r.kind) {
       case 'ask':
-        return this.ask(r.requestId, r.tool, r.summary);
+        return void this.ask(r);
       case 'resolved':
         this.asks.get(r.requestId)?.abort();
         this.asks.delete(r.requestId);
@@ -308,15 +313,21 @@ class HostTurn {
     }
   }
 
-  /** A raised hand, put to the manager as the old runner's are; the first answer wins, from anyone watching. */
-  private ask(requestId: string, tool: string, summary: string): void {
+  /**
+   * A raised hand, put to the manager as the old runner's are; the first answer wins, from anyone watching. A helper of a
+   * workflow the manager approved goes ahead without asking, and approving a Workflow call (asked about by what that
+   * means) approves its helpers.
+   */
+  private async ask({ requestId, tool, input, summary: line, agentId, toolUseId }: Extract<Reaction, { kind: 'ask' }>): Promise<void> {
+    const summary = tool === 'Workflow' ? workflowAsk(input) : line;
     const controller = new AbortController();
     this.asks.set(requestId, controller);
-    void this.hooks.permission(tool, summary, controller.signal).then((approved) => {
-      if (controller.signal.aborted) return;
-      const answer = approved ? { _tag: 'AllowOnce' as const } : { _tag: 'Deny' as const, message: DECLINED };
-      return this.runner.run(Host.use((h) => h.answer(requestId, answer))).catch(() => undefined);
-    });
+    const permits = this.ctx.permits;
+    const approved = (await permits?.approvesSoon(agentId)) || (!controller.signal.aborted && (await this.hooks.permission(tool, summary, controller.signal)));
+    if (controller.signal.aborted) return;
+    if (approved && tool === 'Workflow' && toolUseId) permits?.approveCall(toolUseId);
+    const answer = approved ? { _tag: 'AllowOnce' as const } : { _tag: 'Deny' as const, message: DECLINED };
+    await this.runner.run(Host.use((h) => h.answer(requestId, answer))).catch(() => undefined);
   }
 }
 

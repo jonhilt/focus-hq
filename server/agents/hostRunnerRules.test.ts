@@ -50,9 +50,16 @@ describe('isSdkMessage', () => {
 describe('reaction', () => {
   const main = { _tag: 'Main' as const };
   it('puts a raised hand to the manager, and stops waiting once anyone answers', () => {
-    expect(reaction({ _tag: 'PermissionRequested', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)', source: main }, undefined)).toEqual({ kind: 'ask', requestId: 'r', tool: 'Bash', summary: 'Bash(curl x)' });
+    expect(reaction({ _tag: 'PermissionRequested', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)', source: main }, undefined)).toEqual({ kind: 'ask', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)' });
     expect(reaction({ _tag: 'PermissionAnswered', requestId: 'r', answer: { _tag: 'AllowOnce' } }, undefined)).toEqual({ kind: 'resolved', requestId: 'r' });
     expect(reaction({ _tag: 'QuestionAnswered', requestId: 'q', answer: { _tag: 'Answers', answers: {} } }, undefined)).toEqual({ kind: 'resolved', requestId: 'q' });
+  });
+
+  it('names the helper that raised a hand, and the call, from Claude Code’s request', () => {
+    const workflow = { _tag: 'PermissionRequested' as const, requestId: 'w', tool: 'Workflow', input: { name: 'review' }, summary: 'Workflow', source: main, raw: { toolUseID: 'toolu_1' } };
+    expect(reaction(workflow, undefined)).toEqual({ kind: 'ask', requestId: 'w', tool: 'Workflow', input: { name: 'review' }, summary: 'Workflow', toolUseId: 'toolu_1' });
+    const helper = { _tag: 'PermissionRequested' as const, requestId: 'h', tool: 'Bash', input: {}, summary: 'Bash(ls)', source: main, raw: { agentID: 'a1', toolUseID: 7 } };
+    expect(reaction(helper, undefined)).toEqual({ kind: 'ask', requestId: 'h', tool: 'Bash', input: {}, summary: 'Bash(ls)', agentId: 'a1' });
   });
 
   it('reports how full the context is, when the usage says', () => {

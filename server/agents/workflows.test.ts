@@ -227,6 +227,21 @@ describe('WorkflowPermits', () => {
     expect(permits.mightApprove('a1')).toBe(false);
     expect(permits.mightApprove(undefined)).toBe(false);
   });
+
+  it('gives an agent it hasn’t heard of a moment to be named by an approved workflow’s progress', async () => {
+    const permits = new WorkflowPermits();
+    permits.approveCall('toolu_1');
+    permits.started('w1', 'toolu_1');
+    let waits = 0;
+    const named = permits.approvesSoon('a1', async () => {
+      if (++waits === 2) permits.seen('w1', [{ agentId: 'a1' }]);
+    });
+    expect(await named).toBe(true);
+    expect(waits).toBe(2);
+    // one never named is asked about after its looks run out
+    expect(await permits.approvesSoon('zz', async () => undefined, 3)).toBe(false);
+    expect(await permits.approvesSoon(undefined, () => Promise.reject(new Error('no wait')))).toBe(false);
+  });
 });
 
 describe('workflowAsk', () => {

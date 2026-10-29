@@ -5,10 +5,13 @@ import { echoTurn, type FakeSession, makeFakeAdapter } from 'agent-host';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
 import type { Settings, TermLine } from '../../shared/types';
+import { paths } from '../config';
 import { BrowserPool } from './browserTool';
 import { DECLINED } from './claudeRunner';
 import { copyTranscript, HostRunner } from './hostRunner';
+import { refusedFile } from './pushGuard';
 import type { RunHooks, RunRequest } from './types';
+import { workflowAsk } from './workflows';
 
 // Developer sessions on agent-host (`HostRunner`), driven by agent-host's stand-in agent: what a Focus turn sees of a
 // conversation the host runs. The host's own promises (its journal, resuming a cut-off turn, holds) are agent-host's
@@ -92,6 +95,45 @@ describe('HostRunner', () => {
     const s = await Effect.runPromise(fake.session(1));
     expect(asked).toEqual(['Bash: Bash(curl x)', 'Bash: Bash(curl x)']);
     expect(s.answers.get('p1')).toEqual({ _tag: 'Deny', message: DECLINED });
+    await runner.shutDown();
+  });
+
+  it("lets the helpers of a workflow the manager approved run without asking, and asks about anyone else's", async () => {
+    const main = { _tag: 'Main' as const };
+    const system = (fields: Record<string, unknown>) => ({ _tag: 'RawEvent' as const, source: main, raw: { type: 'system', session_id: 's', uuid: crypto.randomUUID(), ...fields } });
+    const fake = makeFakeAdapter({
+      script: (s) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          yield* s.emit({ _tag: 'PermissionRequested', requestId: 'w', tool: 'Workflow', input: { name: 'review' }, summary: 'Workflow', source: main, raw: { toolUseID: 'toolu_9' } });
+          yield* s.answerOf('w');
+          yield* s.emit(system({ subtype: 'task_started', task_type: 'local_workflow', task_id: 'w1', tool_use_id: 'toolu_9', description: 'Review', workflow_name: 'review' }));
+          yield* s.emit(system({ subtype: 'task_progress', task_id: 'w1', description: 'Review', usage: {}, workflow_progress: [{ type: 'workflow_agent', index: 1, label: 'review:bugs', state: 'start', startedAt: 3, agentId: 'a1' }] }));
+          for (const [id, agentID] of [['h1', 'a1'], ['h2', 'stranger']]) {
+            yield* s.emit({ _tag: 'PermissionRequested', requestId: id, tool: 'Bash', input: { command: 'curl x' }, summary: 'Bash(curl x)', source: main, raw: { agentID } });
+            yield* s.answerOf(id);
+          }
+          yield* s.endTurn();
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const { h, asked } = hooks(true);
+    await runner.start(request('review it'), h).done;
+    const s = await Effect.runPromise(fake.session(1));
+    expect(asked).toEqual([`Workflow: ${workflowAsk({ name: 'review' })}`, 'Bash: Bash(curl x)']);
+    expect(s.answers.get('h1')).toEqual({ _tag: 'AllowOnce' });
+    await runner.shutDown();
+  });
+
+  it("runs the agent's git through the push guard's hooks", async () => {
+    const fake = makeFakeAdapter({ script: (s, text) => says(s, text) });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    await runner.start(request('push it'), hooks().h).done;
+    const { env } = (await Effect.runPromise(fake.session(1))).options;
+    const n = Number(env.GIT_CONFIG_COUNT) - 1;
+    expect([env[`GIT_CONFIG_KEY_${n}`], env[`GIT_CONFIG_VALUE_${n}`]]).toEqual(['core.hooksPath', paths.gitHooks]);
+    expect(env.FOCUS_PUSH_REFUSED).toBe(refusedFile('dev_1'));
+    expect(existsSync(path.join(paths.gitHooks, 'pre-push'))).toBe(true);
     await runner.shutDown();
   });
 

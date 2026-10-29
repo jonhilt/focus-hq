@@ -287,7 +287,15 @@ export class WorkflowPermits {
   mightApprove(agentId: string | undefined): boolean {
     return !!agentId && !this.agents.has(agentId) && this.approved.size > 0;
   }
+
+  /** Whether `agentId`'s request is approved, given a moment (`looks` of `ms`) for a workflow's progress to name it. */
+  async approvesSoon(agentId: string | undefined, wait: (ms: number) => Promise<unknown> = sleep, looks = 10, ms = 200): Promise<boolean> {
+    for (let i = 0; i < looks && this.mightApprove(agentId); i++) await wait(ms);
+    return this.approves(agentId);
+  }
 }
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** What the captain's asked when the lead wants to run a workflow: its name, and what approving it means. */
 export function workflowAsk(input: Record<string, unknown>): string {
