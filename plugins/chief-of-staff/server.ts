@@ -3,7 +3,8 @@
 // the captain, interrupt the captain, back to the lead), written in the ledger and filed in the inbox; and as a lead
 // ships, whether to raise the lane it merges in (never lower it), holding it back until it has read it. It sends nothing
 // itself but where the captain lets it, and the carry-ons the core leaves to it: a QA fail back to the lead, a slice
-// that's landed. FOCUS_PLUGINS=chief-of-staff, and switched on per project.
+// that's landed; and on its direct line with the user, where it starts a goal itself when the conversation calls for
+// one, and says so. FOCUS_PLUGINS=chief-of-staff, and switched on per project.
 import fs from 'node:fs';
 import path from 'node:path';
 import type { FocusPlugin } from '../../plugin-api/server';
@@ -11,13 +12,16 @@ import { BotHook } from './botHook';
 import { Inbox } from './captainsInbox';
 import { ChiefOfStaff } from './chief';
 import { ClaudeJudge } from './claudeJudge';
+import { ClaudeLine } from './claudeLine';
 import { CREW } from './crew';
 import { DemoJudge } from './demoJudge';
+import { DemoLine } from './demoLine';
+import { DirectLine } from './line';
 import { STANDING_ORDERS } from './judge';
-import { inboxRoutes, threadRoute, watchRoutes } from './routes';
+import { inboxRoutes, lineRoutes, threadRoute, watchRoutes } from './routes';
 import { JevRouter } from './jevRouter';
 import { autoSendFor, jevFor } from './cosRules';
-import { AUTO_SEND_EVERY, CHIEF_OF_STAFF, freshState } from './shared';
+import { AUTO_SEND_EVERY, CHIEF_OF_STAFF, type CosLive, freshState } from './shared';
 
 /** How often the bot hears what changed. */
 const BOT_EVERY = 3000;
@@ -53,6 +57,12 @@ const chiefOfStaff: FocusPlugin = {
     // it has a token and a webhook (the captain sets them in Settings while Focus runs)
     const hook = new BotHook(() => ({ ...inbox.view(), leads: inbox.leads() }), () => host.bot);
     setInterval(() => void hook.tick(), BOT_EVERY).unref();
+    // the user's direct line to it, tied to no goal: it may start a goal there itself when the conversation calls for one
+    const live = host.state<CosLive>(() => ({ lineActivity: '' }), { saved: false });
+    const line = new DirectLine(
+      { projects: () => host.projects(), on: (projectId) => host.on(projectId), agents: () => host.agents(), settings: () => host.settings(), shipStatus: () => host.shipStatus(), goals: host.goals, saved: settings, live },
+      host.demo ? new DemoLine() : new ClaudeLine((run) => host.shipSession(run)),
+    );
     const leadsIn = (projectId: string) => host.agents().filter((a) => a.projectId === projectId && a.task === 'lead').map((a) => a.id);
     return {
       turn: (agent, phase) => void chief.turn(agent, phase),
@@ -60,7 +70,7 @@ const chiefOfStaff: FocusPlugin = {
       mergeHeld: (pr) => chief.mergeHeld(pr),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
-      routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), ...watchRoutes(inbox, settings, (id) => host.agent(id)?.task === 'lead'), threadRoute(host)],
+      routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), ...watchRoutes(inbox, settings, (id) => host.agent(id)?.task === 'lead'), ...lineRoutes(line), threadRoute(host)],
     };
   },
 };

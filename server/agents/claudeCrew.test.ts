@@ -205,7 +205,7 @@ describe('shipSession', () => {
       yield await Promise.resolve(init);
       yield success();
     };
-    const { cwd: _cwd, systemAppend: _append, ...run } = crewRun({ builtins: ['Read'] });
+    const { cwd: _cwd, systemAppend: _append, tools: _tools, ...run } = crewRun({ builtins: ['Read'] });
     const result = await shipSession('number-one', { ...run, systemAppend: ({ workspaces }) => `Worktrees are in ${workspaces}.`, projects: [], shipStatus: () => Promise.resolve({ projects: [] }) }, ask);
     expect(result.text).toBe('Done');
     expect(seen).toEqual({
@@ -215,5 +215,18 @@ describe('shipSession', () => {
       allowed: ['Read', 'mcp__number-one__ship_status', 'mcp__number-one__open_project'],
       append: `Worktrees are in ${paths.workspaces}.`,
     });
+  });
+
+  it('gives the session tools of its own beside the ship tools, under the same name, leaving out one named as a ship tool', async () => {
+    let allowed: string[] | undefined;
+    const ask: Ask = async function* ({ options }) {
+      allowed = options.allowedTools;
+      yield await Promise.resolve(init);
+      yield success();
+    };
+    const { cwd: _cwd, systemAppend: _append, tools: _tools, ...run } = crewRun({ builtins: [] });
+    const own = (name: string) => ({ name, description: 'd', input: {}, activity: 'a', run: () => Promise.resolve('ok') });
+    await shipSession('chief-of-staff', { ...run, systemAppend: () => '', projects: [], shipStatus: () => Promise.resolve({ projects: [] }), tools: [own('start_goal'), own('ship_status')] }, ask);
+    expect(allowed).toEqual(['mcp__chief-of-staff__ship_status', 'mcp__chief-of-staff__open_project', 'mcp__chief-of-staff__start_goal']);
   });
 });

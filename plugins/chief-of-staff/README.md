@@ -1,10 +1,10 @@
 # The chief of staff
 
-A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), switched on per project too (the manager's **Projects** tab, under **Plugins**: **Chief of staff**). It keeps the captain's inbox: what waits on them across the shown projects (Comms, with its badge on the HUD and its strips on the phone, and a bot on the [inbox API](../../docs/ledger.md#the-captains-inbox-api)), and what they decided, each answer a `captain-decision` line, whether it came from Comms, an agent's panel or the bot. As a goal's lead ends a turn, it judges where that turn goes, writes its verdict in the [ledger](../../docs/ledger.md#session-digests), and marks the turn with it (`lead.marks`), so the inbox files the turn by it. It needs no other plugin.
+A plugin (`FOCUS_PLUGINS=chief-of-staff`, [plugins](../../docs/plugins.md)), switched on per project too (the manager's **Projects** tab, under **Plugins**: **Chief of staff**). It keeps the captain's inbox: what waits on them across the shown projects (Comms, with its badge on the HUD and its strips on the phone, and a bot on the [inbox API](../../docs/ledger.md#the-captains-inbox-api)), and what they decided, each answer a `captain-decision` line, whether it came from Comms, an agent's panel or the bot. As a goal's lead ends a turn, it judges where that turn goes, writes its verdict in the [ledger](../../docs/ledger.md#session-digests), and marks the turn with it (`lead.marks`), so the inbox files the turn by it. And on [its direct line](#the-direct-line) in Comms, tied to no goal, the user talks things over with it, and it starts a goal itself when the conversation calls for one, saying so. It needs no other plugin.
 
 ## What it does with a turn
 
-It sends nothing itself unless the captain lets it, project by project (but for the news it [wakes a lead for](#the-leads-news-it-wakes-them-for)). What it decides is where a lead's ended turn waits for them:
+It sends nothing itself unless the captain lets it, project by project (but for the news it [wakes a lead for](#the-leads-news-it-wakes-them-for), and what it starts or tells from [its direct line](#the-direct-line), where the user talks with it). What it decides is where a lead's ended turn waits for them:
 
 - **While it reads the turn** (up to a minute: `JUDGING_MS`, `shared.ts`) the turn is held back: off the badge, no toast, a line in Comms saying how many it's reading. A turn it hasn't judged by then needs the captain as if it weren't there, so a judge that's slow, failing or switched off never hides one.
 - **A card or an interrupt** (routes 2 and 3) needs the captain: it's on the badge, headed by its one line on what's being decided and its words to the captain; the lead's own words and its reason are folded under them, since the captain asked for less to read (the lead's room is a press away, B, for more). As it's judged, a toast says so: an interrupt as an error, so it sounds like one.
@@ -15,7 +15,7 @@ It sends nothing itself unless the captain lets it, project by project (but for 
 
 Over a goal's pod, the team screen shows it holding the goal's move while it reads the turn, and while its words count down to sending themselves (`moveRules.ts`); a card, an interrupt, words held (or that didn't go once their time came) or a read that took too long it hands to the captain, ahead of QA testing what the lead shipped, since only it knows they're waiting on the captain.
 
-Only a lead's ended turn is the chief of staff's: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
+Only a lead's ended turn is the chief of staff's to judge: a raised hand, a question, an error, a goal ready to close and QA's calls go to the captain whatever it thinks. Every verdict is still kept as a `cos-verdict` line, to check against what the captain did (`captain-replies`, `captain-decision`).
 
 ## The watch
 
@@ -32,6 +32,17 @@ Comms is the bridge: one goal at the conn, the rest underway on their orders (`s
 - **A decision's brief** is the chief of staff's words to the captain (`briefOf`), each call with its pick and alternatives: the card showed why it routed the turn instead, which says why it's the captain's, not what they're choosing (28 October 2026). Its suggested replies are choices the card's width, each with the words it sends under its name, since a label like "Hold, but switch over" alone doesn't say what it decides; the first is marked as the pick. A decision answered, on its card or in the chat, stays faded and out of reach until the lead's next one takes its place, so it doesn't vanish from under the captain.
 - **View in room** (the head's button, or B) tunes the room's goal viewing station to the goal at the conn and takes you there; any other lead's berth has its own while it's hovered. Discuss opens the panel at the lead's latest words, from their start, and the conversation wraps rather than scrolling sideways.
 - **Still to build** from the grammar: the exhibit's questions and marks, probes on a decision's contested part, and orders made from each make-it-so.
+
+## The direct line
+
+At the top of Comms' rail, above every project's goals, is the chief of staff itself (**Chief of Staff**, or 0): taking it stands down from any watch and puts its conversation in the viewer's place, with a box to talk in, as the Talk panel looks (`line.ts`, `lineView.ts`, `lineRules.ts`). The user asked for it (29 October 2026) to talk work over with the chief of staff without first picking the goal it belongs to, and decided it has free rein there: when the conversation calls for work, it puts it where it belongs by itself, with no step asking them first.
+
+- **Where work goes:** each message comes to it with the projects it's switched on for, their open goals (each lead's id, the goal's title, how they stand, and what waits on the user), and the goals it started from the line (`crew/line.md`). Work that fits an open goal goes to that goal's lead (`tell_goal`, heard as `[Chief of Staff]`), since an open goal already has the context; only work separate from every open goal starts a new one (`start_goal`, in the project it picks, from `the chief of staff’s direct line`). A question, or an idea the user is still turning over, starts nothing.
+- **It says so:** a goal it starts is a notice in the conversation where it happened, "I started *the goal* in *the project* because *why*", with **Close**, its undo: Focus closes the goal as the user would, warning first about work that would be lost. Words it told a lead are a quieter line.
+- **It starts a goal once, however often a turn asks for it: a retried turn, or one resumed after a restart.** Each goal it starts is kept on the line by its project and its words, normalised (`goalKey`); asked for the same goal while that one is open, the tool finds it rather than starting another, and tells the session so. A goal the user closed from the line (or that's gone some other way) may be started again. It keeps it as the goal starts, not as the turn ends, so a restart between the two still has it. Words it told a lead are kept the same way, so the same words never go to the same lead twice.
+- **Close closes the goal it started, once however often it's pressed.**
+- **It carries on across a restart:** the conversation and its Claude Code session are kept, each turn resuming it, and without a session (a new conversation) it's told the conversation so far. **A turn a restart cut ends failed, saying so, and the line takes the next message.** **New conversation** starts afresh; the goals it started stay kept, so none starts twice.
+- **What it can do:** read the ship (`ship_status`), any project's code (`open_project`, Read, Glob, Grep), start a goal and tell a lead. Nothing else: no edits, issues, merges or closes but the user's Close. It's the only place the chief of staff starts work: judging a lead's turn, P3 still holds.
 
 ## A thread per goal
 
@@ -84,7 +95,7 @@ It reasons from seven principles, and the routes follow from them (`crew/judge.m
 
 - **P1.** The captain's attention is the scarcest thing aboard: spend it where their judgement changes what gets built.
 - **P2.** Direction is the captain's, craft the lead's: what to build, for whom, what users see, the scope, the next slice and whether it's done are theirs; how it's built, tested and merged is the lead's.
-- **P3.** Never decide for the captain: carry on only inside a direction they've set. Anything that starts, widens, narrows, redirects or ends work is theirs, standing orders or not.
+- **P3.** Never decide for the captain: carry on only inside a direction they've set. Anything that starts, widens, narrows, redirects or ends work is theirs, standing orders or not. The one exception is [its direct line](#the-direct-line): there the user has given it the say to start a goal when their conversation calls for one, and it tells them it did. Reading a lead's turn, it never starts, widens or redirects work.
 - **P4.** Prepare, don't pass through: a decision reaches them answerable in seconds, with options and a pick.
 - **P5.** What can't be undone, or reaches beyond the ship (money, production data, permissions, security, licences, people outside), needs them first and now.
 - **P6.** The lead contradicting them, or the goal's direction in doubt, is news they need now.

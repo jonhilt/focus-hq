@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createSdkMcpServer, type McpSdkServerConfigWithInstance, type Options, query, type SDKAssistantMessage, type SDKMessage, type SDKResultMessage, tool } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
+import { type ZodType, z } from 'zod';
 import type { Effort, Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
@@ -276,22 +276,58 @@ export interface ShipSessionRun extends Omit<ReadOnlyRun, 'cwd' | 'readable' | '
   projects: ChatProject[];
   /** The ship as it is right now, for `ship_status`. */
   shipStatus: () => Promise<ShipStatus>;
+  /**
+   * Tools of the session's own beside the ship tools, all pre-approved, as `mcp__<name>__<tool>`: unlike those, they do
+   * what their `run` does, so a plugin that gives one answers for what it changes. A name the ship tools have is left out.
+   */
+  tools?: SessionTool[];
+}
+
+/** A tool a ship session is given of its own (`ShipSessionRun.tools`), answered in words. */
+export interface SessionTool {
+  /** Lowercase letters, digits and underscores. */
+  name: string;
+  /** What it's for and when to reach for it, as the session reads it. */
+  description: string;
+  /** Its input's fields, as zod types (the SDK's tool boundary takes zod). */
+  input: Record<string, ZodType>;
+  /** What the activity line says while it runs. */
+  activity: string;
+  /** Its answer, in words; a throw is said back to the session as the tool failing, in its message. */
+  run(input: Record<string, unknown>): Promise<string>;
+}
+
+const SHIP_TOOLS = ['ship_status', 'open_project'];
+
+/** A session tool as the SDK's: its answer in words, or what it threw as an error the session reads. */
+function sessionTool(t: SessionTool) {
+  return tool(t.name, t.description, t.input, async (input) => {
+    try {
+      return { content: [{ type: 'text' as const, text: await t.run(input) }] };
+    } catch (err) {
+      return { content: [{ type: 'text' as const, text: `${t.name} failed: ${errorMessage(err)}` }], isError: true };
+    }
+  });
 }
 
 /**
  * A read-only session with the run of the ship, as a crew member's (Number One's): from Focus's planning folder,
  * where `open_project` checks out each project, with the agents' worktrees readable and the ship tools
- * (`ship_status`, `open_project`, as `mcp__<name>__…`), neither of which changes anything aboard.
+ * (`ship_status`, `open_project`, as `mcp__<name>__…`), neither of which changes anything aboard, and any tools of
+ * its own it's given (`run.tools`), which do what they do.
  */
 export function shipSession(name: string, run: ShipSessionRun, ask: Ask = query): Promise<ReadOnlyResult> {
   fs.mkdirSync(paths.planning, { recursive: true });
-  const server = createSdkMcpServer({ name, version: '1.0.0', alwaysLoad: true, tools: shipTools(run, run.activity, (dir) => path.relative(paths.planning, dir)) });
+  const { tools: given = [], ...rest } = run;
+  const own = given.filter((t) => !SHIP_TOOLS.includes(t.name));
+  const server = createSdkMcpServer({ name, version: '1.0.0', alwaysLoad: true, tools: [...shipTools(run, run.activity, (dir) => path.relative(paths.planning, dir)), ...own.map(sessionTool)] });
+  const activity = (tool: string) => own.find((t) => t.name === tool)?.activity ?? (tool === 'ship_status' ? 'Checking the ship’s status' : 'Opening a project');
   return runReadOnly({
-    ...run,
+    ...rest,
     cwd: paths.planning,
     readable: [paths.workspaces],
     systemAppend: run.systemAppend({ workspaces: paths.workspaces }),
-    tools: { server, names: ['ship_status', 'open_project'], activity: (tool) => (tool === 'ship_status' ? 'Checking the ship’s status' : 'Opening a project') },
+    tools: { server, names: [...SHIP_TOOLS, ...own.map((t) => t.name)], activity },
   }, ask);
 }
 

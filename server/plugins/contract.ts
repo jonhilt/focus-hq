@@ -328,7 +328,10 @@ export interface PluginHost {
     entries(): Readonly<PersonalEntry>[];
     note(text: string, via: string): PersonalEntry;
   };
-  /** The captain's goals, to act on for the captain once they've said so. */
+  /**
+   * The user's goals, to act on once they've said so, or where they've given the plugin the say: a conversation they
+   * hold with it that calls for a goal may start one, and it tells them it did, with a way to close it again.
+   */
   readonly goals: PluginGoals;
   /**
    * Files an issue on GitHub in `repo`, which has to be one of `projectId`'s repos (it throws, in words, for any
@@ -352,7 +355,8 @@ export interface PluginHost {
   /**
    * A read-only session with the run of the ship, as Number One's: from Focus's planning folder (where it checks
    * out a project's code on demand), the agents' worktrees readable, and the ship tools (`ship_status`,
-   * `open_project`) as `mcp__<plugin id>__…`. Neither tool changes anything aboard.
+   * `open_project`) as `mcp__<plugin id>__…`. Neither tool changes anything aboard; tools of the plugin's own
+   * (`run.tools`, under the same prefix) do what the plugin has them do, so it answers for what they change.
    */
   shipSession(run: ShipSessionRun): Promise<ReadOnlyResult>;
   /**

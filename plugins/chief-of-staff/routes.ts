@@ -2,6 +2,7 @@ import type { PluginHost, PluginRoute, PluginState } from '../../plugin-api/serv
 import { resumeHow } from '../../plugin-api/server';
 import { itemWithLinks } from './botHook';
 import type { Inbox } from './captainsInbox';
+import type { DirectLine } from './line';
 import { decideOf } from './inbox';
 import { landedAnswerOf } from './landed';
 import type { CosState } from './shared';
@@ -107,4 +108,22 @@ export function threadRoute(host: Pick<PluginHost, 'agent' | 'transcript' | 'all
       return { entries: goalThread(lead, { ledger: host.ledger(), lines, jsonl: jsonl ?? '' }) };
     },
   };
+}
+
+/**
+ * The direct line (README.md#the-direct-line): saying something to the chief of staff, starting the conversation
+ * afresh, and closing a goal it started from the line (`key`, its `LineStart.key`; `force` past the warning).
+ */
+export function lineRoutes(line: Pick<DirectLine, 'say' | 'newConversation' | 'close'>): PluginRoute[] {
+  return [
+    { method: 'post', path: '/line/say', handle: ({ body }) => line.say(typeof body.text === 'string' ? body.text : '') },
+    { method: 'post', path: '/line/new', handle: () => line.newConversation() },
+    {
+      method: 'post', path: '/line/close',
+      handle: ({ body }) => {
+        if (typeof body.key !== 'string' || !body.key) throw new Error('Say which goal: key');
+        return line.close(body.key, body.force === true);
+      },
+    },
+  ];
 }

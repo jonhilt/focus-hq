@@ -151,6 +151,62 @@ export interface CosState {
   jev?: Record<string, boolean>;
   conn?: string;
   stoodBy?: string[];
+  /** The user's direct line to it (README.md#the-direct-line): missing until they first say something on it. */
+  line?: CosLine;
+}
+
+/** Something said on the direct line: by the user, or by the chief of staff. */
+export interface LineMessage {
+  from: 'user' | 'cos';
+  text: string;
+  at: number;
+}
+
+/** A goal it started from the direct line: kept so it starts once (`lineRules.ts`), and shown with a way to close it. */
+export interface LineStart {
+  /** The project and the goal's words, normalised (`goalKey`): the same goal asked for again has the same key. */
+  key: string;
+  leadId: string;
+  projectId: string;
+  /** The project's name and the goal's words, as they were when it started. */
+  project: string;
+  text: string;
+  /** Why it started it, in its words to the user. */
+  why: string;
+  at: number;
+  /** When the user closed it from the line (its undo): it may be started again after that. */
+  closed?: number;
+}
+
+/** What it told an existing goal's lead from the direct line, in place of starting one. */
+export interface LineTold {
+  leadId: string;
+  goal: string;
+  text: string;
+  at: number;
+}
+
+/**
+ * The direct line (README.md#the-direct-line): the conversation, its Claude Code session so the next message resumes
+ * it, and the goals it started or told from it. `thinking` while a turn runs; a turn a restart cut is `failed`.
+ */
+export interface CosLine {
+  status: 'waiting' | 'thinking' | 'failed';
+  messages: LineMessage[];
+  started: LineStart[];
+  told: LineTold[];
+  sessionId?: string;
+  error?: string;
+  costUsd: number;
+  /** When the conversation began afresh: what it started or told before then is kept, but not shown. */
+  since?: number;
+}
+
+export const freshLine = (): CosLine => ({ status: 'waiting', messages: [], started: [], told: [], costUsd: 0 });
+
+/** What it's doing on the line this moment, which isn't saved: a turn reads a lot. */
+export interface CosLive {
+  lineActivity: string;
 }
 
 export const freshState = (): CosState => ({ autoSend: {}, jev: {} });
@@ -167,5 +223,32 @@ export function cosStateOf(v: unknown): CosState {
     jev: switches(kept.jev),
     ...(typeof kept.conn === 'string' && kept.conn && { conn: kept.conn }),
     ...(stoodBy.length && { stoodBy }),
+    ...(isRecord(kept.line) && { line: lineOf(kept.line) }),
+  };
+}
+
+const listOf = <T>(v: unknown, one: (r: Record<string, unknown>) => T | undefined): T[] =>
+  Array.isArray(v) ? v.flatMap((x) => (isRecord(x) ? [one(x)].filter((y): y is T => y !== undefined) : [])) : [];
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
+
+function lineStartOf(r: Record<string, unknown>): LineStart | undefined {
+  if (!str(r.key) || !str(r.leadId)) return undefined;
+  const closed = typeof r.closed === 'number' ? r.closed : undefined;
+  return { key: str(r.key), leadId: str(r.leadId), projectId: str(r.projectId), project: str(r.project), text: str(r.text), why: str(r.why), at: num(r.at), ...(closed !== undefined && { closed }) };
+}
+
+/** The direct line, as its state keeps it: what isn't one is left out, so an older or damaged one still reads. */
+export function lineOf(v: Record<string, unknown>): CosLine {
+  const status = isOneOf(['waiting', 'thinking', 'failed'] as const, v.status) ? v.status : 'waiting';
+  return {
+    status,
+    messages: listOf(v.messages, (m) => (isOneOf(['user', 'cos'] as const, m.from) ? { from: m.from, text: str(m.text), at: num(m.at) } : undefined)),
+    started: listOf(v.started, lineStartOf),
+    told: listOf(v.told, (t) => (str(t.leadId) ? { leadId: str(t.leadId), goal: str(t.goal), text: str(t.text), at: num(t.at) } : undefined)),
+    ...(str(v.sessionId) && { sessionId: str(v.sessionId) }),
+    ...(str(v.error) && { error: str(v.error) }),
+    costUsd: num(v.costUsd),
+    ...(typeof v.since === 'number' && { since: v.since }),
   };
 }

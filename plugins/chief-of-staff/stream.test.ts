@@ -8,7 +8,7 @@ import type { ThreadEntry } from './thread';
 // number) takes the conn and opens the goal's sheet with its decision on it, another goal's card is a count on its
 // berth, a hail drops over the sheet until it's put on screen and stood by, the Muster chip (or M) stands down and the
 // muster comes up, and the lead's name (or T) slides in the panel to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [] }));
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; line?: unknown; lineActivity?: string; said: unknown[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [], said: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -32,10 +32,14 @@ vi.mock('../../plugin-api/client', async () => {
     fill: (el: HTMLElement, ...children: (Node | null)[]) => el.replaceChildren(...children.flatMap((c) => (c ? [c] : []))),
     messageAgent: vi.fn(() => Promise.resolve()),
     // the watch as Focus keeps it: taking the conn is kept at once, and heard as the plugin's state changing
-    pluginState: () => ({ autoSend: {}, conn: fake.conn, stoodBy: fake.stoodBy }),
+    pluginState: () => ({ autoSend: {}, conn: fake.conn, stoodBy: fake.stoodBy, line: fake.line, lineActivity: fake.lineActivity }),
+    confirmDialog: vi.fn(() => Promise.resolve(true)),
     onPluginState: (_id: string, f: () => void) => { fake.state = f; return () => undefined; },
-    callPlugin: vi.fn((_p: string, path: string, body: { lead?: string | null; key?: string }) => {
+    callPlugin: vi.fn((_p: string, path: string, body: { lead?: string | null; key?: string; force?: boolean }) => {
       if (path === '/conn') fake.conn = body.lead ?? undefined;
+      if (path.startsWith('/line/')) fake.said.push({ path, ...body });
+      // closing a goal with work to lose warns first, until it's forced
+      if (path === '/line/close' && !body.force) return Promise.resolve({ warn: ['1 open pull request'] });
       if (path === '/stand-by' && body.key) fake.stoodBy = [...(fake.stoodBy ?? []), body.key];
       fake.state?.();
       return Promise.resolve({});
@@ -65,6 +69,9 @@ afterEach(() => {
   fake.waiting = [];
   fake.threads = {};
   fake.preview = undefined;
+  fake.line = undefined;
+  fake.lineActivity = undefined;
+  fake.said = [];
 });
 const part = (name: string) => document.querySelector<HTMLElement>(`[data-part=${name}]`);
 const parts = (name: string) => [...document.querySelectorAll<HTMLElement>(`[data-part=${name}]`)];
@@ -303,5 +310,70 @@ describe('the bridge while updates stream in', () => {
     fake.state?.();
     await settle();
     expect(part('acts')?.querySelector('button')).toBe(got);
+  });
+});
+
+describe('the direct line to the chief of staff', () => {
+  const started = { key: 'p|add dark mode', leadId: 'b', projectId: 'p', project: 'Shop', text: 'Add dark mode', why: 'You want it before the launch.', at: 2 };
+  const line = {
+    status: 'waiting', costUsd: 0, told: [{ leadId: 'a', goal: 'Goal a', text: 'Mind the footer', at: 3 }], started: [started],
+    messages: [{ from: 'user', text: 'We need dark mode', at: 1 }, { from: 'cos', text: 'Started it.', at: 4 }],
+  };
+
+  it('is at the top of the rail, and taking it (or 0) stands down and shows the conversation in the viewer’s place', async () => {
+    fake.conn = 'a';
+    await open();
+    expect(part('line-berth')?.textContent).toContain('Chief of Staff');
+    press('Digit0');
+    await settle();
+    expect(fake.conn).toBeUndefined();
+    expect(shown('line')).toBe(true);
+    expect(shown('sheet')).toBe(false);
+    expect(shown('empty')).toBe(false);
+    expect(document.body.textContent).toContain('Direct line · Chief of Staff');
+    // a berth takes the conn again, and the line goes
+    berth('Goal a')?.click();
+    await settle();
+    expect(shown('line')).toBe(false);
+  });
+
+  it('says what it started where it happened, with why, and Close closes it, warning first', async () => {
+    fake.line = line;
+    await open();
+    part('line-berth')?.click();
+    await settle();
+    const said = part('line-said');
+    expect([...(said?.children ?? [])].map((c) => c.getAttribute('data-from') ?? c.getAttribute('data-part'))).toEqual(['you', 'line-started', 'line-told', 'cos']);
+    expect(part('line-started')?.textContent).toContain('I started Goal b in Shop because you want it before the launch.');
+    part('line-close')?.click();
+    await settle();
+    expect(fake.said).toEqual([{ path: '/line/close', key: started.key }, { path: '/line/close', key: started.key, force: true }]);
+  });
+
+  it('sends what’s typed on Enter, and says what it’s doing while it thinks', async () => {
+    fake.line = { ...line, status: 'thinking' };
+    fake.lineActivity = 'Starting a goal';
+    await open();
+    press('Digit0');
+    expect(part('line-status')?.textContent).toBe('Thinking · Starting a goal');
+    fake.line = { ...line, status: 'failed', error: 'Interrupted when Focus shut down. Say it again.' };
+    fake.state?.();
+    await settle();
+    expect(part('line-status')?.textContent).toContain('Interrupted');
+    const box = part('line-box');
+    if (!(box instanceof HTMLTextAreaElement)) throw new Error('no box');
+    box.value = 'Add search to the shop';
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await settle();
+    expect(fake.said).toEqual([{ path: '/line/say', text: 'Add search to the shop' }]);
+    expect(box.value).toBe('');
+  });
+
+  it('is gone from the started notice’s Close once the goal has closed', async () => {
+    fake.line = { ...line, started: [{ ...started, closed: 9 }] };
+    await open();
+    press('Digit0');
+    expect(part('line-close')).toBeNull();
+    expect(part('line-started')?.textContent).toContain('Started · closed');
   });
 });

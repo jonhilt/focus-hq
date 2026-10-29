@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { judgeSystemPrompt } from './judge';
 import { laneSystemPrompt } from './laneJudge';
+import { lineSystemPrompt } from './line';
 import { ROUTES } from './shared';
 
 // The chief of staff's prompts, word for word, as they were before they moved into its crew files (crew/): changing
@@ -24,5 +25,11 @@ describe('the chief of staff’s lane judge', () => {
   it('is told word for word what it was, with standing orders or none yet', async () => {
     await expect(laneSystemPrompt()).toMatchFileSnapshot(golden('lane'));
     await expect(laneSystemPrompt(orders)).toMatchFileSnapshot(golden('lane-orders'));
+  });
+});
+
+describe('the chief of staff on its direct line', () => {
+  it('is told word for word what it was', async () => {
+    await expect(lineSystemPrompt()).toMatchFileSnapshot(golden('line'));
   });
 });

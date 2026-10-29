@@ -12,7 +12,7 @@ export { errorMessage, newId, randomHex, run, sleep, truncate } from '../server/
 export { resumeHow } from '../server/apiRequests';
 export { demoPace } from '../server/demoPace';
 /** What a read-only Claude Code session is given and gives back (`host.readOnlySession`). */
-export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
+export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, type SessionTool, type ShipSessionRun, WEB_TOOLS } from '../server/agents/claudeCrew';
 /**
  * The environment Focus's Claude Code sessions run in, for a plugin that starts one through the Agent SDK itself:
  * `agentEnv(false)` signs in with your plan whatever the API key's doing, and with no argument as Focus's new

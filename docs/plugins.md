@@ -61,7 +61,7 @@ A plugin is a folder with a `server.ts` that default-exports a `FocusPlugin` (`s
 - **State.** A field the plugin adds later starts at its `fresh()` value, and nothing is saved until it's first set, so a Focus that never used a plugin has nothing of it waiting. What it keeps saved and what it keeps in memory only (`{ saved: false }`) reach the browser side by side, so their keys mustn't meet.
 - **Filing an issue** and **checking out** a repo work only in Focus's projects' repos: Ops refuses any other. A goal lead's checkouts (`leadCheckouts`) are only to read, since the lead's at work in them.
 - **The whole ship** (`snapshot`) is a lot: ask for it when it's needed (a call's answer), not on a timer, and only read it.
-- **The captain's personal log and goals**: jot a thought down only when the captain asks, and start or message a goal only on the captain's word.
+- **The captain's personal log and goals**: jot a thought down only when the captain asks, and start or message a goal only on the captain's word, or in a conversation the user holds with the plugin for that: there it may start a goal the conversation calls for, telling them it did and offering to close it again (the chief of staff's direct line).
 
 ## In the browser
 

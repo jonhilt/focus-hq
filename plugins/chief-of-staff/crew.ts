@@ -2,8 +2,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { type CrewRole, crewFolder } from '../../plugin-api/server';
 
-// The chief of staff's crew files (crew/, as .focus/crew/README.md describes them): what the judge and the lane judge
-// are told, and what each may refer to. Each one's version is a digest of its words, so verdicts from different
+// The chief of staff's crew files (crew/, as .focus/crew/README.md describes them): what the judge, the lane judge and
+// the direct line are told, and what each may refer to. Each one's version is a digest of its words, so verdicts from different
 // prompts are never compared as one, and nobody has to remember to bump it.
 
 const ROLES = {
@@ -15,6 +15,8 @@ const ROLES = {
   },
   /** Whether to raise a ship's lane: `laneSystemPrompt` (laneJudge.ts). */
   lane: { vars: { orders: 'text' }, texts: ['noOrders'], textVars: {} },
+  /** Its direct line with the user: `lineSystemPrompt` (line.ts). */
+  line: { vars: {}, texts: [], textVars: {} },
 } as const satisfies Record<string, CrewRole>;
 
 export const CREW = crewFolder(path.join(path.dirname(fileURLToPath(import.meta.url)), 'crew'), ROLES);

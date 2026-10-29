@@ -6,10 +6,12 @@ import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
 import { type LandedItem, landedWhere } from './landed';
+import { lineView } from './lineView';
 import { mergesOf } from './needCard';
 import { CHIEF_OF_STAFF, cosStateOf, readOf } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import type { ThreadEntry } from './thread';
+import { TW } from './bridgeKit';
 import { type Exhibit, type ExhibitsBy, exhibitsOf, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
 
 // Comms as the bridge (README.md#the-watch), drawn as docs/interface-style/mockups/bridge-grammar.html draws it, its
@@ -81,17 +83,6 @@ function unblocks(f: Filed): string {
 
 const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 
-/** The mockup's pieces, as its CSS draws them (bridge-grammar.html), in Tailwind's utilities. */
-const TW = {
-  label: 'tw:font-display tw:text-[9.5px] tw:font-semibold tw:tracking-[.14em] tw:uppercase tw:text-label',
-  btn: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms] tw:hover:bg-surface2',
-  go: 'tw:inline-flex tw:items-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-ink tw:bg-ink tw:text-[#111] tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:whitespace-nowrap tw:rounded-none tw:cursor-pointer tw:transition-colors tw:duration-[250ms]',
-  /** Where the viewer, the muster and the empty table sit: right of the rail, under the HUD. */
-  table: 'tw:absolute tw:left-[304px] tw:top-[46px] tw:right-3 tw:bottom-3 tw:max-w-[860px]',
-  card: 'tw:relative tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:shadow-lift-2 tw:px-[14px] tw:py-3',
-  ch: 'tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label',
-};
-
 /**
  * Draws a piece of the bridge again only when what it shows has changed (`key`): a piece drawn afresh is new elements,
  * so a press landing as it's replaced is lost, and what was being typed into it goes.
@@ -122,6 +113,8 @@ export function openStream(ui: CommsUi): void {
   // the muster up in the viewer's place; the panel slid in to talk; a muster row opened; the hail put on screen
   let mustering = false;
   let talking = false;
+  // the direct line to the chief of staff in the viewer, tied to no goal (README.md#the-direct-line)
+  let lining = false;
   // the decision last on the sheet, kept faded once it's answered until the next one comes
   let settled: { lead: string; el: HTMLElement } | null = null;
   // the panel's just opened: once the conversation's drawn, show the lead's latest words from their start
@@ -175,12 +168,15 @@ export function openStream(ui: CommsUi): void {
     class: 'tw:relative tw:h-full tw:min-h-[500px] tw:overflow-hidden tw:bg-well tw:bg-[radial-gradient(ellipse_at_50%_120%,#1a2230_0%,transparent_60%)] tw:text-ink tw:font-read tw:text-[14px]/[1.45]',
     attrs: { 'data-part': 'bridge' },
   }, rail, empty, viewer, muster, panel, gallery, hud, hail);
+  const line = lineView((message) => ui.error(message));
+  body.insertBefore(line.el, panel);
 
 
   // taking the conn of a goal, or standing down (null): drawn at once, kept by Focus
   const take = (id: string | null) => {
     conn = id ?? undefined;
     mustering = id === null;
+    lining = false;
     talking = false;
     discussing = null;
     settled = null;
@@ -197,6 +193,23 @@ export function openStream(ui: CommsUi): void {
       taking = false;
       later();
     });
+  };
+  // the direct line: in the viewer's place, standing down from any watch (the conn is a goal's, and the line is no goal)
+  const takeLine = () => {
+    lining = true;
+    mustering = talking = browsing = false;
+    discussing = null;
+    expanded = onScreen = opened = null;
+    if (conn) {
+      conn = undefined;
+      taking = true;
+      void callPlugin(CHIEF_OF_STAFF, '/conn', { lead: null }).catch((e: Error) => ui.error(e.message)).finally(() => {
+        taking = false;
+        later();
+      });
+    }
+    render();
+    line.focusBox();
   };
   // the Muster chip: stands down from a watch; with none, brings the muster up or puts it away
   const muster_ = () => {
@@ -216,7 +229,7 @@ export function openStream(ui: CommsUi): void {
 
   // across the top: where the captain is, and the Muster chip with what waits outside the goal at the conn
   const renderHud = (all: readonly Filed[], lead: Agent | undefined) => {
-    const at = lead ? `On watch · ${lead.lead?.title ?? lead.name}` : 'No watch';
+    const at = lining && !mustering ? 'Direct line · Chief of Staff' : lead ? `On watch · ${lead.lead?.title ?? lead.name}` : 'No watch';
     keyed(where, at, () => fill(where, h('span', null, 'Bridge'), h('span', null, '·'), h('b', { class: 'tw:text-ink tw:font-semibold' }, at)));
     const n = all.filter((f) => f.reach === 'muster' || f.reach === 'hail').length;
     count.textContent = String(n);
@@ -233,9 +246,19 @@ export function openStream(ui: CommsUi): void {
       if (conn && n > (counted.get(l.id) ?? n)) ticked.add(l.id);
       counted.set(l.id, n);
     }
-    const key = JSON.stringify([conn ?? null, sections.map((s) => [s.name, s.goals.map((l) => [l.id, l.lead?.title ?? l.name, l.name, l.status, counted.get(l.id), ticked.has(l.id)])])]);
+    const key = JSON.stringify([conn ?? null, lining, sections.map((s) => [s.name, s.goals.map((l) => [l.id, l.lead?.title ?? l.name, l.name, l.status, counted.get(l.id), ticked.has(l.id)])])]);
     keyed(rail, key, () => drawRail(sections));
   };
+
+  // the direct line's berth, at the top of the rail: no goal's, so it's no project's either
+  const lineBerth = () => h('button', {
+    class: `tw:grid tw:grid-cols-[12px_1fr_22px] tw:items-center tw:gap-[6px] tw:w-full tw:min-h-[30px] tw:py-[6px] tw:pl-2 tw:pr-[6px] tw:mb-[10px] tw:border tw:border-solid tw:rounded-none tw:text-[13px] tw:text-ink tw:text-left tw:font-read tw:cursor-pointer tw:shadow-lift-1 ${lining ? 'tw:bg-surface tw:border-line' : 'tw:bg-panel tw:border-hair-rail'}`,
+    title: 'Talk to the Chief of Staff, tied to no goal (0)', attrs: { 'data-part': 'line-berth', ...(lining && { 'data-at': '' }) },
+    onclick: () => { if (!lining) takeLine(); },
+  },
+  h('i', { class: 'tw:inline-block tw:w-[9px] tw:h-[9px] tw:rotate-45 tw:bg-attn' }),
+  h('span', { class: 'tw:font-display tw:font-semibold tw:tracking-[.06em] tw:uppercase tw:text-[12px]' }, 'Chief of Staff'),
+  h('span', { class: 'tw:font-mono tw:text-[11px] tw:text-muted tw:text-center' }, '0'));
 
   const drawRail = (sections: ReturnType<typeof berths<Agent>>) => {
     const els = sections.flatMap((s, i) => [
@@ -263,7 +286,7 @@ export function openStream(ui: CommsUi): void {
           }, 'View'));
       }),
     ]);
-    fill(rail, ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[13px]' }, 'No goals under way.')]));
+    fill(rail, lineBerth(), ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[13px]' }, 'No goals under way.')]));
   };
 
   // the exhibits panel, beside the sheet in the talk panel's place: every exhibit the lead put up, by slice or newest
@@ -661,9 +684,12 @@ export function openStream(ui: CommsUi): void {
     renderGallery(lead);
     show(muster, mustering);
     if (mustering) renderMuster(all);
-    show(viewer, !mustering && !!lead);
-    show(empty, !mustering && !lead);
-    if (!lead || mustering) return;
+    const onLine = lining && !mustering;
+    show(line.el, onLine);
+    if (onLine) line.render();
+    show(viewer, !mustering && !onLine && !!lead);
+    show(empty, !mustering && !onLine && !lead);
+    if (!lead || mustering || onLine) return;
     if (conn !== fetched) picked();
     renderHead(lead);
     renderCards(lead);
@@ -701,7 +727,7 @@ export function openStream(ui: CommsUi): void {
   }
 
   // the bridge's keys: M stands down (or brings the muster up), T talks (Esc stops), B beams to the lead at the conn,
-  // 1–9 take the conn of a berth
+  // 1–9 take the conn of a berth, 0 the direct line to the chief of staff
   const keys = (e: KeyboardEvent) => {
     // Esc puts the panel away before it closes Comms
     if (e.key === 'Escape' && talking) {
@@ -721,6 +747,7 @@ export function openStream(ui: CommsUi): void {
     else if (e.code === 'KeyT') talk(!talking);
     else if (e.code === 'KeyB' && conn) ui.goToAgent(conn);
     else if (e.code === 'KeyE' && conn) browse(!browsing);
+    else if (e.code === 'Digit0') takeLine();
     else if (berth) {
       const goal = berths(allLeads(), focus.shown).flatMap((s) => s.goals)[Number(berth[1]) - 1];
       if (goal && goal.id !== conn) take(goal.id);
