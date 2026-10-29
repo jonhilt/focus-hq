@@ -4,7 +4,7 @@ import { contextText, turnContext } from './context';
 import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, verdictSchema } from './judge';
 import { laneJudgeVersion, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
-import { type GoalPr, heldForRead, judged, lostRaises, reading, unreadShip, waking } from './laneRules';
+import { type GoalPr, heldForRead, judged, lostRaises, reading, unjudged, unreadShip, waking } from './laneRules';
 import { capped, unattendedRounds } from './roundRules';
 import { readOf } from './shared';
 import { atUsageLimit, turnTail } from './turn';
@@ -138,6 +138,11 @@ export class ChiefOfStaff {
       this.host.record(lead.projectId, { kind: 'cos-lane', ...read, to: lane, why, model: this.judge.model, failed: errorMessage(err) });
     }
     if (lane !== from) this.host.goals.raiseLane(lead.id, lane, why, pr);
+  }
+
+  /** Judges again each lead's turn it began reading and never judged (`unjudged`): run as Focus starts. */
+  rejudge(): void {
+    for (const lead of this.host.agents()) if (lead.task === 'lead' && unjudged(lead)) void this.turn(lead, 'end');
   }
 
   private async judgeTurn(agent: Agent, sessionId: string, goal: string, since: number): Promise<void> {

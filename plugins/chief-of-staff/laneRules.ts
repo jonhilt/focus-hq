@@ -67,6 +67,15 @@ export function waking(lead: Agent, now: number): Waking {
 export const reading = (now: number): CosRead => ({ at: now });
 
 /**
+ * Whether a lead's last turn is one it began reading and never judged (the judging failed, or Focus stopped mid-read),
+ * and the lead's still between turns: judged again as Focus starts, so the turn reaches the captain with its verdict.
+ */
+export function unjudged(lead: Pick<Agent, 'status' | 'lead'>): boolean {
+  const read = readOf(lead);
+  return lead.status === 'done' && read !== undefined && !read.judged && read.acked === undefined;
+}
+
+/**
  * Its read once it's judged the turn, or nothing when the verdict comes too late: the turn's already judged, or it's
  * an earlier turn's (its judging began, `since`, before this one ended). Its words sending a turn back to the lead, in
  * a project where it sends them itself (`autoSend`), go after `AUTO_SEND_MS`; it never carries a lead on by itself,

@@ -108,11 +108,12 @@ function liveParts(store: Store, browsers: BrowserPool): ShipParts {
     mirrors: new PreviewMirrors(() => mirrorHosts(settingsInForce(store.settings).previewHosts, os.networkInterfaces())),
     ownRepo: async () => githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => '')),
     readTranscripts: (agents) => {
-      // developers' sessions on agent-host keep theirs under its own Claude Code config folder
+      // sessions on agent-host keep theirs under its own Claude Code config folder, and come first: a session that moved
+      // there was copied across (`copyTranscript`), so the copy left in the old folder stops at the move
       const hostTranscripts = path.join(HOST_CLAUDE_DIR, 'projects');
       const ownReader = transcriptReader(paths.transcripts, paths.workspaces);
       const hostReader = transcriptReader(hostTranscripts, paths.workspaces);
-      agents.readTranscript = async (sessionId) => (await ownReader(sessionId)) ?? hostReader(sessionId);
+      agents.readTranscript = async (sessionId) => (await hostReader(sessionId)) ?? ownReader(sessionId);
       agents.titleGoal = (brief) => titleGoal(brief, store.settings);
       const folders = [transcriptFolders(paths.transcripts, paths.workspaces), transcriptFolders(hostTranscripts, paths.workspaces)];
       agents.transcripts = async (since) => (await Promise.all(folders.map((f) => f(since)))).flat();

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LedgerEvent } from '../../plugin-api/shared';
-import { acked, held, heldForRead, judged, laneOf, lineOf, lostRaises, needingYou, reading, unreadShip, waking } from './laneRules';
+import { acked, held, heldForRead, judged, laneOf, lineOf, lostRaises, needingYou, reading, unjudged, unreadShip, waking } from './laneRules';
 import { AUTO_SEND_MS, CHIEF_OF_STAFF, type CosRead, JUDGING_MS, type Verdict } from './shared';
 
 const verdict = (route: Verdict['route']): Verdict => ({ route, asks: [{ ask: route === 3 ? 'Spend $40?' : 'Carry on' }], why: 'w', message: 'm' });
@@ -87,6 +87,14 @@ describe('waking a lead for Ops’ news', () => {
 });
 
 describe('its read of a turn', () => {
+  it('is judged again when it was begun and never judged, while the lead is between turns', () => {
+    expect(unjudged(lead(reading(10)))).toBe(true);
+    expect(unjudged(lead({ at: 10, judged: verdict(2) }))).toBe(false);
+    expect(unjudged(lead({ at: 10, acked: 20 }))).toBe(false);
+    expect(unjudged(lead())).toBe(false);
+    expect(unjudged(lead(reading(10), { status: 'working' }))).toBe(false);
+  });
+
   it('is judged once, while it’s the turn being read', () => {
     expect(judged(reading(10), verdict(2), 10, false, 20)).toEqual({ at: 10, judged: verdict(2) });
     expect(judged(undefined, verdict(2), 10, false, 20)).toBeUndefined();

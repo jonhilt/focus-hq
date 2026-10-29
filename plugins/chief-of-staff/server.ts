@@ -51,6 +51,8 @@ const chiefOfStaff: FocusPlugin = {
     const jev = host.demo ? undefined : { router: new JevRouter(typesafeKey), on: (projectId: string) => host.on(projectId) && jevFor(settings.get(), projectId) };
     const judge = host.demo ? new DemoJudge() : new ClaudeJudge((run) => host.readOnlySession(run));
     const chief = new ChiefOfStaff(host, judge, () => readIfThere(orders), autoSends, jev);
+    // a turn left unjudged before Focus stopped (or whose judging failed) is judged now
+    chief.rejudge();
     const inbox = new Inbox(host, autoSends);
     setInterval(() => void inbox.autoSend(), AUTO_SEND_EVERY).unref();
     // a bot speaking for the captain hears what changes in the inbox, and what the leads show, on its webhook, once

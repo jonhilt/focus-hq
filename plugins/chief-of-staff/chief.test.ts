@@ -201,6 +201,26 @@ describe('the chief of staff', () => {
     expect(warned).toEqual([`[chief-of-staff] judging ${o.lead().name}’s turn failed: the judge gave no verdict: {"route":9}`]);
   });
 
+  it('judges again, as Focus starts, a turn whose judging failed', async () => {
+    const answer: Record<string, unknown> = { route: 9 };
+    const o = await aboard(answer);
+    const warn = console.warn;
+    console.warn = () => undefined;
+    try {
+      o.claude.turns[0].end({ ok: true, summary: 'Slice 1 is up.' });
+      await until(() => o.lead().status === 'done' && o.asked.length === 1);
+      await until(() => o.read()?.at !== undefined);
+    } finally {
+      console.warn = warn;
+    }
+    expect(o.read()?.judged).toBeUndefined();
+    Object.assign(answer, { route: 4, ask: 'Run the tests first', why: 'It can check itself.', message: 'Run the tests first.' });
+    o.chief.rejudge();
+    await until(() => !!o.read()?.judged);
+    expect(o.read()?.judged?.route).toBe(4);
+    expect(o.verdicts()).toHaveLength(1);
+  });
+
   describe('waking a lead for a note Ops left them', () => {
     /** The lead opens its pull requests and ends its turn, which the judge sends back to them (or `answer`s) once `held` is over. */
     async function shipped(answer?: unknown, held?: Promise<void>) {
