@@ -98,7 +98,7 @@ async function walk(page: Page): Promise<void> {
       const room = hq.world.room(hq.state.projects[0].id);
       await walk.through('corridor → hall (${pass})', room.entrance.ends[0].doorway.matrix, 6, 3500);
       await walk.hold('in the hall (${pass})', 2000);
-      const station = room.stations[0];
+      const station = room.station;
       await walk.through('hall → briefing room (${pass})', station.portal.ends[0].doorway.matrix, 6, 3500);
       const seat = station.viewpoint();
       hq.player.teleport(seat.position, seat.lookAt);

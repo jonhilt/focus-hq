@@ -5,7 +5,6 @@ import { answerInChat, pageErrorsNote, BRIEF_LIMIT, freshSessionPrompt, goalBrie
 import { answerQuestion, askQuestion, QUESTION_LIMITS } from './leadRules';
 
 const work: LeadWork = {
-  station: 1,
   title: 'Saved items',
   repos: [
     { repo: 'acme/web', folder: 'web', baseBranch: 'main' },

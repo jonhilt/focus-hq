@@ -14,7 +14,7 @@ const agent = (id: string): Agent => ({
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
   lead: {
-    station: 0, title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
+    title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
     waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1 }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
     artifacts: [{ id: 'fees', title: 'Fee table', at: 5, slice: 1 }, { id: 'flow', title: 'Flow', at: 6, slice: 2 }],
   },
@@ -156,7 +156,7 @@ describe('taking the conn', () => {
     ]);
   });
 
-  it('beams to a lead’s team room: the one at the conn from its head or B, any other from its berth', async () => {
+  it('views a lead’s goal in its room: the one at the conn from its head or B, any other from its berth', async () => {
     fake.conn = 'a';
     await open();
     part('beam-here')?.click();

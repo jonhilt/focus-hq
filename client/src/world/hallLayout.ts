@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { HALL, HALL_HALF, type RoomSlot } from './layout';
 import type { Doorway } from './portal';
-import type { PodSpot } from './teamStation';
+import type { PodSpot } from './goalStation';
 
 // Where things stand in a training hall (blender/training_hall.py builds its shell, which keeps to these sizes): its frame is a room's, +X from the entrance to the
 // far wall, the middle of its floor at the origin. Nothing here draws, so it can be tested without a browser.
@@ -38,17 +38,20 @@ export function curvedPanel(r: number, a0: number, a1: number, y0: number, y1: n
   return g;
 }
 
-/** Where the pods stand round the wall, left to right as you come in: either side of the board, clear of the entrance. */
-export const POD_ANGLES = [-90, -45, 45, 90].map((d) => THREE.MathUtils.degToRad(d));
+/**
+ * Where the goal viewing station's pod stands round the wall: to the right of the board, in sight as you come in, where
+ * one of the four team stations it replaced stood.
+ */
+export const STATION_ANGLE = THREE.MathUtils.degToRad(45);
 
-/** The pods' spots round the hall's wall. */
-export function hallPodSpots(): PodSpot[] {
-  return POD_ANGLES.map((a) => ({ wall: around(R, a), yaw: facingIn(a) }));
+/** The goal viewing station's pod's spot round the hall's wall. */
+export function stationSpot(): PodSpot {
+  return { wall: around(R, STATION_ANGLE), yaw: facingIn(STATION_ANGLE) };
 }
 
 /**
- * Where plugins' screens hang (plugins.ts `hall`), in the order they fill: either side of the entrance, between the pods
- * and the entrance's flat wall, the nearest the pods first. Over the plants and the PADD rack, under the pods' screens.
+ * Where plugins' screens hang (plugins.ts `hall`), in the order they fill: either side of the entrance, clear of the
+ * station's pod and the entrance's flat wall, the nearest the board first. Over the plants and the PADD rack.
  */
 export const HALL_SCREEN_ANGLES = [105, -105, 125, -125, 145, -145].map((d) => THREE.MathUtils.degToRad(d));
 export const HALL_SCREENS = HALL_SCREEN_ANGLES.length;

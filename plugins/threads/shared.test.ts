@@ -9,7 +9,7 @@ const otherLine: LedgerEvent = { seq: 2, at: 3, projectId: 'shop', kind: 'retro-
 const decided = (seq: number, goalId: string, contact: string, as: 'next' | 'parked' | 'dropped' | 'resolved' | 'open', note?: string): LedgerEvent =>
   ({ seq, at: 300 + seq, projectId: 'shop', kind: 'thread-decided', goalId, goal: `Goal ${goalId}`, contact, text: `thread ${contact}`, as, ...(note && { note }) });
 const lead = (id: string, contacts: Contact[]): Pick<Agent, 'id' | 'name' | 'lead'> =>
-  ({ id, name: 'Lt. Oyelaran', lead: { station: 0, title: `Goal ${id}`, repos: [], slice: 1, prs: [], contacts } });
+  ({ id, name: 'Lt. Oyelaran', lead: { title: `Goal ${id}`, repos: [], slice: 1, prs: [], contacts } });
 
 describe('the threads closed goals left open', () => {
   it('keeps each project’s open contacts as their goal closed, and none it pursued, dropped or spun off', () => {

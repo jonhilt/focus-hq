@@ -33,8 +33,11 @@ export interface Ui {
   /** The room's QA station: the QA officer, their reports and the project's QA brief. */
   openQa(projectId: string): void;
   /** The room's goals: each one's lead, and a box to start another. */
-  /** `station`: the free team station the captain walked up to, where a goal they start goes. */
-  openGoals(projectId: string, station?: number): void;
+  openGoals(projectId: string): void;
+  /** Which of the room's goals its goal viewing station shows: a pick of them, or a way to start one while there are none. */
+  openGoalPicker(projectId: string): void;
+  /** Tunes the goal viewing station in the room of lead `leadId`'s goal to it, without going there. */
+  tune(leadId: string): void;
   /** Plugin `id`'s own panel (`ClientPlugin.panel`), while it's switched on; nothing otherwise. */
   openPlugin(id: string): void;
   /** The panels of the plugins switched on, by plugin id: what `openPlugin` opens (the tools that shoot the ship go through each). */
@@ -48,7 +51,7 @@ export interface Ui {
   showOnMsd(what: Trace | { plugin: string } | null): void;
   openManager(tab?: ManagerTab): void;
   openTeleport(): void;
-  /** A team station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */
+  /** The goal viewing station's screen up close: what lead `leadId` has shown, and switches for what station screens show. */
   openScreen(leadId?: string): void;
   /** The star chart of lead `leadId`'s goal (stellar cartography). */
   openChart(leadId: string): void;
@@ -56,10 +59,10 @@ export interface Ui {
   openTurbolift(): void;
   /** Takes the turbolift to `stop`. */
   ride(stop: Place): void;
-  /** Beams the captain into transporter room `room` of `projectId`'s team station `station`, to watch its workflow. */
-  beamTo(projectId: string, station: number, room: number): void;
-  /** Beams the captain back to the briefing room of `projectId`'s team station `station`. */
-  beamBack(projectId: string, station: number): void;
+  /** Beams the user into transporter room `room` of `projectId`'s goal viewing station, to watch its workflow. */
+  beamTo(projectId: string, room: number): void;
+  /** Beams the user back to the briefing room of `projectId`'s goal viewing station. */
+  beamBack(projectId: string): void;
   /** The view dives into what the captain's looking at, a rush of light, and comes out at `place` (a plugin's space, say). */
   dive(place: Place): void;
 }

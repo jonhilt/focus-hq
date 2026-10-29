@@ -6,7 +6,7 @@ import { CHIEF_OF_STAFF, type CosRead, JUDGING_MS, type Verdict } from './shared
 const verdict = (route: Verdict['route']): Verdict => ({ route, ask: 'Write the wishlist tests next', why: 'w', message: 'm' });
 const lead = (read?: CosRead, status: Agent['status'] = 'done'): Pick<Agent, 'status' | 'lead'> => ({
   status,
-  lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
+  lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
 });
 
 describe('the chief of staff’s hold on a goal’s move', () => {

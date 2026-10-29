@@ -39,21 +39,21 @@ describe('a pull request being resolved', () => {
 });
 
 describe('goals on the board', () => {
-  const work = (over: Partial<LeadWork> = {}): LeadWork => ({ station: 0, title: 'Saved items', repos: [], slice: 2, prs: [], ...over });
+  const work = (over: Partial<LeadWork> = {}): LeadWork => ({ title: 'Saved items', repos: [], slice: 2, prs: [], ...over });
   const lead = (id: string, status: Agent['status'], over: Partial<LeadWork> = {}) =>
     ({ id, task: 'lead', status, projectId: 'p1', repo: 'acme/shop', issue: { number: 0, title: 'Saved items', url: '' }, startedAt: 0, lead: work(over) }) as Agent;
   const project = { id: 'p1', repos: ['acme/shop'] } as Project;
 
-  it('are in progress for as long as the goal is, by team station, whether or not the lead is at it', () => {
-    const agents = [lead('b', 'done', { station: 3 }), lead('a', 'working', { station: 1 }), { ...lead('dev', 'working'), task: 'issue', lead: undefined } as Agent];
+  it('are in progress for as long as the goal is, as they started, whether or not the lead is at it', () => {
+    const agents = [{ ...lead('b', 'done'), startedAt: 3 }, { ...lead('a', 'working'), startedAt: 1 }, { ...lead('dev', 'working'), task: 'issue', lead: undefined } as Agent];
     const cols = columns(project, undefined, agents, undefined);
     expect(cols.goals.map((a) => a.id)).toEqual(['a', 'b']);
     expect(cols.doing.map((a) => a.id)).toEqual(['dev']);
   });
 
-  it('list goals at a team station by station, then the ones at none as they started', () => {
-    const agents = [{ ...lead('late', 'working', { station: undefined }), startedAt: 9 }, { ...lead('early', 'working', { station: undefined }), startedAt: 2 }, lead('seated', 'done', { station: 2 })];
-    expect(columns(project, undefined, agents, undefined).goals.map((a) => a.id)).toEqual(['seated', 'early', 'late']);
+  it('list goals as they started', () => {
+    const agents = [{ ...lead('late', 'working'), startedAt: 9 }, { ...lead('early', 'working'), startedAt: 2 }, { ...lead('first', 'done'), startedAt: 1 }];
+    expect(columns(project, undefined, agents, undefined).goals.map((a) => a.id)).toEqual(['first', 'early', 'late']);
   });
 
   it('say which slice they’re on and what they’re waiting for', () => {

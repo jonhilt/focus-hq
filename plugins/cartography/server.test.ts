@@ -102,7 +102,7 @@ describe('cartography, switched on per project', () => {
 
 describe('what a goal\'s slice changes', () => {
   const lead = (closing = false) =>
-    ({ id: 'lead_shop_1', projectId: 'shop', lead: { title: 'Wishlist', station: 0, repos: [{ repo: 'o/shop', folder: 'shop', baseBranch: 'main' }], ...(closing ? { closing: { reason: 'done', at: 1 } } : {}) } }) as unknown as Agent;
+    ({ id: 'lead_shop_1', projectId: 'shop', lead: { title: 'Wishlist', repos: [{ repo: 'o/shop', folder: 'shop', baseBranch: 'main' }], ...(closing ? { closing: { reason: 'done', at: 1 } } : {}) } }) as unknown as Agent;
 
   it('works it out as a lead\'s turn ends, from their checkout against the project\'s map', async () => {
     const shop = { id: 'shop', name: 'Shop', repos: ['o/shop'], plugins: ['cartography'] };
@@ -115,7 +115,7 @@ describe('what a goal\'s slice changes', () => {
     parts.turn?.(agent, 'end');
     for (let i = 0; i < 300 && !slices().shop; i++) await new Promise((r) => setTimeout(r, 50));
     // in the demo the checkout Focus maps stands in for the lead's, and the lead's branch touched the api
-    expect(slices().shop).toMatchObject([{ leadId: 'lead_shop_1', title: 'Wishlist', station: 0, repos: [{ change: { repo: 'o/shop', touched: [{ part: 'api', files: 1, lines: 1 }] } }] }]);
+    expect(slices().shop).toMatchObject([{ leadId: 'lead_shop_1', title: 'Wishlist', repos: [{ change: { repo: 'o/shop', touched: [{ part: 'api', files: 1, lines: 1 }] } }] }]);
   });
 
   it('drops a goal that\'s closing, and leaves out other agents\' turns', async () => {
@@ -125,7 +125,7 @@ describe('what a goal\'s slice changes', () => {
     const parts = cartography.start(lent);
     const map = { repo: 'o/shop', files: 0, mapped: 0, sizes: {}, connections: [], problems: [], model: { parts: [], views: [], ignore: [] } };
     const change = { repo: 'o/shop', touched: [{ part: 'api', files: 1, lines: 3 }], unowned: [], added: [], removed: [], gained: [], lost: [] };
-    seed({ maps: { shop: [map] }, slices: { shop: [{ leadId: closing.id, title: 'Wishlist', station: 0, at: 1, repos: [{ change, branch: map }] }] } });
+    seed({ maps: { shop: [map] }, slices: { shop: [{ leadId: closing.id, title: 'Wishlist', at: 1, repos: [{ change, branch: map }] }] } });
     parts.turn?.({ id: 'someone', projectId: 'shop' } as Agent, 'end');
     parts.turn?.(closing, 'end');
     for (let i = 0; i < 100 && slices().shop?.length; i++) await new Promise((r) => setTimeout(r, 20));

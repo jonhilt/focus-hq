@@ -122,9 +122,6 @@ export function goalStarted(ui: Ui, lead: Agent): void {
   ui.hud.toast('success', `${lead.name} leads “${lead.lead?.title ?? lead.issue.title}”`, { label: 'Go there', run: () => ui.goToAgent(lead.id) });
 }
 
-/** The team station a goal's lead sits at, in words, for a goal started while goals took one. */
-export const stationWords = (lead: Agent): string | undefined => (lead.lead?.station === undefined ? undefined : `team station ${lead.lead.station + 1}`);
-
 /** A hand-off control: where the work goes, and the button that sends it. */
 export function handOffControl(ui: Ui, projectId: string, idea: () => string, from: string, title: string, primary = false): HTMLElement {
   const target = goalTarget(projectId);

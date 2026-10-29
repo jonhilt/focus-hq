@@ -143,7 +143,7 @@ export class AgentSessions extends Part {
         const change = helperChange(agent, event, Date.now());
         if (!change) return;
         this.update(agent, change);
-        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team station: ${event.description}` }]);
+        if (event.kind === 'started') this.print(agent, [{ kind: 'system', text: `✻ ${helperFor(event.id).name} joins ${agent.name}'s team: ${event.description}` }]);
         // a helper that's done lingers a moment, so you see how it got on
         if (event.kind === 'ended') {
           this.background(Effect.sleep(HELPER_LINGER_MS).pipe(Effect.andThen(Effect.sync(() => this.update(agent, { helpers: (agent.helpers ?? []).filter((h) => h.id !== event.id) })))));

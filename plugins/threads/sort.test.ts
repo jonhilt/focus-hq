@@ -20,7 +20,7 @@ describe('what the model is told', () => {
     const prompt = sortPrompt([thread('c1'), thread('next-abc', { idea: true, text: 'Remember more than one address' })], {
       now: at(24),
       closed: [record('g2', at(15), { title: 'Saved addresses', note: { done: 'A shopper keeps three addresses', learned: ['The lookup needs a key'], next: [] } })],
-      leads: [{ lead: { station: 0, title: 'Save for later', repos: [], slice: 1, prs: [], note: { done: 'Items saved across devices', learned: [], next: ['Share a list'] } } }],
+      leads: [{ lead: { title: 'Save for later', repos: [], slice: 1, prs: [], note: { done: 'Items saved across devices', learned: [], next: ['Share a list'] } } }],
     });
     expect(prompt).toBe([
       'Today is 2026-10-24.',
@@ -108,7 +108,7 @@ describe('the proposals taken from the model’s answer', () => {
 
 describe('the demo’s stand-in for the model', () => {
   it('sends an idea to a goal under way it shares words with, drops the other ideas, and gives contacts to the captain', () => {
-    const lead = { lead: { station: 0, title: 'Shoppers can save items for later', repos: [], slice: 1, prs: [] } };
+    const lead = { lead: { title: 'Shoppers can save items for later', repos: [], slice: 1, prs: [] } };
     const answer = demoAnswer([thread('c1'), thread('n1', { idea: true, text: 'Let shoppers save items for later' }), thread('n2', { idea: true, text: 'Prefill the address' })], [lead]);
     expect(proposalsFrom(answer, [thread('c1'), thread('n1', { idea: true }), thread('n2', { idea: true })]).map((p) => [p.contact, p.as, p.note])).toEqual([
       ['c1', 'next', 'you'],

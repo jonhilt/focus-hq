@@ -7,7 +7,7 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
-import { goalStarted, prLink, stationWords } from './goals';
+import { goalStarted, prLink } from './goals';
 import { type Box, CHART, chartSize, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
 import { close, closer, home, panBy, type View, wheelZoom, whole, type World, zoomAbout, zoomOn } from './chartView';
 import { type Column, ORBIT, type PlacedNode, type Quiet, type Sky, sky, sliceWork, type WorkKind, type WorkNode } from './constellation';
@@ -443,7 +443,7 @@ function spunOffGoal(closed: { goal?: string; title: string }, ui: Ui): HTMLElem
   const lead = closed.goal ? state.agents.get(closed.goal) : undefined;
   const title = lead?.lead?.title ?? closed.title;
   return lead
-    ? h('button', { class: 'chart-jump', onclick: () => ui.openAgent(lead.id) }, [`“${title}” · ${lead.name}`, stationWords(lead)].filter(Boolean).join(', '))
+    ? h('button', { class: 'chart-jump', onclick: () => ui.openAgent(lead.id) }, `“${title}” · ${lead.name}`)
     : h('p', null, `“${title}”`);
 }
 

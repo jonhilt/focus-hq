@@ -85,8 +85,8 @@ export async function launchBrowser(args: string[] = []): Promise<Browser> {
 }
 
 /**
- * Opens the ship at `url` and readies its whole 3D scene for a scan: built, and the team stations' briefing rooms
- * shown.
+ * Opens the ship at `url` and readies its whole 3D scene for a scan: built, and the goal viewing stations' briefing
+ * rooms shown.
  */
 export async function openScene(browser: Browser, url: string): Promise<Page> {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -102,7 +102,7 @@ export async function openScene(browser: Browser, url: string): Promise<Page> {
   await page.evaluate(() => {
     if (!window.focusHQ) throw new Error("the ship isn't loaded: window.focusHQ is missing");
     const { world } = window.focusHQ;
-    // team stations' briefing rooms are only drawn while you're in one or looking in through its door (teamStation.ts)
+    // the goal viewing stations' briefing rooms are only drawn while you're in one or looking in through its door (goalStation.ts)
     (world.root.parent ?? world.root).traverse((o) => {
       if (o.name === 'briefing_room' && o.parent) o.parent.visible = true;
     });

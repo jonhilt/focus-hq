@@ -52,7 +52,7 @@ describe('its mark on a lead’s turn, read back', () => {
   });
 
   it('is read from the lead’s marks, under the plugin’s id', () => {
-    expect(readOf({ lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], marks: { 'chief-of-staff': { at: 3 }, other: 'x' } } })).toEqual({ at: 3 });
+    expect(readOf({ lead: { title: 'W', repos: [], slice: 1, prs: [], marks: { 'chief-of-staff': { at: 3 }, other: 'x' } } })).toEqual({ at: 3 });
     expect(readOf({ lead: undefined })).toBeUndefined();
   });
 });

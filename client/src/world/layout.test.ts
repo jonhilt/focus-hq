@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { TEAM_STATIONS } from '../../../shared/types';
 import { type Box2, BRIEFING, briefingRoomAt, ENGINEERING_DECK, HALL, HALL_HALF, hallAt, ROOM_DEPTH, roomSlot, SPACE, spaceAt, TRANSPORTER, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 
 const meet = (a: Box2, b: Box2) => a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ;
@@ -7,10 +6,8 @@ const meet = (a: Box2, b: Box2) => a.minX < b.maxX && b.minX < a.maxX && a.minZ 
 // a dozen holodecks' briefing rooms: the floor each covers, with the alcove behind its door
 const rooms: Box2[] = [];
 for (let i = 0; i < 12; i++) {
-  for (let s = 0; s < TEAM_STATIONS; s++) {
-    const at = briefingRoomAt(roomSlot(i), s);
-    rooms.push({ minX: at.x - BRIEFING.width / 2, maxX: at.x + BRIEFING.width / 2, minZ: at.z - BRIEFING.depth, maxZ: at.z + BRIEFING.alcove });
-  }
+  const at = briefingRoomAt(roomSlot(i));
+  rooms.push({ minX: at.x - BRIEFING.width / 2, maxX: at.x + BRIEFING.width / 2, minZ: at.z - BRIEFING.depth, maxZ: at.z + BRIEFING.alcove });
 }
 
 describe('briefingRoomAt', () => {
@@ -43,14 +40,12 @@ describe('hallAt', () => {
 });
 
 describe('transporterRoomAt', () => {
-  // the same dozen holodecks' team stations' transporter rooms: the floor each covers, walls and all
+  // the same dozen holodecks' goal viewing stations' transporter rooms: the floor each covers, walls and all
   const transporters: Box2[] = [];
   for (let i = 0; i < 12; i++) {
-    for (let s = 0; s < TEAM_STATIONS; s++) {
-      for (let k = 0; k < TRANSPORTER_ROOMS; k++) {
-        const at = transporterRoomAt(roomSlot(i), s, k);
-        transporters.push({ minX: at.x - TRANSPORTER.width / 2, maxX: at.x + TRANSPORTER.width / 2, minZ: at.z - TRANSPORTER.depth / 2, maxZ: at.z + TRANSPORTER.depth / 2 });
-      }
+    for (let k = 0; k < TRANSPORTER_ROOMS; k++) {
+      const at = transporterRoomAt(roomSlot(i), k);
+      transporters.push({ minX: at.x - TRANSPORTER.width / 2, maxX: at.x + TRANSPORTER.width / 2, minZ: at.z - TRANSPORTER.depth / 2, maxZ: at.z + TRANSPORTER.depth / 2 });
     }
   }
 
@@ -72,6 +67,6 @@ describe('spaceAt', () => {
   it('stands each space clear of the next, and of the furthest holodeck, hall and briefing room', () => {
     expect(spaceAt(0).distanceTo(spaceAt(1))).toBeGreaterThan(SPACE.radius * 2);
     const far = roomSlot(2 * 30 - 1);
-    for (const p of [far.center, hallAt(far), briefingRoomAt(far, TEAM_STATIONS - 1)]) expect(spaceAt(0).distanceTo(p)).toBeGreaterThan(SPACE.radius * 2);
+    for (const p of [far.center, hallAt(far), briefingRoomAt(far)]) expect(spaceAt(0).distanceTo(p)).toBeGreaterThan(SPACE.radius * 2);
   });
 });

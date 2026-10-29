@@ -8,18 +8,18 @@ import { SlidingDoors } from './starship';
 export type Interaction =
   /** An agent's panel, on one of its views if given: a lead's goal, from the goal board. */
   | { kind: 'agent'; id: string; view?: 'browser' | 'goal' | 'tasks' | 'crew' }
-  /** One of a lead's helpers at their team station: its own transcript. */
+  /** One of a lead's helpers at the goal viewing station: its own transcript. */
   | { kind: 'helper'; leadId: string; id: string }
-  /** One of a lead's workflow agents on a transporter room's pads: its own transcript. Its room says whose. */
-  | { kind: 'workflow-agent'; projectId: string; station: number; workflowId: string; index: number }
-  /** A transporter room's console, while a lead's workflow runs there: its script, full size. Its room says whose. */
-  | { kind: 'workflow-script'; projectId: string; station: number; workflowId: string }
+  /** One of a lead's workflow agents on a transporter room's pads: its own transcript. Whose: the lead `projectId`'s goal viewing station is tuned to. */
+  | { kind: 'workflow-agent'; projectId: string; workflowId: string; index: number }
+  /** A transporter room's console, while a lead's workflow runs there: its script, full size. Whose, as for a workflow agent. */
+  | { kind: 'workflow-script'; projectId: string; workflowId: string }
   /** The switch on a transporter console's screen: show or hide the flow hologram over every console. */
   | { kind: 'flow-hologram' }
   /** E on a transporter room's tactical display: the rail map, or the LCARS view (flowPrefs.ts). */
   | { kind: 'tactical-view' }
-  /** One of a lead's background commands or monitors, a probe by their chair: its output, and a way to stop it. Its station says whose. */
-  | { kind: 'background'; projectId: string; station: number; taskId: string }
+  /** One of a lead's background commands or monitors, a probe by their chair: its output, and a way to stop it. Whose, as for a workflow agent. */
+  | { kind: 'background'; projectId: string; taskId: string }
   | { kind: 'desk'; projectId: string }
   | { kind: 'board'; projectId: string; tab?: 'todo' | 'doing' | 'prs' }
   /** One of a plugin's screens round a holodeck's wall (hallScreens.ts): up close. */
@@ -34,21 +34,21 @@ export type Interaction =
   /** Main engineering's master systems table: review the ledger. */
   | { kind: 'ledger' }
   | { kind: 'qa'; projectId: string }
-  /** A free team station: start a goal there. */
-  | { kind: 'station'; projectId: string; station: number }
-  /** A team station's big screen, in use by lead `id`: look at what they've shown and asked. */
+  /** The goal viewing station of `projectId`'s holodeck: pick which of its goals it shows (or start one, with none). */
+  | { kind: 'tune'; projectId: string }
+  /** The goal viewing station's big screen, tuned to lead `id`'s goal: look at what they've shown and asked. */
   | { kind: 'screen'; id: string }
   /** The star chart beside it: lead `id`'s goal's chart. */
   | { kind: 'chart'; id: string }
-  /** A switch on the panel beside a team station's screen: show or hide that pane, on every station screen. */
+  /** A switch on the panel beside the goal viewing station's screen: show or hide that pane, on every station screen. */
   | { kind: 'pane'; pane: keyof PanePrefs }
   /**
    * A transporter room's console: beam back to the briefing room of the station it's one of (`projectId`'s holodeck's
-   * team station `station`, its transporter room `room`), which the room fills in as it's dressed.
+   * goal viewing station, its transporter room `room`), which the room fills in as it's dressed.
    */
-  | { kind: 'energise'; projectId?: string; station?: number; room?: number }
-  /** A feed on a briefing room's wall: beam into the transporter room it shows (`projectId`'s team station `station`'s room `room`). */
-  | { kind: 'beam-to'; projectId: string; station: number; room: number }
+  | { kind: 'energise'; projectId?: string; room?: number }
+  /** A feed on a briefing room's wall: beam into the transporter room it shows (`projectId`'s goal viewing station's room `room`). */
+  | { kind: 'beam-to'; projectId: string; room: number }
   | { kind: 'vacant' }
   /** Something a plugin put in the ship (`ShipHost.interactive`): what pressing E on it does. */
   | { kind: 'plugin'; use: (ui: Ui) => void };

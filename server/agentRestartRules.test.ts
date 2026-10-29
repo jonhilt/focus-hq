@@ -22,7 +22,6 @@ const agent = (a: Partial<Agent> = {}): Agent => ({
 });
 
 const work: LeadWork = {
-  station: 1,
   title: 'Saved items',
   repos: [
     { repo: 'acme/web', folder: 'web', baseBranch: 'main' },

@@ -1,10 +1,9 @@
 import * as THREE from 'three';
-import { goalTitle } from '../../../shared/goalTitle';
 import { openQuestion } from '../../../shared/artifacts';
 import { helperFor, plannerFor, qaOfficerFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
 import type { Agent, Board, Helper, Project } from '../../../shared/types';
-import { DESKS_PER_ROOM, TEAM_STATIONS } from '../../../shared/types';
+import { DESKS_PER_ROOM } from '../../../shared/types';
 import { state } from '../net/state';
 import { sound } from '../sound';
 import { KanbanBoard } from './board';
@@ -12,10 +11,10 @@ import { type Builder, type Interaction, interactive, REACH } from './builder';
 import { seatHelpers } from './helperSeats';
 import { agentView, Character, type CrewView } from './character';
 import { buildHall } from './hall';
-import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, hallPodSpots, inHall } from './hallLayout';
+import { around, curvedPanel, deckEntrance, ENTRANCE_X, facingIn, inHall, stationSpot } from './hallLayout';
 import { briefingRoomAt, footprints, HALL, hallAt, OVER_DOOR, type RoomSlot, ROOM_DEPTH, TRANSPORTER_ROOMS, transporterRoomAt } from './layout';
 import { ContactShadows } from './contactShadow';
-import { prGlance } from './goalRoom';
+import { prGlance, viewedGoal } from './goalRoom';
 import { mergeStatic } from './merge';
 import { box, flat } from './materials';
 import { padd, plant } from './props';
@@ -32,7 +31,7 @@ import { HallScreens } from './hallScreens';
 import { hallScreens } from '../plugins';
 import { OVERLAY_LAYER } from './frame';
 import { AHEAD, Portal } from './portal';
-import { type StationSeat, TEAM_SCREEN, TeamStation, type TeamStationKit } from './teamStation';
+import { GoalStation, type GoalStationKit, type StationSeat, TEAM_SCREEN } from './goalStation';
 import type { TransporterRoom } from './transporterRoom';
 
 interface DeskSlot {
@@ -88,7 +87,7 @@ function overShoulder(seat: THREE.Vector3): { position: THREE.Vector3; lookAt: T
 
 /**
  * A project's holodeck: through its door on the deck, a training hall (hall.ts) with workstations with agents at them,
- * the Kanban board, the PADD rack with the pull requests to review, and the team stations' pods round the wall.
+ * the Kanban board, the PADD rack with the pull requests to review, and the goal viewing station's pod by the wall.
  */
 export class ProjectRoom {
   readonly group = new THREE.Group();
@@ -108,8 +107,15 @@ export class ProjectRoom {
   private qa!: Character;
   private qaScreen = new StationScreen(null, 'QA station · standing by');
   private qaStation!: THREE.Group;
-  /** The team stations: one goal each, a door in the room to a briefing room where its lead, helpers and reviewer sit. */
-  private stations: TeamStation[] = [];
+  /**
+   * The goal viewing station: a door in the room to a briefing room where the lead, helpers and reviewer of the goal
+   * it's tuned to sit. A project has any number of goals; the station shows one at a time.
+   */
+  readonly station: GoalStation;
+  /** The goal (its lead's id) the station's tuned to: by the user, or the one it picked to show (`viewedGoal`). */
+  private tuned: string | undefined;
+  /** When (ms since the epoch) each lead's screen last had something new, for which goal is the most recently active. */
+  private readonly activeAt = new Map<string, number>();
   /** The PADDs on the rack, a pile per pull request waiting (paddRack.ts). */
   private padds = new THREE.Group();
   /** What the PADDs on the rack show, to rebuild them only when it changes. */
@@ -127,15 +133,15 @@ export class ProjectRoom {
 
   /**
    * `scenery` is the landscape the hall sits in (null for plain walls). The World owns it, so it can outlive this room
-   * when the building is rebuilt for an unrelated change. `teamStation` is the door and briefing room each of its team
-   * stations is a copy of (loadTeamStation), and `hallKit` the shell every hall is a copy of (loadTrainingHall).
+   * when the building is rebuilt for an unrelated change. `stationKit` is the door and briefing room its goal viewing
+   * station is a copy of (loadGoalStation), and `hallKit` the shell every hall is a copy of (loadTrainingHall).
    */
   constructor(
     public project: Project,
     readonly slot: RoomSlot,
     builder: Builder,
     private readonly scenery: Scenery | null,
-    teamStation: TeamStationKit,
+    stationKit: GoalStationKit,
     hallKit: THREE.Object3D,
   ) {
     this.group.position.copy(hallAt(slot));
@@ -192,19 +198,15 @@ export class ProjectRoom {
     this.qa = new Character(this.qaView());
     qaStation.seat.add(this.qa.group);
 
-    // the team stations' pods round the wall, each to the briefing room where a goal's lead works with the captain,
-    // with its screen hung over it
-    const pods = hallPodSpots();
-    for (let i = 0; i < TEAM_STATIONS; i++) {
-      const transporters = Array.from({ length: TRANSPORTER_ROOMS }, (_, k) => transporterRoomAt(slot, i, k));
-      const station = new TeamStation(i, [LCARS.gold, LCARS.periwinkle, LCARS.orange, LCARS.lilac][i], teamStation, briefingRoomAt(slot, i), pods[i], project.id, transporters);
-      this.group.add(station.door);
-      shadows.add(station.door);
-      overPod(station);
-      this.group.add(station.podScreen);
-      station.connect(builder, builder.halls);
-      this.stations.push(station);
-    }
+    // the goal viewing station's pod by the wall, to the briefing room where the lead of the goal it's tuned to works
+    // with the user, with its screen hung over it
+    const transporters = Array.from({ length: TRANSPORTER_ROOMS }, (_, k) => transporterRoomAt(slot, k));
+    const station = (this.station = new GoalStation(LCARS.gold, stationKit, briefingRoomAt(slot), stationSpot(), project.id, transporters));
+    this.group.add(station.door);
+    shadows.add(station.door);
+    overPod(station);
+    this.group.add(station.podScreen);
+    station.connect(builder, builder.halls);
 
     // the Ops station: the operations officer sits across from QA, facing the board,
     // drafting issues (N anywhere in the hall, or E on them) and looking into pull requests that are stuck
@@ -233,7 +235,8 @@ export class ProjectRoom {
     // the room's, then what's used (merged within itself, so it's still what's picked), keeping what moves or changes
     const keep = [
       ...(scenery ? [scenery.group] : []),
-      ...this.stations.flatMap((s) => [s.door, s.podScreen]),
+      station.door,
+      station.podScreen,
       ...this.desks.map((d) => d.seat),
       qaStation.seat,
       ops.seat,
@@ -310,59 +313,73 @@ export class ProjectRoom {
     interactive(slot.character.group, use, label);
   }
 
-  /** Each team station's goal: its lead, their helpers, and the goal's QA reviewer; a free one says what's next. */
-  syncStations(): void {
+  /**
+   * The goal viewing station's goal (`viewedGoal`): its lead, their helpers, and the goal's QA reviewer. Using its door
+   * or the screen over its pod picks which goal it shows, or starts one while there are none.
+   */
+  syncStation(): void {
+    const station = this.station;
     const leads = state.leadsIn(this.project.id);
+    this.tuned = viewedGoal(leads, this.tuned, this.activeAt);
+    const lead = leads.find((a) => a.id === this.tuned);
     const reviewers = state.reviewersIn(this.project.id);
-    const queued = this.project.goalQueue?.[0];
-    const next = queued && goalTitle(queued.text);
-    for (const station of this.stations) {
-      const lead = leads.find((a) => a.lead?.station === station.index);
-      const n = station.index + 1;
-      station.screen.setAgent(lead ?? null);
-      station.screen.setIdle(station.freeText(next));
-      const use: Interaction = lead ? { kind: 'agent', id: lead.id } : { kind: 'station', projectId: this.project.id, station: station.index };
-      const label = () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : next ? `Team station ${n} is free: start “${next}”` : `Start a goal at team station ${n}`);
-      for (const thing of station.furniture) interactive(thing, use, label);
-      if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
-      else interactive(station.goalBoard, use, label);
-      if (lead) interactive(station.chartScreen, { kind: 'chart', id: lead.id }, () => `Open the star chart of “${lead.lead?.title ?? 'the goal'}”`);
-      else interactive(station.chartScreen, use, label);
-      // each of the lead's panes up close (what they've shown or asked, their browser…), from where the captain stands;
-      // anywhere else on it, and while it's free, the screen is the station's, as its door is
-      station.display.userData.interactionAt = lead ? (uv: THREE.Vector2) => {
-        const pane = station.screen.paneAt(uv);
-        return pane ? paneUse(pane, lead) : null;
-      } : undefined;
-      if (lead && (lead.lead?.artifacts?.length || lead.lead?.questions?.length)) {
-        interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : `Look at what ${lead.name} has shown up close`), 10);
-      } else interactive(station.display, use, label, lead ? 10 : REACH);
-      this.sit(station.lead, lead?.id, lead && agentView(lead), use, label);
-      this.syncHelpers(station, lead);
-      const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
-      this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : use,
-        () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
-      // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's in the room, and
-      // the station's screen over its pod, with how the slice's pull requests stand
-      const prs = lead?.lead?.prs.map((pr) => {
-        const review = state.reviews.get(prKey(pr.repo, pr.number));
-        const reason = review?.followUp?.kind === 'needs-you' ? review.followUp.reason : undefined;
-        return { label: `${pr.repo.split('/')[1]} #${pr.number}`, number: pr.number, state: prGlance(pr, review), ...(reason && { reason }) };
-      });
-      station.show(lead, next, prs);
-      station.showWorkflows(lead, performance.now());
-      station.showBackground(lead);
-    }
+    station.leadId = lead?.id;
+    station.screen.setAgent(lead ?? null);
+    station.screen.setIdle(station.freeText());
+    const tune: Interaction = { kind: 'tune', projectId: this.project.id };
+    const others = leads.length - 1;
+    const label = () => (!lead ? 'No goals under way: start one' : others ? `Showing “${lead.lead?.title ?? 'a goal'}”: pick another of ${leads.length} goals` : `Showing “${lead.lead?.title ?? 'a goal'}”, the only goal under way`);
+    for (const thing of station.furniture) interactive(thing, tune, label);
+    if (lead) interactive(station.goalBoard, { kind: 'agent', id: lead.id, view: 'goal' }, () => `Look at ${lead.name}’s goal and to-dos`);
+    else interactive(station.goalBoard, tune, label);
+    if (lead) interactive(station.chartScreen, { kind: 'chart', id: lead.id }, () => `Open the star chart of “${lead.lead?.title ?? 'the goal'}”`);
+    else interactive(station.chartScreen, tune, label);
+    // each of the lead's panes up close (what they've shown or asked, their browser…), from where the user stands;
+    // anywhere else on it, and while there's no goal, the screen is the station's, as its door is
+    station.display.userData.interactionAt = lead ? (uv: THREE.Vector2) => {
+      const pane = station.screen.paneAt(uv);
+      return pane ? paneUse(pane, lead) : null;
+    } : undefined;
+    if (lead && (lead.lead?.artifacts?.length || lead.lead?.questions?.length)) {
+      interactive(station.display, { kind: 'screen', id: lead.id }, () => (openQuestion(lead) ? `Answer ${lead.name}’s question` : `Look at what ${lead.name} has shown up close`), 10);
+    } else if (lead) interactive(station.display, { kind: 'agent', id: lead.id }, () => `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”`, 10);
+    else interactive(station.display, tune, label, REACH);
+    this.sit(station.lead, lead?.id, lead && agentView(lead), lead ? { kind: 'agent', id: lead.id } : tune, () => (lead ? `Talk to ${lead.name}, lead of “${lead.lead?.title ?? 'a goal'}”` : label()));
+    this.syncHelpers(station, lead);
+    const reviewer = lead && reviewers.find((r) => r.reviewFor === lead.id);
+    this.sit(station.reviewer, reviewer?.id, reviewer && agentView(reviewer), reviewer ? { kind: 'agent', id: reviewer.id } : tune,
+      () => (reviewer ? `${reviewer.name}, reviewing “${lead?.lead?.title ?? 'the goal'}”: ${reviewer.activity}` : label()));
+    // once everyone's seated: the sign, the lamps and the goal board, with its roster of who's in the room, and
+    // the screen over its pod, with how the slice's pull requests stand
+    const prs = lead?.lead?.prs.map((pr) => {
+      const review = state.reviews.get(prKey(pr.repo, pr.number));
+      const reason = review?.followUp?.kind === 'needs-you' ? review.followUp.reason : undefined;
+      return { label: `${pr.repo.split('/')[1]} #${pr.number}`, number: pr.number, state: prGlance(pr, review), ...(reason && { reason }) };
+    });
+    station.show(lead, leads.length, lead ? leads.indexOf(lead) + 1 : 0, prs);
+    station.showWorkflows(lead, performance.now());
+    station.showBackground(lead);
   }
 
-  /** Seats the lead's helpers at their station's consoles, and sends the ones who've gone on their way. */
-  private syncHelpers(station: TeamStation, lead: Agent | undefined): void {
+  /** Tunes the goal viewing station to the goal `leadId` leads, if it's one of this room's under way. */
+  tune(leadId: string): void {
+    this.tuned = leadId;
+    this.syncStation();
+  }
+
+  /** The lead of the goal the goal viewing station shows, while there's one. */
+  viewing(): string | undefined {
+    return this.station.leadId;
+  }
+
+  /** Seats the lead's helpers at the station's consoles, and sends the ones who've gone on their way. */
+  private syncHelpers(station: GoalStation, lead: Agent | undefined): void {
     const helpers: Helper[] = lead?.helpers ?? [];
     const seats = seatHelpers(station.helpers.map((s) => s.id), helpers.map((h) => h.id));
     for (const [i, slot] of station.helpers.entries()) {
       const helper = helpers.find((h) => h.id === seats[i]);
       if (!helper || !lead) {
-        this.sit(slot, undefined, undefined, { kind: 'station', projectId: this.project.id, station: station.index }, () => '');
+        this.sit(slot, undefined, undefined, { kind: 'tune', projectId: this.project.id }, () => '');
         continue;
       }
       const crew = helperFor(helper.id);
@@ -427,7 +444,7 @@ export class ProjectRoom {
       slot.character!.set(agentView(agent));
       slot.screen.setAgent(agent);
     }
-    this.syncStations();
+    this.syncStation();
     this.boardDirty = true;
   }
 
@@ -487,7 +504,8 @@ export class ProjectRoom {
   markScreen(agentId: string): void {
     this.desks.find((d) => d.agentId === agentId)?.screen.markDirty();
     if (state.qaAgent(this.project.id)?.id === agentId) this.qaScreen.markDirty();
-    for (const station of this.stations) if (station.lead.id === agentId) station.screen.markDirty();
+    if (state.agents.get(agentId)?.task === 'lead') this.activeAt.set(agentId, Date.now());
+    if (this.station.lead.id === agentId) this.station.screen.markDirty();
   }
 
   markBoard(): void {
@@ -553,9 +571,9 @@ export class ProjectRoom {
     });
   }
 
-  /** The doorways between the holodeck and its team stations' briefing rooms. */
+  /** The doorways into the holodeck's hall and from it to its goal viewing station's briefing room. */
   portals(): Portal[] {
-    return [this.entrance, ...this.stations.map((s) => s.portal)];
+    return [this.entrance, this.station.portal];
   }
 
   /** Whether a world position is in this holodeck's hall. */
@@ -570,19 +588,9 @@ export class ProjectRoom {
     return { position: position.clone().applyMatrix4(this.group.matrixWorld), lookAt: lookAt.clone().applyMatrix4(this.group.matrixWorld) };
   }
 
-  /** Its team stations' briefing rooms. */
-  briefingRooms(): THREE.Object3D[] {
-    return this.stations.map((s) => s.room);
-  }
-
-  /** Its team stations' transporter rooms, station by station. */
+  /** Its goal viewing station's transporter rooms. */
   transporterRooms(): TransporterRoom[] {
-    return this.stations.flatMap((s) => s.transporterRooms);
-  }
-
-  /** Its team stations. */
-  teamStations(): readonly TeamStation[] {
-    return this.stations;
+    return this.station.transporterRooms;
   }
 
   /**
@@ -590,25 +598,20 @@ export class ProjectRoom {
    * rooms; a briefing room, from the hall.
    */
   ahead(camera: THREE.Vector3): THREE.Object3D[] {
-    const briefing = this.stations.find((s) => s.inside(camera));
-    if (briefing) return briefing.portal.near(camera, AHEAD) ? [this.group] : [];
+    const { station } = this;
+    if (station.inside(camera)) return station.portal.near(camera, AHEAD) ? [this.group] : [];
     if (!this.holds(camera)) return this.entrance.near(camera, AHEAD) ? [this.group] : [];
-    return this.stations.filter((s) => s.portal.near(camera, AHEAD)).map((s) => s.room);
-  }
-
-  /** The team station whose briefing room a world position is in, if it's in one of this room's. */
-  briefingRoomOf(p: THREE.Vector3): number | undefined {
-    return this.stations.find((s) => s.inside(p))?.index;
+    return station.portal.near(camera, AHEAD) ? [station.room] : [];
   }
 
   update(t: number, now: number, camera: THREE.Vector3): void {
     // from a briefing room, the holodeck is what you see through its door
-    const briefing = this.stations.find((s) => s.inside(camera));
+    const briefing = this.station.inside(camera) ? this.station : undefined;
     const eye = briefing ? briefing.threshold() : camera;
     // and from the hallway, the hall is what you see through its door on the deck: as if beyond its entrance
     const looking = !briefing && !this.holds(camera) ? tmp.copy(camera).applyMatrix4(this.entrance.ends[0].through) : tmp.copy(eye);
     this.scenery?.update(t, this.group.worldToLocal(looking));
-    // within earshot of a beam: in the hall, or at its door in the hallway, or in one of its briefing rooms
+    // within earshot of a beam: in the hall, or at its door in the hallway, or in its station's briefing room
     this.youreHere = this.holds(eye) || eye.distanceTo(this.slot.center) < HALF_D + 2;
     if (this.beams.length) this.beams = this.beams.filter((b) => !b.update(now));
     hover(this.boardMesh, this.boardY, t);
@@ -636,25 +639,7 @@ export class ProjectRoom {
     if (inRoom) this.qa.update(t, qaDist);
     const qaAgent = state.qaAgent(this.project.id);
     this.qaScreen.maybeDraw(now, hallView(inRoom && qaDist < 6), qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
-    for (const station of this.stations) {
-      station.update(t);
-      station.updateTransporters(t, now, camera, station === briefing);
-      if (station === briefing) station.animateChart(now);
-      // only drawn while you're in it, or might see into it through its open door
-      station.room.visible = station === briefing || station.portal.ajar;
-      // in the briefing room, or seeing into it through the door
-      const seen = station.eye(camera, inRoom && !briefing);
-      // everyone seated fades their bubble by how near you are to where the captain stands, so from there, watching the
-      // screen, none of them cross it
-      const atHead = seen ? station.fromHead(seen) : 0;
-      if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);
-      const lead = station.lead.id;
-      const view: ScreenView = !station.room.visible && !station.portal.near(camera, AHEAD) ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
-      station.screen.maybeDraw(now, view, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
-      // its sign and the screen over its pod are in the hall, its goal board and chart in the briefing room; out of sight
-      // they're still drawn now and then, so there's little to draw as they come into view (only to send)
-      station.updateDisplays(now, view === 'near' ? 'near' : 'far');
-    }
+    this.updateStation(t, now, camera, inRoom && !briefing);
     for (const slot of this.desks) {
       if (!slot.character) {
         slot.screen.maybeDraw(now, hallView(false), undefined, undefined);
@@ -666,19 +651,55 @@ export class ProjectRoom {
     }
   }
 
-  /** The team station a goal's lead works at. */
-  stationOf(leadId: string): TeamStation | undefined {
-    return this.stations.find((st) => st.lead.id === leadId);
+  /**
+   * Moves the goal viewing station on and draws its screens: `fromHall`, the camera's in the hall, where it might see
+   * into the briefing room through the station's door.
+   */
+  private updateStation(t: number, now: number, camera: THREE.Vector3, fromHall: boolean): void {
+    const station = this.station;
+    const briefing = station.inside(camera);
+    station.update(t);
+    station.updateTransporters(t, now, camera, briefing);
+    if (briefing) station.animateChart(now);
+    // only drawn while you're in it, or might see into it through its open door
+    station.room.visible = briefing || station.portal.ajar;
+    // in the briefing room, or seeing into it through the door
+    const seen = station.eye(camera, fromHall);
+    // everyone seated fades their bubble by how near you are to where the user stands, so from there, watching the
+    // screen, none of them cross it
+    const atHead = seen ? station.fromHead(seen) : 0;
+    if (seen) for (const slot of [station.lead, ...station.helpers, station.reviewer]) slot.character?.update(t, atHead);
+    const lead = station.lead.id;
+    const view: ScreenView = !station.room.visible && !station.portal.near(camera, AHEAD) ? 'unseen' : seen && station.fromScreen(seen) < 13 ? 'near' : 'far';
+    station.screen.maybeDraw(now, view, lead ? state.lines.get(lead) : undefined, lead ? state.browser.get(lead) : undefined);
+    // its sign and the screen over its pod are in the hall, its goal board and chart in the briefing room; out of sight
+    // they're still drawn now and then, so there's little to draw as they come into view (only to send)
+    station.updateDisplays(now, view === 'near' ? 'near' : 'far');
+  }
+
+  /**
+   * Tunes the goal viewing station to the goal `leadId` leads, if it's one of this room's under way, and gives where to
+   * stand in its briefing room to watch them; null for anyone else.
+   */
+  viewGoal(leadId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
+    if (!state.leadsIn(this.project.id).some((a) => a.id === leadId)) return null;
+    this.tune(leadId);
+    return this.station.viewpoint();
+  }
+
+  /** Whether a world position is in the goal viewing station's briefing room. */
+  inBriefingRoom(p: THREE.Vector3): boolean {
+    return this.station.inside(p);
   }
 
   /** World position and look target for standing behind an agent. */
   viewpoint(agentId: string): { position: THREE.Vector3; lookAt: THREE.Vector3 } | null {
     const slot = this.desks.find((d) => d.agentId === agentId);
     const qa = state.qaAgent(this.project.id)?.id === agentId;
-    const station = this.stations.find((st) => st.lead.id === agentId);
+    const station = this.station.lead.id === agentId;
     if (!slot && !qa && !station) return null;
     // the briefing room is in the world already
-    if (station) return station.viewpoint();
+    if (station) return this.station.viewpoint();
     const v = overShoulder(slot ? PLAN.desks[slot.index].clone().add(DESK_SEAT) : PLAN.qa);
     this.group.updateWorldMatrix(true, false);
     return { position: v.position.applyMatrix4(this.group.matrixWorld), lookAt: v.lookAt.applyMatrix4(this.group.matrixWorld) };
@@ -696,7 +717,7 @@ export class ProjectRoom {
     this.opsScreen.dispose();
     this.qa.dispose();
     this.qaScreen.dispose();
-    for (const station of this.stations) station.dispose();
+    this.station.dispose();
     for (const beam of this.beams) beam.finish();
   }
 }
@@ -704,12 +725,12 @@ export class ProjectRoom {
 const tmp = new THREE.Vector3();
 
 /**
- * A team station's screen hangs over its pod, over the sign floating there, tipped down to the middle of the hall: you
- * can see what every team's up to from the control ring without going in.
+ * The goal viewing station's screen hangs over its pod, over the sign floating there, tipped down to the middle of the
+ * hall: you can see how its goal stands from the control ring without going in.
  */
 const POD_SCREEN = { scale: 1.4, bottom: 3.3, out: 0.6, tilt: 0.15 };
 
-function overPod(station: TeamStation): void {
+function overPod(station: GoalStation): void {
   const { scale, bottom, out, tilt } = POD_SCREEN;
   const yaw = station.door.rotation.y;
   const half = ((TEAM_SCREEN.height + TEAM_SCREEN.rim * 2) * scale) / 2;

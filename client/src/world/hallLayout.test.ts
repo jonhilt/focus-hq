@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { around, ENTRANCE_X, HALL_SCREEN, HALL_SCREEN_ANGLES, HALL_SCREENS, hallPodSpots, hallScreenSpots, POD_ANGLES } from './hallLayout';
+import { around, ENTRANCE_X, HALL_SCREEN, HALL_SCREEN_ANGLES, HALL_SCREENS, hallScreenSpots, STATION_ANGLE, stationSpot } from './hallLayout';
 import { type Box2, contains, DOOR_H, DOOR_W, footprint, footprints, HALL, WALL_T } from './layout';
 
 // The player is a 0.3 m radius (player.ts), colliding only with boxes square to the world.
@@ -32,12 +32,12 @@ function markers(file: string, module: string): { colliders: THREE.Matrix4[]; do
   };
 }
 
-describe('the training hall’s pods', () => {
+describe('the goal viewing station’s pod', () => {
   const { colliders, doorway } = markers('team-station.glb', 'station_door');
 
-  it('can all be walked into, however they’re turned', () => {
+  it('can be walked into, turned as it stands', () => {
     expect(colliders.length).toBeGreaterThan(0);
-    for (const { wall, yaw } of hallPodSpots()) {
+    for (const { wall, yaw } of [stationSpot()]) {
       const frame = new THREE.Matrix4().makeRotationY(yaw).setPosition(wall);
       const boxes = colliders.flatMap((m) => footprints(new THREE.Matrix4().multiplyMatrices(frame, m)));
       const through = new THREE.Matrix4().multiplyMatrices(frame, doorway);
@@ -61,11 +61,11 @@ describe('the training hall’s shell', () => {
     expect(size).toEqual({ width: DOOR_W, height: DOOR_H, depth: HALL.alcove });
   });
 
-  it('can be walked into from the entrance, and out to every pod', () => {
+  it('can be walked into from the entrance, and out to the station’s pod', () => {
     // over the entrance's threshold and on to the middle of the floor
     for (let z = 0.05; z >= -12; z -= 0.1) expect(blocks(boxes, new THREE.Vector3(0, 0, z).applyMatrix4(doorway)), `${z.toFixed(1)} m in`).toBe(false);
-    // and from the middle out to where each pod stands, its back against the wall
-    for (const { wall } of hallPodSpots()) {
+    // and from the middle out to where the station's pod stands, its back against the wall
+    for (const { wall } of [stationSpot()]) {
       for (let t = 0; t <= 1; t += 0.02) expect(blocks(boxes, wall.clone().multiplyScalar(t * (HALL.radius - 0.6) / HALL.radius))).toBe(false);
     }
   });
@@ -101,14 +101,14 @@ describe('footprints', () => {
 });
 
 describe('hall screens', () => {
-  it('hang either side of the entrance, clear of the pods and the entrance’s wall, facing the middle', () => {
+  it('hang either side of the entrance, clear of the station’s pod and the entrance’s wall, facing the middle', () => {
     const spots = hallScreenSpots(HALL_SCREENS + 2);
     expect(spots).toHaveLength(HALL_SCREENS);
     const half = HALL_SCREEN.width / 2 / HALL_SCREEN.r;
     const gap = Math.asin(2.4 / HALL.radius);
     for (const a of HALL_SCREEN_ANGLES) {
-      // clear of the pods (±90°, ±45°: a pod is about 1.2 m either side of its middle at the wall) and the entrance's flat wall
-      for (const pod of POD_ANGLES) expect(Math.abs(Math.abs(a) - Math.abs(pod))).toBeGreaterThan(half + 1.2 / HALL.radius);
+      // clear of the pod (about 1.2 m either side of its middle at the wall) and the entrance's flat wall
+      expect(Math.abs(a - STATION_ANGLE)).toBeGreaterThan(half + 1.2 / HALL.radius);
       expect(Math.abs(a) + half).toBeLessThan(Math.PI - gap);
     }
     for (const { at, yaw } of spots) {

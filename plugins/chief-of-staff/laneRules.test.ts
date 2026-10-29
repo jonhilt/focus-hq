@@ -8,7 +8,7 @@ const lead = (read?: CosRead, more: Partial<Agent> = {}): Agent => ({
   id: 'a1', name: 'Lt. Vale', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
-  lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
+  lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
   ...more,
 });
 const turn = (read?: CosRead, more?: Partial<Agent>) => ({ kind: 'turn' as const, agent: lead(read, more) });
@@ -51,8 +51,8 @@ describe('waking a lead for Ops’ news', () => {
     expect(waking(lead({ at: 1, judged: verdict(3) }), 2)).toBe('no');
     expect(waking(lead(), 2)).toBe('no');
     expect(waking(lead({ at: 1 }), 1 + JUDGING_MS)).toBe('no');
-    expect(waking(lead(undefined, { lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], readTurn: 1000 } }), 2)).toBe('no');
-    expect(waking(lead(undefined, { lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], closing: { reason: 'done', at: 1 } } }), 2)).toBe('no');
+    expect(waking(lead(undefined, { lead: { title: 'W', repos: [], slice: 1, prs: [], readTurn: 1000 } }), 2)).toBe('no');
+    expect(waking(lead(undefined, { lead: { title: 'W', repos: [], slice: 1, prs: [], closing: { reason: 'done', at: 1 } } }), 2)).toBe('no');
     expect(waking(lead(undefined, { status: 'error', error: 'boom' }), 2)).toBe('no');
   });
 
@@ -61,7 +61,7 @@ describe('waking a lead for Ops’ news', () => {
   });
 
   it('goes by its read of a turn the captain has read: carry on or send back wakes, a card doesn’t, one being read waits', () => {
-    const read = (r: CosRead) => lead(r, { lead: { station: 0, title: 'W', repos: [], slice: 1, prs: [], readTurn: 1000, marks: { [CHIEF_OF_STAFF]: r } } });
+    const read = (r: CosRead) => lead(r, { lead: { title: 'W', repos: [], slice: 1, prs: [], readTurn: 1000, marks: { [CHIEF_OF_STAFF]: r } } });
     expect(waking(read({ at: 1, judged: verdict(1) }), 2)).toBe('now');
     expect(waking(read({ at: 1, judged: verdict(4) }), 2)).toBe('now');
     expect(waking(read({ at: 1, judged: verdict(2) }), 2)).toBe('no');
@@ -81,7 +81,7 @@ describe('waking a lead for Ops’ news', () => {
   });
 
   it('leaves a question or a close with the captain even when it would carry the turn on', () => {
-    const closing = { station: 0, title: 'W', repos: [], slice: 1, prs: [], closing: { reason: 'done', at: 1 }, marks: { [CHIEF_OF_STAFF]: { at: 1, judged: verdict(1) } } };
+    const closing = { title: 'W', repos: [], slice: 1, prs: [], closing: { reason: 'done', at: 1 }, marks: { [CHIEF_OF_STAFF]: { at: 1, judged: verdict(1) } } };
     expect(waking(lead(undefined, { lead: closing }), 2)).toBe('no');
   });
 });
@@ -122,7 +122,7 @@ describe('its read of a turn', () => {
 
 type Pr = { repo: string; number: number; url: string; sha?: string; lane?: 'ship' | 'show' | 'ask'; outcome?: 'merged' | 'closed' };
 const pr = (number: number, more: Partial<Pr> = {}): Pr => ({ repo: 'acme/shop', number, url: '', sha: `sha${number}`, lane: 'ship', ...more });
-const goalLead = (prs: Pr[]): Pick<Agent, 'lead'> => ({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs } });
+const goalLead = (prs: Pr[]): Pick<Agent, 'lead'> => ({ lead: { title: 'Wishlist', repos: [], slice: 1, prs } });
 const laneRead = (prs: { pr: number; sha: string }[], to: 'ship' | 'show' | 'ask' = 'ship'): LedgerEvent => ({
   kind: 'cos-lane', seq: 1, at: 1, projectId: 'p', agent: 'Lt. Vale', prs: prs.map((p) => ({ repo: 'acme/shop', ...p })), from: 'ship', to, why: to === 'ship' ? 'Safe.' : 'It changes a card.', model: 'haiku', version: 'lane-v1',
 });

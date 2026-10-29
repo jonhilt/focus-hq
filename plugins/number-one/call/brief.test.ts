@@ -15,7 +15,6 @@ const lead = {
   task: 'lead',
   status: 'working',
   lead: {
-    station: 1,
     title: 'Wishlist',
     slice: 2,
     brief: 'Shoppers save items for later',

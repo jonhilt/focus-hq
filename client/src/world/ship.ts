@@ -23,7 +23,7 @@ import { buildHiddenRoom, ProjectRoom, VacantHall } from './room';
 import type { Scenery } from './scenery';
 import { LCARS, LCARS_FONT, lcarsFrame, type SlidingDoors } from './starship';
 import { cruise } from './starfield';
-import type { TeamStation, TeamStationKit } from './teamStation';
+import type { GoalStation, GoalStationKit } from './goalStation';
 import type { TransporterRoom } from './transporterRoom';
 import { createScenery, roomTheme } from './themes';
 import { pulse } from './warpCore';
@@ -51,7 +51,7 @@ export interface Ship {
   engineering: Deck;
 }
 
-/** Builds and owns the whole ship: its decks, and a holodeck per project, each with its team stations' briefing rooms. */
+/** Builds and owns the whole ship: its decks, and a holodeck per project, each with its goal viewing station's briefing room. */
 export class World {
   readonly root = new THREE.Group();
   colliders: Box2[] = [];
@@ -72,11 +72,11 @@ export class World {
   private sceneries = new Map<string, Scenery>();
   private builder: Builder | null = null;
   private doors: SlidingDoors[] = [];
-  /** The doorways between each holodeck and its team stations' briefing rooms. */
+  /** The doorways into each holodeck's hall, and from it to its goal viewing station's briefing room. */
   portals: Portal[] = [];
-  /** Every team station's briefing room, apart from the holodeck deck they're reached from (regions.ts). */
+  /** Every holodeck's goal viewing station's briefing room, apart from the holodeck deck they're reached from (regions.ts). */
   private readonly briefingRooms = new THREE.Group();
-  /** Every team station's transporter rooms, each drawn only while the camera's in it, or a feed reveals it (`reveal`). */
+  /** Every goal viewing station's transporter rooms, each drawn only while the camera's in it, or a feed reveals it (`reveal`). */
   private readonly transporterGroup = new THREE.Group();
   transporterRooms: TransporterRoom[] = [];
   /** Where the decks that stand on their own are, to tell when the camera's on one. */
@@ -101,8 +101,8 @@ export class World {
   constructor(
     scene: THREE.Scene,
     private readonly ship: Ship,
-    /** The door and briefing room every team station is a copy of (loadTeamStation). */
-    private readonly teamStation: TeamStationKit,
+    /** The door and briefing room every goal viewing station is a copy of (loadGoalStation). */
+    private readonly stationKit: GoalStationKit,
     /** The shell every project's training hall is a copy of (loadTrainingHall), through its holodeck's door. */
     private readonly hallKit: THREE.Object3D,
   ) {
@@ -156,19 +156,19 @@ export class World {
     return [...this.rooms.values()].flatMap((room) => room.ahead(camera));
   }
 
-  /** Every holodeck's team stations. */
-  stations(): TeamStation[] {
-    return [...this.rooms.values()].flatMap((r) => r.teamStations());
+  /** Every holodeck's goal viewing station. */
+  stations(): GoalStation[] {
+    return [...this.rooms.values()].map((r) => r.station);
   }
 
-  /** The team station whose briefing room a world position is in, if any. */
-  stationAt(p: THREE.Vector3): TeamStation | undefined {
+  /** The goal viewing station whose briefing room a world position is in, if any. */
+  stationAt(p: THREE.Vector3): GoalStation | undefined {
     return this.stations().find((s) => s.inside(p));
   }
 
-  /** The team station `station` of `projectId`'s holodeck. */
-  station(projectId: string, station: number): TeamStation | undefined {
-    return this.rooms.get(projectId)?.teamStations()[station];
+  /** The goal viewing station of `projectId`'s holodeck. */
+  station(projectId: string): GoalStation | undefined {
+    return this.rooms.get(projectId)?.station;
   }
 
   /** The transporter room a world position is in, if it's in one. */
@@ -177,7 +177,7 @@ export class World {
   }
 
   private inBriefingRoom(p: THREE.Vector3): boolean {
-    for (const room of this.rooms.values()) if (room.briefingRoomOf(p) !== undefined) return true;
+    for (const room of this.rooms.values()) if (room.inBriefingRoom(p)) return true;
     return false;
   }
 
@@ -202,8 +202,6 @@ export class World {
       for (const room of this.rooms.values()) {
         room.project = projects.find((p) => p.id === room.project.id) ?? room.project;
         room.markBoard();
-        // a goal joining or leaving the line changes what a free team station says
-        room.syncStations();
       }
       this.panelsDirty = true;
       return;
@@ -249,11 +247,11 @@ export class World {
       // the stencil value (slot + 1) and the sun direction both depend on the slot, hence the key
       scenery ??= createScenery(theme, i + 1, project.id, SUN_POSITION.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), -slot.rotationY));
       if (scenery) this.sceneries.set(key, scenery);
-      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.teamStation, this.hallKit));
+      this.rooms.set(project.id, new ProjectRoom(project, slot, b, scenery, this.stationKit, this.hallKit));
     });
     for (const scenery of previous.values()) scenery.dispose();
     // the briefing rooms stand apart from the holodeck deck, and are drawn apart from it
-    for (const room of this.rooms.values()) for (const briefing of room.briefingRooms()) this.briefingRooms.add(briefing);
+    for (const room of this.rooms.values()) this.briefingRooms.add(room.station.room);
     // and the transporter rooms far off, each drawn apart from all of them
     this.transporterRooms = [...this.rooms.values()].flatMap((r) => r.transporterRooms());
     for (const room of this.transporterRooms) this.transporterGroup.add(room.group);
@@ -369,7 +367,7 @@ export class World {
     }
     for (const t of this.transporterRooms) {
       const project = this.rooms.get(t.projectId)?.project.name ?? t.projectId;
-      places.push({ label: `Transporter room ${t.index + 1} · TS-${t.station + 1} · ${project}`, position: t.place.at.clone(), lookAt: t.place.lookAt.clone(), unlisted: true });
+      places.push({ label: `Transporter room ${t.index + 1} · ${project}`, position: t.place.at.clone(), lookAt: t.place.lookAt.clone(), unlisted: true });
     }
     return places;
   }
@@ -390,12 +388,11 @@ export class World {
     const transporter = this.transporterRoomAt(p);
     if (transporter) {
       const project = this.rooms.get(transporter.projectId)?.project;
-      return { label: `${project?.name ?? ''} · transporter room ${transporter.index + 1} · TS-${transporter.station + 1}`, projectId: transporter.projectId };
+      return { label: `${project?.name ?? ''} · transporter room ${transporter.index + 1}`, projectId: transporter.projectId };
     }
     for (const room of this.rooms.values()) {
       if (room.holds(p)) return { label: room.project.name, projectId: room.project.id };
-      const station = room.briefingRoomOf(p);
-      if (station !== undefined) return { label: `${room.project.name} · briefing room ${station + 1}`, projectId: room.project.id };
+      if (room.inBriefingRoom(p)) return { label: `${room.project.name} · briefing room`, projectId: room.project.id };
     }
     for (const deck of this.decks()) {
       const label = deck.areaAt(p);

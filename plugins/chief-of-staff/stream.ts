@@ -255,12 +255,12 @@ export function openStream(ui: CommsUi): void {
         dotEl(l),
         h('span', { class: 'tw:line-clamp-2 tw:leading-[1.3]' }, l.lead?.title ?? l.name),
         h('span', { class: `tw:w-[22px] tw:h-4 tw:font-mono tw:text-[12px]/[16px] tw:font-semibold tw:text-center tw:text-attn tw:shadow-[inset_0_0_0_1px_#f5a524] ${n && !at ? '' : 'tw:opacity-0'}`, attrs: { 'data-part': 'count' } }, n ? String(n) : ''));
-        // Beam there, over the berth's right end while it's hovered: to the lead's team room
+        // View in room, over the berth's right end while it's hovered: the room's goal viewing station, tuned to the lead's goal
         return h('div', { class: 'tw:relative tw:group' }, berth,
           h('button', {
             class: 'tw:absolute tw:right-[34px] tw:top-1/2 tw:-translate-y-1/2 tw:h-5 tw:px-[6px] tw:border tw:border-solid tw:border-line tw:bg-surface2 tw:text-muted tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:rounded-none tw:cursor-pointer tw:opacity-0 tw:group-hover:opacity-100 tw:focus:opacity-100 tw:hover:text-ink',
-            title: `Beam to ${l.name}'s team room`, attrs: { 'data-part': 'beam' }, onclick: () => ui.goToAgent(l.id),
-          }, 'Beam'));
+            title: `View ${l.name}'s goal in its room`, attrs: { 'data-part': 'beam' }, onclick: () => ui.goToAgent(l.id),
+          }, 'View'));
       }),
     ]);
     fill(rail, ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[13px]' }, 'No goals under way.')]));
@@ -350,8 +350,8 @@ export function openStream(ui: CommsUi): void {
         }, dotEl(lead), `${lead.name} · ${doing(lead.status)}`),
         h('button', {
           class: 'tw:row-span-2 tw:col-start-3 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:rounded-none tw:cursor-pointer tw:hover:bg-surface2',
-          title: `Beam to ${lead.name}'s team room (B)`, attrs: { 'data-part': 'beam-here' }, onclick: () => ui.goToAgent(lead.id),
-        }, 'Beam there'),
+          title: `View ${lead.name}'s goal in its room: its goal viewing station, tuned to it (B)`, attrs: { 'data-part': 'beam-here' }, onclick: () => ui.goToAgent(lead.id),
+        }, 'View in room'),
         h('button', {
           class: `tw:row-span-2 tw:col-start-4 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:flex tw:items-center tw:gap-[6px] ${browsing ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-surface tw:text-ink tw:border-line tw:hover:bg-surface2'}`,
           title: 'What the lead put up to look at, by slice or newest first (E)', attrs: { 'data-part': 'exhibits' }, onclick: () => browse(!browsing),

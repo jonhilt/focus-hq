@@ -9,7 +9,7 @@ import { TermView } from './terminal';
 const helperOf = (lead: Agent | undefined, id: string): Helper | undefined => lead?.helpers?.find((x) => x.id === id);
 
 /**
- * A lead's helper (one of Claude Code's subagents) at the team station: its own transcript, from what the lead asked of
+ * A lead's helper (one of Claude Code's subagents) at the goal viewing station: its own transcript, from what the lead asked of
  * it to how it got on, without the lead's conversation round it. You talk to the lead, not the helper.
  */
 export function openHelperPanel(ui: Ui, leadId: string, id: string): void {

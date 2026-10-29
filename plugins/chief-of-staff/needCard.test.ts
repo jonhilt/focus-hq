@@ -47,7 +47,7 @@ const lead = (more: Partial<Agent> = {}, read?: CosRead): Agent => ({
   id: 'a1', name: 'Lt. Vale', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
   avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
-  lead: { station: 2, title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
+  lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], ...(read && { marks: { [CHIEF_OF_STAFF]: read } }) },
   ...more,
 });
 const pr: PullRequest = {
@@ -72,7 +72,7 @@ describe('a card in Comms', () => {
     const el = card({ kind: 'hand', agent: lead({ status: 'waiting', permission: { id: 'r1', tool: 'Bash', summary: 'Run the tests', at: 900 } }) });
     expect(el.textContent).toContain('Approve: Run the tests');
     expect(el.textContent).toContain('Tool: Bash');
-    expect(el.textContent).toContain('Lt. Vale, Station 3');
+    expect(el.textContent).toContain('Lt. Vale · waiting');
     button(el, 'Approve').click();
     button(el, 'Decline').click();
     await settle();
@@ -88,7 +88,7 @@ describe('a card in Comms', () => {
 
   it('picks a question’s option, with the captain’s word', async () => {
     const question = { id: 'q1', question: 'Which layout?', context: 'The list or the grid.', options: [{ id: 'a', label: 'List' }, { id: 'b', label: 'Grid', detail: 'Denser' }], at: 900 };
-    const el = card({ kind: 'question', agent: lead({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], questions: [question] } }) });
+    const el = card({ kind: 'question', agent: lead({ lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], questions: [question] } }) });
     expect(el.textContent).toContain('Pick: Which layout?');
     const note = el.querySelector('input');
     if (note) note.value = ' the grid reads better ';
@@ -104,7 +104,7 @@ describe('a card in Comms', () => {
 
   it('opens an option large over Comms, steps to the next with →, picks it there, and Esc closes only the picture', async () => {
     const question = { id: 'q1', question: 'Which layout?', context: '', options: [{ id: 'a', label: 'List', image: true }, { id: 'b', label: 'Grid', detail: 'Denser', image: true }], at: 900 };
-    const el = card({ kind: 'question', agent: lead({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], questions: [question] } }) });
+    const el = card({ kind: 'question', agent: lead({ lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], questions: [question] } }) });
     document.body.append(el);
     const panelEsc = vi.fn();
     window.addEventListener('keydown', panelEsc);
@@ -146,7 +146,7 @@ describe('a card in Comms', () => {
     expect(el.textContent).not.toContain('Send the chief of staff’s words');
   });
 
-  it('beams to a lead’s team room from their card', () => {
+  it('views a lead’s goal in its room from their card', () => {
     const el = card({ kind: 'turn', agent: lead() });
     el.querySelector<HTMLButtonElement>('[data-act="beam"]')?.click();
     expect(ui.goToAgent).toHaveBeenCalledWith('a1');
@@ -188,7 +188,7 @@ describe('a card in Comms', () => {
   });
 
   it('closes a goal ready to close, saying what done looked like', async () => {
-    const el = card({ kind: 'wrap-up', agent: lead({ lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], note: { done: 'Wishlists ship', learned: [], next: [] }, closing: { reason: 'All shipped', at: 900 } } }) });
+    const el = card({ kind: 'wrap-up', agent: lead({ lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], note: { done: 'Wishlists ship', learned: [], next: [] }, closing: { reason: 'All shipped', at: 900 } } }) });
     expect(el.textContent).toContain('Ready to close: All shipped');
     expect(el.textContent).toContain('Done looks like: Wishlists ship');
     button(el, 'Close goal').click();
@@ -199,7 +199,7 @@ describe('a card in Comms', () => {
   it('merges a lead’s open pull request from their turn, without going to the board', async () => {
     calls.shownPrs.mockReturnValue([{ projectId: 'p', pr }]);
     const recap = { id: 'system-recap', title: 'System recap: Wishlist', at: 900, image: true };
-    const el = card({ kind: 'turn', agent: lead({ lead: { station: 2, title: 'Wishlist', repos: [], slice: 1, prs: [{ repo: 'acme/shop', number: 7, url: pr.url }], artifacts: [recap] } }) });
+    const el = card({ kind: 'turn', agent: lead({ lead: { title: 'Wishlist', repos: [], slice: 1, prs: [{ repo: 'acme/shop', number: 7, url: pr.url }], artifacts: [recap] } }) });
     expect(el.textContent).toContain('Their open pull request:');
     // the slice's recap with them, once, whatever was said since it went up
     expect([...el.querySelectorAll('img')].map((i) => i.getAttribute('src'))).toEqual(['/api/artifacts/a1/system-recap.jpg?v=900']);

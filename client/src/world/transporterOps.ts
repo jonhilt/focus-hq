@@ -160,7 +160,7 @@ export class TransporterOperation {
     this.glows = new PadGlows(room.group, room.pads);
     // the buttons in the corner of the console's screen: energise, and show or hide the hologram
     const energise: { interaction: Interaction; label: () => string } = {
-      interaction: { kind: 'energise', projectId: room.projectId, station: room.station, room: room.index },
+      interaction: { kind: 'energise', projectId: room.projectId, room: room.index },
       label: () => 'Energise: beam back to the briefing room',
     };
     room.script.userData.interactionAt = (uv: THREE.Vector2) => {
@@ -222,8 +222,8 @@ export class TransporterOperation {
       return;
     }
     interactive(this.room.tactical, VIEW_SWITCH.interaction, VIEW_SWITCH.label);
-    const { projectId, station } = this.room;
-    for (const mesh of [screen, this.flow.panel]) interactive(mesh, { kind: 'workflow-script', projectId, station, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
+    const { projectId } = this.room;
+    for (const mesh of [screen, this.flow.panel]) interactive(mesh, { kind: 'workflow-script', projectId, workflowId: workflow.id }, () => `Read the script of ${workflow.name}`);
   }
 
   /** The workflow in the room, if any. */
@@ -256,8 +256,8 @@ export class TransporterOperation {
         const arrived = this.beamIn(i, occupant.key, view);
         this.figures[i] = arrived;
         // E on them: their own screen, the transcript Claude Code keeps as they work
-        const { projectId, station } = this.room;
-        interactive(arrived.character.group, { kind: 'workflow-agent', projectId, station, workflowId: wf.id, index: agent.index }, () => `See ${agent.label}'s screen`);
+        const { projectId } = this.room;
+        interactive(arrived.character.group, { kind: 'workflow-agent', projectId, workflowId: wf.id, index: agent.index }, () => `See ${agent.label}'s screen`);
       }
       else figure.character.set(view);
       const phase = wf.phases.find((p) => p.index === occupant.phase);

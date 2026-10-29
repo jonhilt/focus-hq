@@ -109,14 +109,11 @@ export type ConflictsOutcome = { kind: 'merged'; auto?: string[] } | { kind: 'up
 /** The QA officer doesn't sit at one of the room's desks but at the QA station in the control ring. */
 export const QA_DESK = -1;
 
-/** Nor does a goal's lead, who sits at one of the room's team stations (`LeadWork.station`). */
+/** Nor does a goal's lead, who works at the room's goal viewing station while it's tuned to their goal. */
 export const LEAD_DESK = -2;
 
 /** Nor does an agent on a plugin's brief that works away from the room (main engineering's climber). */
 export const AWAY_DESK = -3;
-
-/** How many team stations a room's world has: a goal started when goals took one keeps it (`LeadWork.station`). */
-export const TEAM_STATIONS = 4;
 
 /** One item of the task list an agent keeps for itself with Claude Code's task tools (TodoWrite, TaskCreate, TaskUpdate). */
 export interface ClaudeTask {
@@ -127,7 +124,7 @@ export interface ClaudeTask {
   activeForm?: string;
 }
 
-/** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the goal's team station while it works. */
+/** A subagent a goal's lead handed a piece of work to (Claude Code's Agent tool), seated at the goal viewing station while it works and the station shows its goal. */
 export interface Helper {
   /** The Agent tool call that started it. */
   id: string;
@@ -275,7 +272,7 @@ export interface Agent {
   task: AgentTask;
   /** Whose brief it is, and its label ('brief' task only). */
   brief?: Brief;
-  /** A goal's lead's station, repos and pull requests ('lead' task only). */
+  /** A goal's lead's goal, repos and pull requests ('lead' task only). */
   lead?: LeadWork;
   /** The subagents the lead has working for it right now, and any that just finished ('lead' task only). */
   helpers?: Helper[];
@@ -335,5 +332,5 @@ export interface Agent {
 /** An agent leading a goal, with the goal's work on it (`hasLeadWork` narrows an `Agent` to one). */
 export type LeadAgent = Agent & { lead: LeadWork };
 
-/** A room's individual desks, for quick issue work; goals have team stations of their own (TEAM_STATIONS). */
+/** A room's individual desks, for quick issue work; goals have leads of their own, away from the desks. */
 export const DESKS_PER_ROOM = 2;

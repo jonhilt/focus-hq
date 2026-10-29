@@ -37,8 +37,8 @@ describe('spokenStatus', () => {
     const ship = snapshot({
       projects: [{ ...shop, goalQueue: [queued('Voice mode for Focus\nwith more detail'), queued('Another', 'q2')] }],
       agents: [
-        lead(1, { lead: { station: 1, title: 'Chart the voyage' } as Agent['lead'] }),
-        lead(2, { status: 'done', lead: { station: 2, title: 'Faster boards', readTurn: 5 } as Agent['lead'], finishedAt: 5 }),
+        lead(1, { lead: { title: 'Chart the voyage' } as Agent['lead'] }),
+        lead(2, { status: 'done', lead: { title: 'Faster boards', readTurn: 5 } as Agent['lead'], finishedAt: 5 }),
         agent({ id: 'a2', permission: { summary: 'Run rm' } as Agent['permission'], status: 'waiting' }),
       ],
     });
@@ -52,9 +52,9 @@ describe('spokenStatus', () => {
     const ship = snapshot({
       agents: [
         agent({ id: 'a2', name: 'Ensign Broke', status: 'error' }),
-        lead(0, { status: 'done', finishedAt: 5, lead: { station: 0, title: 'Done?', closing: { reason: 'All in', at: 5 } } as Agent['lead'] }),
-        lead(1, { status: 'done', finishedAt: 5, lead: { station: 1, title: 'Turn' } as Agent['lead'] }),
-        lead(2, { status: 'done', finishedAt: 5, lead: { station: 2, title: 'Asks', questions: [asked] } as unknown as Agent['lead'] }),
+        lead(0, { status: 'done', finishedAt: 5, lead: { title: 'Done?', closing: { reason: 'All in', at: 5 } } as Agent['lead'] }),
+        lead(1, { status: 'done', finishedAt: 5, lead: { title: 'Turn' } as Agent['lead'] }),
+        lead(2, { status: 'done', finishedAt: 5, lead: { title: 'Asks', questions: [asked] } as unknown as Agent['lead'] }),
       ],
       boards: [{ projectId: 'p1', issues: [], prs: [{ repo: 'acme/shop', number: 40, title: 'Wishlist', url: '', branch: 'b', headSha: 'a', baseBranch: 'main', isDraft: false, mergeable: 'CONFLICTING', checks: 'passing', failedChecks: [], closes: [], createdAt: '', author: 'captain' }], updatedAt: 0 }],
     });
@@ -136,7 +136,7 @@ describe('nextGoal', () => {
 });
 
 describe('decide', () => {
-  const ship = snapshot({ projects: [{ ...shop, goalQueue: [queued('Voice mode')] }, blog], agents: [lead(0, { lead: { station: 0, title: 'Wishlist' } as Agent['lead'] })] });
+  const ship = snapshot({ projects: [{ ...shop, goalQueue: [queued('Voice mode')] }, blog], agents: [lead(0, { lead: { title: 'Wishlist' } as Agent['lead'] })] });
   const d = (scene: CallScene = {}) => ({ snapshot: ship, ledger: [], now: 0, scene });
 
   it('answers a status question from the board, for the project named', () => {
@@ -204,7 +204,7 @@ describe('decide', () => {
 });
 
 describe('dictated', () => {
-  const [topic] = topics(snapshot({ agents: [lead(0, { lead: { station: 0, title: 'Wishlist' } as Agent['lead'] })] }));
+  const [topic] = topics(snapshot({ agents: [lead(0, { lead: { title: 'Wishlist' } as Agent['lead'] })] }));
 
   it('reads a new goal back, carrying the call with it', () => {
     const words = 'Find out why pull requests fail QA in the shop, and stop it happening. Then tidy up.';

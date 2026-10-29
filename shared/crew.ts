@@ -83,7 +83,7 @@ export function qaOfficerFor(projectId: string): Planner {
 export const leadId = (projectId: string, suffix: string) => `lead_${projectId}_${suffix}`;
 
 /**
- * A goal's lead at one of the room's team stations: the captain's own Claude Code session for the goal, building across
+ * A goal's lead: the user's own Claude Code session for the goal, building across
  * the project's repos a slice at a time. Command: they lead the work. Never the same surname as the room's other
  * officers, nor as `others` (the names of the room's other leads), and not as `closed` (the leads of the goals in the
  * room's log) while there's another to be had, so a goal reopened later gets its own lead back.
@@ -97,7 +97,7 @@ export function leadFor(projectId: string, goalId: string, others: string[] = []
 /**
  * A goal's own QA reviewer, who comes to its lead's table to review the goal's pull requests while the room's QA
  * officer looks after everyone else's. Sciences, like the QA officer; never sharing a surname with the room's officers
- * or `others` (the names of everyone else at its team stations).
+ * or `others` (the names of the room's other leads and reviewers).
  */
 export function qaFor(projectId: string, goalId: string, others: string[] = []): Planner {
   const h = hash(`qa:${projectId}:${goalId}`);

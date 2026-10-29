@@ -1527,13 +1527,12 @@ describe('AgentManager', () => {
     expect(store.agent('old').desk).toBe(0);
   });
 
-  it('starts any number of goals in a project, at no team station, even with goals waiting in line', () => {
+  it('starts any number of goals in a project, even with goals waiting in line', () => {
     const { agents, store, project } = focus();
     expect(() => agents.startGoal(project.id, ' ')).toThrow('Tell them what you’re after');
     agents.queueGoal(project.id, 'Waiting');
     const started = ['One', 'Two', 'Three', 'Four', 'Five', 'Six'].map((goal) => agents.startGoal(project.id, goal).agent);
     expect(started.map((a) => store.agent(a.id).lead?.title)).toEqual(['One', 'Two', 'Three', 'Four', 'Five', 'Six']);
-    expect(started.every((a) => store.agent(a.id).lead?.station === undefined)).toBe(true);
     expect(project.goalQueue?.map((g) => g.text)).toEqual(['Waiting']);
   });
 

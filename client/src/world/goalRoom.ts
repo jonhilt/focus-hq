@@ -2,8 +2,8 @@ import { openQuestion } from '../../../shared/artifacts';
 import { hailOf } from '../../../shared/tricorder';
 import type { Agent, GoalNote, LeadPr, LeadWork, QaReview } from '../../../shared/types';
 
-// What a team station shows of its goal beyond the lead's own screen: whether its briefing room is in session, on the
-// lamps and sign at its door, the lead's note on the goal, on the board in its briefing room, and what the team's up to
+// What the goal viewing station shows of the goal it's tuned to beyond the lead's own screen, and which goal that is:
+// whether its briefing room is in session, on the lamps and sign at its door, the lead's note on the goal, on the board in its briefing room, and what the team's up to
 // at a glance, on its screen over its pod in the holodeck.
 
 /**
@@ -86,6 +86,18 @@ export function noteSections(note: GoalNote, slice: number, steps: readonly Slic
 export function rowAt(rows: { top: number; bottom: number }[], y: number): number | undefined {
   const i = rows.findIndex((r) => y >= r.top && y < r.bottom);
   return i < 0 ? undefined : i;
+}
+
+/**
+ * Which goal the room's goal viewing station shows (its lead's id), of the project's goals under way, `leads`: the one
+ * it's `tuned` to (by the user, or the one it showed last) while that's still under way, so it never changes under
+ * you; otherwise the most recently active, by when its lead last did something the browser heard of (`activeAt`), or
+ * else when it started. None while there are no goals.
+ */
+export function viewedGoal(leads: Pick<Agent, 'id' | 'startedAt'>[], tuned: string | undefined, activeAt: ReadonlyMap<string, number>): string | undefined {
+  if (tuned && leads.some((l) => l.id === tuned)) return tuned;
+  const recent = (l: Pick<Agent, 'id' | 'startedAt'>) => activeAt.get(l.id) ?? l.startedAt;
+  return leads.reduce<Pick<Agent, 'id' | 'startedAt'> | undefined>((best, l) => (!best || recent(l) > recent(best) ? l : best), undefined)?.id;
 }
 
 /** Who sits round a briefing room's table, as the goal board lists them: the lead, the reviewer, then the helpers. */

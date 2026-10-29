@@ -15,7 +15,7 @@ import { h } from './ui/dom';
 import { Hud } from './ui/hud';
 import { openManagerPanel } from './ui/managerPanel';
 import { stepDemoPace } from './ui/demoPace';
-import { openGoalsPanel } from './ui/goalsPanel';
+import { openGoalPicker, openGoalsPanel } from './ui/goalsPanel';
 import { linkAction, type NewsLink } from './ui/newsLink';
 import { openEngineeringPanel } from './ui/engineeringPanel';
 import { openLedgerPanel } from './ui/ledgerPanel';
@@ -44,7 +44,7 @@ import { adapt, FEWEST, initialResolution, levels, WINDOW } from './resolution';
 import { FrameStats } from './ui/frameStats';
 import { PortalView } from './world/portal';
 import { loadTrainingHall } from './world/hall';
-import { loadTeamStation } from './world/teamStation';
+import { loadGoalStation } from './world/goalStation';
 import { stopAt } from './world/turbolift';
 import { TransporterFeeds } from './world/transporterFeeds';
 import { TextureFeed, warmUp } from './world/warmUp';
@@ -136,8 +136,8 @@ async function main() {
 
   await fontsReady();
 
-  const [theShip, teamStation, hallKit] = await Promise.all([ship(), loadTeamStation('/ship/team-station.glb', '/ship/transporter-room.glb'), loadTrainingHall('/ship/training-hall.glb')]);
-  const world = new World(scene, theShip, teamStation, hallKit);
+  const [theShip, stationKit, hallKit] = await Promise.all([ship(), loadGoalStation('/ship/team-station.glb', '/ship/transporter-room.glb'), loadTrainingHall('/ship/training-hall.glb')]);
+  const world = new World(scene, theShip, stationKit, hallKit);
   world.shipPlugins = clientPlugins;
   // ?cull=0 draws the whole ship from anywhere, for the gap and z-fighting scans
   world.culling = params.get('cull') !== '0';
@@ -166,7 +166,9 @@ async function main() {
     },
     goToAgent: (id) => {
       const agent = state.agents.get(id);
-      const view = agent && world.room(agent.projectId)?.viewpoint(id);
+      const room = agent && world.room(agent.projectId);
+      // a goal's lead: the room's goal viewing station, tuned to their goal; anyone else, from behind their seat
+      const view = agent?.task === 'lead' ? room?.viewGoal(id) : room?.viewpoint(id);
       // someone without a seat in the room to stand behind: their panel instead
       if (!view) return agent ? ui.openAgent(id) : undefined;
       sound.beam();
@@ -200,7 +202,12 @@ async function main() {
     ),
     openPlugin: (id) => openPluginPanel(id, ui),
     pluginPanels: () => pluginPanels().map(({ id, label }) => ({ id, label })),
-    openGoals: (projectId, station) => openGoalsPanel(ui, projectId, station),
+    openGoals: (projectId) => openGoalsPanel(ui, projectId),
+    openGoalPicker: (projectId) => openGoalPicker(ui, projectId, world.room(projectId)?.viewing()),
+    tune: (leadId) => {
+      const agent = state.agents.get(leadId);
+      if (agent) world.room(agent.projectId)?.tune(leadId);
+    },
     openManager: (tab) => openManagerPanel(ui, tab),
     openTeleport: () => openTeleportPanel(ui),
     openScreen: (leadId) => openScreenPanel(ui, leadId),
@@ -215,12 +222,12 @@ async function main() {
       hud.blackout(() => player.teleport(stop.position, stop.lookAt));
       player.lock();
     },
-    beamTo: (projectId, station, room) => {
-      const to = world.transporterRooms.find((t) => t.projectId === projectId && t.station === station && t.index === room);
+    beamTo: (projectId, room) => {
+      const to = world.transporterRooms.find((t) => t.projectId === projectId && t.index === room);
       if (to) beam(to.place.at, to.place.lookAt);
     },
-    beamBack: (projectId, station) => {
-      const to = world.station(projectId, station)?.viewpoint();
+    beamBack: (projectId) => {
+      const to = world.station(projectId)?.viewpoint();
       if (to) beam(to.position, to.lookAt);
     },
     dive: (place) => {
@@ -400,8 +407,8 @@ async function main() {
     world.room(projectId)?.markBoard();
     world.room(projectId)?.syncQa();
     world.room(projectId)?.syncPlanner();
-    // the screens over the pods show how QA has each goal's pull requests
-    world.room(projectId)?.syncStations();
+    // the screen over the goal viewing station's pod shows how QA has its goal's pull requests
+    world.room(projectId)?.syncStation();
   });
   // the engineering station's screen shows the report card, and its engineer what a plugin has them busy with
   const showEngineering = () => world.engineering?.showReport(state.report, stationSays());
@@ -415,7 +422,7 @@ async function main() {
     const board = pluginBoard(id);
     if (board) world.showOnMsd(board);
     if (clientPlugin(id)?.engineering?.station) showEngineering();
-    if (clientPlugin(id)?.goal) for (const room of world.rooms.values()) room.syncStations();
+    if (clientPlugin(id)?.goal) for (const room of world.rooms.values()) room.syncStation();
     world.syncHallScreens();
   });
   state.on('toast', (e) => {
@@ -526,8 +533,8 @@ async function main() {
         ui.openHelper(i.leadId, i.id);
         break;
       case 'workflow-agent': {
-        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
-        if (lead) ui.openWorkflowAgent(lead.id, i.workflowId, i.index);
+        const lead = world.room(i.projectId)?.viewing();
+        if (lead) ui.openWorkflowAgent(lead, i.workflowId, i.index);
         break;
       }
       case 'flow-hologram':
@@ -539,13 +546,13 @@ async function main() {
         railPrefs.set(!railPrefs.on);
         break;
       case 'workflow-script': {
-        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
-        if (lead) ui.openWorkflowScript(lead.id, i.workflowId);
+        const lead = world.room(i.projectId)?.viewing();
+        if (lead) ui.openWorkflowScript(lead, i.workflowId);
         break;
       }
       case 'background': {
-        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
-        if (lead) ui.openBackground(lead.id, i.taskId);
+        const lead = world.room(i.projectId)?.viewing();
+        if (lead) ui.openBackground(lead, i.taskId);
         break;
       }
       case 'desk':
@@ -569,8 +576,8 @@ async function main() {
       case 'qa':
         ui.openQa(i.projectId);
         break;
-      case 'station':
-        ui.openGoals(i.projectId, i.station);
+      case 'tune':
+        ui.openGoalPicker(i.projectId);
         break;
       case 'manager':
         ui.openManager(i.tab);
@@ -596,10 +603,10 @@ async function main() {
         break;
       case 'energise':
         sound.press();
-        if (i.projectId !== undefined && i.station !== undefined) ui.beamBack(i.projectId, i.station);
+        if (i.projectId !== undefined) ui.beamBack(i.projectId);
         break;
       case 'beam-to':
-        ui.beamTo(i.projectId, i.station, i.room);
+        ui.beamTo(i.projectId, i.room);
         break;
       case 'plugin':
         i.use(ui);

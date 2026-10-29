@@ -73,7 +73,7 @@ describe('waypoints', () => {
 
   it('travel with a closed goal and come back when it reopens', () => {
     const waypoints = [{ slice: 1, startedAt: 0, landedAt: 5, title: 'Saved items' }, { slice: 2, startedAt: 5 }];
-    const work: LeadWork = { station: 1, title: 'Saved items', repos: [{ repo: 'acme/web', folder: 'web', baseBranch: 'main' }], slice: 2, prs: [], waypoints };
+    const work: LeadWork = { title: 'Saved items', repos: [{ repo: 'acme/web', folder: 'web', baseBranch: 'main' }], slice: 2, prs: [], waypoints };
     const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/saved-2-ab12', startedAt: 0, lead: work } as LeadAgent;
     const record = goalRecord(lead, 99);
     expect(record.waypoints).toEqual(waypoints);

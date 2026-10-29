@@ -226,7 +226,7 @@ function body(ui: CardUi, a: Attention, go: OpenAgent): { context: string; folds
     }
     case 'wrap-up': {
       const done = a.agent.lead?.note?.done;
-      const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home, which frees the station' }, 'Close goal');
+      const close = h('button', { class: 'btn small go', title: 'File the goal in the room’s log and send its lead home' }, 'Close goal');
       close.onclick = () => void busy(close, () => closeGoal(a.agent), ui.error);
       return { context: [done ? `Done looks like: ${done}` : '', said(a.agent)].filter(Boolean).join('\n\n'), answers: [...mergeBox(ui, leadPrs(a.agent), a.agent), h('div', { class: 'row' }, close, open(go, a.agent, 'Carry on'))] };
     }
@@ -252,15 +252,14 @@ function titleOf(a: Attention): string {
 function trail(a: Attention): string {
   const project = focus.project('agent' in a ? a.agent.projectId : a.projectId)?.name;
   if (!('agent' in a)) return [project, 'Pull request'].filter(Boolean).join(' · ');
-  const work = a.agent.lead;
   const since = a.kind === 'hand' ? a.agent.permission?.at : a.agent.finishedAt;
-  return [project, work?.station !== undefined ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
+  return [project, a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
 }
 
-/** To a lead's team room, where there's more of what they're on than the card has. */
+/** To the lead's goal in its room (the goal viewing station, tuned to it), where there's more of what they're on than the card has. */
 const beamBox = (ui: CardUi, a: Attention): HTMLElement[] =>
   'agent' in a && a.agent.lead
-    ? [h('button', { class: 'btn small cos-beam', title: 'Beam to their team room (B)', attrs: { 'data-act': 'beam' }, onclick: () => ui.goToAgent(a.agent.id) }, 'Beam to their room')]
+    ? [h('button', { class: 'btn small cos-beam', title: 'View their goal in its room (B)', attrs: { 'data-act': 'beam' }, onclick: () => ui.goToAgent(a.agent.id) }, 'View in room')]
     : [];
 
 /** A lead's open pull requests, each with QA's word and its merge button: what the bridge folds under a decision's More. */

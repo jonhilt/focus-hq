@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, AgentStatus, GoalNote } from '../../../shared/types';
-import { checklistGlance, goalMove, goalRoomState, HELD_ELSEWHERE, lampGlow, leadNow, type MovePr, movePills, noteSections, prGlance, roster, rowAt, sliceProgress, sliceSteps } from './goalRoom';
+import { checklistGlance, goalMove, goalRoomState, HELD_ELSEWHERE, lampGlow, leadNow, type MovePr, movePills, noteSections, prGlance, roster, rowAt, sliceProgress, sliceSteps, viewedGoal } from './goalRoom';
 
 describe('goalRoomState', () => {
   const lead = (status: AgentStatus) => ({ status });
@@ -206,7 +206,7 @@ describe('goalMove', () => {
     id: 'a1', name: 'Lt. Vale', projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
     status, activity: 'Writing the wishlist API', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
     avatar: { division: 'command', rank: 'ensign', species: 'human', skin: '#fff', hair: '#000', hairstyle: 'crop', accessory: 'none' },
-    lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: [], ...work },
+    lead: { title: 'Wishlist', repos: [], slice: 1, prs: [], ...work },
     ...more,
   });
   const pr = (number: number, state: MovePr['state']): MovePr => ({ number, state });
@@ -298,5 +298,28 @@ describe('lampGlow', () => {
       expect(lampGlow('in-session', false, t)).toBe(HELD_ELSEWHERE);
     }
     expect(lampGlow('free', true, 0)).toBe(0);
+  });
+});
+
+describe('viewedGoal', () => {
+  const leads = [{ id: 'a', startedAt: 100 }, { id: 'b', startedAt: 300 }, { id: 'c', startedAt: 200 }];
+  const never = new Map<string, number>();
+
+  it('shows nothing while there are no goals', () => {
+    expect(viewedGoal([], 'a', never)).toBeUndefined();
+  });
+
+  it('keeps to the goal it’s tuned to while that’s under way, however active the others are', () => {
+    expect(viewedGoal(leads, 'a', new Map([['c', 900]]))).toBe('a');
+  });
+
+  it('shows the most recently active goal when it’s tuned to none, or to one that’s closed', () => {
+    expect(viewedGoal(leads, undefined, new Map([['c', 900], ['b', 500]]))).toBe('c');
+    expect(viewedGoal(leads, 'gone', new Map([['a', 400]]))).toBe('a');
+  });
+
+  it('takes the latest started for a lead it’s heard nothing from', () => {
+    expect(viewedGoal(leads, undefined, never)).toBe('b');
+    expect(viewedGoal(leads, undefined, new Map([['a', 250]]))).toBe('b');
   });
 });

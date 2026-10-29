@@ -1,4 +1,4 @@
-// What a team station's transporter rooms show of its lead's workflows: which workflow is in which room, who stands on
+// What the goal viewing station's transporter rooms show of its lead's workflows: which workflow is in which room, who stands on
 // which pad, the phases' colours, and what the tactical display, the pattern buffer, the console's script, the flow
 // hologram and the briefing room's feeds say. Pure: no Three.js, so it's testable outside the browser (transporterOps.ts and transporterFeeds.ts draw it).
 import type { Workflow, WorkflowAgent, WorkflowPhase } from '../../../shared/types';

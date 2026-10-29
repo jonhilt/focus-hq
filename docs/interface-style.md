@@ -16,7 +16,7 @@ All of it is CSS and textures the browser draws on canvases: nothing in the deck
 | `client/src/tricorder/tricorder.css` | a second copy of the palette, and its own elbows |
 | `plugins/briefings/explainer.ts` | a third copy, and the SVG elbows round every explainer; its CSS variables are part of the explain tool's contract with leads (`explainTool.ts` calls it "the ship's LCARS player") |
 | `client/src/world/starship.ts` | `LCARS`, `LCARS_STATUS`, `LCARS_FONT` and the canvas helpers `lcarsFrame`, `lcarsSign`, console and readout textures |
-| `client/src/world/goalScreens.ts` | the team stations' sign, goal board, chart and screen, with hand-drawn elbows, caps and pills: the biggest job |
+| `client/src/world/goalScreens.ts` | the goal viewing station's sign, goal board, chart and screen, with hand-drawn elbows, caps and pills: the biggest job |
 | `transporterOps.ts`, `msd.ts`, `screen.ts` and some small files | frames, pills and cap-and-plate readouts (speech bubbles, probes, PADDs, question lights) |
 | `blender/kit.py` and the deck scripts | sign colours and the orange wall stripe baked into the GLBs, which the browser can remap without a rebuild |
 | `client/index.html` (and the tricorder's, and the explainer's) | Antonio from Google Fonts |

@@ -27,36 +27,38 @@ import { FEED_SIZE } from './transporterFeeds';
 import { BackgroundProbes } from './probes';
 import { api } from '../net/api';
 
-// A team station: where a goal's lead works with the captain. In the holodeck it's a door, with the station's sign
-// floating over it and lamps either side that show whether its goal room is in session; through it is the goal's
-// briefing room, which stands far off in the world (layout.ts: briefingRoomAt) and is far bigger than the holodeck
-// could hold. The two doorways are a Portal, so you see the briefing room through the open door and walk straight in.
-// It's a mini bridge: the captain stands a few steps in from the door, facing the lead's session on the far wall, the
-// lead and the goal's QA reviewer either side and their helpers (Claude Code's subagents) at consoles round behind,
-// each with a PADD, with the lead's note on the goal on the board beside them. Both halves are built in Blender (blender/team_station.py); who sits where and what the screens
-// show are drawn here. Each station also has a screen hung over its pod (room.ts), so you can see what every team's up
-// to from the middle of the holodeck without going in.
+// The goal viewing station: one in each project's holodeck, tuned to one of the project's goals at a time (the room
+// keeps which: room.ts), since a project has any number of goals. In the holodeck it's a door, with its sign floating
+// over it and lamps either side that show whether the tuned goal's room is in session; through it is the briefing
+// room, which stands far off in the world (layout.ts: briefingRoomAt) and is far bigger than the holodeck could hold.
+// The two doorways are a Portal, so you see the briefing room through the open door and walk straight in. It's a mini
+// bridge: the user stands a few steps in from the door, facing the lead's session on the far wall, the lead and the
+// goal's QA reviewer either side and their helpers (Claude Code's subagents) at consoles round behind, each with a
+// PADD, with the lead's note on the goal on the board beside them, and its transporter rooms run the lead's workflows.
+// Both halves are built in Blender (blender/team_station.py, named for the four team stations this replaced); who sits
+// where and what the screens show are drawn here. It also has a screen hung over its pod (room.ts), so you can see how
+// the goal stands from the middle of the holodeck without going in.
 
 /**
- * The modules every team station is a copy of: its door, the briefing room through it, and its transporter rooms
- * (transporterRoom.ts), where its lead's workflows run.
+ * The modules every goal viewing station is a copy of: its door, the briefing room through it, and its transporter
+ * rooms (transporterRoom.ts), where its lead's workflows run.
  */
-export interface TeamStationKit {
+export interface GoalStationKit {
   door: THREE.Object3D;
   room: THREE.Object3D;
   transporter: THREE.Object3D;
 }
 
-/** Loads the team station's door and briefing room (`url`) and its transporter room (`transporterUrl`). */
-export async function loadTeamStation(url: string, transporterUrl: string): Promise<TeamStationKit> {
+/** Loads the station's door and briefing room (`url`) and its transporter room (`transporterUrl`). */
+export async function loadGoalStation(url: string, transporterUrl: string): Promise<GoalStationKit> {
   const [{ scene }, transporter] = await Promise.all([new GLTFLoader().loadAsync(url), loadTransporterRoom(transporterUrl)]);
   const door = scene.getObjectByName('station_door');
   const room = scene.getObjectByName('briefing_room');
-  if (!door || !room) throw new Error('The team station needs a station_door and a briefing_room module');
+  if (!door || !room) throw new Error('The goal station needs a station_door and a briefing_room module');
   return { door, room, transporter };
 }
 
-/** Where a team station's pod stands: its back against the wall at `wall`, facing into the hall, turned `yaw` (its frame). */
+/** Where the station's pod stands: its back against the wall at `wall`, facing into the hall, turned `yaw` (its frame). */
 export interface PodSpot {
   wall: THREE.Vector3;
   yaw: number;
@@ -97,7 +99,7 @@ interface Read {
   area?: THREE.Matrix4;
 }
 
-export class TeamStation {
+export class GoalStation {
   /** The door, in the room frame. */
   readonly door = new THREE.Group();
   /** The briefing room, and its doors, in world space. */
@@ -115,8 +117,8 @@ export class TeamStation {
   private readonly operations: TransporterOperation[];
   /** Which of the lead's workflows is in which room (`assignRooms`). */
   private held: (string | undefined)[] = [];
-  /** The station's lead while it has one, whose workflows' scripts the transporter consoles read. */
-  private leadId: string | undefined;
+  /** The lead of the goal it's tuned to, while there is one: whose workflows' scripts the transporter consoles read. */
+  leadId: string | undefined;
   /** The monitors down the port wall, one per transporter room: its live picture and its caption. */
   private readonly feeds: { picture: THREE.Mesh; caption: THREE.Mesh; canvas: ReturnType<typeof makeCanvas>; texture: THREE.CanvasTexture; key: string }[];
   /** The strip over them, saying how many workflows wait for a room. */
@@ -174,9 +176,8 @@ export class TeamStation {
   private leadName = '';
 
   constructor(
-    readonly index: number,
     private readonly accent: string,
-    kit: TeamStationKit,
+    kit: GoalStationKit,
     /** Where the briefing room's doorway stands in the world (layout.ts: briefingRoomAt). */
     origin: THREE.Vector3,
     /** Where its pod stands in the holodeck. */
@@ -209,7 +210,7 @@ export class TeamStation {
 
     const screen = (screens: { screen: string; feed?: number; mesh: THREE.Mesh }[], name: string, where: string, feed?: number) => {
       const found = screens.find((s) => s.screen === name && s.feed === feed);
-      if (!found) throw new Error(`The team station's ${where} has no ${name} screen`);
+      if (!found) throw new Error(`The goal station's ${where} has no ${name} screen`);
       return found.mesh;
     };
     const display = (this.display = screen(roomScreens, 'team-station', 'briefing room'));
@@ -226,7 +227,7 @@ export class TeamStation {
     panes.userData.interactionAt = (uv: THREE.Vector2) => this.switchAt(uv);
 
     const { place, area } = this.roomKit;
-    if (!place || !area) throw new Error('The team station’s briefing room has no place or area marker');
+    if (!place || !area) throw new Error('The goal station’s briefing room has no place or area marker');
     this.head = place.clone().applyMatrix4(room.matrixWorld);
     this.area = footprint(new THREE.Matrix4().multiplyMatrices(room.matrixWorld, area));
     this.screenCentre = new THREE.Box3().setFromObject(display).getCenter(new THREE.Vector3());
@@ -247,7 +248,7 @@ export class TeamStation {
 
     const seat = (crew: Crew): StationSeat => {
       const found = this.roomKit.seats.get(crew);
-      if (!found) throw new Error(`The team station’s briefing room has no seat for ${crew}`);
+      if (!found) throw new Error(`The goal station’s briefing room has no seat for ${crew}`);
       room.add(found);
       return { seat: found };
     };
@@ -255,14 +256,14 @@ export class TeamStation {
     this.helpers = HELPER_SEATS.map(seat);
     this.reviewer = seat('station-reviewer');
     this.probes = new BackgroundProbes(
-      (taskId) => ({ kind: 'background', projectId, station: index, taskId }),
+      (taskId) => ({ kind: 'background', projectId, taskId }),
       (task) => `Look at ${this.leadName}’s ${task.kind === 'monitor' ? 'monitor' : 'background command'} ${task.description} (${task.status})`,
     );
     this.lead.seat.add(this.probes.group);
     this.probes.awayFrom(this.head);
-    this.show(undefined);
+    this.show(undefined, 0, 0);
     this.goalBoard.userData.interactionAt = (uv: THREE.Vector2) => this.rowAt(uv);
-    this.transporterRooms = transporters.map((at, i) => new TransporterRoom(kit.transporter, at, projectId, index, i, accent));
+    this.transporterRooms = transporters.map((at, i) => new TransporterRoom(kit.transporter, at, projectId, i, accent));
     this.operations = this.transporterRooms.map((room) => new TransporterOperation(room, (workflowId) => (this.leadId ? api.workflowScript(this.leadId, workflowId) : Promise.resolve(undefined))));
     this.feeds = this.transporterRooms.map((_, i) => {
       const canvas = makeCanvas(1024, 100);
@@ -294,7 +295,7 @@ export class TeamStation {
       const feed = this.feeds[i];
       feed.picture.material = wf && this.live ? this.live[i] : idleFeed(i);
       drawCaption(feed, i, wf);
-      const use: Interaction = { kind: 'beam-to', projectId: this.projectId, station: this.index, room: i };
+      const use: Interaction = { kind: 'beam-to', projectId: this.projectId, room: i };
       const label = () => (wf ? `Beam into transporter room ${i + 1} to watch ${wf.name}` : `Beam into transporter room ${i + 1}`);
       for (const mesh of [feed.picture, feed.caption]) interactive(mesh, use, label, FEED_REACH);
     });
@@ -390,10 +391,10 @@ export class TeamStation {
           read.area = o.matrix.clone();
           return;
         default:
-          throw new Error(`The team station has a ${marker.kind} marker, which a station can't use`);
+          throw new Error(`The goal station has a ${marker.kind} marker, which a station can't use`);
       }
     });
-    if (parts.length) throw new Error(`The team station has a ${parts[0].part.kind} part, which only a transporter room has`);
+    if (parts.length) throw new Error(`The goal station has a ${parts[0].part.kind} part, which only a transporter room has`);
     // in the station's colour, still shaded by the occlusion baked into the module
     const painted = new Map<THREE.Texture | null, THREE.Material>();
     for (const mesh of accents) {
@@ -416,7 +417,7 @@ export class TeamStation {
     const door = this.door.children[0];
     door.updateWorldMatrix(true, false);
     const doorway = (read: Read, frame: THREE.Matrix4): Doorway => {
-      if (!read.doorway) throw new Error('The team station has a module without a doorway');
+      if (!read.doorway) throw new Error('The goal station has a module without a doorway');
       const { width, height, depth } = read.doorway.marker;
       return { matrix: new THREE.Matrix4().multiplyMatrices(frame, read.doorway.matrix), width, height, depth };
     };
@@ -469,9 +470,9 @@ export class TeamStation {
     return eye.distanceTo(this.screenCentre);
   }
 
-  /** What the station says while it has no goal. */
-  freeText(next?: string): string {
-    return next ? `Next up: ${next}` : `Team station ${this.index + 1} · start a goal here`;
+  /** What the station's screen says while the project has no goals. */
+  freeText(): string {
+    return 'Goal viewing station · no goals under way';
   }
 
   /** Draws its sign, goal board, chart and the screen over its pod, if they've changed and it's time (Display.update). */
@@ -480,15 +481,15 @@ export class TeamStation {
   }
 
   /**
-   * Shows the station's goal on its sign (over the door and under the screen), its lamps, its goal board and its
-   * screen over its pod (with how the slice's pull requests `prs` stand): its lead, or what's `next` in line for it
-   * while it's free.
+   * Shows the goal it's tuned to on its sign (over the door and under the screen), its lamps, its goal board and its
+   * screen over its pod (with how the slice's pull requests `prs` stand): its lead, the `at`th (from 1) of the
+   * project's `goals`; none while there are no goals.
    */
-  show(lead: Agent | undefined, next?: string, prs?: StationView['prs']): void {
+  show(lead: Agent | undefined, goals: number, at: number, prs?: StationView['prs']): void {
     const seated = (s: StationSeat) => (s.view ? s : undefined);
     this.crew = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
     const crew = this.crew.map(({ who, role }) => ({ who: who.view!, role: role === 'Helper' ? (who.view!.tag ?? role) : role }));
-    const view: StationView = { index: this.index, accent: this.accent, lead, crew, next, prs, whose: lead && whoseMove(lead, prs, Date.now()) };
+    const view: StationView = { goals, at, accent: this.accent, lead, crew, prs, whose: lead && whoseMove(lead, prs, Date.now()) };
     this.view = view;
     this.sign.show(view);
     this.board.show(view);
@@ -526,8 +527,8 @@ export class TeamStation {
     // the holograms' own cyan
     this.teamHologram.tint.set(this.tone === 'free' ? HOLO_CYAN : colour).multiplyScalar(0.35 + 0.65 * glow);
     this.signHologram.tint.copy(this.teamHologram.tint);
-    hover(this.faces, 0, t, this.index * 1.7);
-    hover(this.doorSign, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, t, this.index * 1.7 + 2);
+    hover(this.faces, 0, t);
+    hover(this.doorSign, DOOR_SIGN.bottom + (DOOR_SIGN.width * GoalSign.H) / GoalSign.W / 2, t, 2);
     this.teamHologram.update(Math.min(0.1, t - this.lastT));
     this.lastT = t;
     this.probes.update(t);
@@ -628,7 +629,7 @@ function drawStrip(strip: { canvas: ReturnType<typeof makeCanvas>; texture: THRE
 }
 
 const idleFeeds: THREE.Material[] = [];
-/** A monitor with no workflow in its room: standing by. Shared by every station. */
+/** A monitor with no workflow in its room: standing by. Shared by every room's station. */
 function idleFeed(i: number): THREE.Material {
   if (idleFeeds[i]) return idleFeeds[i];
   const { canvas, ctx } = makeCanvas(FEED_SIZE.x, FEED_SIZE.y);

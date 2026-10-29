@@ -4,7 +4,6 @@ import { goalRecord } from './lead';
 import { answerQuestion, ARTIFACT_LIMITS, askQuestion, closeCheck, compactsFirst, hasLeadWork, QUESTION_LIMITS, queuedStart, reopenable, reviewsToStart, showArtifact, verdictStands, verdictToast } from './leadRules';
 
 const work: LeadWork = {
-  station: 1,
   title: 'Saved items',
   repos: [
     { repo: 'acme/web', folder: 'web', baseBranch: 'main' },

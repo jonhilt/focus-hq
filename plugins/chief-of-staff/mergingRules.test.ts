@@ -8,7 +8,7 @@ const pr = (number: number, more: Partial<PullRequest> = {}): PullRequest => ({
 });
 const lead = (prs: { repo: string; number: number; outcome?: 'merged' | 'closed' }[]): Pick<Agent, 'projectId' | 'lead'> => ({
   projectId: 'p',
-  lead: { station: 0, title: 'Wishlist', repos: [], slice: 1, prs: prs.map((p) => ({ ...p, url: '' })) },
+  lead: { title: 'Wishlist', repos: [], slice: 1, prs: prs.map((p) => ({ ...p, url: '' })) },
 });
 
 describe('the pull requests a lead’s card can merge', () => {

@@ -6,7 +6,7 @@ import type { Agent, GoalRecord, QueuedGoal } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { clientPlugin, everyGoalButtons, type GoalsPanelView, goalsPanelViews, goalTags } from '../plugins';
-import { LCARS_STATUS } from '../world/starship';
+import { LCARS, LCARS_STATUS } from '../world/starship';
 import type { Ui } from './context';
 import { withMic } from './dictation';
 import { busy, fill, h, timeAgo } from './dom';
@@ -24,15 +24,14 @@ const doing = (lead: Agent) => {
   return t ? t.activeForm || t.subject : '';
 };
 
-/** One goal under way: its station if it has one, its lead and how they're getting on, their note and its pull requests. */
+/** One goal under way: its lead and how they're getting on, their note and its pull requests. */
 function goalCard(ui: Ui, lead: Agent): HTMLElement {
   const work = lead.lead;
-  const station = work?.station === undefined ? undefined : work.station + 1;
   const tasks = lead.tasks ?? [];
   const close = h('button', { class: `btn small${work?.closing ? ' go' : ''}`, title: 'File the goal in the room’s log and send its lead home' }, 'Close goal');
   close.onclick = () => void busy(close, () => closeGoal(lead), ui.error);
   return h('div', { class: 'goal-card', style: `--tone:${UNIFORM[lead.avatar.division]}` },
-    h('div', { class: 'goal-station', title: station === undefined ? undefined : `Team station ${station}` }, station === undefined ? '' : String(station).padStart(2, '0')),
+    h('div', { class: 'goal-station' }),
     h('div', { class: 'goal-main' },
       h('strong', { class: 'goal-title' }, work?.title ?? lead.issue.title),
       // what the lead is on, in words, beside what you can do about it
@@ -130,9 +129,9 @@ function recordRow(ui: Ui, projectId: string, goal: GoalRecord): HTMLElement {
  * The room's goals, any number of them, each with a lead of its own (the user's own Claude Code session for it, across
  * the project's repos). Talk to a goal's lead, close it, or start another; goals left waiting in line (from when goals
  * waited for a free team station) start when the user starts them. The sidebar picks between the goals under way, a
- * new one and the closed ones. `station`, a free team station the user walked up to, opens it on a new goal.
+ * new one and the closed ones.
  */
-export function openGoalsPanel(ui: Ui, projectId: string, station?: number): void {
+export function openGoalsPanel(ui: Ui, projectId: string): void {
   const project = state.project(projectId);
   if (!project) return;
   // the goals under way side by side, as many abreast as the panel has room for
@@ -163,8 +162,8 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     }
   };
 
-  // a free station the user walked up to opens on a new goal; otherwise the goals under way, if there are any
-  let picked: GoalsView | undefined = station !== undefined ? 'new' : undefined;
+  // the goals under way, if there are any
+  let picked: GoalsView | undefined;
   const nav = new SideNav<GoalsView>((view) => {
     picked = view;
     render();
@@ -224,4 +223,34 @@ export function openGoalsPanel(ui: Ui, projectId: string, station?: number): voi
     const plugin = clientPlugin(id);
     if (plugin?.goal || plugin?.goalsView) render();
   }));
+}
+
+/**
+ * What the room's goal viewing station shows: a button for each goal under way (the one it shows, `viewing`, marked),
+ * which tunes it to that goal, and the goals panel, to start one (all there is while there are none).
+ */
+export function openGoalPicker(ui: Ui, projectId: string, viewing: string | undefined): void {
+  const project = state.project(projectId);
+  if (!project) return;
+  const leads = state.leadsIn(projectId);
+  const pick = (lead: Agent) => {
+    ui.tune(lead.id);
+    ui.panels.close();
+  };
+  const body = h('div', null,
+    leads.length ? null : h('p', { style: 'margin-top:0' }, 'No goals under way in this room: start one, and the station shows it.'),
+    h('div', { class: 'places' },
+      ...leads.map((lead) =>
+        h('button', { class: lead.id === viewing ? 'btn place primary' : 'btn place', onclick: () => pick(lead) },
+          h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }),
+          lead.lead?.title ?? lead.issue.title,
+          h('small', null, `${lead.name} · ${statusLine(lead)}${lead.id === viewing ? ' · on the station now' : ''}`),
+        ),
+      ),
+    ),
+    h('div', { class: 'row', style: 'margin-top:12px' },
+      h('button', { class: leads.length ? 'btn' : 'btn primary', onclick: () => ui.openGoals(projectId) }, leads.length ? 'All goals' : 'Start a goal'),
+    ),
+  );
+  ui.panels.open({ title: `${project.name} · goal viewing station`, body, accent: LCARS.gold });
 }

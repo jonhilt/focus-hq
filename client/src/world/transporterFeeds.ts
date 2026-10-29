@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { Frame } from './frame';
-import type { TeamStation } from './teamStation';
+import type { GoalStation } from './goalStation';
 
-// The live feeds from a team station's transporter rooms, on the monitors down its briefing room's port wall: each
+// The live feeds from a goal viewing station's transporter rooms, on the monitors down its briefing room's port wall: each
 // room seen from its camera up over the door (TransporterRoom.camera), drawn as the screen draws the ship (frame.ts:
 // the outlines and the speech bubbles too) into a small picture of its own. Only while the captain's in that briefing
 // room, only the rooms with a workflow in them whose monitor is in view, and a few times a second, one feed a frame at
@@ -15,8 +15,8 @@ const FEED_FPS = 8;
 
 /** What the feeds need of the world: the briefing room the camera's in, and drawing only the part of the ship at a point. */
 export interface FeedWorld {
-  stationAt(p: THREE.Vector3): TeamStation | undefined;
-  stations(): TeamStation[];
+  stationAt(p: THREE.Vector3): GoalStation | undefined;
+  stations(): GoalStation[];
   reveal(at: THREE.Vector3 | null): void;
 }
 
@@ -24,10 +24,10 @@ export class TransporterFeeds {
   private readonly frame: Frame;
   private readonly camera = new THREE.PerspectiveCamera(50, FEED_SIZE.x / FEED_SIZE.y, 0.05, 60);
   /** Each station's pictures, made the first time the captain stands in its briefing room. */
-  private readonly targets = new Map<TeamStation, THREE.WebGLRenderTarget[]>();
+  private readonly targets = new Map<GoalStation, THREE.WebGLRenderTarget[]>();
   private readonly drawn: number[] = [];
   private next = 0;
-  private station: TeamStation | undefined;
+  private station: GoalStation | undefined;
   private readonly view = new THREE.Frustum();
   private readonly viewMatrix = new THREE.Matrix4();
 
@@ -75,7 +75,7 @@ export class TransporterFeeds {
   }
 
   /** Gives `station`'s monitors pictures to show, and lets go of any from stations no longer aboard. */
-  private watch(station: TeamStation, world: FeedWorld): void {
+  private watch(station: GoalStation, world: FeedWorld): void {
     const aboard = new Set(world.stations());
     for (const [s, targets] of this.targets) {
       if (aboard.has(s)) continue;

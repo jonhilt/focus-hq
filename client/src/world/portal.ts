@@ -3,7 +3,7 @@ import { clipNear, inDoorway, onScreen, throughDoor } from './doorway';
 import { Frame } from './frame';
 import { SlidingDoors } from './starship';
 
-// A pair of doorways that lead into each other, wherever in the world they stand: a team station's door in a holodeck
+// A pair of doorways that lead into each other, wherever in the world they stand: the goal viewing station's door in a holodeck
 // and the briefing room through it, which stands far off and is far bigger than the holodeck could hold. While the
 // doors are open, the alcove behind the one you're looking at shows the other end, drawn from where you'd be if you
 // stood that far from the other doorway (and turned the same way to it), into a texture the alcove samples wherever

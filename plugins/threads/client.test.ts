@@ -47,7 +47,7 @@ const toasts: string[] = [];
 const ui = { openAgent: (id: string) => opened.push(id), error: (message: string) => errors.push(message), hud: { toast: (_level: string, text: string) => toasts.push(text) } } as never;
 const closedThread = (contact: string, at: number, decided?: Thread['decided']): Thread =>
   ({ goal: 'g1', goalTitle: 'Quality review', leadName: 'Lt. Reyes', contact, text: `Thread ${contact}`, at, slice: 1, closedAt: 3, ...(decided && { decided }) });
-const live = { id: 'g7', name: 'Lt. Oyelaran', lead: { station: 0, title: 'SaaS', repos: [], slice: 2, prs: [], contacts: [{ id: 'c1', text: 'Firm #2 gaps', slice: 1, at: 8 }] } };
+const live = { id: 'g7', name: 'Lt. Oyelaran', lead: { title: 'SaaS', repos: [], slice: 2, prs: [], contacts: [{ id: 'c1', text: 'Firm #2 gaps', slice: 1, at: 8 }] } };
 
 const sections = (view: HTMLElement) => [...view.querySelectorAll('.threads-section')].map((s) => [
   s.querySelector('h3, summary')?.textContent,
@@ -63,7 +63,7 @@ beforeEach(() => {
   toasts.length = 0;
   goalsStarted.length = 0;
   opened.length = 0;
-  spun = { agent: { id: 'shop-lead-a1', name: 'Lt. Mensah', lead: { station: 1, title: 'Thread c2', repos: [], slice: 1, prs: [] } } };
+  spun = { agent: { id: 'shop-lead-a1', name: 'Lt. Mensah', lead: { title: 'Thread c2', repos: [], slice: 1, prs: [] } } };
   refuse = undefined;
   leads = [live];
   sent = { sorts: {}, sorting: {}, closed: { shop: [closedThread('c2', 9), closedThread('c3', 12, { as: 'parked', note: 'until the first login', at: 2 }), closedThread('c4', 1, { as: 'dropped', note: 'covered', at: 1 })] } };
@@ -170,7 +170,7 @@ describe('a project’s threads in its goals panel', () => {
   it('shows a thread spun off as the goal it went to, with a way to its lead while it’s under way', () => {
     const spunOff = closedThread('c2', 9, { as: 'next', spunOff: { goal: 'g8', title: 'Thread c2' }, at: 2 });
     sent = { sorts: {}, sorting: {}, closed: { shop: [spunOff] } };
-    leads = [{ id: 'g8', name: 'Lt. Mensah', lead: { station: 1, title: 'Second firm’s gaps', repos: [], slice: 1, prs: [] } }];
+    leads = [{ id: 'g8', name: 'Lt. Mensah', lead: { title: 'Second firm’s gaps', repos: [], slice: 1, prs: [] } }];
     const row = threadsView(ui, 'shop').querySelector('.threads-row:not(.live)') ?? undefined;
     expect(row?.querySelector('.threads-decided')?.textContent).toBe('Spun off as “Second firm’s gaps” · 2d ago');
     expect([...(row?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Talk', 'Park', 'Drop', 'Resolved', 'Undo']);

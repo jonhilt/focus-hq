@@ -115,8 +115,8 @@ class Cartographer {
       }
       const now = this.state.get().slices;
       const kept = (now[agent.projectId] ?? []).filter((s) => s.leadId !== agentId && underWay(this.host.agent(s.leadId)));
-      const mine: GoalSlice[] = repos.length ? [{ leadId: agentId, title: lead.title, heading: lead.waypoints?.at(-1)?.heading ?? lead.waypoints?.at(-1)?.title, station: lead.station, at: Date.now(), repos }] : [];
-      this.state.set({ slices: { ...now, [agent.projectId]: [...kept, ...mine].sort((a, b) => (a.station ?? Number.MAX_SAFE_INTEGER) - (b.station ?? Number.MAX_SAFE_INTEGER)) } });
+      const mine: GoalSlice[] = repos.length ? [{ leadId: agentId, title: lead.title, heading: lead.waypoints?.at(-1)?.heading ?? lead.waypoints?.at(-1)?.title, at: Date.now(), repos }] : [];
+      this.state.set({ slices: { ...now, [agent.projectId]: [...kept, ...mine] } });
     } finally {
       this.slicing.delete(agentId);
     }

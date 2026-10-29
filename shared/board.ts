@@ -14,12 +14,8 @@ export interface Columns {
   hiddenPrs: number;
 }
 
-/**
- * The order goals are listed in: those whose leads sit at a team station by station (goals started while goals took one),
- * then the rest as they started.
- */
-export const goalOrder = (a: Agent, b: Agent): number =>
-  (a.lead?.station ?? Number.MAX_SAFE_INTEGER) - (b.lead?.station ?? Number.MAX_SAFE_INTEGER) || a.startedAt - b.startedAt;
+/** The order goals are listed in: as they started. */
+export const goalOrder = (a: Agent, b: Agent): number => a.startedAt - b.startedAt;
 
 /** Splits a project's issues, agents and PRs into the three Kanban columns. */
 export function columns(project: Project, board: Board | undefined, agents: Agent[], login: string | undefined): Columns {

@@ -13,7 +13,7 @@ import { lcarsSign } from './starship';
 // drill in (Lower Decks, "I, Excretus"). The holodeck's door on the deck is a Portal to the
 // hall's entrance, so the hall stands out in the world (layout.ts: hallAt), round and tall, whatever the deck's
 // slot can hold. Its frame is a room's: +X from the entrance to the far wall, where the board curves round the wall,
-// with the team stations' pods round the wall either side of it and the desks in the control ring in the middle.
+// with the goal viewing station's pod by the wall to its right and the desks in the control ring in the middle.
 // Its shell is built in Blender (blender/training_hall.py), a copy per hall; ProjectRoom fills it, from the hall's
 // plan, as it fills today's room from its own.
 

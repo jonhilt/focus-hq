@@ -72,8 +72,8 @@ describe('needsYou', () => {
   });
 
   it('lists a lead waiting for a reply until their turn is read, and a lead ready to wrap up whether read or not', () => {
-    const turn = agent({ task: 'lead', status: 'done', finishedAt: 5, lead: { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] } });
-    const closing = agent({ id: 'a2', task: 'lead', status: 'done', finishedAt: 6, lead: { title: 'Search', station: 1, repos: [], slice: 2, prs: [], closing: { reason: 'all merged', at: 6 } } });
+    const turn = agent({ task: 'lead', status: 'done', finishedAt: 5, lead: { title: 'Wishlist', repos: [], slice: 1, prs: [] } });
+    const closing = agent({ id: 'a2', task: 'lead', status: 'done', finishedAt: 6, lead: { title: 'Search', repos: [], slice: 2, prs: [], closing: { reason: 'all merged', at: 6 } } });
     const working = agent({ id: 'a3', task: 'lead', lead: turn.lead });
     expect(needsYou([turn, closing, working], [], new Map())).toEqual([
       { kind: 'turn', agent: turn },
@@ -117,7 +117,7 @@ describe('needsYou', () => {
 
 describe('needsYou order', () => {
   it('puts what stopped an agent first, then what holds a goal up, then the PRs, oldest first within each', () => {
-    const lead = { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] };
+    const lead = { title: 'Wishlist', repos: [], slice: 1, prs: [] };
     const conflicting = pr({ number: 13, mergeable: 'CONFLICTING' });
     const laterTurn = agent({ id: 't2', task: 'lead', status: 'done', finishedAt: 9, lead });
     const earlierTurn = agent({ id: 't1', task: 'lead', status: 'done', finishedAt: 4, lead });
@@ -158,7 +158,7 @@ describe('inFlight', () => {
 });
 
 describe('hailNews: the core’s toast as an agent comes to need the captain', () => {
-  const lead = (a: Partial<Agent> = {}) => agent({ task: 'lead', name: 'Lt. Vale', finishedAt: 5, lead: { title: 'Wishlist', station: 0, repos: [], slice: 1, prs: [] }, ...a });
+  const lead = (a: Partial<Agent> = {}) => agent({ task: 'lead', name: 'Lt. Vale', finishedAt: 5, lead: { title: 'Wishlist', repos: [], slice: 1, prs: [] }, ...a });
 
   it('says a lead’s turn has come to the captain as it ends, and a raised hand as it’s raised', () => {
     const working = lead();
@@ -175,6 +175,6 @@ describe('hailNews: the core’s toast as an agent comes to need the captain', (
     expect(hailNews('turn', lead(), new Map())).toBeNull();
     expect(hailNews(null, agent({ status: 'error', error: 'boom' }), new Map())).toBeNull();
     // a turn the captain has read hails nobody
-    expect(hailNews(null, lead({ status: 'done', lead: { title: 'W', station: 0, repos: [], slice: 1, prs: [], readTurn: 5 } }), new Map())).toBeNull();
+    expect(hailNews(null, lead({ status: 'done', lead: { title: 'W', repos: [], slice: 1, prs: [], readTurn: 5 } }), new Map())).toBeNull();
   });
 });

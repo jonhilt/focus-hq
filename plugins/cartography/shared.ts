@@ -127,8 +127,6 @@ export interface GoalSlice {
   /** The goal's title, and what its slice is heading for. */
   title: string;
   heading?: string;
-  /** The team station its lead sits at, for a goal started while goals took one. */
-  station?: number;
   /** When it was worked out: as the lead's last turn ended. */
   at: number;
   /** Each repo the slice changes: what it changes, and the map of the lead's checkout (without its history and flows). */

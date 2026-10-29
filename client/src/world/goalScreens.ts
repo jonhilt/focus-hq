@@ -11,9 +11,9 @@ import { DISPLAY_EVERY, redrawDue, type ScreenView, screenTest, takeDraw } from 
 import { LCARS, LCARS_FONT, LCARS_STATUS } from './starship';
 import { clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, seeded, shieldState } from '../ui/course';
 
-// What a team station shows of its goal besides the lead's session. What floats in the holodeck is drawn like the
-// holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the station's door (also lit on the
-// dado under the briefing room's viewscreen), with the station, its goal and lead, whether its room is in session, and
+// What the goal viewing station shows of the goal it's tuned to besides the lead's session. What floats in the
+// holodeck is drawn like the holograms over the pods in Lower Decks, glowing cyan on dark glass: the sign over the
+// station's door (also lit on the dado under the briefing room's viewscreen), with which goal it shows, its lead, whether its room is in session, and
 // how far through its slice it is; and the team screen over its pod, for what the team's up to at a glance.
 // The goal board on the briefing room's wall is LCARS, like the viewscreen beside it: the goal and the lead's note on
 // it, and who's in the briefing room and what each is doing, the way the crew leaderboard in Lower Decks does.
@@ -33,15 +33,16 @@ const PANE = 'rgba(30, 120, 150, 0.22)';
 const TEXT = '#dcfbff';
 
 /**
- * What a station shows: its number and colour, its lead (none while it's free), who's in its briefing room, and what's
- * next in line for it.
+ * What the goal viewing station shows: how many goals its project has under way, its colour, the lead of the goal it's
+ * tuned to (none while the project has no goals), and who's in its briefing room.
  */
 export interface StationView {
-  index: number;
+  /** How many goals the project has under way, and which of them (from 1, in the goals' order) it's tuned to: 0 for none. */
+  goals: number;
+  at: number;
   accent: string;
   lead?: Agent;
   crew?: { who: CrewView; role: string }[];
-  next?: string;
   /** The slice's pull requests and how each stands (the screen over its pod's). */
   prs?: { label: string; number: number; state: PrGlance; reason?: string }[];
   /** Whose move it is on its goal, while it has one (`whoseMove`). */
@@ -206,7 +207,7 @@ abstract class Display {
   protected keyOf(view: StationView): unknown {
     const { lead } = view;
     const crew = view.crew?.map(({ who, role }) => [who.name, who.status, who.line, role]);
-    return [view.index, view.next, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, sliceSteps(lead.lead), lead.lead?.brief]];
+    return [view.goals, view.at, crew, lead && [lead.name, lead.status, lead.lead?.title, lead.lead?.slice, lead.lead?.note, sliceSteps(lead.lead), lead.lead?.brief]];
   }
 
   protected abstract draw(view: StationView): void;
@@ -235,7 +236,7 @@ export class GoalSign extends Display {
     return [super.keyOf(view), move];
   }
 
-  protected draw({ index, accent, lead, next, whose }: StationView): void {
+  protected draw({ goals, at, accent, lead, whose }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [GoalSign.W, GoalSign.H];
     const room = goalRoomState(lead);
@@ -245,9 +246,9 @@ export class GoalSign extends Display {
     const m = 14;
     ctx.fillStyle = GLASS;
     ctx.fillRect(0, 0, W, H);
-    // edged by its hologram's outline, in its room's tone (teamStation.ts)
+    // edged by its hologram's outline, in its room's tone (goalStation.ts)
 
-    // the station's code, in its own colour
+    // which of the room's goals it's tuned to, of how many, in its own colour
     const codeW = 230;
     ctx.fillStyle = accent;
     ctx.beginPath();
@@ -257,9 +258,9 @@ export class GoalSign extends Display {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `600 96px ${LCARS_FONT}`;
-    ctx.fillText(`TS-${index + 1}`, m + 22 + codeW / 2 + 8, H / 2 - 12);
+    ctx.fillText(`${at}/${goals}`, m + 22 + codeW / 2 + 8, H / 2 - 12);
     ctx.font = `600 30px ${LCARS_FONT}`;
-    ctx.fillText('TEAM STATION', m + 22 + codeW / 2 + 8, H / 2 + 58);
+    ctx.fillText('GOAL VIEWER', m + 22 + codeW / 2 + 8, H / 2 + 58);
 
     // how far through the slice, or whether it's free: the state you see first
     const progress = sliceProgress(sliceSteps(lead?.lead));
@@ -286,10 +287,10 @@ export class GoalSign extends Display {
     const w = rx - 30 - x;
     ctx.textAlign = 'left';
     ctx.font = `600 100px ${LCARS_FONT}`;
-    const title = lead ? (lead.lead?.title ?? lead.issue.title) : next ? 'Next up' : `Team station ${index + 1}`;
+    const title = lead ? (lead.lead?.title ?? lead.issue.title) : 'No goals';
     glowText(ctx, fitText(ctx, title.toUpperCase(), w), x, H / 2 - 32, TEXT, 10);
     ctx.font = `500 50px ${LCARS_FONT}`;
-    const sub = lead ? `${lead.name} · ${label}` : next ?? 'Free · start a goal here';
+    const sub = lead ? `${lead.name} · ${label}` : 'Press E to start one';
     glowText(ctx, fitText(ctx, sub.toUpperCase(), w), x, H / 2 + 50, color, 8);
   }
 }
@@ -359,7 +360,7 @@ export class GoalBoard extends Display {
     return i !== undefined && x >= this.rows[i].left && x < this.rows[i].right ? i : undefined;
   }
 
-  protected draw({ index, accent, lead, crew, next, prs }: StationView): void {
+  protected draw({ accent, lead, crew, prs }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [GoalBoard.W, GoalBoard.H];
     this.rows = [];
@@ -393,7 +394,7 @@ export class GoalBoard extends Display {
     ctx.textAlign = 'right';
     ctx.textBaseline = 'alphabetic';
     ctx.font = `600 54px ${LCARS_FONT}`;
-    ctx.fillText(`TS-${index + 1}`, side - 14, bar - 16);
+    ctx.fillText('GOAL', side - 14, bar - 16);
     // blocks down the left side, as on the viewscreen's frame
     const blocks: [string, number][] = [[LCARS.lilac, 90], [LCARS.periwinkle, 150], [LCARS.peach, H]];
     let by = bar + 130;
@@ -420,7 +421,7 @@ export class GoalBoard extends Display {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(status, pillX + pillW / 2, bar / 2 + 2);
-    const title = (lead ? (lead.lead?.title ?? lead.issue.title) : `Team station ${index + 1}`).toUpperCase();
+    const title = (lead ? (lead.lead?.title ?? lead.issue.title) : 'No goals').toUpperCase();
     const tx = side + 28;
     const tw = pillX - 28 - tx;
     let titleLines: string[] = [];
@@ -448,7 +449,7 @@ export class GoalBoard extends Display {
       ctx.restore();
       sy += s.height;
     }
-    if (!lead) return this.message('Free', next ? `Next up: ${next}` : 'Press E at the door, or on this board, to start a goal here.', x, y, w, h, color);
+    if (!lead) return this.message('Free', 'No goals under way: press E at the door, or on this board, to start one.', x, y, w, h, color);
 
     const note = lead.lead?.note;
     const steps = sliceSteps(lead.lead);
@@ -689,7 +690,7 @@ export class ChartScreen extends Display {
   protected override keyOf(view: StationView): unknown {
     const work = view.lead?.lead;
     const out = [...probesOut(view.lead)];
-    return [view.index, view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts, out]];
+    return [view.accent, work && [work.title, work.slice, work.note?.done, work.note?.next, work.waypoints, work.contacts, out]];
   }
 
   protected draw({ accent, lead }: StationView): void {
@@ -1020,10 +1021,10 @@ function drawCourse(ctx: CanvasRenderingContext2D, plot: CoursePlot, done: strin
 }
 
 /**
- * A team station's screen, hung over its pod as a hologram (hologram.ts), the four round the holodeck so you can watch every team at once
- * without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, whose
+ * The goal viewing station's screen, hung over its pod as a hologram (hologram.ts), so you can watch the goal it's tuned
+ * to without going in: how its room stands across the top in big type (seen from across the holodeck), the goal, whose
  * move it is (a pill for each holder, the one holding it lit) and why, beside the lead's face, how far through the slice they are and what's left of its tasks, and along the bottom
- * who else is in the briefing room and the slice's pull requests. A free station says so, or what's next in line for it.
+ * who else is in the briefing room and the slice's pull requests. With no goals under way, it says so.
  */
 export class TeamScreen extends Display {
   static readonly W = 1600;
@@ -1044,7 +1045,7 @@ export class TeamScreen extends Display {
     return this.shown?.whose?.move.counter === undefined ? DISPLAY_EVERY : COUNTDOWN_EVERY;
   }
 
-  protected draw({ index, accent, lead, crew, next, prs, whose }: StationView): void {
+  protected draw({ goals, at, accent, lead, crew, prs, whose }: StationView): void {
     const { ctx } = this.c;
     const [W, H] = [TeamScreen.W, TeamScreen.H];
     const room = goalRoomState(lead);
@@ -1056,9 +1057,9 @@ export class TeamScreen extends Display {
     ctx.fillRect(0, 0, W, H);
     ctx.fillStyle = GLASS;
     ctx.fillRect(0, 0, W, H);
-    // edged by its hologram's outline, in its room's tone (teamStation.ts)
+    // edged by its hologram's outline, in its room's tone (goalStation.ts)
 
-    // across the top: the station's code in its colour, its lead, and how its room stands, big enough to read from the door
+    // across the top: which of the room's goals it's tuned to, of how many, in its colour, its lead, and how its room stands, big enough to read from the door
     const top = 36;
     const barH = 108;
     const codeW = 270;
@@ -1070,7 +1071,7 @@ export class TeamScreen extends Display {
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.font = `600 88px ${LCARS_FONT}`;
-    ctx.fillText(`TS-${index + 1}`, 40 + codeW / 2 + 8, top + barH / 2 + 4);
+    ctx.fillText(`${at}/${goals}`, 40 + codeW / 2 + 8, top + barH / 2 + 4);
     ctx.font = `600 68px ${LCARS_FONT}`;
     const toneText = label.toUpperCase();
     const toneW = ctx.measureText(toneText).width + 80;
@@ -1084,7 +1085,7 @@ export class TeamScreen extends Display {
     const nameW = W - 40 - toneW - 34 - nameX;
     ctx.textAlign = 'left';
     ctx.font = `600 60px ${LCARS_FONT}`;
-    glowText(ctx, fitText(ctx, (lead ? lead.name : 'Team station').toUpperCase(), nameW), nameX, top + barH / 2 - 14, accent, 8);
+    glowText(ctx, fitText(ctx, (lead ? lead.name : 'Goal viewing station').toUpperCase(), nameW), nameX, top + barH / 2 - 14, accent, 8);
     ctx.font = `500 32px ${LCARS_FONT}`;
     glowText(ctx, fitText(ctx, lead ? 'GOAL LEAD' : 'NO GOAL', nameW), nameX, top + barH / 2 + 34, TEXT, 4);
 
@@ -1096,10 +1097,10 @@ export class TeamScreen extends Display {
       ctx.fill();
       ctx.textAlign = 'center';
       ctx.font = `600 110px ${LCARS_FONT}`;
-      glowText(ctx, next ? 'NEXT UP' : 'FREE', W / 2, y + 150, color, 16);
+      glowText(ctx, 'NO GOALS', W / 2, y + 150, color, 16);
       ctx.font = `46px ${UI_FONT}`;
       ctx.fillStyle = TEXT;
-      const lines = wrap(ctx, next ?? 'Press E here, or at its door, to start a goal at this station.', W - 260, 4);
+      const lines = wrap(ctx, 'Nothing under way in this room. Press E here, or at its door, to start a goal.', W - 260, 4);
       lines.forEach((line, i) => ctx.fillText(line, W / 2, y + 280 + i * 60));
       return;
     }

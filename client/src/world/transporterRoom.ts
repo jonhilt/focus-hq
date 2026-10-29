@@ -8,8 +8,8 @@ import { flat, occludedToon, toon } from './materials';
 import { mergeStatic } from './merge';
 import { consoleTexture, LCARS, lcarsFrame, LCARS_FONT } from './starship';
 
-// A transporter room, as on the Enterprise-D: where a goal's lead runs a workflow (one of TRANSPORTER_ROOMS per team
-// station, standing far out in the world: layout.ts, transporterRoomAt). Built in Blender (blender/transporter_room.py):
+// A transporter room, as on the Enterprise-D: where a goal's lead runs a workflow (one of TRANSPORTER_ROOMS per
+// holodeck's goal viewing station, standing far out in the world: layout.ts, transporterRoomAt). Built in Blender (blender/transporter_room.py):
 // a platform of three tiers of six pads along its back wall, each with a lit ring and an emitter over it, the transporter
 // console in front of it, the pattern buffer's glowing columns in niches either side, a tactical display on the
 // starboard wall and a sealed door. Nobody walks in or out: you beam in, and back to the briefing room from the console
@@ -17,7 +17,7 @@ import { consoleTexture, LCARS, lcarsFrame, LCARS_FONT } from './starship';
 // This dresses a copy of the module and hands out its parts, in world coordinates; who stands on the pads, the rings'
 // colours, the buffer's glow and what the screens show are up to whoever runs the room.
 
-/** Loads the transporter room module every team station's transporter rooms are copies of. */
+/** Loads the transporter room module every goal viewing station's transporter rooms are copies of. */
 export async function loadTransporterRoom(url: string): Promise<THREE.Object3D> {
   const { scene } = await new GLTFLoader().loadAsync(url);
   const room = scene.getObjectByName('transporter_room');
@@ -132,9 +132,8 @@ export class TransporterRoom {
     kit: THREE.Object3D,
     /** Where the middle of its floor stands (layout.ts: transporterRoomAt). */
     origin: THREE.Vector3,
-    /** The holodeck's project, the team station's index in it and this room's among the station's. */
+    /** The holodeck's project, and this room's index among its goal viewing station's. */
     readonly projectId: string,
-    readonly station: number,
     readonly index: number,
     /** The station's colour, for the strips along the platform's risers and the buffer's bands. */
     accent: string,
@@ -225,7 +224,7 @@ export class TransporterRoom {
     const consoles = energisers.filter((o) => o.name.includes('console'));
     if (consoles.length !== 1) throw new Error('The transporter room needs one console to energise from');
     this.console = consoles[0];
-    for (const o of energisers) interactive(o, { kind: 'energise', projectId, station, room: index }, o.userData.label as () => string);
+    for (const o of energisers) interactive(o, { kind: 'energise', projectId, room: index }, o.userData.label as () => string);
 
     const at = place.at.setY(0);
     this.place = { at, lookAt: at.clone().addScaledVector(place.forward, 4).setY(1.4) };

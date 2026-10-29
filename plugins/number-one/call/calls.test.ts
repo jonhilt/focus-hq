@@ -107,7 +107,7 @@ describe('Calls', () => {
   });
 
   it("says when a word for a lead waits on the captain's say about the API key", async () => {
-    const goal = { ...snapshot, agents: [{ id: 'lead_1', name: 'Lt. Data', projectId: 'p1', task: 'lead', lead: { station: 0, title: 'Wishlist', prs: [] } }] } as unknown as Snapshot;
+    const goal = { ...snapshot, agents: [{ id: 'lead_1', name: 'Lt. Data', projectId: 'p1', task: 'lead', lead: { title: 'Wishlist', prs: [] } }] } as unknown as Snapshot;
     const t = setUp([{ action: choice('tell_lead'), topic: choice('goal:lead_1') }, {}, { approve: { noul: 0.95 } }], { costly: {} as never }, goal);
     await t.calls.start('v=0 offer');
     await t.say('Tell Data something', 'd1');

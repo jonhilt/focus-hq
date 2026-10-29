@@ -8,7 +8,7 @@ const web: RepoMap = { ...MAP, repo: 'o/web' };
 const api: RepoMap = { ...MAP, repo: 'o/api' };
 const tie = { a: { repo: 'o/api', part: 'core' }, b: { repo: 'o/web', part: 'api' }, together: 4, either: 6 };
 const slice: GoalSlice = {
-  leadId: 'lead-1', title: 'Wishlist', station: 2, at: 5,
+  leadId: 'lead-1', title: 'Wishlist', at: 5,
   repos: [{ change: { repo: 'o/r', touched: [{ part: 'api', files: 1, lines: 3 }], unowned: [], added: [], removed: [], gained: [], lost: [] }, branch: MAP }],
 };
 const state = (patch: Partial<CartographyState> = {}): CartographyState => ({ maps: {}, mapping: [], slices: {}, crossRepo: {}, crossCalls: {}, ...patch });
@@ -61,7 +61,7 @@ describe('spaceShows', () => {
       ['view', 'the map: What does the API reach?'],
     ]);
     const sliced = shows.find((s) => s.kind === 'slice');
-    expect(sliced?.kind === 'slice' && sliced.caption).toBe("Wishlist · TS-3 · o/web, its lead's checkout against the default branch");
+    expect(sliced?.kind === 'slice' && sliced.caption).toBe("Wishlist · o/web, its lead's checkout against the default branch");
   });
 
   it('puts up no more than fit', () => {

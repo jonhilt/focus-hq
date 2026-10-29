@@ -301,7 +301,7 @@ describe('probes on the chart', () => {
 
   it('counts a lead’s working helpers as out, and its unfinished scripts while it’s at work', () => {
     const helpers = [{ id: 'h1', description: '', status: 'working' as const, activity: '', startedAt: 0 }, { id: 'h2', description: '', status: 'done' as const, activity: '', startedAt: 0 }];
-    const lead = { slice: 1, prs: [], repos: [], station: 0, title: '', waypoints: [{ slice: 1, startedAt: 0, probes: [probe('s1', 0, { type: 'script' }), probe('s2', 0, { type: 'script', endedAt: 5 }), probe('h1', 0)] }] };
+    const lead = { slice: 1, prs: [], repos: [], title: '', waypoints: [{ slice: 1, startedAt: 0, probes: [probe('s1', 0, { type: 'script' }), probe('s2', 0, { type: 'script', endedAt: 5 }), probe('h1', 0)] }] };
     expect([...probesOut({ status: 'working', helpers, lead })].sort()).toEqual(['h1', 's1']);
     expect([...probesOut({ status: 'done', helpers, lead })]).toEqual(['h1']);
     expect([...probesOut(undefined)]).toEqual([]);

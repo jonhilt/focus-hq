@@ -35,7 +35,7 @@ A few, in order:
 - Not part of the note
 `;
 
-const work: LeadWork = { station: 0, title: 'Saved items', repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: 0 }] };
+const work: LeadWork = { title: 'Saved items', repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: 0 }] };
 
 describe('reading a brief', () => {
   it('takes the title from its # heading and each part from the heading that names it', () => {

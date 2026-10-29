@@ -7,7 +7,6 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { WebSocket } from 'ws';
 import { keysOf } from '../shared/records';
-import { TEAM_STATIONS } from '../shared/types';
 import { CheckFailed, freePort, startDemo, stopDemo, waitForServer } from './demoShip';
 import { measure, verdict, BUDGETS, type Measured, type Sent } from './scaleRules';
 
@@ -47,7 +46,10 @@ async function shipState(api: Api): Promise<ShipState> {
   return state;
 }
 
-/** More projects on the demo's repos, each with a goal for every team station, and developers on the boards' first issues. */
+/** More projects on the demo's repos, each with a few goals, and developers on the boards' first issues. */
+/** How many goals each project starts with: as many as a room once had team stations for. */
+const GOALS_EACH = 4;
+
 async function grow(api: Api, projects: number): Promise<void> {
   for (let i = 0; i < projects; i++) {
     const repos = [DEMO_REPOS[i % DEMO_REPOS.length], DEMO_REPOS[(i + 1) % DEMO_REPOS.length]];
@@ -55,8 +57,7 @@ async function grow(api: Api, projects: number): Promise<void> {
   }
   const state = await shipState(api);
   for (const project of state.projects) {
-    // as many goals as a room has team stations, as it had when goals took one
-    for (let g = 0; g < TEAM_STATIONS; g++) await api(`/projects/${project.id}/goals`, { text: `Scale goal ${g + 1}: tidy up the checkout flow` });
+    for (let g = 0; g < GOALS_EACH; g++) await api(`/projects/${project.id}/goals`, { text: `Scale goal ${g + 1}: tidy up the checkout flow` });
     const issues = state.boards.find((b) => b.projectId === project.id)?.issues ?? [];
     for (const issue of issues.slice(0, 2)) {
       await api('/agents', { projectId: project.id, repo: issue.repo, number: issue.number, title: issue.title }).catch(() => undefined); // past the project's crew limit

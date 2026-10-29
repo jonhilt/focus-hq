@@ -3,7 +3,7 @@ import type * as THREE from 'three';
 /**
  * The parts of the ship that never see each other except through a doorway that's a portal (portal.ts): the command
  * deck, main engineering, the holodeck deck, the training halls (each reached through its holodeck's door on the deck)
- * and the team stations' briefing rooms; and the team stations' transporter rooms, which you only beam into. Decks
+ * and the goal viewing stations' briefing rooms; and their transporter rooms, which you only beam into. Decks
  * stand side by side in world space, briefing rooms and halls out beyond the holodecks and transporter rooms beyond
  * main engineering, so from any one of them every other would be drawn, hidden behind its walls; the World draws only
  * the one the camera's in (and of the transporter rooms, only the one it's in). A plugin's spaces (`ShipHost.space`)

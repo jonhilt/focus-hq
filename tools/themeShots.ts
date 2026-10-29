@@ -47,7 +47,7 @@ try {
   await shot(page, 'engineering', place('Engineering'));
   await shot(page, 'ready-room', place('Ready room'));
   await shot(page, 'holodeck', `ui.goTo(ui.places().find((p) => p.projectId)); ${settle}`);
-  await shot(page, 'team-station', `ui.goToAgent(${lead}); ${settle}`);
+  await shot(page, 'goal-station', `ui.goToAgent(${lead}); ${settle}`);
   await shot(page, 'transporter', place('Transporter room 1'));
 } finally {
   await browser.close();
