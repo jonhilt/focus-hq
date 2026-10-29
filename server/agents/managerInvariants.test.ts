@@ -207,6 +207,22 @@ describe('a goal’s lead, under Focus’s rule for a restart', () => {
     expect(seen).toEqual(['ended', 'ended', 'judged', 'none', 'judged', 'none', 'ended']);
   });
 
+  // docs/goals.md: the lead hears their brief again once their conversation's compacted, and asks with their office
+  // tools, in a conversation agent-host carries on after a restart as in any other (before a turn of theirs brings them)
+  it('gives the host a lead’s office tools and brief for a conversation it resumes after a restart, and no one else extras', async () => {
+    const first = focus();
+    const started = first.agents.startGoal(first.project.id, 'Saved items');
+    if (!('agent' in started)) throw new Error('the goal was queued');
+    first.agents.shutDown();
+    const after = restarted(first.store);
+    const extras = after.agents.sessionExtras(started.agent.id);
+    expect(extras?.cwd).toBeTruthy();
+    expect(extras?.brief?.afterCompact()).toContain('Saved items');
+    expect(Object.keys(extras?.tools ?? {})).toEqual(['recap', 'show', 'ask', 'proposeClose', 'extra']);
+    expect(after.agents.sessionExtras('nobody')).toBeUndefined();
+    after.agents.shutDown();
+  });
+
   it('is said to be where it was, and held if it was, after Focus goes down and starts again', async () => {
     await checkRestart(lead, { runs: 15 });
   });

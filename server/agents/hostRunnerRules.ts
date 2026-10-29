@@ -3,6 +3,7 @@ import type { Autonomy as HostAutonomy, ConversationEvent, ConversationSummary }
 import { clock } from '../../shared/clock';
 import type { AgentTask, Autonomy, TermLine } from '../../shared/types';
 import { fieldsOf } from '../../shared/records';
+import { type AskedQuestion, askedQuestions } from './questions';
 import type { TurnResult } from './sdkMessages';
 import { type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
 
@@ -75,6 +76,8 @@ export function isSdkMessage(raw: unknown): raw is SDKMessage {
 export type Reaction =
   /** A raised hand: put it to the manager. */
   | { kind: 'ask'; requestId: string; tool: string; input: Record<string, unknown>; summary: string; agentId?: string; toolUseId?: string }
+  /** A lead's question for the user (Claude Code's AskUserQuestion); `questions` undefined when it can't be read. */
+  | { kind: 'question'; requestId: string; questions?: AskedQuestion[] }
   /** Someone answered a raised hand or a question: stop waiting on the manager for it. */
   | { kind: 'resolved'; requestId: string }
   /** How full the context window is. */
@@ -103,6 +106,8 @@ export function reaction(event: ConversationEvent, result: TurnResult | undefine
         : { kind: 'none' };
     case 'PermissionRequested':
       return asking(event);
+    case 'QuestionAsked':
+      return { kind: 'question', requestId: event.requestId, questions: askedQuestions({ questions: event.questions }) };
     case 'PermissionAnswered':
     case 'QuestionAnswered':
       return { kind: 'resolved', requestId: event.requestId };

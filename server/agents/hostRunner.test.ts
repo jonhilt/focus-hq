@@ -10,6 +10,7 @@ import { BrowserPool } from './browserTool';
 import { DECLINED } from './claudeRunner';
 import { copyTranscript, HostRunner } from './hostRunner';
 import { refusedFile } from './pushGuard';
+import { askedQuestions } from './questions';
 import type { RunHooks, RunRequest } from './types';
 import { workflowAsk } from './workflows';
 
@@ -237,6 +238,96 @@ describe('HostRunner', () => {
     expect(after.sessions).toHaveLength(1);
     await Effect.runPromise(s2.endTurn());
     expect(await resumed.done).toMatchObject({ ok: true });
+    await second.shutDown();
+  });
+});
+
+describe("HostRunner, a goal's lead", () => {
+  const signal = new AbortController().signal;
+  const tools = { recap: async () => '', show: async () => '', ask: async () => '', proposeClose: async () => '', extra: [] };
+  const lead = (prompt: string, edited = () => undefined, resumeSessionId?: string): RunRequest => ({
+    ...request(prompt, resumeSessionId),
+    agentId: 'lead_1',
+    task: 'lead',
+    tools,
+    brief: { edited, afterCompact: () => 'The goal: Saved items' },
+  });
+  const edit = (file: string) => ({ hook_event_name: 'PostToolUse' as const, tool_name: 'Edit', tool_input: { file_path: file }, tool_response: {}, tool_use_id: 't1', session_id: 's', transcript_path: '', cwd: process.cwd() });
+  const compacted = { hook_event_name: 'SessionStart' as const, source: 'compact' as const, session_id: 's', transcript_path: '', cwd: process.cwd() };
+
+  it('may ask the user, reads their brief again as they edit it, has it back after a compaction, and has helpers summed up', async () => {
+    const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const edited = vi.fn();
+    const session = runner.start(lead('run the goal', edited), hooks().h);
+    const s = await Effect.runPromise(fake.session(1));
+    await until(() => s.inTurn, 'the turn');
+    expect(s.options.disallowedTools).toEqual(['EnterPlanMode']);
+    const extension = runner.extend(s.options.conversationId, s.options.labels);
+    expect(extension).toMatchObject({ agentProgressSummaries: true, toolConfig: { askUserQuestion: { previewFormat: 'html' } } });
+    const [onEdit] = extension.hooks?.PostToolUse ?? [];
+    await onEdit.hooks[0](edit(path.join(process.cwd(), 'brief.md')), 't1', { signal });
+    expect(edited).toHaveBeenCalledOnce();
+    const [onStart] = extension.hooks?.SessionStart ?? [];
+    expect(await onStart.hooks[0](compacted, undefined, { signal })).toMatchObject({ hookSpecificOutput: { additionalContext: 'The goal: Saved items' } });
+    await Effect.runPromise(s.endTurn());
+    await session.done;
+    await runner.shutDown();
+  });
+
+  it("gives a developer's sessions none of a lead's extras", async () => {
+    const fake = makeFakeAdapter({ script: (s, text) => says(s, text) });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    await runner.start(request('fix it'), hooks().h).done;
+    const s = await Effect.runPromise(fake.session(1));
+    expect(runner.extend(s.options.conversationId, s.options.labels)).toEqual({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [expect.any(Function)] }] } });
+    await runner.shutDown();
+  });
+
+  it("puts a lead's question to the user and gives them the answers, and says so when it can't read one", async () => {
+    const questions = [{ question: 'Which?', header: 'Pick', multiSelect: false, options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }] }];
+    const fake = makeFakeAdapter({
+      script: (s) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          yield* s.emit({ _tag: 'QuestionAsked', requestId: 'q1', questions, source: { _tag: 'Main' } });
+          yield* s.answerOf('q1');
+          yield* s.emit({ _tag: 'QuestionAsked', requestId: 'q2', questions: 'nonsense', source: { _tag: 'Main' } });
+          yield* s.answerOf('q2');
+          yield* s.endTurn();
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const asked: unknown[] = [];
+    const h: RunHooks = { ...hooks().h, question: (input) => (asked.push(input.questions), Promise.resolve({ 'Which?': 'B' })) };
+    await runner.start(lead('decide'), h).done;
+    const s = await Effect.runPromise(fake.session(1));
+    expect(asked).toEqual([askedQuestions({ questions })]);
+    expect(s.answers.get('q1')).toEqual({ _tag: 'Answers', answers: { 'Which?': 'B' } });
+    expect(s.answers.get('q2')).toMatchObject({ _tag: 'Declined', reason: expect.stringMatching(/couldn’t read the questions/) });
+    await runner.shutDown();
+  });
+
+  it('has the manager give a lead their extras for a conversation the host resumes after a restart', async () => {
+    const file = journal();
+    const before = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const first = new HostRunner(new BrowserPool(), before, file);
+    const session = first.start(lead('run the goal'), hooks().h);
+    const s1 = await Effect.runPromise(before.session(1));
+    await until(() => s1.inTurn, 'the turn');
+    first.closingNow();
+    session.stop();
+    await first.shutDown();
+
+    const after = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const second = new HostRunner(new BrowserPool(), after, file);
+    const asked: string[] = [];
+    second.extrasFor = (id) => (asked.push(id), { cwd: process.cwd(), tools, brief: { edited: () => undefined, afterCompact: () => 'The goal: resumed' } });
+    second.warmUp();
+    const s2 = await Effect.runPromise(after.session(1));
+    expect(asked).toEqual(['lead_1']);
+    const [onStart] = second.extend(s2.options.conversationId, s2.options.labels).hooks?.SessionStart ?? [];
+    expect(await onStart.hooks[0](compacted, undefined, { signal })).toMatchObject({ hookSpecificOutput: { additionalContext: 'The goal: resumed' } });
     await second.shutDown();
   });
 });

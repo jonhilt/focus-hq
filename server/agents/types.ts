@@ -118,6 +118,9 @@ export interface RunRequest {
   scripted?: { title: string; summary: string };
 }
 
+/** What a goal's lead's sessions have beyond everyone's: Ops' office tools, and their brief, in their workspace (`cwd`). */
+export type SessionExtras = Pick<RunRequest, 'cwd' | 'tools' | 'brief'>;
+
 /** A tool's answer with pictures for Claude to look at: JPEGs, after the words. */
 export interface ToolReply {
   text: string;

@@ -2,6 +2,7 @@ import type { Layer } from 'effect';
 import { type CaptainAnswer, landed } from '../../shared/captainAnswer';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
 import type { Agent, Autonomy, CodingAgent, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { SessionExtras } from './types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
 import type { Plugins } from '../plugins/registry';
@@ -120,6 +121,11 @@ export class AgentManager {
     this.core.goalTools.recover();
     this.core.sessions.recover(keyFallback.onKey(), new Set(closing));
     for (const room of rooms) this.core.reviews.nextReview(room);
+  }
+
+  /** A lead's extras for a session the host resumes after a restart (`AgentSessions.sessionExtras`). */
+  sessionExtras(agentId: string): SessionExtras | undefined {
+    return this.core.sessions.sessionExtras(agentId);
   }
 
   /** Focus is shutting down (`AgentSessions.shutDown`). */

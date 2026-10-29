@@ -1,6 +1,7 @@
 import type { ConversationSummary } from 'agent-host';
 import { describe, expect, it } from 'vitest';
 import { isSdkMessage, joining, outcome, reaction, runsOnHost } from './hostRunnerRules';
+import { askedQuestions } from './questions';
 import { STOPPED_BY_CAPTAIN } from './types';
 
 const conv = (id: string, status: string, agentSessionId?: string): ConversationSummary => ({ id, agent: 'claude', labels: {}, status, ...(agentSessionId && { agentSessionId }) });
@@ -52,6 +53,12 @@ describe('reaction', () => {
     expect(reaction({ _tag: 'PermissionRequested', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)', source: main }, undefined)).toEqual({ kind: 'ask', requestId: 'r', tool: 'Bash', input: {}, summary: 'Bash(curl x)' });
     expect(reaction({ _tag: 'PermissionAnswered', requestId: 'r', answer: { _tag: 'AllowOnce' } }, undefined)).toEqual({ kind: 'resolved', requestId: 'r' });
     expect(reaction({ _tag: 'QuestionAnswered', requestId: 'q', answer: { _tag: 'Answers', answers: {} } }, undefined)).toEqual({ kind: 'resolved', requestId: 'q' });
+  });
+
+  it("reads a lead's questions, or says it couldn't", () => {
+    const questions = [{ question: 'Which?', header: 'Pick', multiSelect: false, options: [{ label: 'A', description: 'a' }, { label: 'B', description: 'b' }] }];
+    expect(reaction({ _tag: 'QuestionAsked', requestId: 'q', questions, source: main }, undefined)).toEqual({ kind: 'question', requestId: 'q', questions: askedQuestions({ questions }) });
+    expect(reaction({ _tag: 'QuestionAsked', requestId: 'q', questions: 'nonsense', source: main }, undefined)).toEqual({ kind: 'question', requestId: 'q', questions: undefined });
   });
 
   it('names the helper that raised a hand, and the call, from Claude Code’s request', () => {

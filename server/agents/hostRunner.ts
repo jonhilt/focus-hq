@@ -1,20 +1,21 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { type Adapter, type ConversationEvent, Host, type Lent, makeClaudeAdapter, makeCodexAdapter, type Tool, type WatchItem, Journal } from 'agent-host';
+import { type Adapter, type ClaudeAdapterOptions, type ConversationEvent, Host, type Lent, makeClaudeAdapter, makeCodexAdapter, type Tool, type WatchItem, Journal } from 'agent-host';
 import { Effect, Fiber, Layer, ManagedRuntime, Stream } from 'effect';
 import type { Effort } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage } from '../util';
 import { BackgroundTracker } from './backgroundTasks';
 import { browserTools, type BrowserPool } from './browserTool';
-import { agentEnv, DECLINED } from './claudeRunner';
+import { agentEnv, DECLINED, sessionHooks, UNANSWERED } from './claudeRunner';
 import { type CommonContext, handleCommonEvent, newCommonContext } from './commonEvents';
+import type { AskedQuestion } from './questions';
 import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction, runsOnHost } from './hostRunnerRules';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { openScratch, type Scratch } from './scratch';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
-import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest } from './types';
+import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, SessionExtras } from './types';
 import { sessionEnv } from './wait';
 import { WorkflowPermits, workflowAsk } from './workflows';
 
@@ -37,6 +38,7 @@ const AGENT_LABEL = 'focusAgent';
 interface Lending {
   scratch: Scratch;
   hooks?: RunHooks;
+  extras?: SessionExtras;
 }
 
 export class HostRunner implements AgentRunner {
@@ -45,6 +47,9 @@ export class HostRunner implements AgentRunner {
   /** Which Focus agent each conversation is, by the host's id. */
   private readonly agentOf = new Map<string, string>();
   private closing = false;
+
+  /** A lead's extras for a conversation the host resumes before any turn of theirs (the manager's, once it's up). */
+  extrasFor?: (agentId: string) => SessionExtras | undefined;
 
   constructor(
     private readonly browsers: BrowserPool,
@@ -90,9 +95,9 @@ export class HostRunner implements AgentRunner {
   }
 
   /** A turn of `agentId`'s starts: a fresh scratch dir, and its hooks for the browser's frames. */
-  opened(agentId: string, hooks: RunHooks): Lending {
+  opened(agentId: string, hooks: RunHooks, extras: SessionExtras): Lending {
     this.lendings.get(agentId)?.scratch.close();
-    const lending = { scratch: openScratch(agentId, paths.dcgConfig), hooks };
+    const lending = { scratch: openScratch(agentId, paths.dcgConfig), hooks, extras };
     this.lendings.set(agentId, lending);
     return lending;
   }
@@ -122,19 +127,36 @@ export class HostRunner implements AgentRunner {
     return { tools, env: definedOnly(sessionEnv(base, { ...lending.scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(agentId), base) })) };
   }
 
-  /** The host opening a conversation Focus didn't start in this run (one it resumes after a restart). */
+  /**
+   * The host opening a conversation Focus didn't start in this run (one it resumes after a restart): a lead's extras
+   * come from the manager (`extrasFor`), since no turn of theirs has brought them yet.
+   */
   private lend(conversationId: string, agentId: string | undefined): Lent {
     if (!agentId) return {};
     this.remember(conversationId, agentId);
-    return this.lent(agentId);
+    const lent = this.lent(agentId);
+    const lending = this.lendings.get(agentId);
+    if (lending && !lending.extras) lending.extras = this.extrasFor?.(agentId);
+    return lent;
   }
 
-  /** Claude Code's own extras: the scratch dir's guard on Bash (and the push guard's), before it runs. */
-  extend(conversationId: string, labels: Record<string, string>) {
+  /**
+   * Claude Code's own extras: the scratch dir's guard on Bash (and the push guard's), before it runs; and a lead's brief
+   * hooks, their questions' pages in HTML, and their helpers' progress in a line. A lead's brief is looked up as each
+   * hook runs, so it's always their latest turn's.
+   */
+  extend(conversationId: string, labels: Record<string, string>): ReturnType<NonNullable<ClaudeAdapterOptions['extend']>> {
     // whose it is from its labels: a conversation's first session opens before `start` gives Focus its id
     const agentId = labels[AGENT_LABEL] ?? this.agentOf.get(conversationId);
-    const scratch = agentId ? this.lendings.get(agentId)?.scratch : undefined;
-    return scratch ? { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] } } : {};
+    const lending = agentId ? this.lendings.get(agentId) : undefined;
+    if (!agentId || !lending) return {};
+    const extras = lending.extras;
+    const latest = () => this.lendings.get(agentId)?.extras?.brief;
+    const brief = extras?.brief && { edited: () => latest()?.edited(), afterCompact: () => latest()?.afterCompact() ?? '' };
+    return {
+      hooks: sessionHooks({ cwd: extras?.cwd ?? '', brief }, lending.scratch.hook),
+      ...(extras?.tools && { agentProgressSummaries: true, toolConfig: { askUserQuestion: { previewFormat: 'html' } } }),
+    };
   }
 }
 
@@ -189,7 +211,7 @@ class HostTurn {
   }
 
   private async run(): Promise<RunOutcome> {
-    const lending = this.runner.opened(this.req.agentId, this.hooks);
+    const lending = this.runner.opened(this.req.agentId, this.hooks, { cwd: this.req.cwd, tools: this.req.tools, brief: this.req.brief });
     this.ctx.scratch = lending.scratch.dir;
     this.hooks.signIn?.(false);
     try {
@@ -235,8 +257,9 @@ class HostTurn {
             allowApiKeyFallback: false,
             firstMessage: this.req.prompt,
             systemAppend: this.req.systemAppend,
-            // Claude Code's own: Codex's can't be switched off one by one
-            disallowedTools: codex ? [] : ['AskUserQuestion', 'EnterPlanMode'],
+            // Claude Code's own (Codex's can't be switched off one by one); a lead asks the user with AskUserQuestion, and no
+            // one plans in Claude Code's own plan mode
+            disallowedTools: codex ? [] : this.req.tools ? ['EnterPlanMode'] : ['AskUserQuestion', 'EnterPlanMode'],
             ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }),
             ...(plan.resumes && { resumeAgentSession: plan.resumes }),
           },
@@ -285,6 +308,19 @@ class HostTurn {
     );
   }
 
+  /**
+   * A lead's question, put to the user on their station's screen; the first answer wins, from anyone watching. Unanswered
+   * (the turn's over, or they were stopped), the lead hears so; unreadable, they're told how to ask again.
+   */
+  private async question(requestId: string, questions: AskedQuestion[] | undefined): Promise<void> {
+    const controller = new AbortController();
+    this.asks.set(requestId, controller);
+    const answers = questions && (await this.hooks.question({ questions }, controller.signal));
+    if (controller.signal.aborted && !answers) return;
+    const answer = answers ? { _tag: 'Answers' as const, answers } : { _tag: 'Declined' as const, reason: questions ? UNANSWERED : UNREADABLE_QUESTIONS };
+    await this.runner.run(Host.use((h) => h.answer(requestId, answer))).catch(() => undefined);
+  }
+
   private stop(): void {
     // Focus shutting down: the host carries the turn on when it starts again
     if (this.runner.isClosing || this.over) return;
@@ -316,6 +352,8 @@ class HostTurn {
     switch (r.kind) {
       case 'ask':
         return void this.ask(r);
+      case 'question':
+        return void this.question(r.requestId, r.questions);
       case 'resolved':
         this.asks.get(r.requestId)?.abort();
         this.asks.delete(r.requestId);
@@ -354,6 +392,9 @@ class HostTurn {
     await this.runner.run(Host.use((h) => h.answer(requestId, answer))).catch(() => undefined);
   }
 }
+
+/** What a lead hears when Claude Code's AskUserQuestion input can't be read. */
+const UNREADABLE_QUESTIONS = 'Ops couldn’t read the questions: ask again with 1–4 questions of 2–4 options each.';
 
 /** The environment as the host takes it: no unset values. */
 function definedOnly(env: Record<string, string | undefined>): Record<string, string> {

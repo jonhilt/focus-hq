@@ -20,7 +20,7 @@ import { type Recordings, Sessions, Workspace } from '../services';
 import { journalResults, runOutcome, scriptPlan, transcriptLines, WORKFLOW_LINGER_MS } from '../workflows';
 import { committedWaypoint, probedWaypoints } from '../waypoints';
 import { BACKGROUND_LINGER_MS, OUTPUT_TAIL, outputLines } from '../backgroundTasks';
-import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
+import { type ExtraTool, type RunHooks, type RunOutcome, type RunRequest, type SessionExtras, STOPPED_BY_CAPTAIN, type WorkflowEvent } from '../types';
 import { EmptyRepository, type ManagerServices, Part, Refused, ReportGone, type Runtime, withNotes, type WorkError } from './core';
 
 /** Running an agent's Claude Code session: launching their task, each turn and its hooks, compacting, and what follows a turn. */
@@ -226,8 +226,6 @@ export class AgentSessions extends Part {
 
   /** One turn of the agent's session: the same tools and instructions on every turn, so a resumed session stays itself. */
   private runRequest(agent: Agent, prompt: string, instructions: string, resumeSessionId?: string): RunRequest {
-    // the lead's tools answer Claude Code as Promises: the SDK's tool boundary
-    const tool = <A>(effect: Effect.Effect<A, WorkError, ManagerServices>) => this.runtime.runPromise(effect);
     const cwd = this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.task === 'review' ? this.core.reviews.reviewDir(agent) : agent.id))));
     return {
       agentId: agent.id,
@@ -243,12 +241,28 @@ export class AgentSessions extends Part {
       model: agent.model,
       agent: agent.agent,
       outputSchema: agent.task === 'review' ? QA_SCHEMA : undefined,
-      brief: agent.task === 'lead' ? { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) } : undefined,
       scripted: this.core.plugins.brief(agent.brief)?.demo,
-      tools: agent.task === 'lead'
-        ? { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), extra: this.leadTools(agent, cwd) }
-        : undefined,
+      ...this.leadExtras(agent, cwd),
     };
+  }
+
+  /** A goal's lead's extras (`SessionExtras`): their brief's hooks and Ops' office tools, bound to them. */
+  private leadExtras(agent: Agent, cwd: string): Pick<RunRequest, 'brief' | 'tools'> {
+    if (agent.task !== 'lead') return {};
+    // the lead's tools answer Claude Code as Promises: the SDK's tool boundary
+    const tool = <A>(effect: Effect.Effect<A, WorkError, ManagerServices>) => this.runtime.runPromise(effect);
+    return {
+      brief: { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) },
+      tools: { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), extra: this.leadTools(agent, cwd) },
+    };
+  }
+
+  /** A session's extras for one the host resumes after a restart, before any turn of theirs brings them: a lead's only. */
+  sessionExtras(agentId: string): SessionExtras | undefined {
+    const agent = this.store.agents.get(agentId);
+    if (agent?.task !== 'lead') return undefined;
+    const cwd = this.runtime.runSync(Workspace.use((w) => Effect.succeed(w.dir(agent.id))));
+    return { cwd, ...this.leadExtras(agent, cwd) };
   }
 
   /** The tools of the plugins switched on for a lead's project, in their `office` server, bound to them: their checkouts (in `workspace`), and their station's screen. */

@@ -95,8 +95,8 @@ function demoParts(): ShipParts {
 }
 
 function liveParts(store: Store, browsers: BrowserPool): ShipParts {
+  // warmed up once the manager can give the host a lead's extras (`main`)
   const host = new HostRunner(browsers);
-  host.warmUp();
   return {
     github: ghCliLayer,
     runner: splitRunner(new ClaudeRunner(browsers), host),
@@ -158,6 +158,12 @@ async function main() {
   focus.voice.warmSpeech();
   const crew = Layer.mergeAll(gitHub, Workspace.fromOps(parts.workspace), Sessions.fromRunner(parts.runner), Triage.fromTriager(parts.triager), Renderer.fromBrowser(browsers), Recordings.fromBrowser(browsers), QaChat.fromChatter(parts.qaChat));
   focus.agents = new AgentManager(store, hub, crew, (id) => focus.boardChanged(id), version);
+  // the host resumes what it was carrying as it starts: a lead's office tools and brief hooks with it
+  if (parts.host) {
+    const agents = focus.agents;
+    parts.host.extrasFor = (id) => agents.sessionExtras(id);
+    parts.host.warmUp();
+  }
   focus.ownRepo = await parts.ownRepo();
   parts.readTranscripts(focus.agents);
   await startPlugins(focus, store, parts.demoRunner, shipStatus);
