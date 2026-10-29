@@ -16,7 +16,7 @@ importers:
         version: 3.8.1
       agent-host:
         specifier: git+https://github.com/jonhilt/agent-host.git
-        version: git+https://github.com/jonhilt/agent-host.git#2ae3bf9dd1f9e5146e34b0b2db385f4194b6db36(@anthropic-ai/claude-agent-sdk@0.3.289(@anthropic-ai/sdk@0.131.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(zod@4.6.5))(effect@4.0.6)(xstate@5.33.3)(zod@4.6.5)
+        version: git+https://github.com/jonhilt/agent-host.git#93ab7a93383081ce441d9fb680a98d9ac9a9e3e7(@anthropic-ai/claude-agent-sdk@0.3.289(@anthropic-ai/sdk@0.131.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(zod@4.6.5))(effect@4.0.6)(xstate@5.33.3)(zod@4.6.5)
       croner:
         specifier: 10.0.1
         version: 10.0.1
@@ -1029,8 +1029,8 @@ packages:
     engines: {node: '>=0.4.0'}
     hasBin: true
 
-  agent-host@git+https://github.com/jonhilt/agent-host.git#2ae3bf9dd1f9e5146e34b0b2db385f4194b6db36:
-    resolution: {commit: 2ae3bf9dd1f9e5146e34b0b2db385f4194b6db36, repo: https://github.com/jonhilt/agent-host.git, type: git}
+  agent-host@git+https://github.com/jonhilt/agent-host.git#93ab7a93383081ce441d9fb680a98d9ac9a9e3e7:
+    resolution: {commit: 93ab7a93383081ce441d9fb680a98d9ac9a9e3e7, repo: https://github.com/jonhilt/agent-host.git, type: git}
     version: 0.0.0
     engines: {node: '>=22.19'}
     peerDependencies:
@@ -2898,7 +2898,7 @@ snapshots:
 
   acorn@8.18.0: {}
 
-  agent-host@git+https://github.com/jonhilt/agent-host.git#2ae3bf9dd1f9e5146e34b0b2db385f4194b6db36(@anthropic-ai/claude-agent-sdk@0.3.289(@anthropic-ai/sdk@0.131.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(zod@4.6.5))(effect@4.0.6)(xstate@5.33.3)(zod@4.6.5):
+  agent-host@git+https://github.com/jonhilt/agent-host.git#93ab7a93383081ce441d9fb680a98d9ac9a9e3e7(@anthropic-ai/claude-agent-sdk@0.3.289(@anthropic-ai/sdk@0.131.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(zod@4.6.5))(effect@4.0.6)(xstate@5.33.3)(zod@4.6.5):
     dependencies:
       '@anthropic-ai/claude-agent-sdk': 0.3.289(@anthropic-ai/sdk@0.131.0(zod@4.6.5))(@modelcontextprotocol/sdk@1.32.2(zod@4.6.5))(zod@4.6.5)
       '@modelcontextprotocol/sdk': 1.32.2(zod@4.6.5)

@@ -48,7 +48,7 @@ export class HostRunner implements AgentRunner {
 
   constructor(
     private readonly browsers: BrowserPool,
-    claude: Adapter = makeClaudeAdapter({ configDir: HOST_CLAUDE_DIR, env: agentEnv(false), extend: (id) => this.extend(id) }),
+    claude: Adapter = makeClaudeAdapter({ configDir: HOST_CLAUDE_DIR, env: agentEnv(false), extend: (id, labels) => this.extend(id, labels) }),
     journalPath = path.join(HOST_DIR, 'journal.sqlite'),
     codex: Adapter = makeCodexAdapter({ codexHome: HOST_CODEX_DIR, env: agentEnv(false) }),
   ) {
@@ -130,8 +130,9 @@ export class HostRunner implements AgentRunner {
   }
 
   /** Claude Code's own extras: the scratch dir's guard on Bash (and the push guard's), before it runs. */
-  private extend(conversationId: string) {
-    const agentId = this.agentOf.get(conversationId);
+  extend(conversationId: string, labels: Record<string, string>) {
+    // whose it is from its labels: a conversation's first session opens before `start` gives Focus its id
+    const agentId = labels[AGENT_LABEL] ?? this.agentOf.get(conversationId);
     const scratch = agentId ? this.lendings.get(agentId)?.scratch : undefined;
     return scratch ? { hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [scratch.hook] }] } } : {};
   }

@@ -77,6 +77,20 @@ describe('HostRunner', () => {
     await runner.shutDown();
   });
 
+  it("guards a session's Bash from its first opening, before the host has given Focus the conversation's id", async () => {
+    const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const session = runner.start(request('fix it'), hooks().h);
+    const s = await Effect.runPromise(fake.session(1));
+    await until(() => s.inTurn, 'the turn');
+    // as the Claude adapter asks while the host opens the session: by an id Focus hasn't heard yet, and its labels
+    expect(runner.extend('not-yet-known', s.options.labels)).toEqual({ hooks: { PreToolUse: [{ matcher: 'Bash', hooks: [expect.any(Function)] }] } });
+    expect(runner.extend('not-yet-known', {})).toEqual({});
+    session.stop();
+    await session.done;
+    await runner.shutDown();
+  });
+
   it("puts a raised hand to the manager and gives the agent their answer", async () => {
     const fake = makeFakeAdapter({
       script: (s) =>
