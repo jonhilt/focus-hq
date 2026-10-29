@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, BotChange, BotStatus, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, QueuedGoal, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, BotChange, BotStatus, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -54,19 +54,16 @@ export const api = {
   draftIssue: (projectId: string, idea: string, revise?: { repo: string; title: string; body: string; notes: string }) =>
     call<IssueDraft>('POST', `/projects/${projectId}/draft`, { idea, revise }),
   discardDraft: (projectId: string) => call('DELETE', `/projects/${projectId}/draft`),
-  /**
-   * Starts a goal at a team station (the first free one unless `station` says): a lead of its own hears `text` first.
-   * With every station taken, the goal waits in line instead.
-   */
-  startGoal: (projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}) =>
-    call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
+  /** Starts a goal: a lead of its own hears `text` first. A project has any number of goals, so it always starts. */
+  startGoal: (projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}) =>
+    call<{ agent: Agent }>('POST', `/projects/${projectId}/goals`, { text, ...how }),
   /** Demo only: how fast the pretend agents go (below 1 is slower than `pnpm run demo`), told to every tab. */
   demoSpeed: (speed: number) => call<{ speed: number }>('POST', '/demo/speed', { speed }),
-  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}) =>
+  startQueued: (projectId: string, queueId: string, edits: { text?: string; effort?: Effort; shaping?: boolean } = {}) =>
     call<Agent>('POST', `/projects/${projectId}/goals/queue/${queueId}/start`, edits),
   moveQueued: (projectId: string, queueId: string, by: -1 | 1) => call('POST', `/projects/${projectId}/goals/queue/${queueId}/move`, { by }),
   dropQueued: (projectId: string, queueId: string) => call('DELETE', `/projects/${projectId}/goals/queue/${queueId}`),
-  /** Reopens a closed goal from the room's log at a free team station, on its branch and with its lead's session. */
+  /** Reopens a closed goal from the room's log, on its branch and with its lead's session. */
   reopenGoal: (projectId: string, goalId: string) => call<Agent>('POST', `/projects/${projectId}/goals/${goalId}/reopen`, {}),
   /** Closes a goal, unless something would be lost or left behind: then it says what, and `force` closes it anyway. */
   closeGoal: (id: string, force = false) => call<{ closed: true } | { warn: string[] }>('POST', `/agents/${id}/close`, { force }),
@@ -120,8 +117,8 @@ export const api = {
     call<Agent | MessageReply>('POST', `/agents/${id}/answer`, { question, option, note, how }),
   /** The captain has read the lead's latest turn, here: every screen stops hailing about it. */
   readTurn: (id: string) => call('POST', `/agents/${id}/read`),
-  spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),
-  spinOffIdea: (id: string, idea: string, text: string) => call<{ agent: Agent } | { queued: QueuedGoal }>('POST', `/agents/${id}/ideas/spin-off`, { idea, text }),
+  spinOffContact: (id: string, contact: string, text: string) => call<{ agent: Agent }>('POST', `/agents/${id}/contacts/${contact}/spin-off`, { text }),
+  spinOffIdea: (id: string, idea: string, text: string) => call<{ agent: Agent }>('POST', `/agents/${id}/ideas/spin-off`, { idea, text }),
   tickSpotCheck: (id: string, slice: number, index: number, checked: boolean) => call('POST', `/agents/${id}/spot-checks`, { slice, index, checked }),
   permission: (id: string, requestId: string, allow: boolean) => call('POST', `/agents/${id}/permission`, { requestId, allow }),
   stop: (id: string) => call('POST', `/agents/${id}/stop`),

@@ -1,7 +1,7 @@
 // What both halves of the threads plugin (README.md) share: a project's register of loose threads, the contacts its
 // goals' leads logged and never pursued or dropped, and the ideas for next its goals closed with, which outlive the goal
 // that noticed them.
-import { type Agent, type GoalRecord, goalTitle, type LedgerEntry, type LedgerEvent, type QueuedGoal } from '../../plugin-api/shared';
+import { type Agent, type GoalRecord, goalTitle, type LedgerEntry, type LedgerEvent } from '../../plugin-api/shared';
 
 export const THREADS = 'threads';
 
@@ -37,7 +37,7 @@ export interface Thread {
   proposed?: { as: ThreadEnd; note: string; at: number };
 }
 
-/** The goal a thread was spun off as: its lead's id, if it took a team station (not if it waits in line for one), and its title as it started. */
+/** The goal a thread was spun off as: its lead's id (missing on one that waited in line, when goals waited for a free team station), and its title as it started. */
 export interface SpunOff {
   goal?: string;
   title: string;
@@ -153,8 +153,8 @@ export const spinOffText = (t: Thread) =>
   `${t.text}\n\n(Spun off from “${t.goalTitle}”, a closed goal: ${t.idea ? 'one of the ideas for next it closed with' : `its contact ${t.contact}, noticed in slice ${t.slice}`}.)`;
 
 /** The ledger line thread `t` being spun off writes: taken on (next) as the goal `started` from `text`, at a station or in line for one. */
-export function spunOffEntry(t: Thread, text: string, started: { agent: Pick<Agent, 'id' | 'lead'> } | { queued: QueuedGoal }): LedgerEntry {
-  const spunOff: SpunOff = 'agent' in started ? { goal: started.agent.id, title: started.agent.lead?.title ?? goalTitle(text) } : { title: goalTitle(text) };
+export function spunOffEntry(t: Thread, text: string, started: { agent: Pick<Agent, 'id' | 'lead'> }): LedgerEntry {
+  const spunOff: SpunOff = { goal: started.agent.id, title: started.agent.lead?.title ?? goalTitle(text) };
   return { kind: 'thread-decided', goalId: t.goal, goal: t.goalTitle, contact: t.contact, text: t.text, as: 'next', spunOff };
 }
 

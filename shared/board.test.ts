@@ -51,6 +51,11 @@ describe('goals on the board', () => {
     expect(cols.doing.map((a) => a.id)).toEqual(['dev']);
   });
 
+  it('list goals at a team station by station, then the ones at none as they started', () => {
+    const agents = [{ ...lead('late', 'working', { station: undefined }), startedAt: 9 }, { ...lead('early', 'working', { station: undefined }), startedAt: 2 }, lead('seated', 'done', { station: 2 })];
+    expect(columns(project, undefined, agents, undefined).goals.map((a) => a.id)).toEqual(['seated', 'early', 'late']);
+  });
+
   it('say which slice they’re on and what they’re waiting for', () => {
     expect(goalState(lead('l', 'working'))).toBe('Slice 2 · working');
     expect(goalState(lead('l', 'waiting'))).toBe('Slice 2 · needs approval');

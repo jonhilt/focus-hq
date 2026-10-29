@@ -1,7 +1,7 @@
 // The threads plugin in the browser: a Threads view in each project's goals panel, after Closed, listing the
 // contacts its goals' leads logged and left open and the ideas for next its goals closed with, what a model proposed
 // of them (Sort for me), and where the captain decided each of a closed goal's ends.
-import { type Agent, busy, callPlugin, type ClientPlugin, focus, goalStarted, goalTitle, h, pluginState, type QueuedGoal, timeAgo, type Ui } from '../../plugin-api/client';
+import { type Agent, busy, callPlugin, type ClientPlugin, focus, goalStarted, h, pluginState, timeAgo, type Ui } from '../../plugin-api/client';
 import { type LastSort, register, type RegisterThread, spinOffText, THREAD_ENDS, type ThreadEnd, THREADS, type ThreadsState } from './shared';
 import './threads.css';
 
@@ -73,12 +73,6 @@ function noteForm(ui: Ui, projectId: string, t: RegisterThread, draft: Draft & {
   return h('div', { class: 'row threads-form' }, input, save, cancel);
 }
 
-/** Tells the captain where a goal spun off from a thread went: to a team station, or in line for one. */
-function started(ui: Ui, s: { agent: Agent } | { queued: QueuedGoal }): void {
-  if ('agent' in s) goalStarted(ui, s.agent);
-  else ui.hud.toast('info', `Every team station has a goal: “${goalTitle(s.queued.text)}” waits in line for one`);
-}
-
 /** The first words of a goal of its own spun off from `t`, what its lead hears first: started with the button, left with Esc or Cancel. */
 function spinOffForm(ui: Ui, projectId: string, t: RegisterThread, draft: Draft, redraw: () => void): HTMLElement {
   const text = h('textarea', { class: 'threads-goal', rows: 5, title: 'What the new goal’s lead hears first' });
@@ -87,14 +81,14 @@ function spinOffForm(ui: Ui, projectId: string, t: RegisterThread, draft: Draft,
   const cancel = h('button', { class: 'btn small' }, 'Cancel');
   text.oninput = () => (draft.text = text.value);
   start.onclick = () => send(ui, start, draft, () => text.value, redraw, async () =>
-    started(ui, await callPlugin<{ agent: Agent } | { queued: QueuedGoal }>(THREADS, '/spin-off', { projectId, goal: t.goal, contact: t.contact, text: text.value })));
+    goalStarted(ui, (await callPlugin<{ agent: Agent }>(THREADS, '/spin-off', { projectId, goal: t.goal, contact: t.contact, text: text.value })).agent));
   cancel.onclick = () => ((writing = null), redraw());
   text.onkeydown = (e) => {
     if (e.key === 'Escape') cancel.click();
   };
   setTimeout(() => text.focus(), 0);
   return h('div', { class: 'threads-form' }, text,
-    h('div', { class: 'row' }, start, cancel, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
+    h('div', { class: 'row' }, start, cancel, h('small', { class: 'muted' }, 'It starts with a lead of its own')));
 }
 
 /** What was decided of a thread, in words: a goal it was spun off as by `title`, its title now if its lead's on the ship. */

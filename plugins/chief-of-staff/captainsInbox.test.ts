@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { Agent, FocusPlugin, PluginHost } from '../../plugin-api/server';
+import type { FocusPlugin, PluginHost } from '../../plugin-api/server';
 import { focus, until } from '../../plugin-api/testing';
 import { Inbox } from './captainsInbox';
 import { judged, reading } from './laneRules';
@@ -222,7 +222,7 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
       if (!found) throw new Error(`no route ${path}`);
       return (body: Record<string, unknown> = {}, params: Record<string, string> = {}) => found.handle({ body, query: {}, params });
     };
-    const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: Agent };
+    const { agent } = o.agents.startGoal(o.project.id, 'Saved items');
     await until(() => o.claude.turns.length === 1 && !!o.store.agents.get(agent.id)?.sessionId);
     const read = () => readOf(o.store.agent(agent.id));
     const state = () => o.agents.plugins.stateOf(CHIEF_OF_STAFF) as CosState | undefined;
@@ -317,7 +317,7 @@ describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-in
       if (!found) throw new Error(`no bot route ${method} ${path}`);
       return (body: Record<string, unknown> = {}, params: Record<string, string> = {}) => found.handle({ body, query: {}, params });
     };
-    const { agent } = o.agents.startGoal(o.project.id, 'Saved items') as { agent: Agent };
+    const { agent } = o.agents.startGoal(o.project.id, 'Saved items');
     await until(() => o.claude.turns.length === 1);
     o.claude.turns[0].end({ ok: true, summary: 'Here’s the mockup. Shall I build it?' });
     await until(() => o.store.agent(agent.id).status === 'done');

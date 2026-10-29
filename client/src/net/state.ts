@@ -1,3 +1,4 @@
+import { goalOrder } from '../../../shared/board';
 import { isHidden, shownProjects } from '../../../shared/hidden';
 import type { ReportCard } from '../../../shared/ledger';
 import type { PersonalEntry } from '../../../shared/personalLog';
@@ -234,9 +235,9 @@ export class ShipState {
     return [...this.agents.values()].filter((a) => a.projectId === projectId);
   }
 
-  /** The room's goals: each one's lead, by team station. */
+  /** The room's goals: each one's lead, in `goalOrder`. */
   leadsIn(projectId: string): Agent[] {
-    return this.agentsIn(projectId).filter((a) => a.task === 'lead').sort((a, b) => (a.lead?.station ?? 0) - (b.lead?.station ?? 0));
+    return this.agentsIn(projectId).filter((a) => a.task === 'lead').sort(goalOrder);
   }
 
   /** The room's QA officer's agent record, while they have one. */

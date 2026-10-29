@@ -3,7 +3,7 @@ import { briefing, pieces, type Topic, topics } from './brief';
 import type { JevAnswer, JevAnswers, JevQuestion } from './jev';
 import { spokenStatus } from './status';
 import type { LedgerEvent, Project, Snapshot } from '../../../plugin-api/server';
-import { goalTitle, pickStation, shownProjects } from '../../../plugin-api/shared';
+import { goalTitle, shownProjects } from '../../../plugin-api/shared';
 
 // What a call does with what the captain just said: the questions Jev is asked about it, and what its answers mean.
 // Pure, so it's unit tested (routeRules.test.ts); the call's machine (machine.ts) acts on the result.
@@ -27,8 +27,6 @@ export interface StartGoal {
   projectName: string;
   queueId: string;
   title: string;
-  /** The team station it would get, 0-based. */
-  station: number;
 }
 
 /** Something consequential the call does, once the captain has said yes to it. */
@@ -74,7 +72,7 @@ const NONE = 'none';
 export function askFor(act: Act): string {
   switch (act.kind) {
     case 'start-queued':
-      return `Start "${act.start.title}" in ${act.start.projectName}, at station ${act.start.station + 1}?`;
+      return `Start "${act.start.title}" in ${act.start.projectName}?`;
     case 'new-goal':
       return `Start a new goal in ${act.projectName}: "${act.said}"? It takes the notes from this call with it.`;
     case 'tell-lead':
@@ -147,7 +145,7 @@ function projectMeant(projects: Project[], answers: JevAnswers, topic?: Topic): 
   return projects.find((p) => p.id === id);
 }
 
-/** Starting the next queued goal: which, and where; or why not, said aloud. */
+/** Starting the next queued goal: which; or why not, said aloud. A project has any number of goals, so it can always start. */
 export function nextGoal(snapshot: Snapshot, project: Project | undefined): Routing {
   const projects = shownProjects(snapshot.projects);
   if (!project) {
@@ -159,10 +157,7 @@ export function nextGoal(snapshot: Snapshot, project: Project | undefined): Rout
   const next = project.goalQueue?.[0];
   if (!next) return { kind: 'say', text: `There are no goals queued in ${project.name}.` };
   const title = goalTitle(next.text);
-  const taken = snapshot.agents.filter((a) => a.projectId === project.id && a.task === 'lead').map((a) => a.lead?.station ?? 0);
-  const station = pickStation(taken);
-  if (station === undefined) return { kind: 'say', text: `Every team station in ${project.name} has a goal, so "${title}" has to wait for one to close.` };
-  const act: Act = { kind: 'start-queued', start: { projectId: project.id, projectName: project.name, queueId: next.id, title, station } };
+  const act: Act = { kind: 'start-queued', start: { projectId: project.id, projectName: project.name, queueId: next.id, title } };
   return { kind: 'confirm', act, ask: askFor(act) };
 }
 

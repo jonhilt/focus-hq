@@ -114,8 +114,8 @@ export type LedgerEntry =
    * records it): which goal (`goalId`, titled `goal`) and which of its threads (`contact`: a contact's id, or an idea
    * for next's key, saying `text`), and `as` what. `note` goes with it: who takes it on (next), until when (parked),
    * why (dropped) or what resolved it (resolved). `open` takes a decision back, to be decided again. `spunOff` is the
-   * goal of its own it was taken on as (next), started from it: its lead's id, if it took a team station (not if it
-   * waits in line for one), and title. `proposed`: the captain accepted it as a model proposed it (`thread-proposals`).
+   * goal of its own it was taken on as (next), started from it: its lead's id (missing on one that waited in line,
+   * when goals waited for a free team station), and title. `proposed`: the captain accepted it as a model proposed it (`thread-proposals`).
    */
   | { kind: 'thread-decided'; goalId: string; goal: string; contact: string; text: string; as: ThreadDecidedAs; note?: string; spunOff?: { goal?: string; title: string }; proposed?: true }
   /**

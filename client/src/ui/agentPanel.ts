@@ -198,7 +198,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
       // one LCARS bar of segments, each in its own colour, and what they're doing last, taking the rest of the bar
       readout('Status', a.status, { tone: LCARS_STATUS[a.status] }),
       a.run ? readout('Run', runLine(a.run), { tone: LCARS.periwinkle, title: `Where their run is, as its journal tells it (fact #${a.run.seq})` }) : null,
-      a.task === 'lead' ? readout('Station · Slice', `${(a.lead?.station ?? 0) + 1} · ${a.lead?.slice ?? 1}`, { tone: LCARS.sky }) : null,
+      a.task === 'lead' ? (a.lead?.station === undefined
+        ? readout('Slice', String(a.lead?.slice ?? 1), { tone: LCARS.sky })
+        : readout('Station · Slice', `${a.lead.station + 1} · ${a.lead.slice}`, { tone: LCARS.sky })) : null,
       readout('Effort', a.task === 'lead' ? leadEffortPicker(a) : a.effort ?? 'default', { tone: LCARS.gold }),
       readout('Autonomy', autonomyPicker(a), { tone: autonomyOf(a) === 'full' ? LCARS.red : LCARS.gold }),
       contextReadout(a),

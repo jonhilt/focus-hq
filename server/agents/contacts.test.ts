@@ -43,16 +43,15 @@ describe('contacts', () => {
     expect(contactToSpinOff(contacts, ' c1 ')).toBe(contacts[0]);
     expect(contactToSpinOff(contacts, 'c2')).toEqual({ error: 'Contact c2 was already dropped.' });
     expect(contactToSpinOff(undefined, 'c1')).toEqual({ error: 'There\'s no contact c1. Open contacts: none.' });
-    // started at a station: linked to its lead, under the lead's title
-    const lead = { id: 'lead-p-x', lead: { station: 2, title: 'Auth off the LAN', repos: [], slice: 1, prs: [] } };
+    // linked to its lead, under the lead's title
+    const lead = { id: 'lead-p-x', lead: { title: 'Auth off the LAN', repos: [], slice: 1, prs: [] } };
     const after = spunOff({ slice: 3, contacts }, contacts[0], { agent: lead }, 'Auth off the LAN? Look into it', 9);
     expect(after.contacts[0].closed).toEqual({ as: 'spun off', goal: 'lead-p-x', title: 'Auth off the LAN', slice: 3, at: 9 });
     expect(after.contacts[1]).toBe(contacts[1]);
-    expect(after.note).toBe('The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”, at team station 3. Leave that thread to the new goal: take it off your brief.');
-    // waiting in line, it has no lead yet, and goes by its first words
-    const queued = spunOff({ slice: 3, contacts }, contacts[0], { queued: { id: 'q1', text: 'Auth off the LAN? Look into it', at: 8 } }, 'Auth off the LAN? Look into it', 9);
-    expect(queued.contacts[0].closed).toEqual({ as: 'spun off', title: 'Auth off the LAN? Look into it', slice: 3, at: 9 });
-    expect(queued.note).toContain('“Auth off the LAN? Look into it”, waiting in line for a team station.');
+    expect(after.note).toBe('The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”. Leave that thread to the new goal: take it off your brief.');
+    // a lead not titled yet: the goal goes by its first words
+    const untitled = spunOff({ slice: 3, contacts }, contacts[0], { agent: { id: 'lead-p-y' } }, 'Auth off the LAN? Look into it', 9);
+    expect(untitled.contacts[0].closed).toEqual({ as: 'spun off', goal: 'lead-p-y', title: 'Auth off the LAN? Look into it', slice: 3, at: 9 });
   });
 
   it('spins an idea for next off, taking it off the lead’s ideas', () => {
@@ -60,7 +59,7 @@ describe('contacts', () => {
     expect(spunOffIdea(next, ' Tidy the  store code')).toEqual(['Show it in the header']);
     expect(spunOffIdea(next, 'Dark mode')).toHaveProperty('error');
     expect(spunOffIdea(undefined, 'Dark mode')).toHaveProperty('error');
-    expect(spunOffIdeaNote('Tidy the store code', 'Tidy the store', 0)).toContain('(Tidy the store code) off as a goal of its own, “Tidy the store”, at team station 1');
+    expect(spunOffIdeaNote('Tidy the store code', 'Tidy the store')).toContain('(Tidy the store code) off as a goal of its own, “Tidy the store”. Leave it');
   });
 
   it('forgets the oldest closed ones once there are too many to keep', () => {
@@ -76,6 +75,6 @@ describe('contacts', () => {
     const contacts: Contact[] = [{ id: 'c1', text: 'Auth off the LAN?', slice: 1, at: 0 }];
     const work: LeadWork = { station: 0, title: 'Tricorder', repos: [{ repo: 'acme/web', folder: 'web', baseBranch: 'main' }], slice: 1, prs: [], contacts };
     const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/tricorder-1-ab12', startedAt: 0, lead: work } as LeadAgent;
-    expect(reopenedWork(goalRecord(lead, 9), 2).contacts).toEqual(contacts);
+    expect(reopenedWork(goalRecord(lead, 9)).contacts).toEqual(contacts);
   });
 });

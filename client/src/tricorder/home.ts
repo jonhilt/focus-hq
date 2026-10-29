@@ -124,7 +124,7 @@ function goalCard(lead: Agent): HTMLElement {
   return h('a', { class: 'card agent', href: agentHref(lead.id), attrs: { 'data-key': `agent:${lead.id}` } },
     h('div', { class: 'row' },
       h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]}` }),
-      h('strong', { class: 'grow' }, `${lead.name} · team station ${(lead.lead?.station ?? 0) + 1}`),
+      h('strong', { class: 'grow' }, lead.lead?.station === undefined ? lead.name : `${lead.name} · team station ${lead.lead.station + 1}`),
       // between turns, a lead isn't "done": the goal's line below says what it waits for
       lead.status === 'done' || lead.status === 'stopped' ? null : h('span', { class: `pill status ${lead.status}` }, `${statusIcon(lead)} ${lead.status}`),
     ),

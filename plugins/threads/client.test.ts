@@ -167,15 +167,6 @@ describe('a project’s threads in its goals panel', () => {
     expect(row()?.querySelector('textarea')).toBeNull();
   });
 
-  it('says a goal spun off waits in line when every team station has one', async () => {
-    spun = { queued: { id: 'q1', text: 'Thread c2\n\nmore', at: 5 } };
-    button(threadsView(ui, 'shop').querySelector('.threads-row') ?? undefined, 'Spin off')?.click();
-    button(threadsView(ui, 'shop').querySelector('.threads-row') ?? undefined, 'Spin off as a goal')?.click();
-    await settle();
-    expect(goalsStarted).toEqual([]);
-    expect(toasts).toEqual(['Every team station has a goal: “Thread c2” waits in line for one']);
-  });
-
   it('shows a thread spun off as the goal it went to, with a way to its lead while it’s under way', () => {
     const spunOff = closedThread('c2', 9, { as: 'next', spunOff: { goal: 'g8', title: 'Thread c2' }, at: 2 });
     sent = { sorts: {}, sorting: {}, closed: { shop: [spunOff] } };

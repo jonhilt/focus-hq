@@ -7,7 +7,7 @@ import { state } from '../net/state';
 import { LCARS } from '../world/starship';
 import type { Ui } from './context';
 import { fill, h } from './dom';
-import { goalStarted, prLink } from './goals';
+import { goalStarted, prLink, stationWords } from './goals';
 import { type Box, CHART, chartSize, clip, type CoursePlot, everySlice, type Label, leaderEnd, LINE_GAP, plotCourse, type ProbeFlight, probeFlights, probesOut, type Pt, seeded, shieldState, TRANSMIT_MS, waypointName } from './course';
 import { close, closer, home, panBy, type View, wheelZoom, whole, type World, zoomAbout, zoomOn } from './chartView';
 import { type Column, ORBIT, type PlacedNode, type Quiet, type Sky, sky, sliceWork, type WorkKind, type WorkNode } from './constellation';
@@ -435,7 +435,7 @@ function spinOffSection(key: string, start: string, go: (text: string) => Promis
     go(text.value).then(() => spin.drafts.delete(key), (err: Error) => ui.error(err.message)).finally(() => (button.disabled = false));
   };
   return section('Make it a goal of its own', LCARS.peach, text,
-    h('div', { class: 'row' }, button, h('small', { class: 'muted' }, 'It takes the first free team station, or waits in line for one')));
+    h('div', { class: 'row' }, button, h('small', { class: 'muted' }, 'It starts with a lead of its own')));
 }
 
 /** The goal a contact was spun off as: a link to its lead while it's on the ship, else its name. */
@@ -443,7 +443,7 @@ function spunOffGoal(closed: { goal?: string; title: string }, ui: Ui): HTMLElem
   const lead = closed.goal ? state.agents.get(closed.goal) : undefined;
   const title = lead?.lead?.title ?? closed.title;
   return lead
-    ? h('button', { class: 'chart-jump', onclick: () => ui.openAgent(lead.id) }, `“${title}” · ${lead.name}, team station ${(lead.lead?.station ?? 0) + 1}`)
+    ? h('button', { class: 'chart-jump', onclick: () => ui.openAgent(lead.id) }, [`“${title}” · ${lead.name}`, stationWords(lead)].filter(Boolean).join(', '))
     : h('p', null, `“${title}”`);
 }
 
@@ -675,9 +675,7 @@ function openChart(ui: Ui, goal: () => ChartGoal | undefined, shown: (ui: Ui) =>
   let drawn = '';
   // an open contact's or an idea's words for a goal of its own, as the captain edits them: kept across the redraws a live
   // goal brings. An idea spun off comes off the chart, so the drawer goes back to the waypoint under way
-  const started = (s: { agent: Agent } | object) => {
-    if ('agent' in s) goalStarted(ui, s.agent);
-  };
+  const started = (s: { agent: Agent }) => goalStarted(ui, s.agent);
   const spin: SpinOff | undefined = liveId ? {
     drafts: new Map(),
     contact: async (c, text) => started(await api.spinOffContact(liveId, c.id, text)),

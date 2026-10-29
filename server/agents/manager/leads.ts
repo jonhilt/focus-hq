@@ -2,12 +2,12 @@ import { prKey } from '../../../shared/qa';
 import { Effect } from 'effect';
 import { leadFor, leadId } from '../../../shared/crew';
 import type { Agent, Effort, Evidence, LeadAgent, QaReport, QaReview, QaScreenshot, QueuedGoal } from '../../../shared/types';
-import { LEAD_DESK, TEAM_STATIONS } from '../../../shared/types';
+import { LEAD_DESK } from '../../../shared/types';
 import { GitHub } from '../../github/service';
 import { errorMessage, newId } from '../../util';
 import { takesTitle } from '../goalTitles';
-import { fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, nextGoal, qaVerdictNote, fixingNote, fixHandedBackNote, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
-import { closeCheck, hasLeadWork, pickStation, queuedStart, reopenable, verdictStands, verdictToast } from '../leadRules';
+import { fileGoal, freshSessionPrompt, goalBrief, goalEffort, goalRecord, goalReviewerId, goalTitle, leadWorktreeId, moveQueued, qaVerdictNote, fixingNote, fixHandedBackNote, reopenedNote, reopenedWork, sliceBranch, sliceLanded, snapshotMessage, repoBranch, type VerdictBehind } from '../lead';
+import { closeCheck, hasLeadWork, queuedStart, reopenable, verdictStands, verdictToast } from '../leadRules';
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
@@ -23,24 +23,15 @@ export class Leads extends Part {
   titleGoal?: (brief: string) => Promise<string | undefined>;
 
   /**
-   * Starts a goal at one of the room's team stations: a lead of its own (the captain's own Claude Code session for the
-   * goal), with every repo of the project checked out on the goal's first branch, who hears `text` first. `station`
-   * picks the station; otherwise the goal takes the first free one. Later messages go to the lead like any agent's.
+   * Starts a goal: a lead of its own (the user's own Claude Code session for the goal), with every repo of the project
+   * checked out on the goal's first branch, who hears `text` first. A project has any number of goals, so it always
+   * starts, at no team station. Later messages go to the lead like any agent's.
    */
-  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } | { queued: QueuedGoal } {
+  startGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } {
     const project = this.store.project(projectId);
     if (!project.repos.length) throw new Refused({ message: `Connect a repository to ${project.name} first` });
     if (!text.trim()) throw new Refused({ message: 'Tell them what you’re after' });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
-    // goals already waiting go first: a new one joins the line behind them, even if a station has just come free
-    if (how.station === undefined && project.goalQueue?.length) return { queued: this.queueGoal(projectId, text, how) };
-    const station = pickStation(leads.map((a) => a.lead?.station ?? 0), how.station);
-    if (station === undefined) {
-      const wanted = how.station;
-      if (wanted === undefined) return { queued: this.queueGoal(projectId, text, how) };
-      const holder = leads.find((a) => a.lead?.station === wanted);
-      throw new Refused({ message: holder ? `Team station ${wanted + 1} already has a goal: ${holder.lead?.title ?? holder.name}` : `${project.name} has team stations 1 to ${TEAM_STATIONS}` });
-    }
     const suffix = newId('g').slice(-6);
     const id = leadId(projectId, suffix);
     const crew = leadFor(projectId, suffix, leads.map((a) => a.name), (project.goals ?? []).map((g) => g.leadName));
@@ -57,10 +48,10 @@ export class Leads extends Part {
       effort,
       desk: LEAD_DESK,
       status: 'queued',
-      activity: `Coming over to team station ${station + 1}`,
+      activity: 'Coming over to lead the goal',
       branch: sliceBranch(title, 1, newId('s').slice(-4)),
       baseBranch: 'main',
-      lead: { station, title, brief: goalBrief(text), ...(how.shaping && { shaping: true }), repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: Date.now() }] },
+      lead: { title, brief: goalBrief(text), ...(how.shaping && { shaping: true }), repos: [], slice: 1, prs: [], waypoints: [{ slice: 1, startedAt: Date.now() }] },
       costUsd: 0,
       startedAt: Date.now(),
     };
@@ -68,7 +59,7 @@ export class Leads extends Part {
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
     this.print(agent, [
-      { kind: 'system', text: `✻ ${crew.name} takes team station ${station + 1} to lead “${title}” across ${project.repos.join(', ')} (${effort} effort${how.shaping ? ', shaping it with the captain first' : ''})` },
+      { kind: 'system', text: `✻ ${crew.name} leads “${title}” across ${project.repos.join(', ')} (${effort} effort${how.shaping ? ', shaping it with the captain first' : ''})` },
       { kind: 'manager', text: `▶ ${how.from ? `Captain, from ${how.from}` : 'Captain'}: ${text.trim()}` },
     ]);
     this.core.seating.schedule();
@@ -95,18 +86,16 @@ export class Leads extends Part {
   }
 
   /**
-   * Reopens a closed goal from the room's log at a free team station (`station`, or the first free one): the same lead,
-   * so Claude Code finds their conversation again, with every repo checked out on the goal's branch as it was left.
+   * Reopens a closed goal from the room's log: the same lead, so Claude Code finds their conversation again, with every
+   * repo checked out on the goal's branch as it was left. Like a new goal, it takes no team station.
    */
-  reopenGoal(projectId: string, goalId: string, station?: number): Agent {
+  reopenGoal(projectId: string, goalId: string): Agent {
     const project = this.store.project(projectId);
     const goal = (project.goals ?? []).find((g) => g.id === goalId);
     if (!goal) throw new Refused({ message: 'That goal isn’t in the room’s log' });
     if (!reopenable(goal)) throw new Refused({ message: `“${goal.title}” closed before Ops kept its branch, so it can’t be reopened` });
     if (this.store.agents.has(goal.id)) throw new Refused({ message: `“${goal.title}” is already under way` });
     const leads = this.store.agentsIn(projectId).filter((a) => a.task === 'lead');
-    const free = pickStation(leads.map((a) => a.lead?.station ?? 0), station) ?? pickStation(leads.map((a) => a.lead?.station ?? 0));
-    if (free === undefined) throw new Refused({ message: `Every team station in ${project.name} has a goal: close one first` });
     const crew = leadFor(projectId, goal.id.slice(goal.id.lastIndexOf('_') + 1), leads.map((a) => a.name));
     const agent: Agent = {
       id: goal.id,
@@ -119,10 +108,10 @@ export class Leads extends Part {
       effort: goalEffort(undefined, this.store.settings),
       desk: LEAD_DESK,
       status: 'queued',
-      activity: `Coming back to team station ${free + 1}`,
+      activity: 'Coming back to the goal',
       branch: goal.branch,
       baseBranch: goal.repos[0].baseBranch,
-      lead: reopenedWork(goal, free),
+      lead: reopenedWork(goal),
       sessionId: goal.sessionId,
       costUsd: 0,
       startedAt: Date.now(),
@@ -132,18 +121,18 @@ export class Leads extends Part {
     this.projectsChanged();
     this.store.putAgent(agent);
     this.hub.send({ type: 'agent', agent });
-    this.print(agent, [{ kind: 'system', text: `✻ The captain reopened “${goal.title}”: ${agent.name} comes back to team station ${free + 1}, on ${goal.branch}` }]);
+    this.print(agent, [{ kind: 'system', text: `✻ The captain reopened “${goal.title}”: ${agent.name} comes back to it, on ${goal.branch}` }]);
     this.core.seating.schedule();
     return agent;
   }
 
-  /** Puts a goal in line for the next free team station. It waits there for the captain to start it. */
+  /** Puts a goal in line without starting it. It waits there for the user to start it. */
   queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): QueuedGoal {
     const project = this.store.project(projectId);
     const queued: QueuedGoal = { id: newId('q'), text: text.trim(), effort: how.effort, ...(how.shaping && { shaping: true }), from: how.from, at: Date.now() };
     const ahead = project.goalQueue?.length ?? 0;
     this.changeQueue(projectId, [...(project.goalQueue ?? []), queued]);
-    this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line for a team station in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`, undefined, projectId);
+    this.hub.toast('info', `🧭 “${goalTitle(text)}” waits in line in ${project.name}${ahead ? `, behind ${ahead} other goal${ahead === 1 ? '' : 's'}` : ''}`, undefined, projectId);
     return queued;
   }
 
@@ -152,14 +141,12 @@ export class Leads extends Part {
     this.projectsChanged();
   }
 
-  /** Starts a queued goal at a free team station, with the captain's last edits to it. */
-  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}): Agent {
+  /** Starts a queued goal now, with the user's last edits to it. */
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; shaping?: boolean } = {}): Agent {
     const project = this.store.project(projectId);
-    const taken = this.store.agentsIn(projectId).filter((a) => a.task === 'lead').map((a) => a.lead?.station ?? 0);
-    const start = queuedStart(project.goalQueue, queueId, taken, edits, project.name);
+    const start = queuedStart(project.goalQueue, queueId, edits);
     if (start.kind === 'refused') throw new Refused({ message: start.message });
-    const started = this.startGoal(projectId, start.text, { station: start.station, effort: start.effort, from: start.from, shaping: start.shaping });
-    if (!('agent' in started)) throw new Refused({ message: 'No team station was free after all' });
+    const started = this.startGoal(projectId, start.text, { effort: start.effort, from: start.from, shaping: start.shaping });
     this.changeQueue(projectId, (project.goalQueue ?? []).filter((g) => g.id !== queueId));
     return started.agent;
   }
@@ -174,7 +161,7 @@ export class Leads extends Part {
 
   /**
    * Closes a goal: commits any uncommitted work as a WIP snapshot on its branch, files it in the room's log and sends its
-   * lead home, which frees the station. First says what would be left behind (work GitHub hasn't got, open pull
+   * lead home. First says what would be left behind (work GitHub hasn't got, open pull
    * requests, a goal that shipped nothing), unless `force`. A checkout whose work can't be saved keeps the goal open.
    */
   closeGoal(id: string, force = false): Promise<{ closed: true } | { warn: string[] }> {
@@ -216,10 +203,7 @@ export class Leads extends Part {
       }
       yield* this.core.seating.goHome(reviewer);
       this.core.reviews.nextReview(agent.projectId);
-      const next = nextGoal(project.goalQueue);
-      this.hub.toast('success', next
-        ? `🏁 “${work.title}” is closed. Team station ${work.station + 1} is free: next up is “${goalTitle(next.text)}” (L to start it)`
-        : `🏁 “${work.title}” is closed, and team station ${work.station + 1} is free`, undefined, project.id);
+      this.hub.toast('success', `🏁 “${work.title}” is closed`, undefined, project.id);
       return { closed: true as const };
     }));
   }
@@ -320,10 +304,9 @@ export class Leads extends Part {
   }
 
   /**
-   * The captain spins one of a goal's open contacts off as a goal of its own, starting it with `text` (or putting it in
-   * line for a station): the contact closes as spun off, and the goal's lead hears so.
+   * The user spins one of a goal's open contacts off as a goal of its own, starting it with `text`: the contact closes as spun off, and the goal's lead hears so.
    */
-  spinOffContact(leadId: string, contactId: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+  spinOffContact(leadId: string, contactId: string, text: string): { agent: Agent } {
     const lead = this.store.agents.get(leadId);
     if (!lead?.lead) throw new Refused({ message: 'There’s no goal under way there' });
     const contact = contactToSpinOff(lead.lead.contacts, contactId);
@@ -337,22 +320,21 @@ export class Leads extends Part {
   }
 
   /**
-   * The captain spins one of a goal's ideas for next (a projected course on its chart) off as a goal of its own, starting
-   * it with `text` (or putting it in line for a station): the idea comes off the goal's note, and its lead hears so (to take it off their brief).
+   * The user spins one of a goal's ideas for next (a projected course on its chart) off as a goal of its own, starting
+   * it with `text`: the idea comes off the goal's note, and its lead hears so (to take it off their brief).
    */
-  spinOffIdea(leadId: string, idea: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+  spinOffIdea(leadId: string, idea: string, text: string): { agent: Agent } {
     const lead = this.store.agents.get(leadId);
     if (!lead?.lead) throw new Refused({ message: 'There’s no goal under way there' });
     const checked = spunOffIdea(lead.lead.note?.next, idea);
     if ('error' in checked) throw new Refused({ message: checked.error });
     const started = this.startGoal(lead.projectId, text, { from: 'a goal’s star chart' });
-    const goal = 'agent' in started ? started.agent : undefined;
-    const title = goal?.lead?.title ?? goalTitle(text);
+    const title = started.agent.lead?.title ?? goalTitle(text);
     const work = this.store.agent(leadId).lead ?? lead.lead;
     const next = spunOffIdea(work.note?.next, idea);
     // it stays off the note while the lead's brief still lists it (`briefedGoal`)
     if (work.note && !('error' in next)) this.update(lead, { lead: { ...work, note: { ...work.note, next }, spunOffIdeas: [...(work.spunOffIdeas ?? []), idea] } });
-    this.noteForLead(lead, 'Star chart', spunOffIdeaNote(idea, title, goal?.lead?.station));
+    this.noteForLead(lead, 'Star chart', spunOffIdeaNote(idea, title));
     return started;
   }
 

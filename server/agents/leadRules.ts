@@ -1,22 +1,10 @@
 import type { Agent, Effort, GoalArtifact, GoalQuestion, GoalRecord, LeadAgent, LeadWork, QaReport, QueuedGoal } from '../../shared/types';
-import { TEAM_STATIONS } from '../../shared/types';
 import type { BranchState } from './types';
 
-// A goal lead's decisions: the station a goal gets, whether a queued goal can start, whether Ops compacts the lead's
+// A goal lead's decisions: what starting a queued goal starts it with, whether Ops compacts the lead's
 // conversation first, what showing a page or asking (or answering) a question does to the goal, what closing a goal
 // would leave behind and whether a closed one reopens, which reviews start, and what the captain hears of QA's verdict.
 // Pure, so it's unit tested (leadRules.test.ts); manager/leads.ts, goalTools.ts, sessions.ts and reviews.ts act on it.
-
-/**
- * The team station a new goal gets: `wanted` if it's free, otherwise the first free one. Undefined when `wanted` is taken
- * or out of range, or when every station is.
- */
-export function pickStation(taken: number[], wanted?: number): number | undefined {
-  const free = (s: number) => s >= 0 && s < TEAM_STATIONS && !taken.includes(s);
-  if (wanted !== undefined) return Number.isInteger(wanted) && free(wanted) ? wanted : undefined;
-  for (let s = 0; s < TEAM_STATIONS; s++) if (free(s)) return s;
-  return undefined;
-}
 
 /** Whether the agent carries a goal's lead work, as every lead does from the moment it's made. */
 export const hasLeadWork = (agent: Agent): agent is LeadAgent => agent.lead !== undefined;
@@ -151,23 +139,20 @@ export type ReopenableGoal = GoalRecord & { branch: string; repos: [LeadWork['re
 /** Whether a closed goal can be reopened: it kept its branch and repos (goals closed before they were kept didn't). */
 export const reopenable = (goal: GoalRecord): goal is ReopenableGoal => !!goal.branch && !!goal.repos?.length;
 
-/** What starting a queued goal comes to: the station, words and effort it starts with, or why it can't start. */
+/** What starting a queued goal comes to: the words and effort it starts with, or why it can't start. */
 export type QueuedStart =
-  | { kind: 'start'; station: number; text: string; effort?: Effort; from?: string; shaping?: boolean }
+  | { kind: 'start'; text: string; effort?: Effort; from?: string; shaping?: boolean }
   | { kind: 'refused'; message: string };
 
 /**
- * Starting goal `id` from the queue, with the captain's last edits to it: the station they started it from if it's still
- * free, else the first free one; their words, effort and whether to shape it first, else the ones it was queued with. `taken` holds the stations
- * with a goal, and `room` names the project.
+ * Starting goal `id` from the queue, with the user's last edits to it: their words, effort and whether to shape it
+ * first, else the ones it was queued with. A project has any number of goals, so one in line always starts.
  */
-export function queuedStart(queue: QueuedGoal[] | undefined, id: string, taken: number[], edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean }, room: string): QueuedStart {
+export function queuedStart(queue: QueuedGoal[] | undefined, id: string, edits: { text?: string; effort?: Effort; shaping?: boolean }): QueuedStart {
   const queued = queue?.find((g) => g.id === id);
   if (!queued) return { kind: 'refused', message: 'That goal is no longer in line' };
-  const station = (edits.station === undefined ? undefined : pickStation(taken, edits.station)) ?? pickStation(taken);
-  if (station === undefined) return { kind: 'refused', message: `Every team station in ${room} still has a goal` };
   const shaping = edits.shaping ?? !!queued.shaping;
-  return { kind: 'start', station, text: edits.text?.trim() || queued.text, effort: edits.effort ?? queued.effort, from: queued.from, ...(shaping && { shaping }) };
+  return { kind: 'start', text: edits.text?.trim() || queued.text, effort: edits.effort ?? queued.effort, from: queued.from, ...(shaping && { shaping }) };
 }
 
 /**

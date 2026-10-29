@@ -91,14 +91,14 @@ describe('the captain spinning a thread off as a goal of its own', () => {
     expect(t && spinOffText(t)).toBe('thread c1\n\n(Spun off from “Goal g1”, a closed goal: its contact c1, noticed in slice 1.)');
   });
 
-  it('takes the thread on as the goal it started, at a station or in line for one', () => {
+  it('takes the thread on as the goal it started, by its first words until its lead has a title', () => {
     const [t] = closed();
-    const at = { agent: { id: 'shop-lead-a1', lead: { station: 1, title: 'Saved items', repos: [], slice: 1, prs: [] } } };
+    const at = { agent: { id: 'shop-lead-a1', lead: { title: 'Saved items', repos: [], slice: 1, prs: [] } } };
     expect(t && spunOffEntry(t, 'Saved items\n\nmore', at)).toEqual({
       kind: 'thread-decided', goalId: 'g1', goal: 'Goal g1', contact: 'c1', text: 'thread c1', as: 'next', spunOff: { goal: 'shop-lead-a1', title: 'Saved items' },
     });
-    expect(t && spunOffEntry(t, 'Saved items, the rest of them\n\nmore', { queued: { id: 'q1', text: 'Saved items, the rest of them', at: 5 } }))
-      .toMatchObject({ as: 'next', spunOff: { title: 'Saved items, the rest of them' } });
+    expect(t && spunOffEntry(t, 'Saved items, the rest of them\n\nmore', { agent: { id: 'shop-lead-a2' } }))
+      .toMatchObject({ as: 'next', spunOff: { goal: 'shop-lead-a2', title: 'Saved items, the rest of them' } });
   });
 
   it('keeps the goal it was spun off as, until the decision’s taken back', () => {

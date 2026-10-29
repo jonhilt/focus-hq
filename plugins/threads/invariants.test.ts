@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { GoalRecord, LedgerEntry, LedgerEvent, PluginParts, PluginState, ReadOnlyResult } from '../../plugin-api/server';
+import type { Agent, GoalRecord, LedgerEntry, LedgerEvent, PluginParts, PluginState, ReadOnlyResult } from '../../plugin-api/server';
 import { checkAtOnce, checkRestart, type Later, type Running, type Subject } from '../../plugin-api/testing';
 import { type ThreadsHost, threadsParts } from './server';
 import type { ThreadsState } from './shared';
@@ -74,7 +74,7 @@ function life(later: Later, ledger: LedgerEvent[], started: string[] = []): Runn
     goals: {
       start: (_projectId, text) => {
         started.push(text);
-        return { queued: { id: `q${started.length}`, text, at: 0 } };
+        return { agent: { id: `shop-lead-${started.length}`, lead: { title: text } } as Agent };
       },
     },
   };

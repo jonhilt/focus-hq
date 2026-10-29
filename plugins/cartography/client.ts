@@ -40,7 +40,7 @@ function sliceCards(slices: readonly SliceView[], open: Set<string>): HTMLElemen
   const cards = slices.map(({ slice, map, view, marks }) => {
     const id = `slice#${slice.leadId}#${map.repo}`;
     const details = h('details', { class: 'card', open: open.has(id), attrs: { 'data-key': id } },
-      h('summary', null, h('span', { class: 'chip' }, `TS-${slice.station + 1}`), ' ', h('strong', null, view.question), h('small', { class: 'muted' }, ` · ${view.parts.length} parts · ${map.repo}`)),
+      h('summary', null, ...(slice.station === undefined ? [] : [h('span', { class: 'chip' }, `TS-${slice.station + 1}`), ' ']), h('strong', null, view.question), h('small', { class: 'muted' }, ` · ${view.parts.length} parts · ${map.repo}`)),
       ...viewBody(map, view, marks));
     details.addEventListener('toggle', () => (details.open ? open.add(id) : open.delete(id)));
     return details;

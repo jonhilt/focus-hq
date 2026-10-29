@@ -146,29 +146,26 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
       url: str(req.body.url) || undefined,
     }, { effort: effort(req.body.effort), cloud: req.body.cloud === true }),
   ));
-  // a goal: its own lead (the captain's own Claude Code session for it, across the project's repos) at a team station
+  // a goal: its own lead (the user's own Claude Code session for it, across the project's repos). A project has any
+  // number, so it always starts; a `station` sent by an older client is ignored
   r.post('/projects/:id/goals', h((req) =>
     focus.agents.startGoal(param(req, 'id'), str(req.body.text), {
-      station: typeof req.body.station === 'number' ? req.body.station : undefined,
       effort: effort(req.body.effort),
       from: str(req.body.from) || undefined,
       shaping: req.body.shaping === true,
     }),
   ));
-  // goals waiting for a free team station: started by the captain, never by themselves
+  // goals waiting in line (from when goals waited for a free team station): started by the user, never by themselves
   r.post('/projects/:id/goals/queue/:qid/start', h((req) =>
     focus.agents.startQueued(param(req, 'id'), param(req, 'qid'), {
       text: str(req.body.text) || undefined,
       effort: effort(req.body.effort),
-      station: typeof req.body.station === 'number' ? req.body.station : undefined,
       shaping: typeof req.body.shaping === 'boolean' ? req.body.shaping : undefined,
     }),
   ));
   r.post('/projects/:id/goals/queue/:qid/move', h((req) => focus.agents.moveQueued(param(req, 'id'), param(req, 'qid'), Math.sign(Number(req.body.by)) || 0)));
-  // a closed goal from the room's log, back at a free team station on its branch and session
-  r.post('/projects/:id/goals/:gid/reopen', h((req) =>
-    focus.agents.reopenGoal(param(req, 'id'), param(req, 'gid'), typeof req.body.station === 'number' ? req.body.station : undefined),
-  ));
+  // a closed goal from the room's log, back on its branch and session
+  r.post('/projects/:id/goals/:gid/reopen', h((req) => focus.agents.reopenGoal(param(req, 'id'), param(req, 'gid'))));
   r.delete('/projects/:id/goals/queue/:qid', h((req) => focus.agents.dropQueued(param(req, 'id'), param(req, 'qid'))));
   r.get('/agents/:id/lines', h((req) => store.allLines(param(req, 'id'))));
   r.get('/agents/:id/run', h((req) => replay(store.journalEntries(param(req, 'id')))));

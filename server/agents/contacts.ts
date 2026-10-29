@@ -3,7 +3,7 @@
 // captain spins one (or an idea for next) off as a goal. These are the pure decisions; `briefedGoal` in `briefFile.ts`
 // and the leads' part call them.
 
-import type { Agent, Contact, LeadWork, QueuedGoal } from '../../shared/types';
+import type { Agent, Contact, LeadWork } from '../../shared/types';
 import { notedSlice } from './waypoints';
 
 /** How long a contact's text may be (a longer thread is cut short on the chart), and how many contacts are kept. */
@@ -53,24 +53,23 @@ export function contactToSpinOff(contacts: readonly Contact[] | undefined, id: s
 }
 
 /**
- * What spinning contact `c` off leaves the goal with, once the new goal has `started` (its lead, or a place in line for a
- * station): its contacts, with `c` closed as spun off in the slice under way and linked to the new lead if there is one,
- * and what the goal's lead hears. A goal in line goes by `firstWords`, the title it will start under.
+ * What spinning contact `c` off leaves the goal with, once the new goal has `started` (its lead): its contacts, with `c`
+ * closed as spun off in the slice under way and linked to the new lead, and what the goal's lead hears. The new goal
+ * goes by `firstWords` until its lead has a title.
  */
 export function spunOff(
   work: Pick<LeadWork, 'slice' | 'contacts'>,
   c: Contact,
-  started: { agent: Pick<Agent, 'id' | 'lead'> } | { queued: QueuedGoal },
+  started: { agent: Pick<Agent, 'id' | 'lead'> },
   firstWords: string,
   now: number,
 ): { contacts: Contact[]; note: string } {
-  const lead = 'agent' in started ? started.agent : undefined;
-  const title = lead?.lead?.title ?? firstWords;
-  const closed = { as: 'spun off' as const, ...(lead && { goal: lead.id }), title, slice: work.slice, at: now };
-  const where = lead?.lead ? `at team station ${lead.lead.station + 1}` : 'waiting in line for a team station';
+  const lead = started.agent;
+  const title = lead.lead?.title ?? firstWords;
+  const closed = { as: 'spun off' as const, goal: lead.id, title, slice: work.slice, at: now };
   return {
     contacts: (work.contacts ?? []).map((x) => (x.id === c.id && !x.closed ? { ...x, closed } : x)),
-    note: `The captain spun one of your loose threads (${c.text}) off as a goal of its own, “${title}”, ${where}. Leave that thread to the new goal: take it off your brief.`,
+    note: `The captain spun one of your loose threads (${c.text}) off as a goal of its own, “${title}”. Leave that thread to the new goal: take it off your brief.`,
   };
 }
 
@@ -86,7 +85,6 @@ export function spunOffIdea(next: readonly string[] | undefined, idea: string): 
 }
 
 /** What the lead hears once the captain has spun one of their ideas for next off as a goal of its own. */
-export function spunOffIdeaNote(idea: string, title: string, station: number | undefined): string {
-  const where = station === undefined ? 'waiting in line for a team station' : `at team station ${station + 1}`;
-  return `The captain spun your idea for next (${clean(idea)}) off as a goal of its own, “${title}”, ${where}. Leave it to the new goal: take it off your brief's ideas for next.`;
+export function spunOffIdeaNote(idea: string, title: string): string {
+  return `The captain spun your idea for next (${clean(idea)}) off as a goal of its own, “${title}”. Leave it to the new goal: take it off your brief's ideas for next.`;
 }

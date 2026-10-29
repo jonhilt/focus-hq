@@ -8,7 +8,7 @@ import type { Lane } from '../../shared/mergeLaneRules';
 import type { PersonalEntry } from '../../shared/personalLog';
 import type { MachineGraph, MachineRun, MachineStep } from '../../shared/machines';
 import type { CaptainAnswer } from '../../shared/captainAnswer';
-import type { Agent, Issue, MessageReply, Planner, PluginSecret, PrReview, Project, PullRequest, QaReview, QueuedGoal, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
+import type { Agent, Issue, MessageReply, Planner, PluginSecret, PrReview, Project, PullRequest, QaReview, ResumeHow, Settings, SignIn, Snapshot, TermLine } from '../../shared/types';
 import type { ShipStatus } from '../agents/shipStatus';
 import type { GitHub } from '../github/service';
 import type { ReadOnlyResult, ReadOnlyRun, ShipSessionRun } from '../agents/claudeCrew';
@@ -382,12 +382,12 @@ export interface PluginHost {
 /** What a plugin can do with the captain's goals, as the captain would from the goals panel; each throws, in words, when it can't. */
 export interface PluginGoals {
   /**
-   * Starts a goal in the project with a lead of its own at a free team station, or queues it when every station has
-   * one. `from` says where it came from (`a call`), for the goal's record and its lead.
+   * Starts a goal in the project with a lead of its own: a project has any number, so it always starts. `from` says
+   * where it came from (`a call`), for the goal's record and its lead.
    */
-  start(projectId: string, text: string, how: { from: string }): { agent: Agent } | { queued: QueuedGoal };
-  /** Starts a queued goal at team station `station` (from 0). */
-  startQueued(projectId: string, queueId: string, station: number): Agent;
+  start(projectId: string, text: string, how: { from: string }): { agent: Agent };
+  /** Starts a goal waiting in the project's line now. `station` is ignored: goals no longer take a team station. */
+  startQueued(projectId: string, queueId: string, station?: number): Agent;
   /**
    * Passes a goal's lead (or any agent) a message, as the captain's, or as `from`'s (a crew member's name). On your API
    * key, picking a long conversation back up can cost: then it comes back `costly`, for the captain to say `how`.

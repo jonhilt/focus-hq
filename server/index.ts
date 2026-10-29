@@ -214,9 +214,9 @@ function seedDemoShip(store: Store, agents: AgentManager): void {
   for (const p of [shop, game]) p.plugins = agents.plugins.ids();
   // the demo keeps no ledger: a few days of one, to review at the master systems table
   store.ledger = demoLedger(shop.id, game.id, Date.now());
-  // two goals under way side by side, each with its own lead at its own team station
+  // two goals under way side by side, each with its own lead
   agents.startGoal(shop.id, 'Shoppers can save items for later and find them again on any device');
-  agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page', { station: 2 });
+  agents.startGoal(shop.id, 'Show how many of each sock are left in stock on the product page');
 }
 
 /** The API, behind the host guard, and in the demo the routes that pretend what GitHub and its previews would do. */

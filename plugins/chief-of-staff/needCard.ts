@@ -254,7 +254,7 @@ function trail(a: Attention): string {
   if (!('agent' in a)) return [project, 'Pull request'].filter(Boolean).join(' · ');
   const work = a.agent.lead;
   const since = a.kind === 'hand' ? a.agent.permission?.at : a.agent.finishedAt;
-  return [project, work ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
+  return [project, work?.station !== undefined ? `${a.agent.name}, Station ${work.station + 1}` : a.agent.name, since ? `waiting ${timeAgo(since).replace(/ ago$/, '')}` : ''].filter(Boolean).join(' · ');
 }
 
 /** To a lead's team room, where there's more of what they're on than the card has. */

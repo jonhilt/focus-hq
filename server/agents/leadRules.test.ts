@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
 import { goalRecord } from './lead';
-import { answerQuestion, ARTIFACT_LIMITS, askQuestion, closeCheck, compactsFirst, hasLeadWork, pickStation, QUESTION_LIMITS, queuedStart, reopenable, reviewsToStart, showArtifact, verdictStands, verdictToast } from './leadRules';
+import { answerQuestion, ARTIFACT_LIMITS, askQuestion, closeCheck, compactsFirst, hasLeadWork, QUESTION_LIMITS, queuedStart, reopenable, reviewsToStart, showArtifact, verdictStands, verdictToast } from './leadRules';
 
 const work: LeadWork = {
   station: 1,
@@ -18,17 +18,6 @@ const work: LeadWork = {
 };
 
 describe('a goal’s lead', () => {
-  it('takes the station asked for if it’s free, else the first free one', () => {
-    expect(pickStation([])).toBe(0);
-    expect(pickStation([0, 2])).toBe(1);
-    expect(pickStation([0, 1, 2, 3])).toBeUndefined();
-    expect(pickStation([0], 3)).toBe(3);
-    expect(pickStation([3], 3)).toBeUndefined();
-    expect(pickStation([], 4)).toBeUndefined();
-    expect(pickStation([], -1)).toBeUndefined();
-    expect(pickStation([], 1.5)).toBeUndefined();
-  });
-
   it('carries the goal’s work only when it has some, which is what lets the lead’s parts read it without asserting', () => {
     expect(hasLeadWork({ id: 'lead_p1_ab12', task: 'lead', lead: work } as Agent)).toBe(true);
     expect(hasLeadWork({ id: 'lead_p1_ab12', task: 'lead' } as Agent)).toBe(false);
@@ -75,33 +64,28 @@ describe('queuedStart', () => {
   const q = (id: string) => ({ id, text: id, at: 0 });
   const line = [q('a'), q('b'), q('c')];
 
-  it('starts a queued goal at the station the captain picked while it’s free, else at the first free one', () => {
-    expect(queuedStart(line, 'b', [0], { station: 2 }, 'Shop')).toMatchObject({ kind: 'start', station: 2 });
-    // taken since they picked it, or never a station: the first free one
-    expect(queuedStart(line, 'b', [0, 2], { station: 2 }, 'Shop')).toMatchObject({ kind: 'start', station: 1 });
-    expect(queuedStart(line, 'b', [], { station: 9 }, 'Shop')).toMatchObject({ kind: 'start', station: 0 });
-    expect(queuedStart(line, 'b', [1], {}, 'Shop')).toMatchObject({ kind: 'start', station: 0 });
-    expect(queuedStart(line, 'b', [0, 1, 2, 3], { station: 1 }, 'Shop')).toEqual({ kind: 'refused', message: 'Every team station in Shop still has a goal' });
+  it('always starts a goal still in line, however many goals are under way', () => {
+    expect(queuedStart(line, 'b', {})).toEqual({ kind: 'start', text: 'b' });
   });
 
-  it('starts a queued goal with the captain’s last words and effort on it, else the ones it was queued with', () => {
+  it('starts a queued goal with the user’s last words and effort on it, else the ones it was queued with', () => {
     const queued = [{ id: 'a', text: 'Saved items', effort: 'low' as const, from: 'the bridge', at: 0 }];
-    expect(queuedStart(queued, 'a', [], {}, 'Shop')).toEqual({ kind: 'start', station: 0, text: 'Saved items', effort: 'low', from: 'the bridge' });
-    expect(queuedStart(queued, 'a', [], { text: '  Wishlists ', effort: 'high' }, 'Shop')).toEqual({ kind: 'start', station: 0, text: 'Wishlists', effort: 'high', from: 'the bridge' });
+    expect(queuedStart(queued, 'a', {})).toEqual({ kind: 'start', text: 'Saved items', effort: 'low', from: 'the bridge' });
+    expect(queuedStart(queued, 'a', { text: '  Wishlists ', effort: 'high' })).toEqual({ kind: 'start', text: 'Wishlists', effort: 'high', from: 'the bridge' });
     // words cleared in the editor aren't a goal: it keeps the ones it was queued with
-    expect(queuedStart(queued, 'a', [], { text: '   ' }, 'Shop')).toMatchObject({ text: 'Saved items' });
+    expect(queuedStart(queued, 'a', { text: '   ' })).toMatchObject({ text: 'Saved items' });
   });
 
-  it('starts a queued goal shaped first if it was queued that way, unless the captain unticks it as they start it', () => {
+  it('starts a queued goal shaped first if it was queued that way, unless the user unticks it as they start it', () => {
     const queued = [{ id: 'a', text: 'Saved items', shaping: true as const, at: 0 }];
-    expect(queuedStart(queued, 'a', [], {}, 'Shop')).toMatchObject({ shaping: true });
-    expect(queuedStart(queued, 'a', [], { shaping: false }, 'Shop')).not.toHaveProperty('shaping');
-    expect(queuedStart([{ id: 'b', text: 'Wishlists', at: 0 }], 'b', [], { shaping: true }, 'Shop')).toMatchObject({ shaping: true });
+    expect(queuedStart(queued, 'a', {})).toMatchObject({ shaping: true });
+    expect(queuedStart(queued, 'a', { shaping: false })).not.toHaveProperty('shaping');
+    expect(queuedStart([{ id: 'b', text: 'Wishlists', at: 0 }], 'b', { shaping: true })).toMatchObject({ shaping: true });
   });
 
   it('refuses a goal that has left the line', () => {
-    expect(queuedStart(line, 'zz', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
-    expect(queuedStart(undefined, 'a', [], {}, 'Shop')).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
+    expect(queuedStart(line, 'zz', {})).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
+    expect(queuedStart(undefined, 'a', {})).toEqual({ kind: 'refused', message: 'That goal is no longer in line' });
   });
 });
 

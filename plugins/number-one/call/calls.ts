@@ -9,7 +9,7 @@ import { Live, type LiveEvent, type LiveSession, type Sideband } from './live';
 import { callMachine, type Reply, type RouteInput } from './machine';
 import { topics } from './brief';
 import { type Act, askFor, type Capture, callNotes, decide, dictated, type Routing, routingQuestions, routingState } from './routeRules';
-import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type QueuedGoal, shownProjects, type Snapshot } from '../../../plugin-api/server';
+import { type Agent, errorMessage, type LedgerEvent, type MessageReply, shownProjects, type Snapshot } from '../../../plugin-api/server';
 
 // Calls to Number One: one at a time, each a gpt-live-1 session Ops is the backend of. The
 // session's events drive the call's machine; what the machine says goes back over the sideband.
@@ -22,8 +22,8 @@ import { type Agent, errorMessage, type LedgerEvent, type MessageReply, type Que
 export interface CallHost {
   snapshot(): Promise<Snapshot>;
   ledger(): LedgerEvent[];
-  startQueued(projectId: string, queueId: string, station: number): Agent;
-  startGoal(projectId: string, text: string): { agent: Agent } | { queued: QueuedGoal };
+  startQueued(projectId: string, queueId: string): Agent;
+  startGoal(projectId: string, text: string): { agent: Agent };
   message(agentId: string, text: string): MessageReply;
 }
 
@@ -150,18 +150,16 @@ class Call {
     return decide({ snapshot, ledger: this.focus.ledger(), now: Date.now(), scene }, answers);
   }
 
-  /** Does what the captain said yes to; Ops checks again as it does (the goal still queued, a station free). */
+  /** Does what the user said yes to; Ops checks again as it does (the goal still queued). */
   private act(act: Act): string {
     switch (act.kind) {
       case 'start-queued': {
-        const agent = this.focus.startQueued(act.start.projectId, act.start.queueId, act.start.station);
-        return `Started: ${agent.name} has "${act.start.title}" at station ${(agent.lead?.station ?? act.start.station) + 1}.`;
+        const agent = this.focus.startQueued(act.start.projectId, act.start.queueId);
+        return `Started: ${agent.name} has "${act.start.title}".`;
       }
       case 'new-goal': {
-        const started = this.focus.startGoal(act.projectId, act.text);
-        return 'agent' in started
-          ? `Started: ${started.agent.name} has "${act.title}" at station ${(started.agent.lead?.station ?? 0) + 1}.`
-          : `Queued "${act.title}" in ${act.projectName}: every team station has a goal.`;
+        const { agent } = this.focus.startGoal(act.projectId, act.text);
+        return `Started: ${agent.name} has "${act.title}".`;
       }
       case 'tell-lead':
         return 'sent' in this.focus.message(act.leadId, act.text)

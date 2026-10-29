@@ -57,7 +57,7 @@ describe('briefing', () => {
   it("gives a goal under way: its brief, the lead's note and open threads, its slices, PRs and what the log saw", () => {
     const text = briefing(snapshot, ledger, topic('goal:lead_1'), NOW);
     for (const part of [
-      'Topic: the goal "Wishlist" in Shop. Lt. Data leads it, at station 2, on slice 2.',
+      'Topic: the goal "Wishlist" in Shop. Lt. Data leads it, on slice 2.',
       'The goal as the captain first put it: Shoppers save items for later',
       'What done looks like: Saved items survive a reload',
       'What the slices taught:\n- Local storage is enough',

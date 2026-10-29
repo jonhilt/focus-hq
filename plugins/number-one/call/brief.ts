@@ -89,7 +89,7 @@ function openGoal(snapshot: Snapshot, ledger: LedgerEvent[], lead: LeadAgent, pr
     return `${p.repo} pull request ${p.number}${pr ? `, "${pr.title}": ${qaBadge(reviews.get(prKey(p.repo, p.number)), pr).label}` : ''}${p.outcome ? `, ${p.outcome}` : ''}`;
   });
   return [
-    `Topic: the goal "${work.title}" in ${project.name}. ${lead.name} leads it, at station ${work.station + 1}, on slice ${work.slice}.`,
+    `Topic: the goal "${work.title}" in ${project.name}. ${lead.name} leads it, on slice ${work.slice}.`,
     work.brief ? `The goal as the captain first put it: ${work.brief}` : '',
     ...noteLines(work.note, work.contacts),
     slicesLines(work.waypoints),

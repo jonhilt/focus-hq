@@ -4,7 +4,7 @@ import type { Topic } from './brief';
 import { callMachine, EXPIRY_MS, type Reply, type RouteInput, SETTLE_MS } from './machine';
 import type { Act, Routing, StartGoal } from './routeRules';
 
-const start: StartGoal = { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode', station: 1 };
+const start: StartGoal = { projectId: 'p1', projectName: 'Shop', queueId: 'q1', title: 'Voice mode' };
 const act: Act = { kind: 'start-queued', start };
 const topic: Topic = { kind: 'project', id: 'project:p1', label: 'Shop as a whole', projectId: 'p1', title: 'Shop' };
 
@@ -73,7 +73,7 @@ describe('callMachine', () => {
     c.say('Start the next goal', 'd1');
     await c.settled('confirming');
     expect(c.replies).toEqual([{ delegation: 'd1', text: 'Ask the captain: Start "Voice mode"?' }]);
-    expect(c.instructions[0]).toContain('waiting for the captain\'s yes or no to: Start "Voice mode" in Shop, at station 2?');
+    expect(c.instructions[0]).toContain('waiting for the captain\'s yes or no to: Start "Voice mode" in Shop?');
     expect(c.starts).toEqual([]);
 
     c.say('Make it so', 'd2');

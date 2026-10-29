@@ -32,8 +32,8 @@ export { higherLane, type Lane, LANE_SAID, LANES, laneName } from '../shared/mer
 export { PUBLIC_WORDS_RULE, SHIP_WORDS } from '../shared/wording';
 export type { SliceRecap } from '../shared/recap';
 export { goalTitle } from '../shared/goalTitle';
-/** Reading an agent: whether it's a goal's lead (a `LeadAgent`); and the team station a new goal would get. */
-export { hasLeadWork, pickStation } from '../server/agents/leadRules';
+/** Reading an agent: whether it's a goal's lead (a `LeadAgent`). */
+export { hasLeadWork } from '../server/agents/leadRules';
 /** The ledger as Focus reads it out: a line of it, and lines grouped by day. */
 export { byDay, ledgerRow, type LedgerRow, trace } from '../shared/ledgerReview';
 /** The crew's voices, and what a reply says aloud. */

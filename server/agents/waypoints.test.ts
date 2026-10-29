@@ -77,7 +77,7 @@ describe('waypoints', () => {
     const lead = { id: 'lead_p_1', name: 'Lt. Varga', branch: 'focus/saved-2-ab12', startedAt: 0, lead: work } as LeadAgent;
     const record = goalRecord(lead, 99);
     expect(record.waypoints).toEqual(waypoints);
-    expect(reopenedWork(record, 3).waypoints).toEqual(waypoints);
+    expect(reopenedWork(record).waypoints).toEqual(waypoints);
     expect(goalRecord({ ...lead, lead: { ...work, waypoints: undefined } }, 99)).not.toHaveProperty('waypoints');
   });
 });

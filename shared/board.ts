@@ -5,7 +5,7 @@ import type { Agent, Board, ClosedPr, Issue, Project, PullRequest } from './type
 export interface Columns {
   /** `waitsFor`: the open issues it depends on, empty when it can start. */
   todo: (Issue & { waitsFor: number[] })[];
-  /** The goals under way: each one's lead, by team station. In progress for as long as the goal is, at it right now or not. */
+  /** The goals under way: each one's lead, in `goalOrder`. In progress for as long as the goal is, at it right now or not. */
   goals: Agent[];
   doing: Agent[];
   /** `agent`: whose PR it is (a slice's lead before anyone seated on it); `resolver`: who's resolving its conflicts right now. */
@@ -13,6 +13,13 @@ export interface Columns {
   /** Open PRs hidden by the project's "only my PRs" filter. */
   hiddenPrs: number;
 }
+
+/**
+ * The order goals are listed in: those whose leads sit at a team station by station (goals started while goals took one),
+ * then the rest as they started.
+ */
+export const goalOrder = (a: Agent, b: Agent): number =>
+  (a.lead?.station ?? Number.MAX_SAFE_INTEGER) - (b.lead?.station ?? Number.MAX_SAFE_INTEGER) || a.startedAt - b.startedAt;
 
 /** Splits a project's issues, agents and PRs into the three Kanban columns. */
 export function columns(project: Project, board: Board | undefined, agents: Agent[], login: string | undefined): Columns {
@@ -30,7 +37,7 @@ export function columns(project: Project, board: Board | undefined, agents: Agen
     todo: (board?.issues ?? [])
       .filter((i) => project.repos.includes(i.repo) && !claimed(i))
       .map((i) => ({ ...i, waitsFor: waiting.get(issueKey(i.repo, i.number)) ?? [] })),
-    goals: agents.filter((a) => a.task === 'lead' && a.lead).sort((a, b) => (a.lead?.station ?? 0) - (b.lead?.station ?? 0)),
+    goals: agents.filter((a) => a.task === 'lead' && a.lead).sort(goalOrder),
     // the QA officer and the leads work at their own stations, not on the board's issues
     doing: agents.filter((a) => a.status !== 'done' && a.task !== 'review' && a.task !== 'lead').sort((a, b) => a.startedAt - b.startedAt),
     prs: shown,

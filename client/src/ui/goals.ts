@@ -106,25 +106,24 @@ export function goalTarget(projectId: string): { el: HTMLSelectElement; picked: 
   return { el, picked: () => (el.value ? state.agents.get(el.value) : undefined) };
 }
 
-/**
- * Hands `idea` to a goal: as the captain's next words to a goal's lead, or as the first words of a new goal (which waits
- * in line if every team station is taken). Opens wherever it went.
- */
+/** Hands `idea` to a goal: as the user's next words to a goal's lead, or as the first words of a new goal. Opens wherever it went. */
 export async function handToGoal(ui: Ui, projectId: string, idea: string, to: Agent | undefined, from: string): Promise<void> {
   if (to) {
     if (await messageAgent(to.id, to.name, idea)) ui.openAgent(to.id);
     return;
   }
-  const started = await api.startGoal(projectId, idea, { from });
-  if (!('agent' in started)) return ui.openGoals(projectId);
-  ui.openAgent(started.agent.id);
-  goalStarted(ui, started.agent);
+  const { agent } = await api.startGoal(projectId, idea, { from });
+  ui.openAgent(agent.id);
+  goalStarted(ui, agent);
 }
 
-/** Tells the captain a goal's lead has taken their team station, with a button to beam over to its briefing room. */
+/** Tells the user a goal's lead has taken it on, with a button to go to them. */
 export function goalStarted(ui: Ui, lead: Agent): void {
-  ui.hud.toast('success', `${lead.name} has taken team station ${(lead.lead?.station ?? 0) + 1}`, { label: 'Beam there', run: () => ui.goToAgent(lead.id) });
+  ui.hud.toast('success', `${lead.name} leads “${lead.lead?.title ?? lead.issue.title}”`, { label: 'Go there', run: () => ui.goToAgent(lead.id) });
 }
+
+/** The team station a goal's lead sits at, in words, for a goal started while goals took one. */
+export const stationWords = (lead: Agent): string | undefined => (lead.lead?.station === undefined ? undefined : `team station ${lead.lead.station + 1}`);
 
 /** A hand-off control: where the work goes, and the button that sends it. */
 export function handOffControl(ui: Ui, projectId: string, idea: () => string, from: string, title: string, primary = false): HTMLElement {

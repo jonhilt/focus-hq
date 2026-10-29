@@ -112,7 +112,7 @@ export const LEAD_DESK = -2;
 /** Nor does an agent on a plugin's brief that works away from the room (main engineering's climber). */
 export const AWAY_DESK = -3;
 
-/** How many goals a room can work on at once: each has its own team station, and a lead at it. */
+/** How many team stations a room's world has: a goal started when goals took one keeps it (`LeadWork.station`). */
 export const TEAM_STATIONS = 4;
 
 /** One item of the task list an agent keeps for itself with Claude Code's task tools (TodoWrite, TaskCreate, TaskUpdate). */

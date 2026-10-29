@@ -88,7 +88,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
       const suggestion = draft.tooBig
         ? h('div', { class: 'planner-suggest' },
           h('p', null, `This one might be better as a goal, built a slice at a time by a lead of its own. ${draft.tooBig}`),
-          h('div', { class: 'row' }, leadButton(() => draft.idea, 'Start it as a goal at a free team station; the draft stays here in case you’d rather use it')),
+          h('div', { class: 'row' }, leadButton(() => draft.idea, 'Start it as a goal; the draft stays here in case you’d rather use it')),
         )
         : null;
       fill(el, header,
@@ -103,7 +103,7 @@ export function plannerCard(ui: Ui, projectId: () => string, fields: IssueFields
     const idea = h('textarea', { class: 'planner-input', placeholder: 'e.g. let shoppers save items for later from the cart', value: draft?.idea ?? '' });
     const go = h('button', { class: 'btn small primary' }, draft?.status === 'failed' ? 'Try again' : 'Draft it');
     go.onclick = () => void busy(go, () => api.draftIssue(pid, idea.value), ui.error);
-    const toLead = leadButton(() => idea.value, 'Start it as a goal at a free team station, where a lead of its own builds it a slice at a time');
+    const toLead = leadButton(() => idea.value, 'Start it as a goal, where a lead of its own builds it a slice at a time');
     idea.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) go.click();
     });

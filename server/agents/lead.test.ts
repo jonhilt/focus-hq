@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { answerInChat, pageErrorsNote, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, fixingNote, fixPushedNote, fixHandedBackNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, sliceSiblings, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, landedNote, leadSystemAppend, moveQueued, nextGoal, reopenedNote, reopenedWork, reposBackNote, qaVerdictNote, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { answerInChat, pageErrorsNote, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, fixingNote, fixPushedNote, fixHandedBackNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, sliceSiblings, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, landedNote, leadSystemAppend, moveQueued, reopenedNote, reopenedWork, reposBackNote, qaVerdictNote, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { answerQuestion, askQuestion, QUESTION_LIMITS } from './leadRules';
 
 const work: LeadWork = {
@@ -67,9 +67,9 @@ describe('slices', () => {
 
 describe('what the lead writes and hears', () => {
   it('works across every repo, opens its own pull requests with gh, ready when they’re ready, and never pushes a base branch', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', {});
     expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
-    expect(prompt).toContain('team station 2');
+    expect(prompt).not.toContain('team station');
     expect(prompt).toMatch(/Other leads may be working in the same repos at the same time/);
     expect(prompt).toMatch(/Don't write a spec or plan the whole route/);
     expect(prompt).toMatch(/Keep pull requests reviewable: small enough to review and merge cleanly/);
@@ -86,13 +86,13 @@ describe('what the lead writes and hears', () => {
   });
 
   it('draws the star chart from what the lead does, not from a checklist in the note', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', {});
     expect(prompt).toContain("The goal's star chart is drawn from what you do: your task list (Claude Code's task tools), your commits and your pull requests.");
     expect(prompt).not.toMatch(/checklist|heading/);
   });
 
   it('keeps what changes from slice to slice out of its instructions, which a resumed session never re-reads', () => {
-    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', { station: 1 });
+    const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', {});
     expect(prompt).not.toMatch(/focus\//);
     expect(prompt).not.toMatch(/^- \.\//m);
     expect(workspaceNote(work, 'focus/saved-items-2-ab')).toBe(
@@ -317,19 +317,19 @@ describe('reopening a closed goal', () => {
   const lead = { id: 'lead_p1_ab', name: 'Lt. Okafor', sessionId: 's1', branch: 'focus/saved-items-2-ab12', startedAt: 10, lead: { ...work, brief: 'Saved items\nAcross devices' } } as LeadAgent;
   const closedAt = Date.UTC(2026, 9, 7, 12);
 
-  it('picks up the slice it was on, with its pull requests, at its new station', () => {
+  it('picks up the slice it was on, with its pull requests, at no team station', () => {
     const record = goalRecord(lead, closedAt);
-    expect(reopenedWork(record, 3)).toEqual({
-      station: 3, title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), reopening: { closedAt },
+    expect(reopenedWork(record)).toEqual({
+      title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), reopening: { closedAt },
     });
     // closed before the new slice shipped anything: it's that slice again, with the earlier slices' pull requests kept
     const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [], landed: everyPr(work) } }, closedAt);
-    expect(reopenedWork(unshipped, 0)).toMatchObject({ slice: 3, prs: [], landed: everyPr(work) });
-    expect(goalRecord({ ...lead, lead: reopenedWork(unshipped, 0) }, closedAt).prs).toEqual(unshipped.prs);
+    expect(reopenedWork(unshipped)).toMatchObject({ slice: 3, prs: [], landed: everyPr(work) });
+    expect(goalRecord({ ...lead, lead: reopenedWork(unshipped) }, closedAt).prs).toEqual(unshipped.prs);
     // closed before goals kept their slice: what it kept is the last slice's
     const old = { ...record, slice: undefined, prs: work.prs };
-    expect(reopenedWork(old, 0)).toMatchObject({ slice: 2, prs: work.prs });
-    expect(reopenedWork(old, 0).landed).toBeUndefined();
+    expect(reopenedWork(old)).toMatchObject({ slice: 2, prs: work.prs });
+    expect(reopenedWork(old).landed).toBeUndefined();
   });
 
   it('keeps what the lead showed and asked with the closed goal, and brings it back when it reopens', () => {
@@ -337,15 +337,15 @@ describe('reopening a closed goal', () => {
     const questions = [{ id: 'q1', question: 'Which?', options: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }], at: 2, answer: { option: 'b', at: 3 } }];
     const record = goalRecord({ ...lead, lead: { ...work, artifacts, questions } }, closedAt);
     expect(record).toMatchObject({ artifacts, questions });
-    expect(reopenedWork(record, 1)).toMatchObject({ artifacts, questions });
+    expect(reopenedWork(record)).toMatchObject({ artifacts, questions });
     // nothing shown: nothing kept
     expect(goalRecord(lead, closedAt)).not.toHaveProperty('artifacts');
-    expect(reopenedWork(goalRecord(lead, closedAt), 1)).not.toHaveProperty('questions');
+    expect(reopenedWork(goalRecord(lead, closedAt))).not.toHaveProperty('questions');
   });
 
   it('keeps a goal shaped first that way when it reopens, as its lead’s system prompt still is', () => {
     const record = goalRecord({ ...lead, lead: { ...work, shaping: true } }, closedAt);
-    expect(reopenedWork(record, 1).shaping).toBe(true);
+    expect(reopenedWork(record).shaping).toBe(true);
     expect(goalRecord(lead, closedAt)).not.toHaveProperty('shaping');
   });
 
@@ -353,7 +353,7 @@ describe('reopening a closed goal', () => {
     const briefMd = '# Saved items\n\n## Next\n\n- Header';
     const record = goalRecord({ ...lead, lead: { ...work, briefMd } }, closedAt);
     expect(record.briefMd).toBe(briefMd);
-    const again = reopenedWork(record, 0);
+    const again = reopenedWork(record);
     expect(again.briefMd).toBe(briefMd);
     expect(reopenedNote(again, 'focus/saved-items-2-ab12', closedAt)).toMatch(/acme\/api#7\.\n\nIf \.\/brief\.md isn't there any more, write it back as it was:\n\n```markdown\n# Saved items\n\n## Next\n\n- Header\n```\n\nTell the captain/);
     expect(goalRecord(lead, closedAt)).not.toHaveProperty('briefMd');
@@ -361,7 +361,7 @@ describe('reopening a closed goal', () => {
 
   it('tells the lead where their repos are, and where uncommitted work went', () => {
     const record = goalRecord(lead, closedAt);
-    const again = reopenedWork(record, 0);
+    const again = reopenedWork(record);
     expect(reopenedNote(again, 'focus/saved-items-2-ab12', record.closedAt)).toBe(
       '[Ops] The captain reopened this goal, closed on 2026-10-07. Your repos are checked out again on `focus/saved-items-2-ab12`, as you left them: ./web, ./api. ' +
       'If you had uncommitted work when it closed, it\'s the commit “WIP: uncommitted work when the goal “Saved items” closed” at the tip: build on it, or `git reset HEAD~1` to have it uncommitted again. ' +
@@ -376,12 +376,6 @@ describe('reopening a closed goal', () => {
 describe('the goal queue', () => {
   const q = (id: string) => ({ id, text: id, at: 0 });
   const line = [q('a'), q('b'), q('c')];
-
-  it('offers the first goal in line', () => {
-    expect(nextGoal(line)?.id).toBe('a');
-    expect(nextGoal([])).toBeUndefined();
-    expect(nextGoal(undefined)).toBeUndefined();
-  });
 
   it('moves a goal sooner or later, staying in the line', () => {
     expect(moveQueued(line, 'c', -1).map((g) => g.id)).toEqual(['a', 'c', 'b']);

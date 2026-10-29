@@ -30,7 +30,7 @@ describe('the crew’s files', () => {
 
   it('names the file and the line in the body where a prompt refers to what its role hasn’t got', () => {
     expect(error(() => parseCrewFile(CREW_ROLES.lead, 'lead', lead('description: A lead.\n# a comment', 'first\n\nthird {{nmae}}\n'), '.focus/crew/lead.md'))).toBe(
-      ".focus/crew/lead.md:7: {{nmae}} isn't something this role's prompt can refer to: it has name, project, station, shaping, publicWordsRule, scratchRule, waitRule",
+      ".focus/crew/lead.md:7: {{nmae}} isn't something this role's prompt can refer to: it has name, project, shaping, publicWordsRule, scratchRule, waitRule",
     );
   });
 

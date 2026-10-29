@@ -1,4 +1,4 @@
-// Goals: each a lead at a team station, slice by slice, and the room's log of closed ones.
+// Goals: each a lead of its own, slice by slice, and the room's log of closed ones.
 
 import type { Lane } from '../mergeLaneRules';
 import type { SliceRecap } from '../recap';
@@ -6,7 +6,7 @@ import type { ClaudeTask, Effort } from './agents';
 import type { ChecksState } from './github';
 import type { QaSpotCheck } from './qa';
 
-/** A goal waiting for a free team station: what the captain said, and the effort its lead will start at. */
+/** A goal waiting in line, from when goals waited for a free team station: what the captain said, and the effort its lead will start at. */
 export interface QueuedGoal {
   id: string;
   text: string;
@@ -206,8 +206,11 @@ export interface LeadPr {
  * requests the slice shipped. Once they've all merged or closed, the next slice starts on fresh code.
  */
 export interface LeadWork {
-  /** The team station the goal has: 0 … TEAM_STATIONS-1. */
-  station: number;
+  /**
+   * The team station the goal's lead sits at (0 … TEAM_STATIONS-1), for a goal started while goals took one. A project
+   * has any number of goals, so a goal started since has none, and the world doesn't seat it.
+   */
+  station?: number;
   /** The goal in a few words. */
   title: string;
   /**

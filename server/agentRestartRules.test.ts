@@ -79,9 +79,9 @@ describe('agentAfterRestart', () => {
     expect(after.avatar).toHaveProperty('division');
   });
 
-  it('seats a lead saved before team stations at the first, named for its project', () => {
+  it('names a lead saved before goals for its project', () => {
     const lead = agent({ status: 'done', task: 'lead', lead: { title: '' } as never });
-    expect(agentAfterRestart(lead, 'Shop', randomAvatar).lead).toMatchObject({ station: 0, title: 'Shop’s first goal' });
+    expect(agentAfterRestart(lead, 'Shop', randomAvatar).lead).toEqual({ title: 'Shop’s first goal' });
   });
 
   it('leaves what it was given alone', () => {
@@ -92,13 +92,15 @@ describe('agentAfterRestart', () => {
 });
 
 describe('upgradeLead', () => {
-  it('turns the project’s one lead, saved before goals, into the goal at the first station', () => {
+  it('turns the project’s one lead, saved before goals, into a goal, and leaves one that has a goal, with a station or none, alone', () => {
     const old = { id: 'lead_p1', task: 'lead', issue: { number: 0, title: 'Shop’s lead', url: '' }, lead: { repos: [], slice: 3, prs: [] } } as unknown as Agent;
     const upgraded = upgradeLead(old, 'Shop');
-    expect(upgraded.lead).toEqual({ station: 0, title: 'Shop’s first goal', repos: [], slice: 3, prs: [] });
+    expect(upgraded.lead).toEqual({ title: 'Shop’s first goal', repos: [], slice: 3, prs: [] });
     expect(upgraded.issue.title).toBe('Shop’s first goal');
     const current = { ...old, lead: work } as Agent;
     expect(upgradeLead(current, 'Shop')).toBe(current);
+    const stationless = { ...old, lead: { ...work, station: undefined } } as Agent;
+    expect(upgradeLead(stationless, 'Shop')).toBe(stationless);
     const developer = { id: 'agent_x', task: 'issue' } as Agent;
     expect(upgradeLead(developer, 'Shop')).toBe(developer);
   });

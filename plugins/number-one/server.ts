@@ -37,7 +37,7 @@ const numberOnePlugin: FocusPlugin = {
     const calls: Calls = new Calls((call) => live.set({ call }), {
       snapshot: () => host.snapshot(),
       ledger: () => host.ledger(),
-      startQueued: (projectId, queueId, station) => host.goals.startQueued(projectId, queueId, station),
+      startQueued: (projectId, queueId) => host.goals.startQueued(projectId, queueId),
       startGoal: (projectId, goal) => host.goals.start(projectId, goal, { from: 'a call' }),
       message: (agentId, said) => host.goals.message(agentId, said),
     }, () => ({ openai: host.secret('OPENAI_API_KEY'), typesafe: host.secret('TYPESAFE_API_KEY') }), host.demo);

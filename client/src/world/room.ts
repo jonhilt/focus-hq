@@ -317,7 +317,7 @@ export class ProjectRoom {
     const queued = this.project.goalQueue?.[0];
     const next = queued && goalTitle(queued.text);
     for (const station of this.stations) {
-      const lead = leads.find((a) => (a.lead?.station ?? 0) === station.index);
+      const lead = leads.find((a) => a.lead?.station === station.index);
       const n = station.index + 1;
       station.screen.setAgent(lead ?? null);
       station.screen.setIdle(station.freeText(next));

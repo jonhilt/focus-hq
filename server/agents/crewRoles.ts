@@ -23,7 +23,7 @@ const RULES = { publicWordsRule: 'text', scratchRule: 'text', waitRule: 'text' }
 
 export const CREW_ROLES = {
   /** A goal's lead: `leadSystemAppend` (lead.ts). */
-  lead: { vars: { name: 'text', project: 'text', station: 'text', shaping: 'flag', ...RULES } },
+  lead: { vars: { name: 'text', project: 'text', shaping: 'flag', ...RULES } },
   /** An agent at a room's desk, on an issue, a pull request's conflicts or its QA fixes, or a plugin's brief: `systemAppend` (prompts.ts). */
   worker: {
     vars: { name: 'text', repo: 'text', number: 'text', branch: 'text', baseBranch: 'text', assignment: 'text', summary: 'text', cloud: 'flag', ...RULES },

@@ -122,7 +122,7 @@ export function pluginHost(core: Core, id: string, lent: Lent): PluginHost {
     },
     goals: {
       start: (projectId, text, how) => core.leads.startGoal(projectId, text, { from: how.from }),
-      startQueued: (projectId, queueId, station) => core.leads.startQueued(projectId, queueId, { station }),
+      startQueued: (projectId, queueId) => core.leads.startQueued(projectId, queueId),
       resolvePermission: (agentId, requestId, allow) => core.comms.resolvePermission(agentId, requestId, allow),
       answer: (agentId, questionId, option, note, how) => core.goalTools.answer(agentId, questionId, option, note, how),
       closeGoal: (agentId, force) => core.leads.closeGoal(agentId, force),

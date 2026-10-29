@@ -28,7 +28,7 @@ export const focus = {
   },
   /** Every agent of the shown projects. */
   shownAgents: (): Agent[] => state.shownAgents(),
-  /** A project's goals: each one's lead, by team station. */
+  /** A project's goals: each one's lead, in `goalOrder` (shared/board.ts). */
   leadsIn: (projectId: string): Agent[] => state.leadsIn(projectId),
   /** The pull requests the shown projects' boards show, each with its project. */
   shownPrs,

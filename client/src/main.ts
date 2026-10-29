@@ -539,12 +539,12 @@ async function main() {
         railPrefs.set(!railPrefs.on);
         break;
       case 'workflow-script': {
-        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && (a.lead?.station ?? 0) === i.station);
+        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
         if (lead) ui.openWorkflowScript(lead.id, i.workflowId);
         break;
       }
       case 'background': {
-        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && (a.lead?.station ?? 0) === i.station);
+        const lead = [...state.agents.values()].find((a) => a.projectId === i.projectId && a.task === 'lead' && a.lead?.station === i.station);
         if (lead) ui.openBackground(lead.id, i.taskId);
         break;
       }

@@ -17,6 +17,7 @@ import { effortPicker, pickedCloud, pickedEffort, wherePicker } from './agentPan
 import type { BoardTab, Ui } from './context';
 import { confirmDialog } from './confirmDialog';
 import { busy, fill, h, timeAgo } from './dom';
+import { stationWords } from './goals';
 import { Switch } from './panels';
 import { linkHealth } from './previewPanel';
 
@@ -100,7 +101,7 @@ export function openBoardPanel(ui: Ui, projectId: string, focus?: BoardTab): voi
     for (const lead of cols.goals) {
       const note = h('div', { class: `note doing goal ${lead.status}`, title: 'Open the goal' },
         h('div', { class: 't' }, h('span', { class: 'dot', style: `background:${UNIFORM[lead.avatar.division]};margin-right:6px;vertical-align:-2px` }), lead.lead?.title ?? lead.issue.title),
-        h('div', { class: 'm' }, h('span', { class: 'chip' }, `team station ${(lead.lead?.station ?? 0) + 1}`), h('span', { class: 'chip' }, lead.name), h('span', null, goalState(lead))),
+        h('div', { class: 'm' }, stationWords(lead) ? h('span', { class: 'chip' }, stationWords(lead)) : null, h('span', { class: 'chip' }, lead.name), h('span', null, goalState(lead))),
         h('div', { class: 'actions' },
           h('button', { class: 'btn small go', title: 'Teleport to the goal’s briefing room', onclick: (e: MouseEvent) => (e.stopPropagation(), ui.goToAgent(lead.id)) }, 'Beam there'),
         ),

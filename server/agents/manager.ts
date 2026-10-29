@@ -137,20 +137,20 @@ export class AgentManager {
     return this.core.sessions.compactNow(id);
   }
 
-  startGoal(projectId: string, text: string, how: { station?: number; effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } | { queued: QueuedGoal } {
+  startGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): { agent: Agent } {
     return this.core.leads.startGoal(projectId, text, how);
   }
 
-  reopenGoal(projectId: string, goalId: string, station?: number): Agent {
-    return this.core.leads.reopenGoal(projectId, goalId, station);
+  reopenGoal(projectId: string, goalId: string): Agent {
+    return this.core.leads.reopenGoal(projectId, goalId);
   }
 
-  /** Puts a goal in line at the project's team stations without starting it, even with a station free: the captain starts it. */
+  /** Puts a goal in line without starting it: the user starts it. */
   queueGoal(projectId: string, text: string, how: { effort?: Effort; from?: string; shaping?: boolean } = {}): QueuedGoal {
     return this.core.leads.queueGoal(projectId, text, how);
   }
 
-  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; station?: number; shaping?: boolean } = {}): Agent {
+  startQueued(projectId: string, queueId: string, edits: { text?: string; effort?: Effort; shaping?: boolean } = {}): Agent {
     return this.core.leads.startQueued(projectId, queueId, edits);
   }
 
@@ -253,12 +253,12 @@ export class AgentManager {
   }
 
   /** The captain spins one of a goal's open contacts off as a goal of its own. */
-  spinOffContact(id: string, contactId: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+  spinOffContact(id: string, contactId: string, text: string): { agent: Agent } {
     return this.core.leads.spinOffContact(id, contactId, text);
   }
 
   /** The captain spins one of a goal's ideas for next off as a goal of its own. */
-  spinOffIdea(id: string, idea: string, text: string): { agent: Agent } | { queued: QueuedGoal } {
+  spinOffIdea(id: string, idea: string, text: string): { agent: Agent } {
     return this.core.leads.spinOffIdea(id, idea, text);
   }
 

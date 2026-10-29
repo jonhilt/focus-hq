@@ -20,7 +20,7 @@ describe('PUBLIC_WORDS_RULE', () => {
 
   it('is in QA’s and the leads’ prompts', () => {
     expect(qaPlaybook('Odo', { name: 'Shop', repos: ['acme/shop'] }, []).prompt).toContain(PUBLIC_WORDS_RULE);
-    expect(leadSystemAppend({ name: 'Ivanova' }, 'Shop', { station: 0 })).toContain(PUBLIC_WORDS_RULE);
+    expect(leadSystemAppend({ name: 'Ivanova' }, 'Shop', {})).toContain(PUBLIC_WORDS_RULE);
   });
 
   it('is in the prompts of whoever writes issues or a closing comment: the planner and triage', () => {

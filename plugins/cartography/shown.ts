@@ -57,7 +57,7 @@ const titleOf = (map: RepoMap, view: MapView): string =>
 /** A slice's view as the space puts it up. */
 const sliceShown = ({ slice, map, view, marks, key }: SliceView): Shown => ({
   kind: 'slice', key, title: `what ${slice.title} changes`, map, view, marks,
-  caption: `${slice.title} · TS-${slice.station + 1} · ${map.repo}, its lead's checkout against the default branch`,
+  caption: `${slice.title}${slice.station === undefined ? '' : ` · TS-${slice.station + 1}`} · ${map.repo}, its lead's checkout against the default branch`,
 });
 
 /**

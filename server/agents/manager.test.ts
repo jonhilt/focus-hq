@@ -926,12 +926,13 @@ describe('AgentManager', () => {
     expect(after.claude.turns).toEqual([]);
   });
 
-  it('starts a queued goal with the captain’s last edits, at the first free station once theirs is taken, and takes it out of line', () => {
+  it('starts a queued goal now with the user’s last edits, at no team station, and takes it out of line', () => {
     const { agents, store, project } = focus();
-    agents.startGoal(project.id, 'Saved items');
+    for (const goal of ['One', 'Two', 'Three', 'Four']) agents.startGoal(project.id, goal);
     const queued = agents.queueGoal(project.id, 'Wishlists', { effort: 'low', from: 'the bridge' });
-    const lead = agents.startQueued(project.id, queued.id, { text: 'Wishlists you can share', station: 0 });
-    expect(lead).toMatchObject({ task: 'lead', effort: 'low', lead: { station: 1, title: 'Wishlists you can share' } });
+    const lead = agents.startQueued(project.id, queued.id, { text: 'Wishlists you can share' });
+    expect(lead).toMatchObject({ task: 'lead', effort: 'low', lead: { title: 'Wishlists you can share' } });
+    expect(lead.lead).not.toHaveProperty('station');
     expect(store.agent(lead.id).lead?.brief).toBe('Wishlists you can share');
     expect(project.goalQueue).toEqual([]);
     expect(() => agents.startQueued(project.id, queued.id)).toThrow('That goal is no longer in line');
@@ -956,13 +957,13 @@ describe('AgentManager', () => {
 
     const spun = agents.spinOffContact(lead.id, 'c1', 'Saved items follow you across devices') as { agent: { id: string } };
     const goal = store.agent(spun.agent.id);
-    expect(goal.lead).toMatchObject({ station: 1, brief: 'Saved items follow you across devices' });
+    expect(goal.lead).toMatchObject({ brief: 'Saved items follow you across devices' });
     expect(store.agent(lead.id).lead!.contacts![0].closed).toMatchObject({ as: 'spun off', goal: goal.id, title: goal.lead!.title });
     expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun one of your loose threads (Sync across devices?) off as a goal of its own');
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
 
     const idea = agents.spinOffIdea(lead.id, 'Tidy the store', 'Tidy the store code') as { agent: { id: string } };
-    expect(store.agent(idea.agent.id).lead).toMatchObject({ station: 2 });
+    expect(store.agent(idea.agent.id).lead).toMatchObject({ title: 'Tidy the store code' });
     expect(store.agent(lead.id).lead!.note!.next).toEqual(['Show it in the header']);
     // and stays off it while the lead's brief still lists it
     expect(store.agent(lead.id).lead!.spunOffIdeas).toEqual(['Tidy the store']);
@@ -1002,10 +1003,11 @@ describe('AgentManager', () => {
     expect(await agents.closeGoal(lead.id, true)).toEqual({ closed: true });
     expect(store.agents.has(lead.id)).toBe(false);
 
-    // another goal took station 1 meanwhile
+    // another goal started meanwhile
     agents.startGoal(project.id, 'Wishlists');
     const again = agents.reopenGoal(project.id, lead.id);
-    expect(again).toMatchObject({ id: lead.id, name: lead.name, branch, lead: { station: 1, slice: 1, title: 'Saved items' } });
+    expect(again).toMatchObject({ id: lead.id, name: lead.name, branch, lead: { slice: 1, title: 'Saved items' } });
+    expect(again.lead).not.toHaveProperty('station');
     expect(project.goals).toEqual([]);
     expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/isn’t in the room’s log/);
     await until(() => leads().length === 2);
@@ -1070,36 +1072,34 @@ describe('AgentManager', () => {
     expect(agents.reopenGoal(project.id, lead.id)).toMatchObject({ id: lead.id, branch });
   });
 
-  it('reopens a goal only to a free team station', async () => {
+  it('reopens a goal however many goals are under way', async () => {
     const { agents, claude, project } = focus();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items');
     await until(() => claude.turns.length === 1);
     await agents.closeGoal(lead.id, true);
     for (const text of ['One', 'Two', 'Three', 'Four']) agents.startGoal(project.id, text);
-    expect(() => agents.reopenGoal(project.id, lead.id)).toThrow(/Every team station in Shop has a goal: close one first/);
-    expect(project.goals?.map((g) => g.id)).toEqual([lead.id]);
+    expect(agents.reopenGoal(project.id, lead.id)).toMatchObject({ id: lead.id });
+    expect(project.goals).toEqual([]);
   });
 
-  it('spins a contact off as a goal of its own, at a free station or in line, closes it linked to the new goal, and tells the lead', () => {
+  it('spins a contact off as a goal of its own, however many are under way, closes it linked to the new goal, and tells the lead', () => {
     const { agents, store, project } = focus();
-    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: Agent };
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items');
     const work = store.agent(lead.id).lead;
     if (!work) throw new Error('No lead work');
     store.putAgent({ ...store.agent(lead.id), lead: { ...work, contacts: [{ id: 'c1', text: 'Auth off the LAN?', slice: 1, at: 0 }, { id: 'c2', text: 'Dark mode', slice: 1, at: 0 }] } });
 
     const started = agents.spinOffContact(lead.id, 'c1', 'Auth off the LAN\n\n(Spun off from “Saved items”)');
-    if (!('agent' in started)) throw new Error('It went in line');
     const closed = store.agent(lead.id).lead?.contacts?.[0].closed;
     expect(closed).toMatchObject({ as: 'spun off', goal: started.agent.id, title: 'Auth off the LAN', slice: 1 });
-    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”, at team station ${(started.agent.lead?.station ?? 0) + 1}. Leave that thread to the new goal: take it off your brief.`);
+    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”. Leave that thread to the new goal: take it off your brief.`);
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
     expect(() => agents.spinOffContact(lead.id, 'c9', 'Who?')).toThrow("There's no contact c9. Open contacts: c2 (Dark mode).");
 
-    // every station taken: the new goal waits in line, by its first words, and the lead hears that
-    for (const text of ['Three', 'Four']) agents.startGoal(project.id, text);
-    expect(agents.spinOffContact(lead.id, 'c2', 'Dark mode for the shop')).toMatchObject({ queued: { text: 'Dark mode for the shop' } });
-    expect(store.agent(lead.id).lead?.contacts?.[1].closed).toEqual({ as: 'spun off', title: 'Dark mode for the shop', slice: 1, at: expect.any(Number) });
-    expect(store.recentLines(lead.id).at(-1)?.text).toContain('“Dark mode for the shop”, waiting in line for a team station.');
+    // with more goals under way than the room has team stations, the new goal still starts
+    for (const text of ['Three', 'Four', 'Five']) agents.startGoal(project.id, text);
+    const more = agents.spinOffContact(lead.id, 'c2', 'Dark mode for the shop');
+    expect(store.agent(lead.id).lead?.contacts?.[1].closed).toEqual({ as: 'spun off', goal: more.agent.id, title: 'Dark mode for the shop', slice: 1, at: expect.any(Number) });
   });
 
   it('puts what the lead shows on their goal, with a picture when it can take one, and files it with the goal when it closes', async () => {
@@ -1520,13 +1520,14 @@ describe('AgentManager', () => {
     expect(store.agent('old').desk).toBe(0);
   });
 
-  it('says why when a goal can’t have the station it asked for, and queues one when every station is taken', () => {
-    const { agents, project } = focus();
-    agents.startGoal(project.id, 'One', { station: 1 });
-    expect(() => agents.startGoal(project.id, 'Two', { station: 1 })).toThrow('Team station 2 already has a goal: One');
+  it('starts any number of goals in a project, at no team station, even with goals waiting in line', () => {
+    const { agents, store, project } = focus();
     expect(() => agents.startGoal(project.id, ' ')).toThrow('Tell them what you’re after');
-    for (const goal of ['Two', 'Three', 'Four']) agents.startGoal(project.id, goal);
-    expect(agents.startGoal(project.id, 'Five')).toMatchObject({ queued: { text: 'Five' } });
+    agents.queueGoal(project.id, 'Waiting');
+    const started = ['One', 'Two', 'Three', 'Four', 'Five', 'Six'].map((goal) => agents.startGoal(project.id, goal).agent);
+    expect(started.map((a) => store.agent(a.id).lead?.title)).toEqual(['One', 'Two', 'Three', 'Four', 'Five', 'Six']);
+    expect(started.every((a) => store.agent(a.id).lead?.station === undefined)).toBe(true);
+    expect(project.goalQueue?.map((g) => g.text)).toEqual(['Waiting']);
   });
 
   it('carries QA’s pass over a clean merge of main without seating QA, never re-tests a commit with a verdict, and re-tests a real change', async () => {

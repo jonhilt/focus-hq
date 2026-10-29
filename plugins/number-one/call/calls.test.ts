@@ -27,19 +27,19 @@ function setUp(answers: JevAnswers[], messageReply: MessageReply = { sent: true 
       }),
   }));
   const jev = Layer.succeed(Jev, Jev.of({ ask: () => Effect.sync(() => answers.shift() ?? {}) }));
-  const started: [string, string, number][] = [];
+  const started: [string, string][] = [];
   const goals: [string, string][] = [];
   const messages: [string, string][] = [];
   const focus: CallHost = {
     snapshot: () => Promise.resolve(ship),
     ledger: () => [],
-    startQueued: (projectId, queueId, station) => {
-      started.push([projectId, queueId, station]);
-      return { name: 'Lt. Data', lead: { station } } as Agent;
+    startQueued: (projectId, queueId) => {
+      started.push([projectId, queueId]);
+      return { name: 'Lt. Data' } as Agent;
     },
     startGoal: (projectId, text) => {
       goals.push([projectId, text]);
-      return { queued: { id: 'q2', text, at: 0 } };
+      return { agent: { name: 'Lt. Worf' } as Agent };
     },
     message: (agentId, text) => {
       messages.push([agentId, text]);
@@ -77,12 +77,12 @@ describe('Calls', () => {
     const t = setUp([{ action: choice('start_next_goal') }, { action: choice('other'), approve: { noul: 0.97 } }]);
     await t.calls.start('v=0 offer');
     await t.say('Start the next goal', 'd1');
-    expect(t.call()).toMatchObject({ step: 'confirming', pending: 'Start "Voice mode" in Shop, at station 1?' });
+    expect(t.call()).toMatchObject({ step: 'confirming', pending: 'Start "Voice mode" in Shop?' });
     expect(t.sent.some((e) => e.type === 'session.instructions.append')).toBe(true);
     expect(t.started).toEqual([]);
     await t.say('Make it so', 'd2');
-    expect(t.started).toEqual([['p1', 'q1', 0]]);
-    expect(t.replies().at(-1)).toEqual({ type: 'session.commentary.append', delegation_id: 'd2', content: 'Started: Lt. Data has "Voice mode" at station 1.' });
+    expect(t.started).toEqual([['p1', 'q1']]);
+    expect(t.replies().at(-1)).toEqual({ type: 'session.commentary.append', delegation_id: 'd2', content: 'Started: Lt. Data has "Voice mode".' });
     expect(t.call().step).toBe('listening');
   });
 
@@ -103,7 +103,7 @@ describe('Calls', () => {
     await t.say('Yes', 'd4');
     // the notes start where the topic did, after the captain asked for it
     expect(t.goals).toEqual([['p1', expect.stringMatching(/^Fix the flaky tests\n\nFrom a call with the captain about Shop:\nShip: QA keeps failing on flaky tests\./) as string]]);
-    expect(t.replies().at(-1)).toMatchObject({ delegation_id: 'd4', content: 'Queued "Fix the flaky tests" in Shop: every team station has a goal.' });
+    expect(t.replies().at(-1)).toMatchObject({ delegation_id: 'd4', content: 'Started: Lt. Worf has "Fix the flaky tests".' });
   });
 
   it("says when a word for a lead waits on the captain's say about the API key", async () => {
@@ -140,7 +140,7 @@ describe('Calls', () => {
   });
 
   it("won't take a call without both keys", async () => {
-    const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ queued: { id: 'q', text: '', at: 0 } }), message: () => ({ sent: true }) }, () => ({ openai: 'sk' }), false);
+    const calls = new Calls(() => undefined, { snapshot: () => Promise.resolve(snapshot), ledger: () => [], startQueued: () => ({}) as Agent, startGoal: () => ({ agent: {} as Agent }), message: () => ({ sent: true }) }, () => ({ openai: 'sk' }), false);
     expect(calls.status()).toEqual({ missing: 'Calls need a TypeSafe API key, set in the ready room\'s Plugins tab', call: null });
     await expect(calls.start('v=0 offer')).rejects.toThrow('TypeSafe API key');
   });

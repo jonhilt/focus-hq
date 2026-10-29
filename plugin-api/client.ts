@@ -12,8 +12,8 @@ export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
 export { confirmDialog } from '../client/src/ui/confirmDialog';
 /**
- * Starting an idea as a goal, or handing it to one under way (the goals list's own control); and telling the captain a
- * goal a plugin started has its lead at a team station, as every goal started in Focus does.
+ * Starting an idea as a goal, or handing it to one under way (the goals list's own control); and telling the user a
+ * goal a plugin started has a lead of its own, as every goal started in Focus does.
  */
 export { goalStarted, handOffControl } from '../client/src/ui/goals';
 /**

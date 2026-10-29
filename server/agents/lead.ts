@@ -73,8 +73,8 @@ export function workspaceList(work: LeadWork, branch: string): string {
  * keeps a session's first system prompt on every resume; where the repos are and which branch they're on (which change
  * from slice to slice) come in messages instead (`workspaceNote`, `newSliceNote`).
  */
-export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string, work: Pick<LeadWork, 'station' | 'shaping'>): string {
-  return crewPrompt('lead', { name: agent.name, project: projectName, station: String(work.station + 1), shaping: !!work.shaping, ...CREW_RULES }).trim();
+export function leadSystemAppend(agent: Pick<Agent, 'name'>, projectName: string, work: Pick<LeadWork, 'shaping'>): string {
+  return crewPrompt('lead', { name: agent.name, project: projectName, shaping: !!work.shaping, ...CREW_RULES }).trim();
 }
 
 /**
@@ -139,16 +139,16 @@ export function goalRecord(agent: LeadAgent, now: number): GoalRecord {
 }
 
 /**
- * A closed goal's work as it stood when it closed, at `station`: the slice it was on, with that slice's pull requests,
+ * A closed goal's work as it stood when it closed, at no team station: the slice it was on, with that slice's pull requests,
  * and its repos (so closing it again before they're checked out still files a goal that can be reopened).
  */
-export function reopenedWork(goal: GoalRecord, station: number): LeadWork {
+export function reopenedWork(goal: GoalRecord): LeadWork {
   // goals closed before they kept their slice kept only that slice's pull requests
   const slice = goal.slice ?? (goal.prs.length ? goal.slices : goal.slices + 1);
   const current = goal.slice === undefined ? goal.prs : goal.prs.filter((p) => p.slice === slice);
   const landed = goal.slice === undefined ? [] : goal.prs.filter((p) => p.slice !== slice);
   return {
-    station, title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), ...(goal.shaping && { shaping: true }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
+    title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), ...(goal.shaping && { shaping: true }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
     ...(goal.artifacts && { artifacts: goal.artifacts }), ...(goal.questions && { questions: goal.questions }),
     ...(goal.waypoints && { waypoints: goal.waypoints }), ...(goal.contacts && { contacts: goal.contacts }),
@@ -178,9 +178,6 @@ export function reopenedNote(work: LeadWork, branch: string, closedAt: number): 
 /** The room's log with a goal just closed: newest first, the oldest dropping off. */
 /** The goals in `before` that `after` no longer has: what they showed can go. */
 export const fileGoal = (log: GoalRecord[], record: GoalRecord): GoalRecord[] => [record, ...log.filter((g) => g.id !== record.id)].slice(0, GOAL_LOG);
-
-/** The queued goal a freed station offers: the first in line. */
-export const nextGoal = (queue: QueuedGoal[] | undefined): QueuedGoal | undefined => queue?.[0];
 
 /** The queue with one goal moved `by` places (negative: sooner), staying within the queue. */
 export function moveQueued(queue: QueuedGoal[], id: string, by: number): QueuedGoal[] {

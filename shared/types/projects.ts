@@ -142,7 +142,7 @@ export interface Project {
    * cartography, does nothing for it otherwise. Missing = none.
    */
   plugins?: string[];
-  /** Goals waiting for a free team station, first up first. They never start by themselves. */
+  /** Goals waiting in line, first up first (from when goals waited for a free team station). They never start by themselves. */
   goalQueue?: QueuedGoal[];
   /** Goals that have been closed, newest first (a few dozen at most). */
   goals?: GoalRecord[];
