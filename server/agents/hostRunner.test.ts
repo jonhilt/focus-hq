@@ -1,0 +1,195 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { echoTurn, type FakeSession, makeFakeAdapter } from 'agent-host';
+import { Effect } from 'effect';
+import { describe, expect, it, vi } from 'vitest';
+import type { Settings, TermLine } from '../../shared/types';
+import { BrowserPool } from './browserTool';
+import { DECLINED } from './claudeRunner';
+import { copyTranscript, HostRunner } from './hostRunner';
+import type { RunHooks, RunRequest } from './types';
+
+// Developer sessions on agent-host (`HostRunner`), driven by agent-host's stand-in agent: what a Focus turn sees of a
+// conversation the host runs. The host's own promises (its journal, resuming a cut-off turn, holds) are agent-host's
+// tests; these are the runner's: a turn ends when the host's turn does, with what Claude Code said; a raised hand goes
+// to the manager and their answer back; a message sent mid-turn reaches the agent; the next turn carries on the same
+// conversation; Focus shutting down leaves a turn to the host, which resumes it, and Focus's own resume then watches
+// that turn rather than telling the agent twice.
+
+vi.setConfig({ testTimeout: 20_000 });
+
+const settings: Settings = { maxConcurrent: 4, autonomy: 'ask', model: '', conflictsModel: '', qaModel: '', mergeMethod: 'squash', attribution: true, userClaudeMd: false, leadEffort: 'high', leadCompactAt: 200_000 };
+const request = (prompt: string, resumeSessionId?: string): RunRequest => ({ agentId: 'dev_1', agentName: 'Ensign Dev', task: 'issue', cwd: process.cwd(), prompt, systemAppend: 'Work the issue.', settings, autonomy: 'ask', resumeSessionId });
+
+const journal = () => path.join(mkdtempSync(path.join(os.tmpdir(), 'focus-host-')), 'journal.sqlite');
+
+function hooks(approve = true) {
+  const lines: Omit<TermLine, 't'>[] = [];
+  const asked: string[] = [];
+  const h: RunHooks = {
+    lines: (ls) => void lines.push(...ls),
+    activity: () => undefined,
+    browser: () => undefined,
+    screenshot: () => undefined,
+    session: () => undefined,
+    cost: () => undefined,
+    permission: (tool, summary) => (asked.push(`${tool}: ${summary}`), Promise.resolve(approve)),
+    question: () => Promise.resolve(undefined),
+  };
+  return { h, lines, asked };
+}
+
+/** Claude Code's own messages, as the stand-in's events carry them. */
+const assistant = (text: string) => ({ type: 'assistant', parent_tool_use_id: null, uuid: crypto.randomUUID(), session_id: 's', message: { content: [{ type: 'text', text }] } });
+const result = (text: string) => ({ type: 'result', subtype: 'success', result: text, is_error: false, duration_ms: 1000, num_turns: 1, total_cost_usd: 0.01, session_id: 's', uuid: crypto.randomUUID() });
+
+/** A turn as Claude Code takes it: it says something, gives a result, and goes quiet. */
+const says = (s: FakeSession, text: string) =>
+  Effect.gen(function* () {
+    yield* s.beginTurn();
+    yield* s.emit({ _tag: 'AssistantMessage', text, source: { _tag: 'Main' }, raw: assistant(text) });
+    yield* s.emit({ _tag: 'Usage', costUsd: 0.01, source: { _tag: 'Main' }, raw: result(text) });
+    yield* s.endTurn();
+  });
+
+const until = async (check: () => boolean, what: string) => {
+  for (let i = 0; i < 300 && !check(); i++) await new Promise((r) => setTimeout(r, 10));
+  if (!check()) throw new Error(`timed out waiting for ${what}`);
+};
+
+describe('HostRunner', () => {
+  it("ends a developer's turn when the host's turn ends, with what Claude Code said, rendered as the old runner renders it", async () => {
+    const fake = makeFakeAdapter({ script: (s, text) => says(s, `done: ${text}`) });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const { h, lines } = hooks();
+    const outcome = await runner.start(request('fix the bug'), h).done;
+    expect(outcome).toMatchObject({ ok: true, summary: 'done: fix the bug', started: true });
+    expect(lines.map((l) => l.text).join('\n')).toContain('done: fix the bug');
+    const s = await Effect.runPromise(fake.session(1));
+    expect(s.options).toMatchObject({ autonomy: 'raise-hand', disallowedTools: ['AskUserQuestion', 'EnterPlanMode'], systemAppend: 'Work the issue.' });
+    // the scratch dir's environment and the browser, lent
+    expect(s.options.env.FOCUS_SCRATCH).toBeTruthy();
+    expect(s.options.tools.map((t) => `${t.server}/${t.name}`)).toContain('browser/open');
+    await runner.shutDown();
+  });
+
+  it("puts a raised hand to the manager and gives the agent their answer", async () => {
+    const fake = makeFakeAdapter({
+      script: (s) =>
+        Effect.gen(function* () {
+          yield* s.beginTurn();
+          for (const id of ['p1', 'p2']) {
+            yield* s.emit({ _tag: 'PermissionRequested', requestId: id, tool: 'Bash', input: { command: 'curl x' }, summary: 'Bash(curl x)', source: { _tag: 'Main' } });
+            yield* s.answerOf(id);
+          }
+          yield* s.endTurn();
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const { h, asked } = hooks(false);
+    await runner.start(request('fetch it'), h).done;
+    const s = await Effect.runPromise(fake.session(1));
+    expect(asked).toEqual(['Bash: Bash(curl x)', 'Bash: Bash(curl x)']);
+    expect(s.answers.get('p1')).toEqual({ _tag: 'Deny', message: DECLINED });
+    await runner.shutDown();
+  });
+
+  it('delivers a message sent mid-turn into that turn, and carries the next turn on in the same conversation', async () => {
+    const fake = makeFakeAdapter({
+      script: (s, text) =>
+        Effect.gen(function* () {
+          if (text !== 'first') return;
+          yield* s.beginTurn();
+          // the turn runs until a second message comes
+          while (s.received.length < 2) yield* Effect.sleep(5);
+          yield* says(s, `heard ${s.received.join(' + ')}`);
+        }),
+    });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const session = runner.start(request('first'), hooks().h);
+    expect(session.send('second')).toBe(true);
+    expect(await session.done).toMatchObject({ ok: true, summary: 'heard first + second' });
+    expect(session.send('too late')).toBe(false);
+
+    const s = await Effect.runPromise(fake.session(1));
+    const next = runner.start(request('third', s.agentSessionId), hooks().h);
+    await until(() => s.received.includes('third'), 'the next turn');
+    await Effect.runPromise(says(s, 'third done'));
+    expect(await next.done).toMatchObject({ ok: true, summary: 'third done' });
+    expect(fake.sessions).toHaveLength(1);
+    await runner.shutDown();
+  });
+
+  it('a stop ends the turn as stopped', async () => {
+    const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const session = runner.start(request('long job'), hooks().h);
+    const s = await Effect.runPromise(fake.session(1));
+    await until(() => s.inTurn, 'the turn');
+    session.stop();
+    expect(await session.done).toMatchObject({ ok: false, aborted: true });
+    await runner.shutDown();
+  });
+
+  it("leaves a turn to the host when Focus shuts down: the host resumes it, and Focus's own resume watches that turn rather than telling the agent twice", async () => {
+    const file = journal();
+    const before = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const first = new HostRunner(new BrowserPool(), before, file);
+    const session = first.start(request('build it'), hooks().h);
+    const s1 = await Effect.runPromise(before.session(1));
+    await until(() => s1.inTurn, 'the turn');
+    first.closingNow();
+    session.stop();
+    await first.shutDown();
+
+    const after = makeFakeAdapter({ script: echoTurn });
+    const second = new HostRunner(new BrowserPool(), after, file);
+    second.warmUp();
+    const s2 = await Effect.runPromise(after.session(1));
+    // the host resumed the same agent session itself, told it so, and sent the turn's message again
+    expect(s2.options.resume).toBe(s1.agentSessionId);
+    await until(() => s2.received.length === 2, 'the resume');
+    expect(s2.received[1]).toBe('build it');
+    // Focus's recovery starts the turn again on the same session: it watches, and sends nothing more
+    const resumed = second.start(request('You were cut off: carry on.', s1.agentSessionId), hooks().h);
+    await new Promise((r) => setTimeout(r, 100));
+    expect(s2.received).toHaveLength(2);
+    expect(after.sessions).toHaveLength(1);
+    await Effect.runPromise(s2.endTurn());
+    expect(await resumed.done).toMatchObject({ ok: true });
+    await second.shutDown();
+  });
+});
+
+describe('copyTranscript', () => {
+  const folders = () => {
+    const root = mkdtempSync(path.join(os.tmpdir(), 'focus-transcripts-'));
+    const from = path.join(root, 'from');
+    const to = path.join(root, 'to');
+    mkdirSync(path.join(from, '-Users-me-repo'), { recursive: true });
+    writeFileSync(path.join(from, '-Users-me-repo', 's1.jsonl'), '{"line":1}\n');
+    return { from, to };
+  };
+
+  it("copies a session's transcript to where the host's Claude Code looks, in the same project folder", () => {
+    const { from, to } = folders();
+    expect(copyTranscript('s1', from, to)).toBe(true);
+    expect(readFileSync(path.join(to, '-Users-me-repo', 's1.jsonl'), 'utf8')).toBe('{"line":1}\n');
+  });
+
+  it('copies once: a transcript the host already has is left as it is', () => {
+    const { from, to } = folders();
+    mkdirSync(path.join(to, '-Users-me-repo'), { recursive: true });
+    writeFileSync(path.join(to, '-Users-me-repo', 's1.jsonl'), 'the host’s own\n');
+    expect(copyTranscript('s1', from, to)).toBe(false);
+    expect(readFileSync(path.join(to, '-Users-me-repo', 's1.jsonl'), 'utf8')).toBe('the host’s own\n');
+  });
+
+  it('copies nothing when the session has no transcript, or there are no transcripts at all', () => {
+    const { from, to } = folders();
+    expect(copyTranscript('missing', from, to)).toBe(false);
+    expect(copyTranscript('s1', path.join(from, 'nowhere'), to)).toBe(false);
+    expect(existsSync(to)).toBe(false);
+  });
+});

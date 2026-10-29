@@ -238,6 +238,7 @@ export class AgentSessions extends Part {
     return {
       agentId: agent.id,
       agentName: agent.name,
+      task: agent.task,
       cwd,
       prompt,
       systemAppend: instructions,

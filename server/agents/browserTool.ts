@@ -1,7 +1,7 @@
-import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
+import { type Tool, type ToolResult, toolServer } from 'agent-host';
+import { Effect, Schema } from 'effect';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import os from 'node:os';
-import { z } from 'zod';
 import { ARTIFACT_SIZE } from '../../shared/artifacts';
 import type { BrowserFrame } from '../../shared/types';
 import { errorMessage, truncate } from '../util';
@@ -304,18 +304,25 @@ export function focusHQShape(): string | null {
   return lines.join('\n');
 }
 
+/** A browser tool's answer as an MCP result: what the old runner's server and the host's tools both give. */
+function toolResult(result: CallResult): ToolResult {
+  const text = result.content.flatMap((c) => (c.type === 'text' ? [c.text] : [])).join('\n');
+  const images = result.content.flatMap((c) => (c.type === 'image' ? [{ data: Buffer.from(c.data, 'base64'), mimeType: c.mimeType }] : []));
+  return { text, ...(images.length > 0 && { images }), ...(result.isError && { isError: true }) };
+}
+
 /**
- * In-process MCP server exposing a real browser. Every action streams a screenshot to the agent's laptop; the ones the
- * agent asks for are kept as evidence too.
+ * A real browser, as tools defined once (agent-host's `Tool`): served as mcp__browser__* to Claude Code, in process.
+ * Every action streams a screenshot to the agent's laptop; the ones the agent asks for are kept as evidence too.
  */
-export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick<RunHooks, 'browser' | 'screenshot'>) {
+export function browserTools(pool: BrowserPool, agentId: string, hooks: () => Pick<RunHooks, 'browser' | 'screenshot'>): Tool[] {
   const snapshot = async (tab: Tab, note: string, keep?: (frame: BrowserFrame) => void): Promise<CallResult> => {
     const { page } = tab;
     const jpeg = await page.screenshot({ type: 'jpeg', quality: 60 });
     const title = await page.title().catch(() => '');
     const base64 = jpeg.toString('base64');
     const frame: BrowserFrame = { url: page.url(), title, image: `data:image/jpeg;base64,${base64}`, at: Date.now() };
-    hooks.browser(frame);
+    hooks().browser(frame);
     keep?.(frame);
     const text = await page
       .evaluate(() => document.body?.innerText ?? '')
@@ -340,92 +347,101 @@ export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick
     }
   };
 
-  return createSdkMcpServer({
-    name: 'browser',
-    version: '1.0.0',
-    alwaysLoad: true,
-    instructions:
-      'A real headless Chromium for testing web UIs. Each call returns the visible text and a screenshot. ' +
-      'Start dev servers in the background first, then open http://localhost:<port>.',
-    tools: [
-      tool('open', 'Open a URL (e.g. http://localhost:5173) and return a screenshot.', { url: z.string() }, ({ url }) =>
+  const browserTool = <A>(name: string, description: string, input: Schema.Codec<A, A>, run: (input: A) => Promise<CallResult>): Tool<A> => ({
+    name,
+    server: 'browser',
+    description,
+    input,
+    handler: (args) => Effect.promise(() => run(args)).pipe(Effect.map(toolResult)),
+  });
+
+  return [
+    browserTool(
+      'open',
+      'Open a URL (e.g. http://localhost:5173) and return a screenshot. A real headless Chromium for testing web UIs: start dev servers in the background first.',
+      Schema.Struct({ url: Schema.String }),
+      ({ url }) =>
         act(async ({ page }) => {
           await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
           await page.waitForTimeout(500);
           return `Opened ${url}`;
         }),
-      ),
-      tool(
-        'click',
-        'Click an element, by CSS selector or by its visible text.',
-        { selector: z.string().optional(), text: z.string().optional() },
-        ({ selector, text }) =>
-          act(async ({ page }) => {
-            if (selector) await page.click(selector, { timeout: 10_000 });
-            else if (text) await page.getByText(text, { exact: false }).first().click({ timeout: 10_000 });
-            else throw new Error('Pass a selector or text');
-            await page.waitForTimeout(400);
-            return `Clicked ${selector ?? `"${text}"`}`;
-          }),
-      ),
-      tool(
-        'type',
-        'Fill an input (CSS selector) with text, optionally pressing Enter afterwards.',
-        { selector: z.string(), text: z.string(), submit: z.boolean().optional() },
-        ({ selector, text, submit }) =>
-          act(async ({ page }) => {
-            await page.fill(selector, text, { timeout: 10_000 });
-            if (submit) await page.press(selector, 'Enter');
-            await page.waitForTimeout(400);
-            return `Typed into ${selector}`;
-          }),
-      ),
-      tool('press', 'Press a keyboard key (e.g. Enter, Escape, ArrowDown).', { key: z.string() }, ({ key }) =>
+    ),
+    browserTool(
+      'click',
+      'Click an element, by CSS selector or by its visible text.',
+      Schema.Struct({ selector: Schema.optional(Schema.String), text: Schema.optional(Schema.String) }),
+      ({ selector, text }) =>
         act(async ({ page }) => {
-          await page.keyboard.press(key);
-          await page.waitForTimeout(300);
-          return `Pressed ${key}`;
+          if (selector) await page.click(selector, { timeout: 10_000 });
+          else if (text) await page.getByText(text, { exact: false }).first().click({ timeout: 10_000 });
+          else throw new Error('Pass a selector or text');
+          await page.waitForTimeout(400);
+          return `Clicked ${selector ?? `"${text}"`}`;
         }),
-      ),
-      tool('screenshot', 'Screenshot the current page.', {}, () => act(async () => 'Screenshot', hooks.screenshot)),
-      tool(
-        'evaluate',
-        'Run JavaScript in the page and return its JSON result. A single expression is returned as is (`await` allowed); ' +
-          "statements run as the body of an async function, returning the last one's value when it's an expression " +
-          "(`a(); 'ok'` gives 'ok'), or what you `return`. Gives up after 30 s." +
-          FOCUS_HQ_HOOKS,
-        { expression: z.string() },
-        async ({ expression }) => {
-          try {
-            const { page } = await pool.tab(agentId);
-            pool.acted(agentId);
-            const result = await withTimeout(
-              page.evaluate((body) => {
-                const Async = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
-                return new Async(body)().then((v) => JSON.stringify(v, null, 2));
-              }, evaluateBody(expression)),
-              EVALUATE_TIMEOUT_MS,
-              'Evaluation',
-            );
-            return { content: [{ type: 'text', text: truncate(String(result), 8000) }] };
-          } catch (err) {
-            const message = errorMessage(err);
-            const shape = /TypeError/.test(message)
-              ? await pool
-                  .tab(agentId)
-                  .then(({ page }) => page.evaluate(focusHQShape))
-                  .catch(() => null)
-              : null;
-            const hint = evaluateHint(message, shape && truncate(shape, 2500));
-            return failure(`Evaluation failed: ${message}`, hint, machineLoad(loadNow()));
-          }
-        },
-      ),
-      tool('console', 'Read console messages and page errors collected since the last call.', {}, async () => {
-        const tab = await pool.tab(agentId);
-        const messages = tab.console.splice(0);
-        return { content: [{ type: 'text', text: messages.length ? messages.join('\n') : '(no console output)' }] };
+    ),
+    browserTool(
+      'type',
+      'Fill an input (CSS selector) with text, optionally pressing Enter afterwards.',
+      Schema.Struct({ selector: Schema.String, text: Schema.String, submit: Schema.optional(Schema.Boolean) }),
+      ({ selector, text, submit }) =>
+        act(async ({ page }) => {
+          await page.fill(selector, text, { timeout: 10_000 });
+          if (submit) await page.press(selector, 'Enter');
+          await page.waitForTimeout(400);
+          return `Typed into ${selector}`;
+        }),
+    ),
+    browserTool('press', 'Press a keyboard key (e.g. Enter, Escape, ArrowDown).', Schema.Struct({ key: Schema.String }), ({ key }) =>
+      act(async ({ page }) => {
+        await page.keyboard.press(key);
+        await page.waitForTimeout(300);
+        return `Pressed ${key}`;
       }),
-    ],
-  });
+    ),
+    browserTool('screenshot', 'Screenshot the current page.', Schema.Struct({}), () => act(async () => 'Screenshot', (frame) => hooks().screenshot(frame))),
+    browserTool(
+      'evaluate',
+      'Run JavaScript in the page and return its JSON result. A single expression is returned as is (`await` allowed); ' +
+        "statements run as the body of an async function, returning the last one's value when it's an expression " +
+        "(`a(); 'ok'` gives 'ok'), or what you `return`. Gives up after 30 s." +
+        FOCUS_HQ_HOOKS,
+      Schema.Struct({ expression: Schema.String }),
+      async ({ expression }) => {
+        try {
+          const { page } = await pool.tab(agentId);
+          pool.acted(agentId);
+          const result = await withTimeout(
+            page.evaluate((body) => {
+              const Async = Object.getPrototypeOf(async function () {}).constructor as new (body: string) => () => Promise<unknown>;
+              return new Async(body)().then((v) => JSON.stringify(v, null, 2));
+            }, evaluateBody(expression)),
+            EVALUATE_TIMEOUT_MS,
+            'Evaluation',
+          );
+          return { content: [{ type: 'text', text: truncate(String(result), 8000) }] };
+        } catch (err) {
+          const message = errorMessage(err);
+          const shape = /TypeError/.test(message)
+            ? await pool
+                .tab(agentId)
+                .then(({ page }) => page.evaluate(focusHQShape))
+                .catch(() => null)
+            : null;
+          const hint = evaluateHint(message, shape && truncate(shape, 2500));
+          return failure(`Evaluation failed: ${message}`, hint, machineLoad(loadNow()));
+        }
+      },
+    ),
+    browserTool('console', 'Read console messages and page errors collected since the last call.', Schema.Struct({}), async () => {
+      const tab = await pool.tab(agentId);
+      const messages = tab.console.splice(0);
+      return { content: [{ type: 'text', text: messages.length ? messages.join('\n') : '(no console output)' }] };
+    }),
+  ];
+}
+
+/** The browser tools as the old runner's in-process MCP server. */
+export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick<RunHooks, 'browser' | 'screenshot'>) {
+  return { type: 'sdk' as const, name: 'browser', instance: toolServer('browser', browserTools(pool, agentId, () => hooks)) };
 }

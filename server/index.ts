@@ -10,6 +10,7 @@ import { ClaudeDrafter, ClaudeQaChat, ClaudeTriager, titleGoal } from './agents/
 import { DemoQaChat } from './agents/demoQaChat';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
+import { HOST_CLAUDE_DIR, HostRunner, splitRunner } from './agents/hostRunner';
 import { ClaudeRunner } from './agents/claudeRunner';
 import { CrewFileError, readCrew } from './agents/crewFiles';
 import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
@@ -55,6 +56,8 @@ const SWEEP_EVERY_MS = 60 * 60_000;
 interface ShipParts {
   github: typeof ghCliLayer;
   runner: AgentRunner;
+  /** agent-host, where developers' sessions run (a live ship's). */
+  host?: HostRunner;
   /** The demo's pretend agents, whose transcripts plugins read. */
   demoRunner?: DemoRunner;
   drafter: Drafter;
@@ -92,9 +95,12 @@ function demoParts(): ShipParts {
 }
 
 function liveParts(store: Store, browsers: BrowserPool): ShipParts {
+  const host = new HostRunner(browsers);
+  host.warmUp();
   return {
     github: ghCliLayer,
-    runner: new ClaudeRunner(browsers, () => settingsInForce(store.settings).terminal),
+    runner: splitRunner(new ClaudeRunner(browsers, () => settingsInForce(store.settings).terminal), host),
+    host,
     drafter: new ClaudeDrafter(),
     triager: new ClaudeTriager(),
     qaChat: new ClaudeQaChat(),
@@ -102,9 +108,14 @@ function liveParts(store: Store, browsers: BrowserPool): ShipParts {
     mirrors: new PreviewMirrors(() => mirrorHosts(settingsInForce(store.settings).previewHosts, os.networkInterfaces())),
     ownRepo: async () => githubRepo(await run('git', ['remote', 'get-url', 'origin'], { cwd: config.root }).catch(() => '')),
     readTranscripts: (agents) => {
-      agents.readTranscript = transcriptReader(paths.transcripts, paths.workspaces);
+      // developers' sessions on agent-host keep theirs under its own Claude Code config folder
+      const hostTranscripts = path.join(HOST_CLAUDE_DIR, 'projects');
+      const ownReader = transcriptReader(paths.transcripts, paths.workspaces);
+      const hostReader = transcriptReader(hostTranscripts, paths.workspaces);
+      agents.readTranscript = async (sessionId) => (await ownReader(sessionId)) ?? hostReader(sessionId);
       agents.titleGoal = (brief) => titleGoal(brief, store.settings);
-      agents.transcripts = transcriptFolders(paths.transcripts, paths.workspaces);
+      const folders = [transcriptFolders(paths.transcripts, paths.workspaces), transcriptFolders(hostTranscripts, paths.workspaces)];
+      agents.transcripts = async (since) => (await Promise.all(folders.map((f) => f(since)))).flat();
       // the captain's replies to leads, from the spans digested before they were kept, while their transcripts last
       void agents.backfillReplies().catch((err: unknown) => console.warn(`Couldn't keep the captain's older replies: ${errorMessage(err)}`));
     },
@@ -164,7 +175,7 @@ async function main() {
   });
 
   await focus.start();
-  const restart = shutDownOnSignals(focus, store, browsers, previews);
+  const restart = shutDownOnSignals(focus, store, browsers, previews, parts.host);
   await parts.afterStart(focus, store, hub, restart);
 }
 
@@ -316,14 +327,16 @@ async function liveChores(focus: Focus, store: Store, hub: Hub, restart: () => P
 }
 
 /** Shuts Focus down on SIGINT or SIGTERM, once; returns the restart Focus asks the supervisor for. */
-function shutDownOnSignals(focus: Focus, store: Store, browsers: BrowserPool, previews: Previews): () => Promise<void> {
+function shutDownOnSignals(focus: Focus, store: Store, browsers: BrowserPool, previews: Previews, host?: HostRunner): () => Promise<void> {
   let closing = false;
   const shutdown = async () => {
     if (closing) return;
     closing = true;
     console.log('\nShutting Focus down…');
-    // their sessions stop, and the turns they were in carry on when Focus starts again
+    // their sessions stop, and the turns they were in carry on when Focus starts again (agent-host's by the host's own resume)
+    host?.closingNow();
     focus.agents.shutDown();
+    await host?.shutDown().catch(() => undefined);
     store.save();
     // Kokoro's process goes by SIGKILL (see server/speech.ts): with onnxruntime out of this process, exiting can't abort
     focus.voice.close();

@@ -14,6 +14,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "plugins": [{ "name": "@effect/language-service" }]
   },
   "include": ["shared", "server", "client/src", "plugins", "plugin-api", "vite.config.ts", "vitest.config.ts", "vitest.setup.ts", "tools"]

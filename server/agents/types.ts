@@ -1,5 +1,5 @@
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
-import type { AgentStatus, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, AgentTask, Autonomy, BrowserFrame, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, QuestionInput } from './leadRules';
 import type { LeadTool } from '../plugins/contract';
@@ -89,6 +89,8 @@ export interface RunHooks {
 
 export interface RunRequest {
   agentId: string;
+  /** What the agent does: which runner its sessions go to (`runsOnHost`). */
+  task?: AgentTask;
   agentName: string;
   cwd: string;
   prompt: string;
