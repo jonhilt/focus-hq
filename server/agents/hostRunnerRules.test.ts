@@ -7,9 +7,8 @@ import { STOPPED_BY_CAPTAIN } from './types';
 const conv = (id: string, status: string, agentSessionId?: string): ConversationSummary => ({ id, agent: 'claude', labels: {}, status, ...(agentSessionId && { agentSessionId }) });
 
 describe('runsOnHost', () => {
-  it("runs developers' and QA's sessions on the host, and no one else's", () => {
-    for (const task of ['issue', 'fix', 'conflicts', 'brief', 'review'] as const) expect(runsOnHost(task)).toBe(true);
-    expect(runsOnHost('lead')).toBe(false);
+  it('runs every session on the host, leads included', () => {
+    for (const task of ['issue', 'fix', 'conflicts', 'brief', 'review', 'lead'] as const) expect(runsOnHost(task)).toBe(true);
     expect(runsOnHost(undefined)).toBe(false);
   });
 });

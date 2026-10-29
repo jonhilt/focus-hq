@@ -10,9 +10,9 @@ import { type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
 // The HostRunner's decisions (hostRunner.ts runs them): which sessions go to agent-host, which of an agent's host
 // conversations a turn joins, and what a turn comes to. Pure, so they're unit tested (hostRunnerRules.test.ts).
 
-/** The tasks whose sessions run on agent-host: the developers' and QA's. The leads move over later. */
+/** The tasks whose sessions run on agent-host: every one, leads included. */
 export function runsOnHost(task: AgentTask | undefined): boolean {
-  return task === 'issue' || task === 'fix' || task === 'conflicts' || task === 'brief' || task === 'review';
+  return task !== undefined;
 }
 
 export const HOST_AUTONOMY: Record<Autonomy, HostAutonomy> = { ask: 'raise-hand', auto: 'auto', full: 'full' };

@@ -9,6 +9,7 @@ import { paths } from '../config';
 import { BrowserPool } from './browserTool';
 import { DECLINED } from './claudeRunner';
 import { copyTranscript, HostRunner } from './hostRunner';
+import { OPS_INSTRUCTIONS } from './opsTool';
 import { refusedFile } from './pushGuard';
 import { askedQuestions } from './questions';
 import type { RunHooks, RunRequest } from './types';
@@ -263,6 +264,9 @@ describe("HostRunner, a goal's lead", () => {
     const s = await Effect.runPromise(fake.session(1));
     await until(() => s.inTurn, 'the turn');
     expect(s.options.disallowedTools).toEqual(['EnterPlanMode']);
+    // Ops' office tools, lent, and what Ops is, in their instructions
+    expect(s.options.tools.filter((t) => t.server === 'office').map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close']);
+    expect(s.options.systemAppend).toBe(`Work the issue.\n\n${OPS_INSTRUCTIONS}`);
     const extension = runner.extend(s.options.conversationId, s.options.labels);
     expect(extension).toMatchObject({ agentProgressSummaries: true, toolConfig: { askUserQuestion: { previewFormat: 'html' } } });
     const [onEdit] = extension.hooks?.PostToolUse ?? [];
@@ -326,6 +330,7 @@ describe("HostRunner, a goal's lead", () => {
     second.warmUp();
     const s2 = await Effect.runPromise(after.session(1));
     expect(asked).toEqual(['lead_1']);
+    expect(s2.options.tools.some((t) => t.server === 'office')).toBe(true);
     const [onStart] = second.extend(s2.options.conversationId, s2.options.labels).hooks?.SessionStart ?? [];
     expect(await onStart.hooks[0](compacted, undefined, { signal })).toMatchObject({ hookSpecificOutput: { additionalContext: 'The goal: resumed' } });
     await second.shutDown();

@@ -13,6 +13,7 @@ import { type CommonContext, handleCommonEvent, newCommonContext } from './commo
 import type { AskedQuestion } from './questions';
 import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction, runsOnHost } from './hostRunnerRules';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
+import { OPS_INSTRUCTIONS, opsTools } from './opsTool';
 import { openScratch, type Scratch } from './scratch';
 import { handleMessage, type RunContext, type TurnResult } from './sdkMessages';
 import type { AgentRunner, AgentSession, RunHooks, RunOutcome, RunRequest, SessionExtras } from './types';
@@ -120,7 +121,9 @@ export class HostRunner implements AgentRunner {
     const lending = this.lendings.get(agentId) ?? { scratch: openScratch(agentId, paths.dcgConfig) };
     this.lendings.set(agentId, lending);
     const hooks = (): Pick<RunHooks, 'browser' | 'screenshot'> => lending.hooks ?? { browser: () => undefined, screenshot: () => undefined };
-    const tools: Tool[] = browserTools(this.browsers, agentId, hooks);
+    // a lead's office tools too
+    const office = lending.extras?.tools;
+    const tools: Tool[] = [...browserTools(this.browsers, agentId, hooks), ...(office ? opsTools(office) : [])];
     // its git runs Ops' hooks, which refuse a lead's harmful pushes and hand on to the repo's own
     writePushHooks(paths.gitHooks);
     const base = agentEnv(false);
@@ -134,10 +137,10 @@ export class HostRunner implements AgentRunner {
   private lend(conversationId: string, agentId: string | undefined): Lent {
     if (!agentId) return {};
     this.remember(conversationId, agentId);
-    const lent = this.lent(agentId);
-    const lending = this.lendings.get(agentId);
-    if (lending && !lending.extras) lending.extras = this.extrasFor?.(agentId);
-    return lent;
+    const lending = this.lendings.get(agentId) ?? { scratch: openScratch(agentId, paths.dcgConfig) };
+    lending.extras ??= this.extrasFor?.(agentId);
+    this.lendings.set(agentId, lending);
+    return this.lent(agentId);
   }
 
   /**
@@ -160,7 +163,7 @@ export class HostRunner implements AgentRunner {
   }
 }
 
-/** Developers' sessions on the host, everyone else's on `claude`. */
+/** Every session on the host; `claude` is no longer chosen for any task. */
 export function splitRunner(claude: AgentRunner, host: HostRunner): AgentRunner {
   return {
     start: (req, hooks) => (runsOnHost(req.task) ? host : claude).start(req, hooks),
@@ -256,7 +259,8 @@ class HostTurn {
             loadOwnerSettings: this.req.settings.userClaudeMd,
             allowApiKeyFallback: false,
             firstMessage: this.req.prompt,
-            systemAppend: this.req.systemAppend,
+            // what Ops is, as the old runner's office server told Claude Code: the host's tools carry no instructions
+            systemAppend: this.req.tools ? `${this.req.systemAppend}\n\n${OPS_INSTRUCTIONS}` : this.req.systemAppend,
             // Claude Code's own (Codex's can't be switched off one by one); a lead asks the user with AskUserQuestion, and no
             // one plans in Claude Code's own plan mode
             disallowedTools: codex ? [] : this.req.tools ? ['EnterPlanMode'] : ['AskUserQuestion', 'EnterPlanMode'],

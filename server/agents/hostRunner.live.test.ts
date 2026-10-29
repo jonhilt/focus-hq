@@ -63,6 +63,61 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
     await runner.shutDown();
   }, 300_000);
 
+  it("runs a goal lead's turns: an office tool, a question to the user, and Ops' /compact giving the brief back", async () => {
+    const cwd = mkdtempSync(path.join(os.tmpdir(), 'focus-host-lead-'));
+    const runner = new HostRunner(new BrowserPool(), undefined, path.join(cwd, 'journal.sqlite'));
+    const shown: string[] = [];
+    const questions: string[] = [];
+    let compacted = 0;
+    let session: string | undefined;
+    const hooks: RunHooks = {
+      lines: () => undefined,
+      activity: () => undefined,
+      browser: () => undefined,
+      screenshot: () => undefined,
+      session: (id) => void (session = id),
+      cost: () => undefined,
+      permission: () => Promise.resolve(true),
+      question: (input) => (questions.push(...input.questions.map((q) => q.question)), Promise.resolve(Object.fromEntries(input.questions.map((q) => [q.question, 'Teal'])))),
+    };
+    const lead = (prompt: string, resumeSessionId?: string): RunRequest => ({
+      agentId: 'lead_live',
+      agentName: 'Lt. Live',
+      task: 'lead',
+      cwd,
+      prompt,
+      systemAppend: 'You lead a goal for the user.',
+      settings,
+      autonomy: 'ask',
+      model: 'haiku',
+      resumeSessionId,
+      tools: {
+        recap: async () => 'recapped',
+        show: async (input) => (shown.push(input.title), 'Shown on your screen.'),
+        ask: async () => 'asked',
+        proposeClose: async () => 'proposed',
+      },
+      brief: { edited: () => undefined, afterCompact: () => (compacted++, 'The goal: paint the shed. Done looks like: it is teal.') },
+    });
+    const first = await runner.start(
+      lead(
+        'Do these in order. 1) Call the mcp__office__show tool with id "colours", title "Shed colours" and html "<p>teal or red</p>". ' +
+          '2) Ask the user with AskUserQuestion which colour to paint the shed, options Teal and Red. 3) Reply with the colour they picked.',
+      ),
+      hooks,
+    ).done;
+    expect(first).toMatchObject({ ok: true });
+    expect(shown).toEqual(['Shed colours']);
+    expect(questions).toHaveLength(1);
+    expect(first.summary).toMatch(/teal/i);
+    // Ops compacting the conversation: the lead hears their brief again from the SessionStart hook
+    const said: string[] = [];
+    const compact = await runner.start(lead('/compact keep the goal', session), { ...hooks, lines: (ls) => void said.push(...ls.map((l) => `${l.kind}: ${l.text}`)) }).done;
+    expect(compact).toMatchObject({ ok: true });
+    expect(compacted).toBeGreaterThan(0);
+    await runner.shutDown();
+  }, 300_000);
+
   it('runs a QA review end to end and returns its verdict as a structured answer (criterion 14)', async () => {
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'focus-host-qa-live-'));
     writeFileSync(path.join(cwd, 'add.js'), 'export const add = (a, b) => a + b;\n');
