@@ -41,7 +41,7 @@ export { type CrewVoice, forSpeech, linesToSpeak, sentences, spokenLine } from '
 export { leadVoice } from '../shared/crew';
 /** Where a captain's decision came from, said after it (nothing for the captain in Focus). */
 export { viaNote } from '../shared/ledger';
-export type { DecidedVia, VerdictRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts, ThreadDecidedAs, ThreadProposal } from '../shared/ledger';
+export type { DecidedVia, FeedbackSignal, FeedbackVia, VerdictRoute, FixEffect, FixStatus, Friction, FrictionGroup, FrictionKind, LedgerEntry, SessionFacts, ThreadDecidedAs, ThreadProposal } from '../shared/ledger';
 /** The ledger read as Focus reads it: the report card, the goals it closed, and the frictions, grouped and by digest. */
 export { closedGoals, FIX_SESSIONS, FRICTION_KINDS, frictionGroups, frictionsByDigest, knownSignatures, OPEN_FRICTION_DAYS, reportCard, reportLines, unreadDigests } from '../shared/ledger';
 /** Intents as ledger lines (`intent`): the one way to write one, a project's or a goal's, and a project's own read back. */
@@ -50,6 +50,8 @@ export { type IntentFields, intentEntry, projectIntents } from '../shared/intent
 export { chiefEngineer, crewVoice, fixedCrew, plannerFor } from '../shared/crew';
 /** A record's keys as its key type, and a record built from a list of keys, without a cast at each place. */
 export { fieldsOf, isOneOf, isRecord, keysOf, recordOf } from '../shared/records';
+/** The user's one-tap word on a lead's turn (a `captain-feedback` line): its signals, where it's pressed, and their words. */
+export { FEEDBACK_SAID, FEEDBACK_SIGNALS, FEEDBACK_VIA } from '../shared/ledger';
 export type { Flow, FlowRecording } from '../shared/flows';
 /** Ops' state machines as data, and where a run of one is (`PluginHost.machines`). */
 export type { MachineGraph, MachineRun, MachineState, MachineStep, MachineTransition } from '../shared/machines';

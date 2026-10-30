@@ -1,4 +1,4 @@
-import { verdictAddressee, type VerdictRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, type ThreadDecidedAs, viaNote } from './ledger';
+import { FEEDBACK_SAID, verdictAddressee, type VerdictRoute, type Friction, frictionKey, frictionsByDigest, type LedgerEvent, type SessionDigest, type ThreadDecidedAs, viaNote } from './ledger';
 import { recordOf } from './records';
 
 // Reviewing the ledger at main engineering's master systems table: each event as a line of the log, and the trace of a
@@ -59,6 +59,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'session-digest':
     case 'captain-replies':
     case 'captain-decision':
+    case 'captain-feedback':
     case 'cos-verdict':
     case 'cos-lane':
       return 'sessions';
@@ -175,6 +176,8 @@ function rowParts(e: LedgerEvent): RowParts {
       return { tag: 'Captain', tone: 'info', title: e.replies.length ? `${plural(e.replies.length, 'reply', 'replies')} to ${e.agent}` : `Nothing said to ${e.agent}`, detail: e.goal ?? '' };
     case 'captain-decision':
       return { tag: 'Captain', tone: 'info', title: `Decided: ${e.item.what} → ${e.answer}`, detail: [e.agent, e.goal, viaNote(e.via)].filter(Boolean).join(' · '), goal: e.goal };
+    case 'captain-feedback':
+      return { tag: 'Feedback', tone: 'info', title: `${e.undo ? 'Took back' : 'Said'}: ${FEEDBACK_SAID[e.signal]} · ${e.agent}`, detail: [e.goal, `from ${e.via}`].filter(Boolean).join(' · '), goal: e.goal };
     case 'cos-verdict':
       return cosRow(e);
     case 'lane-raised':
@@ -381,6 +384,7 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
         return subject.kind === 'goal' && e.goal.title === subject.title;
       case 'captain-replies':
       case 'captain-decision':
+      case 'captain-feedback':
       case 'cos-verdict':
       case 'thread-decided':
       case 'alert':

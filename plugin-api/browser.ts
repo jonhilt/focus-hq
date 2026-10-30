@@ -70,6 +70,12 @@ export const focus = {
   markRead: (agent: Agent): void => markTurnRead(agent),
 };
 
+/**
+ * The plugin `id`'s state as Focus sent it, on any page, the phone's too: unread, for the plugin to read as its own
+ * (on the 3D ship, `pluginState` takes the plugin's word for its shape).
+ */
+export const pluginStateNow = (id: string): unknown => state.plugins[id];
+
 /** Calls `fn` whenever plugin `id`'s state changes in the browser; returns what stops it. */
 export const onPluginState = (id: string, fn: () => void): (() => void) => state.on('plugin', (changed) => changed === id && fn());
 

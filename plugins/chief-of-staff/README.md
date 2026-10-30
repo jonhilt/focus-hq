@@ -84,6 +84,15 @@ A slice the lead (or the chief of staff) put in Show merges by itself once QA pa
 - **Got it**: heard, let go, nothing sent. **Redirect** sends the lead the captain's words about it, as the captain's message. **Revert** asks first, then has the lead revert it as their next slice, shipped in Ask, the captain's words as why. Nothing reverts by itself: Focus has no revert of its own, and the lead knows the work.
 - Each is a `captain-decision` (item kind `landed`). Redirect and Revert need the goal still open; a closed goal's is refused, and the card stays for the captain to follow up on GitHub.
 
+## Didn’t need me, and You should have asked me
+
+Two quiet one-tap buttons tell it how a turn went for the user: **Didn’t need me** and **You should have asked me**, on every decision card about a lead's ended turn (their words, a question they ended it on, the goal ready to close) and every words-ready card, in Comms and on the phone (Needs you and Ready to send), and **You should have asked me** on each of the lead's messages in Talk (`feedbackRules.ts`, `feedback.ts`). The user decided them (30 October 2026) because evals found that calm (it didn't need them) and agency (it should have asked) couldn't be measured: nothing recorded either.
+
+- **A press is a `captain-feedback` line** in the [ledger](../../docs/ledger.md#session-digests), naming the turn as its `cos-verdict` does (the lead's session and the turn's last transcript line), with that verdict's line and route when it judged the turn; a lead's message it never judged is recorded too, placed by the transcript. Focus checks the ids the browser sent: a press that doesn't name a goal lead's turn is refused, and nothing is written (`captainsInbox.test.ts`).
+- **No dialog, and pressing it again takes it back**, with the same line marked `undo`: the ledger stays append-only, and a reader takes the latest line for a turn and signal. Each signal is pressed and taken back on its own (`feedbackInvariants.test.ts`).
+- **Shown pressed from the ledger, so a reload or a restart shows the same**: what's pressed is read from the ledger as Focus starts and after each press, and sent to every browser in the plugin's state, not kept anywhere else.
+- **A turn the card can't name has none**: its read names the turn it judged (`CosRead.turnUuid`), and a read kept from before it did names none until the lead's next turn.
+
 ## The lead's news it wakes them for
 
 Only the captain starts a goal lead's next turn in the core: Ops' and QA's news for the lead is a note, heard with the next message they get ([goals](../../docs/goals.md)). Where the chief of staff is on, it wakes the lead for the news that needs no captain, as whoever the note is from, and the note goes ahead of its words (`wakeRules.ts`):

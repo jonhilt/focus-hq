@@ -1,5 +1,5 @@
 // The chief of staff (README.md): what its server part and the browser share.
-import type { Agent, VerdictRoute } from '../../plugin-api/shared';
+import type { Agent, FeedbackSignal, VerdictRoute } from '../../plugin-api/shared';
 import { isOneOf, isRecord } from '../../plugin-api/shared';
 
 /** The plugin's id: in FOCUS_PLUGINS, and the switch in a project's settings. */
@@ -136,6 +136,8 @@ export interface CosRead {
    * together as one message (askRules.ts). Kept with the read, so a reload or a restart keeps them.
    */
   answers?: AskAnswer[];
+  /** The turn it judged, by its transcript's last line (its `cos-verdict`'s `turnUuid`): what the user's word on it names. Left out by reads from before it was kept. */
+  turnUuid?: string;
 }
 
 const trimmed = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
@@ -222,6 +224,7 @@ export function cosReadOf(v: unknown): CosRead | undefined {
     ...(judged?.route === 4 && acked === undefined && typeof v.sendsAt === 'number' && { sendsAt: v.sendsAt }),
     ...(acked !== undefined && { acked }),
     ...(answers.length && { answers }),
+    ...(judged && typeof v.turnUuid === 'string' && v.turnUuid && { turnUuid: v.turnUuid }),
   };
 }
 
@@ -296,6 +299,8 @@ export const freshLine = (): CosLine => ({ status: 'waiting', messages: [], star
 /** What it's doing on the line this moment, which isn't saved: a turn reads a lot. */
 export interface CosLive {
   lineActivity: string;
+  /** The user's word on leads' turns pressed now, by turn (`turnKey`), read again from the ledger as Focus starts (feedbackRules.ts). */
+  feedback?: Record<string, FeedbackSignal[]>;
 }
 
 export const freshState = (): CosState => ({ autoSend: {}, jev: {} });

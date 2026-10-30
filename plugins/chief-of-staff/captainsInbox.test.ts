@@ -380,6 +380,60 @@ describe('the chief of staff plugin’s setting for sending its words by itself'
     expect(o.state()?.stoodBy).toEqual([item.id]);
     expect(() => o.route('/stand-by')({ key: 'turn:gone:1' })).toThrow(/isn’t waiting/);
   });
+  describe('the user’s one-tap word on a turn (README.md#didnt-need-me-and-you-should-have-asked-me)', () => {
+    const feedbackLines = (o: Awaited<ReturnType<typeof aboard>>) => o.store.ledger.filter((e) => e.kind === 'captain-feedback');
+
+    it('records a press on a judged turn as a captain-feedback line naming the turn, its verdict and where it was pressed', async () => {
+      const o = await aboard(false);
+      o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
+      await until(() => !!o.read()?.judged);
+      // the read names the turn its verdict names, so the card can say which turn it's about
+      expect(o.read()?.turnUuid).toBe('t1');
+      const verdict = o.store.ledger.find((e) => e.kind === 'cos-verdict');
+      const lead = o.store.agent(o.id);
+      const got = await o.route('/feedback')({ agentId: o.id, turnUuid: 't1', signal: 'not-needed', via: 'comms' });
+      expect(got).toEqual({ pressed: ['not-needed'] });
+      const [line] = feedbackLines(o);
+      expect(line).toEqual({
+        kind: 'captain-feedback', signal: 'not-needed', agent: lead?.name, goal: 'Saved items', sessionId: lead?.sessionId, turnUuid: 't1',
+        verdictSeq: verdict?.seq, route: 4, via: 'comms', seq: expect.any(Number), at: expect.any(Number), projectId: o.project.id,
+      });
+      // every browser hears what's pressed, by the turn
+      expect((o.state() as { feedback?: unknown } | undefined)?.feedback).toEqual({ [`${lead?.sessionId}:t1`]: ['not-needed'] });
+    });
+
+    it('takes a press back when it’s pressed again, with an undo line, the ledger kept append-only', async () => {
+      const o = await aboard(false);
+      o.claude.turns[0].end({ ok: true, summary: 'Writing the settings page next.' });
+      await until(() => !!o.read()?.judged);
+      const press = { agentId: o.id, turnUuid: 't1', signal: 'should-have-asked', via: 'phone' };
+      await o.route('/feedback')(press);
+      expect(await o.route('/feedback')(press)).toEqual({ pressed: [] });
+      expect(feedbackLines(o).map((e) => (e.kind === 'captain-feedback' ? [e.signal, e.via, e.undo ?? false] : []))).toEqual([['should-have-asked', 'phone', false], ['should-have-asked', 'phone', true]]);
+      expect(await o.route('/feedback')(press)).toEqual({ pressed: ['should-have-asked'] });
+      expect(feedbackLines(o)).toHaveLength(3);
+    });
+
+    it('records a lead’s message in Talk by its transcript’s line, with no verdict where the chief of staff never judged it', async () => {
+      const o = await aboard(false);
+      await expect(o.route('/feedback')({ agentId: o.id, turnUuid: 't1', signal: 'should-have-asked', via: 'talk' })).resolves.toEqual({ pressed: ['should-have-asked'] });
+      const [line] = feedbackLines(o);
+      expect(line).toMatchObject({ turnUuid: 't1', via: 'talk' });
+      expect(line).not.toHaveProperty('verdictSeq');
+      expect(line).not.toHaveProperty('route');
+    });
+
+    it('refuses a press that doesn’t name a lead’s turn, writing nothing', async () => {
+      const o = await aboard(false);
+      const ok = { agentId: o.id, turnUuid: 't1', signal: 'not-needed', via: 'comms' };
+      await expect(o.route('/feedback')({ ...ok, agentId: 'nobody' })).rejects.toThrow(/isn’t aboard/);
+      await expect(o.route('/feedback')({ ...ok, turnUuid: 'made-up' })).rejects.toThrow(/isn’t one of/);
+      await expect(o.route('/feedback')({ ...ok, signal: 'meh' })).rejects.toThrow(/signal/);
+      await expect(o.route('/feedback')({ ...ok, via: 'email' })).rejects.toThrow(/via/);
+      await expect(o.route('/feedback')({ ...ok, turnUuid: '' })).rejects.toThrow(/turnUuid/);
+      expect(feedbackLines(o)).toEqual([]);
+    });
+  });
 });
 
 describe('the chief of staff’s inbox for a bot (docs/ledger.md#the-captains-inbox-api)', () => {

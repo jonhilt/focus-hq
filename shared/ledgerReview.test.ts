@@ -88,6 +88,12 @@ describe('ledgerRow', () => {
     expect(ledgerRow(decided('api')).detail).toBe('Cmdr. Vale · Engineering deck · via the API');
   });
 
+  it('says the user’s word on a lead’s turn, and when they took it back, with where they pressed it', () => {
+    const word = (undo: boolean) => ev({ kind: 'captain-feedback', signal: 'not-needed', agent: 'Cmdr. Vale', goal: GOAL, sessionId: 's', turnUuid: 't1', verdictSeq: 3, route: 2, via: 'phone', ...(undo && { undo: true }) }, 7);
+    expect(ledgerRow(word(false))).toMatchObject({ group: 'sessions', tag: 'Feedback', tone: 'info', title: 'Said: Didn’t need me · Cmdr. Vale', detail: `${GOAL} · from phone`, goal: GOAL });
+    expect(ledgerRow(word(true)).title).toBe('Took back: Didn’t need me · Cmdr. Vale');
+  });
+
   it('says what a plugin alerted the captain of, about whom, among the goals shown at first', () => {
     const alert = ev({ kind: 'alert', by: 'scheduler', agent: 'Lt. Quintero', goal: GOAL, text: 'Lt. Quintero hasn’t answered the 15:07 check (sch-2) after 20 min.' }, 8);
     expect(ledgerRow(alert)).toEqual({

@@ -1,5 +1,6 @@
-import { callPlugin, readPlugin } from '../../plugin-api/browser';
-import type { MessageReply } from '../../plugin-api/shared';
+import { callPlugin, pluginStateNow, readPlugin } from '../../plugin-api/browser';
+import type { FeedbackSignal, MessageReply } from '../../plugin-api/shared';
+import { type FeedbackPress, pressedOf } from './feedbackRules';
 import type { Decide, Inbox } from './inbox';
 import type { LandedAnswer } from './landed';
 import { CHIEF_OF_STAFF } from './shared';
@@ -17,4 +18,10 @@ export const inbox = {
   decideLanded: (id: string, answer: LandedAnswer): Promise<{ ok: true }> => callPlugin(CHIEF_OF_STAFF, `/landed/${encodeURIComponent(id)}/decide`, { ...answer, via: 'office' }),
   /** Holds its words on an item, so they wait for the captain rather than going by themselves. */
   hold: (id: string): Promise<unknown> => callPlugin(CHIEF_OF_STAFF, `${item(id)}/hold`),
+};
+
+/** The user's one-tap word on a lead's turn (feedbackRules.ts): pressing a signal (or, pressed, taking it back), and what's pressed now. */
+export const feedback = {
+  press: (press: FeedbackPress): Promise<{ pressed: FeedbackSignal[] }> => callPlugin(CHIEF_OF_STAFF, '/feedback', press),
+  pressed: (): Record<string, FeedbackSignal[]> => pressedOf(pluginStateNow(CHIEF_OF_STAFF)),
 };

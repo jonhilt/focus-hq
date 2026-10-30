@@ -3,6 +3,7 @@ import { resumeHow } from '../../plugin-api/server';
 import { itemWithLinks } from './botHook';
 import type { Inbox } from './captainsInbox';
 import type { DirectLine } from './line';
+import type { Feedback } from './feedback';
 import { decideOf } from './inbox';
 import { landedAnswerOf } from './landed';
 import type { CosState } from './shared';
@@ -130,3 +131,9 @@ export function lineRoutes(line: Pick<DirectLine, 'say' | 'newConversation' | 'c
     { method: 'post', path: '/line/ack', handle: ({ body }) => line.acknowledge(keyOf(body)) },
   ];
 }
+
+/**
+ * The user's one-tap word on a lead's turn (README.md#didnt-need-me-and-you-should-have-asked-me): `{ agentId,
+ * turnUuid, signal, via }`, pressed or, pressed again, taken back. It gives the turn's signals pressed now.
+ */
+export const feedbackRoute = (feedback: Pick<Feedback, 'press'>): PluginRoute => ({ method: 'post', path: '/feedback', handle: ({ body }) => feedback.press(body) });

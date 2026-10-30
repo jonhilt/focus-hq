@@ -41,6 +41,7 @@ What each part caught and found goes in the sections below, with every live bug 
 | the captain's replies to leads kept in the ledger (`manager/ledger.ts`) | `server/agents/repliesInvariants.test.ts` | both |
 | the chief of staff's verdicts on leads' turns (each turn judged once however often it ends) | `plugins/chief-of-staff/invariants.test.ts` | both |
 | the chief of staff's direct line (its conversation and session, each goal it starts once, closed once, heard of in the muster, through a restart) | `plugins/chief-of-staff/lineInvariants.test.ts` | both |
+| the user's one-tap word on a lead's turn (each press a `captain-feedback` line, pressed again taken back, shown pressed from the ledger through a restart) | `plugins/chief-of-staff/feedbackInvariants.test.ts` | both |
 | the threads plugin's decisions on a project's loose threads, the goals it spins them off as, and a model's proposals for them (each a ledger line, the register read back from them) | `plugins/threads/invariants.test.ts` | both |
 | the intents plugin's compass for each project, what its work is for (each change its intent lines, the compass read back from them) | `plugins/intents/invariants.test.ts` | both |
 | the captain's secrets, the bot's among them (`secrets.ts`) | `server/secretsInvariants.test.ts` | both |

@@ -1,11 +1,12 @@
 import './bridge.css';
 import { allowTool, answerLead, busy, callPlugin, closeGoal, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
-import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, openQuestion } from '../../plugin-api/shared';
+import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, type FeedbackSignal, type FeedbackVia, openQuestion } from '../../plugin-api/shared';
 import { answerAsk } from './askRules';
 import { aboutIt, type Act, actsLaidOut, type AskBlock, askBlocksOf, actsOf, briefOf } from './decisionRules';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
-import { inbox } from './inboxApi';
+import { feedback, inbox } from './inboxApi';
+import { feedbackButtons } from './feedbackRules';
 import { type LandedItem, landedWhere } from './landed';
 import { closeStarted, lineView, startedNow } from './lineView';
 import { mergesOf } from './needCard';
@@ -401,7 +402,7 @@ export function openStream(ui: CommsUi): void {
     const mineLanded = landed.filter((i) => i.leadId === lead.id);
     const work = lead.lead;
     // what the cards show, and what their answers depend on (the lead's pull requests, for the merge buttons)
-    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, item?.answers, mineLanded.map((i) => i.id), work?.prs, focus.preview(lead.projectId)]);
+    const key = JSON.stringify([lead.id, card ?? null, !!ready, !!a, item?.what, item?.cos, item?.answers, mineLanded.map((i) => i.id), work?.prs, focus.preview(lead.projectId), readOf(lead)?.turnUuid, feedback.pressed()]);
     keyed(cards, key, () => {
       if (a?.kind === 'turn' && !ready) focus.markRead(a.agent);
       const els: HTMLElement[] = [];
@@ -528,7 +529,8 @@ export function openStream(ui: CommsUi): void {
           ...buttons.map((b) => press(b, b === acts.go)),
           h('span', { class: 'tw:flex-1' }),
           lead ? quiet('Discuss', `Talk it over with ${lead.name}: what you say goes to them about this`, () => discuss(item, lead.id)) : null,
-          acts.ack ? got : null)),
+          acts.ack ? got : null,
+          turnFeedback(a))),
       acts.more
         ? h('details', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
           h('div', { class: 'cos-acts tw:mt-2' }, ...merges))
@@ -554,14 +556,35 @@ export function openStream(ui: CommsUi): void {
     talk(true);
   };
 
+  // the user's one-tap word on a lead's turn (feedbackRules.ts): quiet, and pressed again to take it back. What's
+  // pressed is the ledger's, from the plugin's state, so a reload shows it the same
+  const feedbackEl = (lead: Agent | undefined, turnUuid: string | undefined, via: FeedbackVia, signals?: readonly FeedbackSignal[]): HTMLElement | null => {
+    const buttons = lead ? feedbackButtons(lead, turnUuid, feedback.pressed(), via, signals) : [];
+    if (!buttons.length) return null;
+    return h('span', { class: 'tw:inline-flex tw:flex-wrap tw:gap-[6px]', attrs: { 'data-part': 'feedback' } }, ...buttons.map((f) => {
+      const b: HTMLButtonElement = h('button', {
+        class: `tw:bg-transparent tw:border tw:px-2 tw:h-6 tw:font-read tw:text-[11.5px] tw:rounded-none tw:cursor-pointer tw:transition-colors ${f.pressed ? 'tw:border-solid tw:border-attn tw:text-attn' : 'tw:border-dashed tw:border-line tw:text-muted tw:hover:text-ink tw:hover:border-muted'}`,
+        title: f.pressed ? 'Recorded. Press again to take it back' : 'Tells the chief of staff, for it to learn from. Press again to take it back',
+        attrs: { 'data-signal': f.signal, 'aria-pressed': String(f.pressed) },
+        onclick: () => void busy(b, () => feedback.press(f.press).then(later), ui.error),
+      }, f.label);
+      return b;
+    }));
+  };
+
+  // on a decision about a lead's ended turn (its words, a question it ended on, the goal ready to close): its read names
+  // that turn while it's the latest, and is cleared as the next one starts, so a raised hand mid-turn has none
+  const turnFeedback = (a: Attention): HTMLElement | null => ('agent' in a ? feedbackEl(a.agent, readOf(a.agent)?.turnUuid, 'comms') : null);
+
   // words the chief of staff has ready for the lead: sent with a press, or heard (Got it), nothing sent
   const wordCard = (item: InboxItem) => {
+    const lead = focus.agent(item.agentId ?? '');
     const send = button('Send', true, () => void busy(send, () => inbox.decide(item.id, { send: true }).then(refreshInbox), ui.error));
     const got = button('Got it', false, () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
     return h('div', { class: TW.card, attrs: { 'data-part': 'word' } },
       h('div', { class: TW.ch }, 'Word ready · the chief of staff'),
       h('div', { class: 'tw:text-[13.5px] tw:mt-[3px]' }, item.cos?.message ?? item.what),
-      h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-[10px]' }, got, send));
+      h('div', { class: 'tw:flex tw:flex-wrap tw:items-center tw:gap-[6px] tw:mt-[10px]' }, got, send, h('span', { class: 'tw:flex-1' }), feedbackEl(lead, readOf(lead)?.turnUuid, 'comms')));
   };
 
   const landedCard = (l: LandedItem) => {
@@ -594,7 +617,7 @@ export function openStream(ui: CommsUi): void {
     const started = startedNow();
     const words = all.filter((f) => f.reach === 'report');
     const heard = landed.filter((i) => !(conn && i.leadId === conn));
-    const key = JSON.stringify([rows.map((r) => [r.item.id, r.stoodBy, r.idle]), started.map((s) => [s.key, s.at, titleOf(s)]), words.map((r) => r.item.id), heard.map((i) => i.id), expanded]);
+    const key = JSON.stringify([rows.map((r) => [r.item.id, r.stoodBy, r.idle]), started.map((s) => [s.key, s.at, titleOf(s)]), words.map((r) => r.item.id), heard.map((i) => i.id), expanded, feedback.pressed()]);
     if (muster.dataset.key === key) return;
     muster.dataset.key = key;
     const local = new Map(waitingNow().map((a): [string, Attention] => [hailKey(a), a]));
@@ -655,7 +678,7 @@ export function openStream(ui: CommsUi): void {
   // a hail from a goal underway, dropped from the Muster chip: on screen in place, or told to stand by
   const renderHail = (all: readonly Filed[]) => {
     const f = conn && !mustering ? all.find((x) => x.reach === 'hail') : undefined;
-    const key = f ? `${f.item.id}|${onScreen === f.item.id}` : '';
+    const key = f ? `${f.item.id}|${onScreen === f.item.id}|${JSON.stringify(feedback.pressed())}` : '';
     if (hail.dataset.key === key) return;
     hail.dataset.key = key;
     show(hail, !!f);
@@ -694,7 +717,7 @@ export function openStream(ui: CommsUi): void {
     show(topic, !!discussing);
     fill(topic, discussing ? h('div', null, h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted' }, 'Discussing'), discussing.what) : null);
     box.placeholder = `Talk to ${lead.name}`;
-    const key = `${lead.id}|${entries.at(-1)?.at ?? 0}|${entries.length}`;
+    const key = `${lead.id}|${entries.at(-1)?.at ?? 0}|${entries.length}|${JSON.stringify(feedback.pressed())}`;
     if (said.dataset.key !== key) drawSaid(lead, key);
     if (!findLatest || !talking || !entries.length) return;
     findLatest = false;
@@ -708,8 +731,11 @@ export function openStream(ui: CommsUi): void {
       if (e.kind === 'ops') return collapsedMessage({ id: `${e.from}@${e.at}`, head: `${e.from} told ${lead.name} · ${clock(e.at)}`, text: e.text, open: unfolded, part: 'told' });
       const text = h('div', { class: 'cos-md' });
       text.innerHTML = markdownHtml(e.kind === 'lead' || e.kind === 'you' ? e.text : '');
+      // a lead's message carries "You should have asked me": what they went ahead with that was the user's to say
+      const asked = e.kind === 'lead' ? feedbackEl(lead, e.turnUuid, 'talk', ['should-have-asked']) : null;
       return h('div', { class: `tw:text-[14.5px]/[1.65] ${e.kind === 'you' ? 'tw:pl-3 tw:border-0 tw:border-l-2 tw:border-solid tw:border-line' : ''}`, attrs: { 'data-from': e.kind } },
-        h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted tw:mb-1' }, `${e.kind === 'you' ? 'You' : lead.name} · ${clock(e.at)}`), text);
+        h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted tw:mb-1' }, `${e.kind === 'you' ? 'You' : lead.name} · ${clock(e.at)}`), text,
+        asked ? h('div', { class: 'tw:mt-1' }, asked) : null);
     }));
     said.scrollTop = said.scrollHeight;
   };

@@ -178,7 +178,8 @@ export class ChiefOfStaff {
       // after a few rounds in a row without the captain, a turn it would carry on is theirs (roundRules.ts)
       const filed = capped(verdict, unattendedRounds(this.host.ledger(), agent));
       const read = judged(readOf(this.host.agent(agent.id)), filed, since, this.autoSends(agent.projectId), Date.now());
-      if (read && this.host.goals.mark(agent.id, read, since)) this.wakeDeferred(agent.id);
+      // it names the turn it judged, so the user's word on it (feedbackRules.ts) names the same one
+      if (read && this.host.goals.mark(agent.id, { ...read, turnUuid: tail.uuid }, since)) this.wakeDeferred(agent.id);
     } finally {
       this.judging.delete(key);
     }

@@ -8,7 +8,7 @@ import type { ThreadEntry } from './thread';
 // number) takes the conn and opens the goal's sheet with its decision on it, another goal's card is a count on its
 // berth, a hail drops over the sheet until it's put on screen and stood by, the Muster chip (or M) stands down and the
 // muster comes up, and the lead's name (or T) slides in the panel to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; line?: unknown; lineActivity?: string; said: unknown[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [], said: [] }));
+const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; line?: unknown; lineActivity?: string; pressed?: Record<string, string[]>; said: unknown[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [], said: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -48,10 +48,14 @@ vi.mock('../../plugin-api/client', async () => {
   };
 });
 vi.mock('./here', () => ({ waitingNow: () => fake.waiting }));
-vi.mock('./inboxApi', () => ({ inbox: { view: () => Promise.resolve({ open: fake.open, landed: [], decided: [] }), decide: vi.fn(() => Promise.resolve({ ok: true })) } }));
+vi.mock('./inboxApi', () => ({
+  inbox: { view: () => Promise.resolve({ open: fake.open, landed: [], decided: [] }), decide: vi.fn(() => Promise.resolve({ ok: true })) },
+  // what's pressed is the plugin's state: a press is heard as it changing
+  feedback: { press: vi.fn(() => Promise.resolve({ pressed: [] })), pressed: () => fake.pressed ?? {} },
+}));
 const { openStream } = await import('./stream');
 const { messageAgent } = await import('../../plugin-api/client');
-const { inbox } = await import('./inboxApi');
+const { feedback, inbox } = await import('./inboxApi');
 const { CHIEF_OF_STAFF } = await import('./shared');
 
 let cleanups: (() => void)[] = [];
@@ -72,6 +76,7 @@ afterEach(() => {
   fake.line = undefined;
   fake.lineActivity = undefined;
   fake.said = [];
+  fake.pressed = undefined;
 });
 const part = (name: string) => document.querySelector<HTMLElement>(`[data-part=${name}]`);
 const parts = (name: string) => [...document.querySelectorAll<HTMLElement>(`[data-part=${name}]`)];
@@ -306,6 +311,101 @@ describe('taking the conn', () => {
     expect(shown('hail')).toBe(false);
     expect(part('decision')).toBeNull();
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
+  });
+});
+
+describe('the user’s word on a turn (README.md#didnt-need-me-and-you-should-have-asked-me)', () => {
+  const judgedTurn = () => {
+    const b = leads[1];
+    if (!b?.lead) throw new Error('no lead');
+    Reflect.set(b, 'sessionId', 'sess-b');
+    b.lead.marks = { [CHIEF_OF_STAFF]: { at: 1000, turnUuid: 'turn-b', judged: { route: 2, ask: 'Filters first?', why: 'A pick.', message: '' } } };
+    return () => {
+      delete b.lead?.marks;
+      Reflect.deleteProperty(b, 'sessionId');
+    };
+  };
+  const signals = () => parts('feedback').flatMap((p) => [...p.querySelectorAll('button')]).map((b) => [b.textContent, b.getAttribute('aria-pressed')]);
+
+  it('puts Didn’t need me and You should have asked me on the decision card, quiet beside Discuss and Got it, the one pressed shown pressed', async () => {
+    const done = judgedTurn();
+    fake.pressed = { 'sess-b:turn-b': ['should-have-asked'] };
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    done();
+    expect([...(part('acts')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Discuss', 'Got it', 'Didn’t need me', 'You should have asked me']);
+    expect(signals()).toEqual([['Didn’t need me', 'false'], ['You should have asked me', 'true']]);
+  });
+
+  it('records a press by the turn the card is about, and shows it pressed once Focus says so, without a dialog', async () => {
+    const done = judgedTurn();
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    part('feedback')?.querySelector<HTMLButtonElement>('[data-signal=not-needed]')?.click();
+    await settle();
+    expect(feedback.press).toHaveBeenCalledWith({ agentId: 'b', turnUuid: 'turn-b', signal: 'not-needed', via: 'comms' });
+    expect(document.querySelector('dialog')).toBeNull();
+    fake.pressed = { 'sess-b:turn-b': ['not-needed'] };
+    fake.state?.();
+    await settle();
+    done();
+    expect(signals()).toEqual([['Didn’t need me', 'true'], ['You should have asked me', 'false']]);
+  });
+
+  it('puts both on the card of words the chief of staff has ready, beside Got it and Send', async () => {
+    const done = judgedTurn();
+    fake.conn = 'b';
+    fake.open = [{ ...card, lane: 'ready', cos: { ...card.cos, route: 4, message: 'Test it first.' } }];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    done();
+    expect(part('word')?.textContent).toContain('Test it first.');
+    expect([...(part('word')?.querySelectorAll('button') ?? [])].map((b) => b.textContent)).toEqual(['Got it', 'Send', 'Didn’t need me', 'You should have asked me']);
+  });
+
+  it('puts both on a question the lead ended their turn on, by that turn', async () => {
+    const done = judgedTurn();
+    const b = leads[1];
+    if (!b?.lead) throw new Error('no lead');
+    Reflect.set(b.lead, 'questions', [{ id: 'q1', question: 'Filters or sorting?', at: 5, options: [{ id: 'a', label: 'Filters' }, { id: 'b', label: 'Sorting' }] }]);
+    fake.conn = 'b';
+    fake.open = [{ ...card, id: 'question:b:q1', kind: 'question', what: 'Filters or sorting?' }];
+    fake.waiting = [{ kind: 'question', agent: b }];
+    await open();
+    done();
+    Reflect.deleteProperty(b.lead, 'questions');
+    expect(part('decision')).not.toBeNull();
+    expect(signals()).toEqual([['Didn’t need me', 'false'], ['You should have asked me', 'false']]);
+  });
+
+  it('has none on a card whose turn isn’t named: a read from before reads kept their turn', async () => {
+    fake.conn = 'b';
+    fake.open = [card];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    await open();
+    expect(part('decision')).not.toBeNull();
+    expect(part('feedback')).toBeNull();
+  });
+
+  it('puts You should have asked me alone on each of the lead’s messages in Talk, by its turn', async () => {
+    fake.conn = 'a';
+    Reflect.set(leads[0], 'sessionId', 'sess-a');
+    fake.pressed = { 'sess-a:u3': ['should-have-asked'] };
+    fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'lead', at: 3, text: 'Done.', turnUuid: 'u3' }, { kind: 'you', at: 4, text: 'And?' }, { kind: 'lead', at: 5, text: 'Shipped it too.', turnUuid: 'u5' }];
+    await open();
+    part('who')?.click();
+    await settle();
+    Reflect.deleteProperty(leads[0], 'sessionId');
+    const said = [...document.querySelectorAll<HTMLElement>('[data-from]')];
+    expect(said.map((m) => m.querySelector('[data-part=feedback]')?.textContent ?? null)).toEqual([null, 'You should have asked me', null, 'You should have asked me']);
+    expect(signals()).toEqual([['You should have asked me', 'true'], ['You should have asked me', 'false']]);
+    said[3]?.querySelector('button')?.click();
+    await settle();
+    expect(feedback.press).toHaveBeenCalledWith({ agentId: 'a', turnUuid: 'u5', signal: 'should-have-asked', via: 'talk' });
   });
 });
 

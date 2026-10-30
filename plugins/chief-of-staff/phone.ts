@@ -1,10 +1,11 @@
 // The chief of staff on the phone (the Tricorder, README.md): what needs the captain at the top of its home screen,
 // most urgent first, then the turns it has words ready for, each sent with a tap.
 import './phone.css';
-import { type Agent, type Attention, focus, h, needsYou, type PhoneHost, type PhonePlugin, prKey, type PullRequest } from '../../plugin-api/phone';
+import { type Agent, type Attention, type FeedbackSignal, focus, h, needsYou, type PhoneHost, type PhonePlugin, prKey, type PullRequest } from '../../plugin-api/phone';
 import { hailing } from './here';
 import { hailKey } from './inbox';
-import { inbox } from './inboxApi';
+import { feedback, inbox } from './inboxApi';
+import { type FeedbackButton, feedbackButtons } from './feedbackRules';
 import { laneOf, lineOf } from './laneRules';
 import { type CosRead, CHIEF_OF_STAFF, readOf } from './shared';
 import { headlineOf } from './askRules';
@@ -16,12 +17,32 @@ export function sendsIn(sendsAt: number | undefined, now: number): string {
   return min > 1 ? `Sends itself in ${min} min` : 'Sends itself within a minute';
 }
 
-function agentEntry(host: PhoneHost, agent: Agent, { icon, what }: { icon: string; what: string }): HTMLElement {
+/** A judged lead turn's feedback buttons on the phone (feedbackRules.ts), from what's pressed now; none for a turn not named. */
+export function phoneFeedback(lead: Agent, pressed: Record<string, FeedbackSignal[]> = feedback.pressed()): FeedbackButton[] {
+  return feedbackButtons(lead, readOf(lead)?.turnUuid, pressed, 'phone');
+}
+
+/** The user's one-tap word on a lead's turn: quiet, pressed again to take it back. */
+function feedbackRow(host: PhoneHost, lead: Agent): HTMLElement | null {
+  const buttons = phoneFeedback(lead);
+  if (!buttons.length) return null;
+  const key = `feedback:${lead.id}`;
+  return h('div', { class: 'cos-feedback' },
+    ...buttons.map((f) => {
+      const b = host.button(`${key}:${f.signal}`, f.label, () => feedback.press(f.press), { class: f.pressed ? 'cos-fb on' : 'cos-fb' });
+      b.setAttribute('aria-pressed', String(f.pressed));
+      b.dataset.signal = f.signal;
+      return b;
+    }),
+    host.errors(key));
+}
+
+function agentEntry(host: PhoneHost, agent: Agent, { icon, what }: { icon: string; what: string }, below: HTMLElement | null): HTMLElement {
   const project = focus.project(agent.projectId);
   return h('li', null, h('a', { class: 'cos-entry', href: host.agentHref(agent.id), style: `--accent:${project?.color ?? 'var(--lcars-gold)'}` },
     h('span', { class: 'icon' }, icon),
     h('span', { class: 'text' }, h('strong', null, what), h('small', null, `${agent.name} · ${project?.name ?? ''} · ${host.workLabel(agent)}`)),
-  ));
+  ), below);
 }
 
 function prEntry(host: PhoneHost, projectId: string, pr: PullRequest, { icon, what }: { icon: string; what: string }): HTMLElement {
@@ -34,7 +55,7 @@ function prEntry(host: PhoneHost, projectId: string, pr: PullRequest, { icon, wh
 
 /** What needs the captain, a line each as Comms says it (`lineOf`), most urgent first; all clear when nothing does. */
 function needsYouStrip(host: PhoneHost, attention: Attention[]): HTMLElement {
-  const items = attention.map((a) => ('agent' in a ? agentEntry(host, a.agent, lineOf(a, focus.reviews)) : prEntry(host, a.projectId, a.pr, lineOf(a, focus.reviews))));
+  const items = attention.map((a) => ('agent' in a ? agentEntry(host, a.agent, lineOf(a, focus.reviews), feedbackRow(host, a.agent)) : prEntry(host, a.projectId, a.pr, lineOf(a, focus.reviews))));
   return h('section', { class: `cos-needs-you ${items.length ? 'alert' : 'clear'}` },
     h('h2', { class: 'bar' }, h('span', null, 'Needs you'), h('span', { class: 'count' }, String(items.length))),
     items.length ? h('ul', null, ...items) : h('p', { class: 'cos-all-clear' }, '✓ All clear. Nothing is waiting on you.'),
@@ -79,6 +100,7 @@ function readyEntry(host: PhoneHost, lead: Agent, now: number): HTMLElement {
       host.button(`${key}:ack`, '✓ Got it', () => inbox.decide(id, { ack: true })),
       h('small', { class: 'sends-in' }, line.when),
     ),
+    feedbackRow(host, lead),
     host.errors(key),
   );
 }

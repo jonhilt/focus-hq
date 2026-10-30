@@ -18,7 +18,8 @@ import { DemoJudge } from './demoJudge';
 import { DemoLine } from './demoLine';
 import { DirectLine } from './line';
 import { STANDING_ORDERS } from './judge';
-import { inboxRoutes, lineRoutes, threadRoute, watchRoutes } from './routes';
+import { feedbackRoute, inboxRoutes, lineRoutes, threadRoute, watchRoutes } from './routes';
+import { Feedback } from './feedback';
 import { JevRouter } from './jevRouter';
 import { autoSendFor, jevFor } from './cosRules';
 import { AUTO_SEND_EVERY, CHIEF_OF_STAFF, type CosLive, freshState } from './shared';
@@ -65,6 +66,8 @@ const chiefOfStaff: FocusPlugin = {
       { projects: () => host.projects(), on: (projectId) => host.on(projectId), agents: () => host.agents(), settings: () => host.settings(), shipStatus: () => host.shipStatus(), goals: host.goals, saved: settings, live },
       host.demo ? new DemoLine() : new ClaudeLine((run) => host.shipSession(run)),
     );
+    // the user's word on leads' turns, what's pressed read again from the ledger as it starts
+    const feedback = new Feedback(host, live);
     const leadsIn = (projectId: string) => host.agents().filter((a) => a.projectId === projectId && a.task === 'lead').map((a) => a.id);
     return {
       turn: (agent, phase) => void chief.turn(agent, phase),
@@ -74,7 +77,7 @@ const chiefOfStaff: FocusPlugin = {
       closeHeld: (lead) => inbox.closeHeld(lead),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
-      routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), ...watchRoutes(inbox, settings, (id) => host.agent(id)?.task === 'lead'), ...lineRoutes(line), threadRoute(host)],
+      routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), ...watchRoutes(inbox, settings, (id) => host.agent(id)?.task === 'lead'), ...lineRoutes(line), threadRoute(host), feedbackRoute(feedback)],
     };
   },
 };

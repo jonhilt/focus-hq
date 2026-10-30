@@ -116,6 +116,14 @@ export type LedgerEntry =
    */
   | { kind: 'captain-decision'; agent: string; goal?: string; item: { id: string; kind: string; what: string }; answer: string; via: DecidedVia }
   /**
+   * The user's one-tap word on a lead's turn (a plugin that judges turns records it): `not-needed`, it didn't need
+   * them, or `should-have-asked`, it should have asked them. The turn is `sessionId` and `turnUuid` (as its
+   * `cos-verdict` names it), with that verdict's `verdictSeq` and `route` when there is one; `via` is where it was
+   * pressed. Pressed again, the same line with `undo: true` takes it back: the latest line for a turn and signal says
+   * where it stands, so the log stays append-only.
+   */
+  | { kind: 'captain-feedback'; signal: FeedbackSignal; agent: string; goal?: string; sessionId: string; turnUuid: string; verdictSeq?: number; route?: VerdictRoute; via: FeedbackVia; undo?: true }
+  /**
    * The captain decided where a loose thread a closed goal left open ends (a plugin that keeps a project's threads
    * records it): which goal (`goalId`, titled `goal`) and which of its threads (`contact`: a contact's id, or an idea
    * for next's key, saying `text`), and `as` what. `note` goes with it: who takes it on (next), until when (parked),
@@ -169,6 +177,17 @@ export const viaNote = (via: DecidedVia): string => (via === 'office' ? '' : via
 
 /** Where a `cos-verdict` line says a lead's turn goes: 1 carry on, 2 a card for the captain, 3 interrupt the captain, 4 back to the lead. */
 export type VerdictRoute = 1 | 2 | 3 | 4;
+
+/** What a `captain-feedback` line says of a turn: it didn't need the user, or it should have asked them. */
+export const FEEDBACK_SIGNALS = ['not-needed', 'should-have-asked'] as const;
+export type FeedbackSignal = (typeof FEEDBACK_SIGNALS)[number];
+
+/** Each signal as the user presses it, in their words. */
+export const FEEDBACK_SAID: Record<FeedbackSignal, string> = { 'not-needed': 'Didn’t need me', 'should-have-asked': 'You should have asked me' };
+
+/** Where a `captain-feedback` line was pressed: a decision card in Comms, the phone, or a lead's message in Talk. */
+export const FEEDBACK_VIA = ['comms', 'phone', 'talk'] as const;
+export type FeedbackVia = (typeof FEEDBACK_VIA)[number];
 
 /** Who a verdict's message is for: the lead on routes 1 (carry on) and 4 (back to the lead), the captain on 2 (a card) and 3 (interrupt). */
 export const verdictAddressee = (route: VerdictRoute): 'lead' | 'captain' => (route === 1 || route === 4 ? 'lead' : 'captain');

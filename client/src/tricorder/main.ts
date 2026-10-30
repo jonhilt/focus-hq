@@ -85,7 +85,8 @@ state.on('agent-removed', (a) => {
   if (agentInHash() === a.id) location.hash = '';
   schedule();
 });
-for (const event of ['agent', 'board', 'review', 'projects', 'info', 'browser', 'connection'] as const) state.on(event, schedule);
+// a plugin's state too: what its strips show (the chief of staff's word on a turn, pressed) can live there
+for (const event of ['agent', 'board', 'review', 'projects', 'info', 'browser', 'connection', 'plugin'] as const) state.on(event, schedule);
 // what the plugins' sections count down, or wait out, moves on without Ops saying anything
 setInterval(schedule, 10_000);
 

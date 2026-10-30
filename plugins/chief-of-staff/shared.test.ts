@@ -9,6 +9,9 @@ describe('its mark on a lead’s turn, read back', () => {
     expect(cosReadOf({ at: 5 })).toEqual({ at: 5 });
     expect(cosReadOf({ at: 5, judged: back, sendsAt: 9 })).toEqual({ at: 5, judged: back, sendsAt: 9 });
     expect(cosReadOf({ at: 5, sendsAt: 9 })).toEqual({ at: 5 });
+    // the turn it judged, named as its verdict names it, for the user's word on it; a read not judged names none
+    expect(cosReadOf({ at: 5, judged: back, turnUuid: 't1' })).toEqual({ at: 5, judged: back, turnUuid: 't1' });
+    expect(cosReadOf({ at: 5, turnUuid: 't1' })).toEqual({ at: 5 });
     // only words sending a turn back count down: a carry-on's countdown from an older version is dropped
     expect(cosReadOf({ at: 5, judged: { ...back, route: 1 }, sendsAt: 9 })).toEqual({ at: 5, judged: { ...back, route: 1 } });
     expect(cosReadOf({ at: 5, judged: { ...verdict, route: 7 } })).toEqual({ at: 5 });

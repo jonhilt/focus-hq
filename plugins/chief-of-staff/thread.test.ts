@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent, TermLine } from '../../plugin-api/shared';
 import { goalThread, leadEntries, ledgerEntries, messageEntries, THREAD_LIMITS } from './thread';
+import { turnTail } from './turn';
 
 const jsonl = (lines: object[]) => lines.map((l) => JSON.stringify(l)).join('\n');
 const iso = (t: number) => new Date(t).toISOString();
@@ -63,9 +64,19 @@ describe('leadEntries', () => {
   it('keeps what the lead said last before each message to them, and at the end', () => {
     const t = jsonl([to(1, 'Build saved items'), said(2, 'Reading the code.'), tool(3), said(4, 'Plan: a list. OK?'), to(5, '<system-reminder>x</system-reminder>'), to(6, 'Yes'), said(7, 'Done.'), to(8, 'meta', true)]);
     expect(leadEntries(t)).toEqual([
-      { kind: 'lead', at: 4, text: 'Plan: a list. OK?' },
-      { kind: 'lead', at: 7, text: 'Done.' },
+      { kind: 'lead', at: 4, text: 'Plan: a list. OK?', turnUuid: 'a4' },
+      { kind: 'lead', at: 7, text: 'Done.', turnUuid: 'a7' },
     ]);
+  });
+
+  it('names each turn by the line its verdict names it by: Claude Code’s stop hook after the lead’s words, not the next message', () => {
+    const stop = (t: number) => ({ type: 'system', subtype: 'stop_hook_summary', uuid: `s${t}`, timestamp: iso(t) });
+    const first = [to(1, 'Build saved items'), said(2, 'Plan: a list. OK?'), stop(3)];
+    const t = jsonl([...first, to(4, 'Yes'), said(5, 'Done.'), stop(6)]);
+    // as the chief of staff judged each turn, its transcript ended there
+    expect(turnTail(jsonl(first))?.uuid).toBe('s3');
+    expect(turnTail(t)?.uuid).toBe('s6');
+    expect(leadEntries(t).map((e) => (e.kind === 'lead' ? e.turnUuid : undefined))).toEqual(['s3', 's6']);
   });
 });
 

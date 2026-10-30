@@ -19,8 +19,11 @@ export const THREAD_LIMITS = { lead: 4000, you: 2000, told: 8000, entries: 200 }
 export type ThreadEntry =
   /** The captain's message to the lead: `via` where they sent it from, when it wasn't Focus (their phone, say). */
   | { kind: 'you'; at: number; text: string; via?: string }
-  /** What the lead said as a turn ended. */
-  | { kind: 'lead'; at: number; text: string }
+  /**
+   * What the lead said as a turn ended: `turnUuid` names the turn as the chief of staff's verdict does (its
+   * transcript's last line in that turn, not the user's), for the user's word on it (feedbackRules.ts).
+   */
+  | { kind: 'lead'; at: number; text: string; turnUuid?: string }
   /** What someone else told the lead (Ops, QA, the chief of staff, the scheduler): whole, up to `THREAD_LIMITS.told`. */
   | { kind: 'ops'; at: number; from: string; text: string }
   /** One of the goal's pull requests merged. */
@@ -62,24 +65,31 @@ export function messageEntries(lines: readonly TermLine[], firstWords?: string):
   return out;
 }
 
-/** What the lead said last before each message to them, and at the end, each at its line's time: from its transcript. */
+/**
+ * What the lead said last before each message to them, and at the end, each at its line's time with its turn's last
+ * line (`turnUuid`, as `turnTail` names it): from its transcript.
+ */
 export function leadEntries(jsonl: string): ThreadEntry[] {
   const out: ThreadEntry[] = [];
   let last: { at: number; text: string } | undefined;
-  const flush = () => {
-    if (last) out.push({ kind: 'lead', at: last.at, text: clip(last.text, THREAD_LIMITS.lead) });
+  let uuid: string | undefined;
+  const flush = (turnUuid: string | undefined) => {
+    if (last) out.push({ kind: 'lead', at: last.at, text: clip(last.text, THREAD_LIMITS.lead), ...(turnUuid && { turnUuid }) });
     last = undefined;
   };
   for (const line of transcriptLines(jsonl)) {
+    // a turn ends on the lead's last line or Claude Code's own after it (its stop hook's): the harness's reminders
+    // and the next message come with what follows
+    if (line.uuid && line.type !== 'user') uuid = line.uuid;
     const at = time(line.timestamp);
     if (at === undefined || line.isMeta) continue;
     const texts = blocks(line).flatMap((b) => (b.type === 'text' && b.text?.trim() ? [b.text.trim()] : []));
     if (!texts.length) continue;
     if (line.type === 'assistant') last = { at, text: texts.join('\n\n') };
     // a message to them (anyone's, but the harness's own) ends what they said before it
-    else if (line.type === 'user' && messageFrom(texts.join('\n')) !== null) flush();
+    else if (line.type === 'user' && messageFrom(texts.join('\n')) !== null) flush(uuid);
   }
-  flush();
+  flush(uuid);
   return out;
 }
 
