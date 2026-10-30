@@ -35,6 +35,8 @@ interface Said {
   /** The captain has read the lead's latest turn (`readTurn`): it stops hailing them until the next ends. */
   read: boolean;
   held: boolean;
+  /** The lead proposed closing the goal (`lead.closing`): the user is asked to close it, until the lead carries on. */
+  closing: boolean;
   /**
    * What's waiting for the lead's next turn, and for the end of the one in hand. Not their notes: a turn a restart
    * picks back up hears them with its note that it was cut off (the next message they hear), so where they are isn't
@@ -68,7 +70,13 @@ const startMarking = (agents: ReturnType<typeof focus>['agents'], hosts: PluginH
 /** The latest lead's notes waiting now. */
 let notesNow: () => string[] = () => [];
 
-/** A goal's lead; `only`, the actions offered, by name, when a check is after one thing. */
+/**
+ * The lead's proposal to close and news from aboard that wakes them: checked on their own (`closingLead`), so the
+ * checks of everything else take the paths they did before them.
+ */
+const CLOSING = /proposes closing|chief of staff writes/;
+
+/** A goal's lead; `only`, the actions offered, by name, when a check is after one thing (all but `CLOSING` without). */
 const leadOf = (only?: RegExp): Subject<Said> => ({
   name: 'lead',
   start: async () => {
@@ -98,6 +106,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
         mark: typeof mark === 'string' ? mark : 'none',
         read: first.store.agent(id).lead?.readTurn !== undefined && first.store.agent(id).lead?.readTurn === first.store.agent(id).finishedAt,
         held: !!first.store.agent(id).held,
+        closing: !!first.store.agent(id).lead?.closing,
         inbox: [...run.inbox],
         later: [...run.later],
         told: Array.from({ length: sent }, (_, i) => `Message ${i + 1}`).filter((m) => [...heard, ...waiting].some((h) => h.includes(m))),
@@ -130,6 +139,16 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
             },
           },
           { name: 'the captain writes', run: () => o.agents.message(id, `And the header: Message ${++sent}`) },
+          // news from someone else aboard: it wakes the lead as the user's word does, but isn't the user's answer
+          { name: 'the chief of staff writes', run: () => o.agents.message(id, `Carry on: Message ${++sent}`, 'Chief of Staff') },
+          {
+            name: 'the lead proposes closing the goal',
+            run: async () => {
+              const t = o.claude.turns.find((t, i) => !t.stopped && !ended.has(i));
+              if (!t?.req.tools) throw new Error('no turn under way');
+              await t.req.tools.proposeClose({ reason: 'It works end to end' });
+            },
+          },
           // news that goes with what they hear next
           { name: 'Ops leaves a note', run: () => noteForLead(o.agents, first.store.agent(id), `QA passed it: Message ${++sent}`) },
           { name: 'the captain stops them', run: () => o.agents.stop(id) },
@@ -139,7 +158,7 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
           { name: 'a mark on an earlier turn comes', run: () => hosts[hosts.length - 1]?.goals.mark(id, 'late', 0) },
           { name: 'the plugin takes its mark away', run: () => hosts[hosts.length - 1]?.goals.mark(id, undefined) },
           { name: 'the captain reads the turn', run: () => o.agents.readTurn(id) },
-        ] satisfies Action[]).filter((a) => !only || only.test(a.name)),
+        ] satisfies Action[]).filter((a) => (only ? only.test(a.name) : !CLOSING.test(a.name))),
         durable: said,
         settle: () => steady(said),
         close: () => o.agents.shutDown(),
@@ -157,6 +176,8 @@ const leadOf = (only?: RegExp): Subject<Said> => ({
   },
 });
 const lead = leadOf();
+/** The actions a lead's proposal to close is about, described on their own (`leadOf` leaves them out by default). */
+const closingLead = leadOf(/proposes closing|writes|turn ends$/);
 
 describe('a goal’s lead, under Focus’s rule for a restart', () => {
   // a description that never got a message into a turn, or a note waiting for the next, would prove nothing of the inbox
@@ -207,6 +228,31 @@ describe('a goal’s lead, under Focus’s rule for a restart', () => {
     expect(seen).toEqual(['ended', 'ended', 'judged', 'none', 'judged', 'none', 'ended']);
   });
 
+  // docs/goals.md: the question whether to close stands only until the lead carries on: their next turn sets it aside,
+  // whoever woke them, and a proposal in that turn asks again
+  it('keeps a proposal to close past its turn’s end and news mid-turn, sets it aside as the next turn starts, and asks again in it', async () => {
+    const l = await closingLead.start(now);
+    const seen: boolean[] = [];
+    for (const name of ['the lead proposes closing the goal', 'the chief of staff writes', 'the turn ends', 'the chief of staff writes', 'the lead proposes closing the goal', 'the turn ends']) {
+      await Promise.resolve().then(() => l.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await l.settle();
+      seen.push(l.durable().closing);
+    }
+    l.close?.();
+    expect(seen).toEqual([true, true, true, false, true, true]);
+  });
+
+  // docs/goals.md: a turn Focus picks back up after a restart cut it off is the same turn, so its question stands
+  it('keeps a proposal to close made in a turn a restart cut off, as that turn carries on', async () => {
+    const l = await closingLead.start(now);
+    await l.actions().find((a) => a.name === 'the lead proposes closing the goal')?.run();
+    await l.settle();
+    const after = await l.restart(now);
+    await after.settle();
+    expect(after.durable()).toMatchObject({ closing: true, phase: JSON.stringify({ turn: 'started' }) });
+    after.close?.();
+  });
+
   // docs/goals.md: the lead hears their brief again once their conversation's compacted, and asks with their office
   // tools, in a conversation agent-host carries on after a restart as in any other (before a turn of theirs brings them)
   it('gives the host a lead’s office tools and brief for a conversation it resumes after a restart, and no one else extras', async () => {
@@ -229,6 +275,11 @@ describe('a goal’s lead, under Focus’s rule for a restart', () => {
 
   // what the lead's told, kept through a restart: messages into a turn, notes waiting for it to end, and the next turn
   it('loses nothing it was told, and keeps what’s waiting where it was, after Focus goes down and starts again', async () => {
-    await checkRestart(leadOf(/writes|note|turn ends$/), { runs: 15 });
+    await checkRestart(leadOf(/captain writes|note|turn ends$/), { runs: 15 });
+  });
+
+  // whether the lead's proposing to close, kept through a restart: made, set aside by news that wakes them, made again
+  it('is said to propose closing the goal, or not, as it was, after Focus goes down and starts again', async () => {
+    await checkRestart(closingLead, { runs: 15 });
   });
 });

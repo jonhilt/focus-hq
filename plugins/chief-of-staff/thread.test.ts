@@ -33,6 +33,18 @@ describe('messageEntries', () => {
     expect(messageEntries(lines.slice(0, 1))).toEqual([{ kind: 'you', at: 1, text: 'Build saved items' }]);
   });
 
+  it('keeps a card set aside as the lead carried on as a quiet line, and no other system line', () => {
+    const lines: TermLine[] = [
+      msg(1, '▶ Chief of Staff: QA passed it, carry on with the next slice'),
+      { t: 2, kind: 'system', text: '✻ Close the goal? — set aside: Rhee carried on' },
+      { t: 3, kind: 'system', text: '✻ Ops compacts the conversation, keeping what the goal needs' },
+    ];
+    expect(messageEntries(lines)).toEqual([
+      { kind: 'ops', at: 1, from: 'Chief of Staff', text: 'QA passed it, carry on with the next slice' },
+      { kind: 'set-aside', at: 2, text: 'Close the goal? — set aside: Rhee carried on' },
+    ]);
+  });
+
   it('clips what it keeps', () => {
     const [you] = messageEntries([msg(1, `▶ Captain: ${'x'.repeat(THREAD_LIMITS.you + 5)}`)]);
     expect(you).toMatchObject({ text: `${'x'.repeat(THREAD_LIMITS.you)} …[+5]` });

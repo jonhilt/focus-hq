@@ -3,10 +3,10 @@ import { blocks, clip, messageFrom, transcriptLines } from '../../plugin-api/ser
 
 // A goal's thread (README.md#a-thread-per-goal): the goal's conversation as the captain would read it in one place, in
 // order. What they said to the lead, what the lead said as each turn ended, and, as quieter lines between them, what
-// Ops, QA and the chief of staff told the lead, the pull requests that merged, and where the chief of staff sent each
-// turn. Built from what's kept already: the messages to the lead from its log (each whole, and who
-// it's from: in its transcript, Ops' news is joined to the captain's next message), its words from its transcript,
-// and the rest from the ledger. Pure, so it's tested (thread.test.ts).
+// Ops, QA and the chief of staff told the lead, the pull requests that merged, where the chief of staff sent each
+// turn, and the cards the user was asked that the lead carried on past. Built from what's kept already: the messages
+// to the lead (and the cards set aside) from its log (each whole, and who it's from: in its transcript, Ops' news is
+// joined to the captain's next message), its words from its transcript, and the rest from the ledger. Pure, so it's tested (thread.test.ts).
 
 /** How much of a turn's last words, and of a message to the lead, a thread keeps. */
 export const THREAD_LIMITS = { lead: 4000, you: 2000, quiet: 240, entries: 200 } as const;
@@ -21,6 +21,8 @@ export type ThreadEntry =
   | { kind: 'ops'; at: number; from: string; text: string }
   /** One of the goal's pull requests merged. */
   | { kind: 'merged'; at: number; repo: string; number: number }
+  /** A card the user hadn't answered, set aside because the lead carried on: `Close the goal? — set aside: Rhee carried on`. */
+  | { kind: 'set-aside'; at: number; text: string }
   /** Where the chief of staff sent a turn of the lead's, and why. */
   | { kind: 'cos'; at: number; route: VerdictRoute; why: string; says?: string; message?: string; check?: string };
 
@@ -35,13 +37,19 @@ const firstLine = (text: string, max: number) => clip(text.trim().split('\n')[0]
 /** A message to the lead as its log prints it: `▶ Captain: …`, `▶ Captain, from phone: …`, `▶ Ops: …`. */
 const MESSAGE = /^▶ ([^:\n]+): ([\s\S]*)$/;
 
+/** A card set aside as its log prints it: `✻ Close the goal? — set aside: Rhee carried on` (the manager's `setAsideLine`). */
+const SET_ASIDE = /^✻ (.+ — set aside: .+ carried on)$/;
+
 /**
- * The messages to the lead in its log, in order: the captain's in full, everyone else's in brief. `firstWords`, the
- * goal as the captain first put it, is left out where it's the first message: the thread's header has it.
+ * The messages to the lead in its log, in order: the captain's in full, everyone else's in brief, and the cards set
+ * aside as the lead carried on. `firstWords`, the goal as the captain first put it, is left out where it's the first
+ * message: the thread's header has it.
  */
 export function messageEntries(lines: readonly TermLine[], firstWords?: string): ThreadEntry[] {
   const out: ThreadEntry[] = [];
   for (const line of lines) {
+    const aside = line.kind === 'system' ? SET_ASIDE.exec(line.text) : null;
+    if (aside) out.push({ kind: 'set-aside', at: line.t, text: aside[1] });
     const m = line.kind === 'manager' ? MESSAGE.exec(line.text) : null;
     if (!m) continue;
     const [, who, text] = m;

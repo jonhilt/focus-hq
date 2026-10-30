@@ -11,9 +11,10 @@ import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
 import { backgroundChange, COMPACT_INSTRUCTIONS, compactInstructions, freshSessionPrompt, helperChange, HELPER_LINGER_MS, leadSystemAppend, taskChange, workflowChange } from '../lead';
 import { compactsFirst, hasLeadWork } from '../leadRules';
-import { mismatchError, turnEnding, type TurnKind } from '../runJournal';
+import { mismatchError, type RunState, turnEnding, type TurnKind } from '../runJournal';
 import { recovery, signInMismatch } from '../runJournalRules';
 import { compactRefusal } from './sessionRules';
+import { closingAtTurnStart } from './turnStartRules';
 import { COMMIT_NUDGE, conflictsPrompt, issuePrompt, systemAppend } from '../prompts';
 import { MAX_SCREENSHOTS, QA_SCHEMA } from '../qa';
 import { type Recordings, Sessions, Workspace } from '../services';
@@ -359,6 +360,8 @@ export class AgentSessions extends Part {
       const rt = this.rt(agent.id);
       const review = agent.task === 'review';
       const lead = agent.task === 'lead' && hasLeadWork(agent) ? agent : undefined;
+      // the turn before this one, as it ended: read before a compaction's turn comes between them
+      const before = this.store.run(agent.id).last;
       if (lead && compactsFirst(lead, !!resumeSessionId, this.store.settings.leadCompactAt, rt.compactFailed)) {
         this.update(agent, { status: 'working' });
         if (yield* this.compact(lead, compactInstructions(lead.lead))) resumeSessionId = lead.sessionId ?? resumeSessionId;
@@ -370,8 +373,7 @@ export class AgentSessions extends Part {
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
       const instructions = yield* this.instructions(agent);
       rt.busy = true;
-      // a new turn: what the plugins noted of the last one is over, and a mark on it that comes later is refused
-      this.update(agent, { status: 'working', activity: resumeSessionId ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined, ...(agent.lead && { lead: { ...agent.lead, marks: undefined, turnStarted: Date.now() } }) });
+      this.turnStarts(agent, !!resumeSessionId, before);
       this.core.plugins.turn(agent, 'start');
       // a turn that's interrupted (sent home) still ends, for the plugins
       const outcome = yield* this.turn(agent, this.runRequest(agent, prompt, instructions, resumeSessionId), true).pipe(
@@ -388,6 +390,18 @@ export class AgentSessions extends Part {
       const ended: TurnEnd = { outcome, prompt, resumeSessionId, lead, review, mismatch: this.store.run(agent.id).last?.mismatch };
       return yield* this.follow(agent, this.decide(agent, ended, carryOn), ended);
     });
+  }
+
+  /**
+   * The agent is at work on a new turn: what the plugins noted of the last one is over, and a mark on it that comes
+   * later is refused. A lead's at work again, so the user isn't asked to close the goal, whoever woke them
+   * (`closingAtTurnStart`): `before` is the turn before this one, as it ended.
+   */
+  private turnStarts(agent: Agent, resuming: boolean, before: RunState['last']): void {
+    const wrapUp = agent.lead && closingAtTurnStart({ name: agent.name, closing: agent.lead.closing }, before);
+    const closing = wrapUp?.kind === 'set-aside' ? { closing: undefined } : {};
+    this.update(agent, { status: 'working', activity: resuming ? 'Reading your message' : 'Getting started', error: undefined, finishedAt: undefined, ...(agent.lead && { lead: { ...agent.lead, marks: undefined, turnStarted: Date.now(), ...closing } }) });
+    if (wrapUp?.kind === 'set-aside') this.print(agent, [{ kind: 'system', text: wrapUp.line }]);
   }
 
   /**
