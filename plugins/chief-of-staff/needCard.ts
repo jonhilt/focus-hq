@@ -7,6 +7,7 @@ import { askBlocksOf, moveAct } from './decisionRules';
 import { type BoardPr, mergePress, openPrsOf } from './mergingRules';
 import { readOf } from './shared';
 import { openZoom, type Zoomable } from './zoom';
+import { isRecap } from './mentionRules';
 
 // What needs the captain, one of them shown large to decide and answer, at the end of its goal's thread in Comms (stream.ts). Its answers go
 // as the agent's panel's do, so Ops hears each as the captain's (and records it, `captainAnswered`); sending its
@@ -36,7 +37,6 @@ const open = (go: OpenAgent, agent: Agent, label: string) => h('button', { class
 const RECAP = 'system-recap';
 /** Each PR's recap, as Ops saves it: `system-recap-<number>` (server/agents/manager/goalPrs.ts). */
 const recapOf = (number: number): string => `${RECAP}-${number}`;
-const isRecap = (id: string): boolean => id === RECAP || id.startsWith(`${RECAP}-`);
 
 /** A press on one of a card's pictures opens it large over Comms; with ⌘ or Ctrl, a link still opens its own tab. */
 const zoomOn = (items: readonly Zoomable[], i: number) => (e: MouseEvent) => {
@@ -168,6 +168,30 @@ function askBlocks(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
 }
 
 /**
+ * A pull request's merge button, as the board's (`mergeAction`, `mergePress`): merge it, asking first when there's a
+ * reason to, or merge it once QA passes. `look` is the button's class; what merges is marked `go`, what's under way or
+ * cancels it `primary`. Comms' pull request card presses the same one.
+ */
+export function mergeButton(ui: Pick<CardUi, 'error'>, { projectId, pr }: BoardPr, look: string, go = 'go', not = 'primary'): HTMLButtonElement {
+  const review = focus.reviews.get(prKey(pr.repo, pr.number));
+  const press = mergePress(mergeAction(review, pr), pr, focus.mergeMethod(projectId, pr.repo));
+  const does = press.does;
+  // as on the board: what merges is green, what's under way or cancels it isn't
+  const merges = does && ('merge' in does || does.whenPassed);
+  const b = h('button', { class: `${look} ${merges ? go : not}`, title: press.title, ...(press.act && { attrs: { 'data-act': press.act } }) }, press.label);
+  b.disabled = !does;
+  if (does) {
+    b.onclick = () =>
+      void busy(b, async () => {
+        if ('whenPassed' in does) return mergeWhenPassed(projectId, pr.repo, pr.number, does.whenPassed);
+        if (does.merge.confirm && !await confirmDialog({ title: 'Merge', message: does.merge.confirm, confirmLabel: 'Merge anyway' })) return;
+        return mergePr(projectId, pr.repo, pr.number, does.merge.override);
+      }, ui.error);
+  }
+  return b;
+}
+
+/**
  * The pull requests a card can merge, a line each with QA's word on it and its merge button, as the board's: merged
  * from here, the captain doesn't go to the board to land what they've just read.
  */
@@ -180,21 +204,7 @@ function mergeBox(ui: CardUi, prs: readonly BoardPr[], lead?: Agent): HTMLElemen
     : [];
   const rows = prs.map(({ projectId, pr }) => {
     const review = focus.reviews.get(prKey(pr.repo, pr.number));
-    const press = mergePress(mergeAction(review, pr), pr, focus.mergeMethod(projectId, pr.repo));
-    const does = press.does;
-    // as on the board: what merges is green, what's under way or cancels it isn't
-    const go = does && ('merge' in does || does.whenPassed);
-    const b = h('button', { class: `btn small ${go ? 'go' : 'primary'}`, title: press.title, ...(press.act && { attrs: { 'data-act': press.act } }) }, press.label);
-    b.disabled = !does;
-    if (does) {
-      b.onclick = () =>
-        void busy(b, async () => {
-          if ('whenPassed' in does) return mergeWhenPassed(projectId, pr.repo, pr.number, does.whenPassed);
-          if (does.merge.confirm && !await confirmDialog({ title: 'Merge', message: does.merge.confirm, confirmLabel: 'Merge anyway' })) return;
-          return mergePr(projectId, pr.repo, pr.number, does.merge.override);
-        }, ui.error);
-    }
-    return h('div', { class: 'row cos-merge' }, b, h('a', { class: 'muted', href: pr.url, target: '_blank', rel: 'noopener', title: 'Open it on GitHub' }, `${pr.title} · ${qaBadge(review, pr).label}`));
+    return h('div', { class: 'row cos-merge' }, mergeButton(ui, { projectId, pr }, 'btn small'), h('a', { class: 'muted', href: pr.url, target: '_blank', rel: 'noopener', title: 'Open it on GitHub' }, `${pr.title} · ${qaBadge(review, pr).label}`));
   });
   return [h('small', { class: 'muted' }, prs.length > 1 ? 'Their open pull requests:' : 'Their open pull request:'), ...recapBox, ...rows];
 }

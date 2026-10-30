@@ -8,7 +8,7 @@ import type { ThreadEntry } from './thread';
 // number) takes the conn and opens the goal's sheet with its decision on it, another goal's card is a count on its
 // berth, a hail drops over the sheet until it's put on screen and stood by, the Muster chip (or M) stands down and the
 // muster comes up, and the lead's name (or T) slides in the panel to talk to them.
-const fake = vi.hoisted((): { threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; line?: unknown; lineActivity?: string; pressed?: Record<string, string[]>; said: unknown[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ threads: {}, open: [], waiting: [], said: [] }));
+const fake = vi.hoisted((): { prs: unknown[]; reviews: Map<string, unknown>; threads: Record<string, ThreadEntry[]>; conn?: string; stoodBy?: string[]; line?: unknown; lineActivity?: string; pressed?: Record<string, string[]>; said: unknown[]; state?: () => void; open: unknown[]; waiting: unknown[]; preview?: unknown } => ({ prs: [], reviews: new Map(), threads: {}, open: [], waiting: [], said: [] }));
 const agent = (id: string): Agent => ({
   id, name: `Lt. ${id}`, projectId: 'p', repo: 'acme/shop', task: 'lead', issue: { number: 0, title: 'Wishlist', url: '' }, desk: 0,
   status: 'done', activity: '', branch: 'b', baseBranch: 'main', costUsd: 0, startedAt: 1, finishedAt: 1000,
@@ -16,7 +16,7 @@ const agent = (id: string): Agent => ({
   lead: {
     title: `Goal ${id}`, repos: [], slice: 2, prs: [], note: { done: 'Saved items survive a reload', learned: [], next: ['Sharing'] },
     waypoints: [{ slice: 1, title: 'Quick wins', startedAt: 1 }, { slice: 2, heading: 'Saved list', startedAt: 2 }],
-    artifacts: [{ id: 'fees', title: 'Fee table', at: 5, slice: 1 }, { id: 'flow', title: 'Flow', at: 6, slice: 2 }],
+    artifacts: [{ id: 'fees', title: 'Fee table', at: 5, slice: 1 }, { id: 'flow', title: 'Flow', at: 6, slice: 2 }, { id: 'system-recap-9', title: 'System recap: #9', at: 7, slice: 2 }],
   },
 });
 const leads = [agent('a'), agent('b')];
@@ -24,13 +24,14 @@ vi.mock('../../plugin-api/client', async () => {
   const phone = await import('../../plugin-api/phone');
   return {
     ...phone,
-    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => fake.preview, reviews: new Map(), lines: () => [], shownPrs: () => [], agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
+    focus: { ...phone.focus, shown: [{ id: 'p', name: 'Shop', color: '#fff' }], project: () => ({ id: 'p', name: 'Shop', color: '#fff' }), leadsIn: () => leads, preview: () => fake.preview, reviews: fake.reviews, mergeMethod: () => 'Squash', lines: () => [], shownPrs: () => fake.prs, agent: (id: string) => leads.find((l) => l.id === id), isHidden: () => false, markRead: vi.fn(), onShip: () => () => undefined, onAgent: () => () => undefined },
     goalTags: () => [],
     LCARS: { gold: 'gold', red: 'red', orange: 'orange', lilac: 'lilac', sky: 'sky', peach: 'peach' },
     markdownHtml: (text: string) => text,
     busy: async (_b: HTMLButtonElement, run: () => Promise<unknown>) => { await run(); },
     fill: (el: HTMLElement, ...children: (Node | null)[]) => el.replaceChildren(...children.flatMap((c) => (c ? [c] : []))),
     messageAgent: vi.fn(() => Promise.resolve()),
+    mergePr: vi.fn(() => Promise.resolve()),
     // the watch as Focus keeps it: taking the conn is kept at once, and heard as the plugin's state changing
     pluginState: () => ({ autoSend: {}, conn: fake.conn, stoodBy: fake.stoodBy, line: fake.line, lineActivity: fake.lineActivity }),
     confirmDialog: vi.fn(() => Promise.resolve(true)),
@@ -54,7 +55,7 @@ vi.mock('./inboxApi', () => ({
   feedback: { press: vi.fn(() => Promise.resolve({ pressed: [] })), pressed: () => fake.pressed ?? {} },
 }));
 const { openStream } = await import('./stream');
-const { messageAgent } = await import('../../plugin-api/client');
+const { mergePr, messageAgent } = await import('../../plugin-api/client');
 const { feedback, inbox } = await import('./inboxApi');
 const { CHIEF_OF_STAFF } = await import('./shared');
 
@@ -77,9 +78,14 @@ afterEach(() => {
   fake.lineActivity = undefined;
   fake.said = [];
   fake.pressed = undefined;
+  fake.prs = [];
+  fake.reviews.clear();
 });
 const part = (name: string) => document.querySelector<HTMLElement>(`[data-part=${name}]`);
 const parts = (name: string) => [...document.querySelectorAll<HTMLElement>(`[data-part=${name}]`)];
+const front = () => document.querySelector<HTMLElement>('[data-front]')?.dataset.part;
+/** The cards beside the sheet, oldest first and the front one last, as they're stacked. */
+const stackOrder = () => parts('stack').flatMap((s) => [...s.querySelectorAll<HTMLElement>(':scope > [data-key]')]).sort((x, y) => Number(x.style.zIndex) - Number(y.style.zIndex)).map((c) => c.dataset.part);
 const berth = (goal: string) => parts('berth').find((r) => r.textContent?.includes(goal));
 const shown = (name: string) => !part(name)?.classList.contains('tw:hidden');
 const press = (code: string, key = '') => window.dispatchEvent(new KeyboardEvent('keydown', { code, key, bubbles: true }));
@@ -131,28 +137,34 @@ describe('taking the conn', () => {
     expect(berth('Goal b')?.querySelector('[data-part=count]')?.textContent).toBe('1');
   });
 
-  it('counts the goal’s exhibits in its head, lists them in a panel beside the sheet by slice or newest, and opens one on the sheet', async () => {
+  it('counts the goal’s exhibits in its head, lists them as a card beside the sheet by slice or newest, and opens one as a card over it', async () => {
     await open();
     berth('Goal a')?.click();
     await settle();
     expect(part('exhibits')?.textContent).toBe('Exhibits · 2');
     part('exhibits')?.click();
-    expect(shown('gallery')).toBe(true);
+    expect(front()).toBe('card-exhibits');
     expect(parts('group').map((g) => g.firstElementChild?.textContent)).toEqual(['2 · Saved list · now', '1 · Quick wins']);
     part('by-newest')?.click();
     expect(parts('card').map((c) => c.dataset.id)).toEqual(['flow', 'fees']);
     parts('card')[1]?.click();
-    expect(part('exhibit')?.textContent).toContain('Exhibit · Fee table · slice 1');
-    expect(part('exhibit')?.querySelector('iframe')?.getAttribute('src')).toContain('fees.html');
-    // talking puts the panel away: one panel beside the sheet at a time
+    // the exhibit slides over the list, which stays as a spine above it; its page is scaled whole to the card
+    expect(front()).toBe('card-artifact');
+    expect(part('card-artifact')?.textContent).toContain('Exhibit · slice 1');
+    expect(part('card-artifact')?.querySelector('iframe')?.getAttribute('src')).toContain('fees.html');
+    expect(part('card-artifact')?.querySelector('iframe')?.getAttribute('style')).toContain('scale(');
+    expect(part('card-exhibits')?.querySelector('[data-part=spine]')?.textContent).toContain('Exhibits');
+    // Talk is a card like any other: it comes over the two, and Esc closes the front one, landing on the one before
     part('who')?.click();
-    expect(shown('gallery')).toBe(false);
+    expect(front()).toBe('card-talk');
+    expect(stackOrder()).toEqual(['card-exhibits', 'card-artifact', 'card-talk']);
+    press('Escape', 'Escape');
+    expect(front()).toBe('card-artifact');
+    press('Escape', 'Escape');
+    expect(front()).toBe('card-exhibits');
     press('KeyE');
-    expect(shown('gallery')).toBe(true);
-    press('Escape', 'Escape');
-    expect(part('exhibit')).toBeNull();
-    press('Escape', 'Escape');
-    expect(shown('gallery')).toBe(false);
+    expect(stackOrder()).toEqual([]);
+    expect(part('sheet')?.classList.contains('tw:right-3')).toBe(true);
   });
 
   it('links each system their preview runs, named as the preview names it', async () => {
@@ -294,7 +306,7 @@ describe('taking the conn', () => {
     fake.waiting = [{ kind: 'turn', agent: leads[1] }];
     await open();
     [...(part('acts')?.querySelectorAll('button') ?? [])].find((b) => b.textContent === 'Discuss')?.click();
-    expect(shown('talk')).toBe(true);
+    expect(front()).toBe('card-talk');
     expect(part('topic')?.textContent).toBe('DiscussingFilters first?');
     const box = part('talk')?.querySelector('textarea');
     if (!box) throw new Error('no box to talk to them');
@@ -409,6 +421,112 @@ describe('the user’s word on a turn (README.md#didnt-need-me-and-you-should-ha
   });
 });
 
+describe('what a decision mentions', () => {
+  const prOf = { repo: 'acme/shop', number: 9 };
+  const mentioning = { ...card, mentions: [{ kind: 'pr', id: 'acme/shop#9', ...prOf }, { kind: 'artifact', id: 'flow' }] };
+  const boardPr = {
+    ...prOf, title: 'Saved list', url: 'https://github.com/acme/shop/pull/9', branch: 'focus/saved', baseBranch: 'main', headSha: 'abc1234def', isDraft: false,
+    mergeable: 'MERGEABLE', checks: 'passing', failedChecks: [], closes: [], createdAt: '', additions: 38, deletions: 4, changedFiles: 3,
+  };
+  const review = {
+    projectId: 'p', ...prOf, title: 'Saved list', status: 'passed', sha: 'abc1234def', requestedAt: 1, commentUrl: 'https://github.com/acme/shop/pull/9#c1',
+    report: {
+      verdict: 'pass', summary: 'Saving survives a reload.', checks: [{ name: 'Saves an item', result: 'pass', details: '' }], commands: [], captions: ['The list'],
+      spotChecks: [{ file: 'src/list.ts', line: 42, why: 'the limit is hard-coded', anchor: 'diff-abcR42' }],
+    },
+    screenshots: [{ caption: 'The list', file: 'shot-1.png' }],
+    recording: { mp4Url: 'https://x/rec.mp4', mp4File: 'rec-1.mp4', realSeconds: 90, shownSeconds: 20, actions: 7 },
+  };
+  const watching = async () => {
+    fake.conn = 'b';
+    fake.open = [mentioning];
+    fake.waiting = [{ kind: 'turn', agent: leads[1] }];
+    fake.prs = [{ projectId: 'p', pr: boardPr }];
+    fake.reviews.set('acme/shop#9', review);
+    const work = leads[1]?.lead;
+    if (work) work.prs = [{ ...prOf, url: boardPr.url, lane: 'ask', recap: { title: 'Saved list', summary: '', recap: { primitives: [{ id: 'saved-list', group: 'shop', impact: 'adds', change: 'keeps the list', paths: ['src/list.ts'] }], invariants: ['A saved item survives a reload'] } } }];
+    await open();
+  };
+  afterEach(() => {
+    const work = leads[1]?.lead;
+    if (work) work.prs = [];
+  });
+
+  it('lists them under the brief, each with where it stands, its slot unlit, and no More fold since the pull request’s card merges it', async () => {
+    await watching();
+    expect(parts('mention').map((m) => m.textContent)).toEqual(['PRshop#9QA passed', 'EXFlowslice 2']);
+    expect(parts('mention').some((m) => m.hasAttribute('data-lit'))).toBe(false);
+    expect(part('decision')?.querySelector('details')).toBeNull();
+  });
+
+  it('opens a pull request’s card from its mention: its checks, size, QA’s verdict and proof, the recap, GitHub and the merge', async () => {
+    await watching();
+    parts('mention')[0]?.click();
+    const pr = part('card-pr');
+    expect(front()).toBe('card-pr');
+    expect(parts('mention')[0]?.hasAttribute('data-lit')).toBe(true);
+    expect(pr?.textContent).toContain('Pull request · Ask lane');
+    expect(part('facts')?.textContent).toBe('Checkspassing' + 'Mergescleanly' + 'QAQA passed');
+    expect(part('size')?.textContent).toBe('+38 −4 · 3 files');
+    expect(part('qa')?.textContent).toContain('Saving survives a reload.');
+    expect(part('spot')?.getAttribute('href')).toBe('https://github.com/acme/shop/pull/9/files#diff-abcR42');
+    expect(part('shots')?.querySelector('img')?.getAttribute('src')).toBe('/api/qa-shots/shot-1.png');
+    expect(part('recording')?.querySelector('video')?.getAttribute('src')).toBe('/api/qa-shots/rec-1.mp4');
+    expect(part('recap')?.textContent).toContain('A saved item survives a reload');
+    expect(part('github')?.getAttribute('href')).toBe(boardPr.url);
+    const merge = part('merge')?.querySelector('button');
+    expect(merge?.textContent).toBe('Squash & merge shop#9');
+    merge?.click();
+    await settle();
+    expect(mergePr).toHaveBeenCalledWith('p', 'acme/shop', 9, false);
+  });
+
+  it('stacks the exhibit over the pull request, whose spine stays above it, and a lit mention or Esc closes its card', async () => {
+    await watching();
+    parts('mention')[0]?.click();
+    parts('mention')[1]?.click();
+    expect(stackOrder()).toEqual(['card-pr', 'card-artifact']);
+    expect(part('card-pr')?.querySelector('[data-part=spine]')?.textContent).toContain('shop#9QA passed');
+    // its spine brings it forward; ] and [ move between them
+    part('card-pr')?.querySelector<HTMLElement>('[data-part=spine]')?.click();
+    expect(front()).toBe('card-pr');
+    press('BracketRight', ']');
+    expect(front()).toBe('card-artifact');
+    // G opens the front pull request on GitHub, and only that
+    press('BracketLeft', '[');
+    const opened = vi.fn((e: Event) => e.preventDefault());
+    part('github')?.addEventListener('click', opened);
+    press('KeyG');
+    expect(opened).toHaveBeenCalledTimes(1);
+    // pressing a lit mention closes its card, wherever it is
+    parts('mention')[1]?.click();
+    expect(stackOrder()).toEqual(['card-pr']);
+    expect(parts('mention')[1]?.hasAttribute('data-lit')).toBe(false);
+    press('Escape', 'Escape');
+    expect(stackOrder()).toEqual([]);
+    expect(parts('mention')[0]?.hasAttribute('data-lit')).toBe(false);
+  });
+
+  it('lists them on words ready for the lead too, so what QA passed merges from beside them', async () => {
+    await watching();
+    fake.open = [{ ...mentioning, lane: 'ready', cos: { ...card.cos, route: 1, message: 'Carry on.' } }];
+    cleanups.forEach((c) => c());
+    cleanups = [];
+    await open();
+    expect(part('word')?.querySelectorAll('[data-part=mention]')).toHaveLength(2);
+    part('word')?.querySelector<HTMLElement>('[data-part=mention]')?.click();
+    expect(front()).toBe('card-pr');
+  });
+
+  it('puts the stack away with another conn: open cards are the view’s alone', async () => {
+    await watching();
+    parts('mention')[0]?.click();
+    berth('Goal a')?.click();
+    await settle();
+    expect(stackOrder()).toEqual([]);
+  });
+});
+
 describe('a hail on watch', () => {
   it('drops over the sheet, opens in place when pressed, and stands by into the muster', async () => {
     fake.conn = 'b';
@@ -437,10 +555,10 @@ describe('talking to the lead', () => {
     fake.conn = 'a';
     fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' }, { kind: 'lead', at: 3, text: 'Done.' }];
     await open();
-    expect(shown('talk')).toBe(false);
+    expect(part('talk')).toBeNull();
     part('who')?.click();
     await settle();
-    expect(shown('talk')).toBe(true);
+    expect(front()).toBe('card-talk');
     expect(part('talk')?.textContent).toContain('Done.');
     expect(part('told')?.textContent).toContain('Ops told Lt. a');
     const box = part('talk')?.querySelector('textarea');
@@ -449,7 +567,7 @@ describe('talking to the lead', () => {
     box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
     expect(messageAgent).toHaveBeenCalledWith('a', 'Lt. a', 'Ship it');
     press('Escape', 'Escape');
-    expect(shown('talk')).toBe(false);
+    expect(part('talk')).toBeNull();
   });
 
   it('folds what others told the lead to a line saying who told them, which opens to all of it and stays open as the thread is drawn again', async () => {

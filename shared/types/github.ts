@@ -59,6 +59,10 @@ export interface PullRequest {
   mergeCheck?: MergeCheck;
   /** The reviews submitted on it, oldest first. Missing when the provider can't tell. */
   reviews?: PrReview[];
+  /** Lines it adds and removes, and how many files it changes, as GitHub counts them. Missing when the provider can't tell. */
+  additions?: number;
+  deletions?: number;
+  changedFiles?: number;
 }
 
 /** A review submitted on a pull request on GitHub: approving it, asking for changes, or commenting (on lines of code too). */

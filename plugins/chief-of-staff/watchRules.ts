@@ -1,3 +1,4 @@
+import { isRecap } from './mentionRules';
 import type { Check, Verdict } from './shared';
 
 // The watch (README.md#the-watch): one goal at the conn, the rest underway on the rail, and what of theirs reaches the
@@ -69,7 +70,8 @@ export type ExhibitsBy = 'slice' | 'newest';
  * A goal's exhibits as its panel lists them, in groups: by slice, the slice it's at first, each with its name; or
  * one group, newest first. Within a slice, newest first too. An exhibit shown before its slice was kept is the current
  * slice's. A slice with nothing shown has no group (28 October 2026: the strip that drew every slice, empty or not,
- * folded the slices behind into stacks, and the captain took the folded exhibits for missing ones).
+ * folded the slices behind into stacks, and the captain took the folded exhibits for missing ones). A pull request's
+ * recap isn't among them: its card reads it typed.
  */
 export function exhibitsOf(work: {
   waypoints: readonly { slice: number; title?: string; heading?: string }[];
@@ -77,6 +79,7 @@ export function exhibitsOf(work: {
 }, by: ExhibitsBy): { label: string; exhibits: Exhibit[] }[] {
   const now = work.waypoints.at(-1)?.slice ?? 1;
   const all = work.artifacts
+    .filter((x) => !isRecap(x.id))
     .map(({ id, title, at, slice, image }): Exhibit => ({ id, title, at, slice: slice ?? now, ...(image && { image }) }))
     .sort((x, y) => y.at - x.at);
   if (by === 'newest') return all.length ? [{ label: 'Newest first', exhibits: all }] : [];

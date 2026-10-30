@@ -1,9 +1,10 @@
 import type { LandedItem } from './landed';
 import type { Attention, CaptainAnswer, DecidedVia, LedgerEvent, QaReview, TermLine } from '../../plugin-api/shared';
-import { artifactUrl, isRecord, lastWords, openQuestion, shownThisTurn, turnRead } from '../../plugin-api/shared';
+import { artifactUrl, isRecord, lastWords, openQuestion, prKey, shownThisTurn, turnRead } from '../../plugin-api/shared';
 import { type Lane, laneOf, lineOf } from './laneRules';
 import { headlineOf } from './askRules';
-import { ACKNOWLEDGED, type AskAnswer, readOf, type Reply, SENT_WORDS, type Verdict } from './shared';
+import { mentionsOf } from './mentionRules';
+import { ACKNOWLEDGED, type AskAnswer, type Mention, readOf, type Reply, SENT_WORDS, type Verdict } from './shared';
 
 // The captain's inbox, as the chief of staff keeps it (docs/ledger.md#the-captains-inbox-api): each thing that needs
 // them with an id that stays the same from look to look, and what they decided lately, from the ledger's
@@ -58,6 +59,8 @@ export interface InboxItem {
   said?: string;
   /** What a lead showed on their screen this turn (`shownThisTurn`): its live page and its picture, served by the API. */
   shown?: { title: string; html: string; image?: string }[];
+  /** What it's about, by reference (mentionRules.ts): what a view opens beside it. Left out when it mentions nothing. */
+  mentions?: Mention[];
 }
 
 /**
@@ -76,14 +79,18 @@ export function itemVerdict(v: Verdict): ItemVerdict {
 export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, now: number, lines?: readonly TermLine[]): InboxItem {
   const { what } = lineOf(a, reviews);
   const lane = laneOf(a, now);
-  if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane };
+  if (!('agent' in a)) return { id: hailKey(a), kind: a.kind, projectId: a.projectId, who: `${a.pr.repo}#${a.pr.number}`, goal: a.pr.title, what, lane, mentions: mentionsOf(a.kind, { pr: a.pr }) };
   const read = a.kind === 'turn' ? readOf(a.agent) : undefined;
   const cos = read?.judged;
   const { agent } = a;
   const since = a.kind === 'hand' ? agent.permission?.at : agent.finishedAt;
-  const q = a.kind === 'question' ? openQuestion(agent) : undefined;
   const said = lines && lastWords(lines);
   const shown = lines && a.kind !== 'error' ? shownThisTurn(agent.lead?.artifacts, lines) : [];
+  const asking = openQuestion(agent);
+  const q = a.kind === 'question' ? asking : undefined;
+  // what the decision says, to find the pull request it names: its line, the chief of staff's asks and words
+  const words = [what, ...(cos?.asks.map((x) => x.ask) ?? []), cos?.message ?? ''].join('\n');
+  const mentions = mentionsOf(a.kind, { ...(agent.lead && { lead: agent.lead }), ...(asking && { question: asking }), reviews: (pr) => reviews.get(prKey(pr.repo, pr.number)), words });
   return {
     id: hailKey(a), kind: a.kind, projectId: agent.projectId, agentId: agent.id, who: agent.name, goal: agent.lead?.title ?? agent.issue.title, what, lane,
     ...(cos && { cos: itemVerdict(cos) }),
@@ -93,6 +100,7 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
     ...(q && { options: q.options.map((o) => ({ id: o.id, label: o.label, ...(o.detail && { detail: o.detail }) })) }),
     ...(said && { said }),
     ...(shown.length && { shown: shown.map((s) => ({ title: s.title, html: artifactUrl(agent.id, s, 'html'), ...(s.image && { image: artifactUrl(agent.id, s, 'jpg') }) })) }),
+    ...(mentions.length && { mentions }),
   };
 }
 

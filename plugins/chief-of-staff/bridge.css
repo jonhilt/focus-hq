@@ -7,6 +7,7 @@
 @source "./stream.ts";
 @source "./bridgeKit.ts";
 @source "./lineView.ts";
+@source "./stackCards.ts";
 
 /* the mockup's tokens: direction B's flight deck, the lifts a layer sits at, its hairlines and its springs */
 @theme {
@@ -72,7 +73,10 @@
 /* settles without overshoot: the panel slides in once, and nothing beside it moves */
 .cos-slide { animation: cos-slide 260ms cubic-bezier(.2, .9, .3, 1); }
 .cos-grow { transform-origin: 0 20px; animation: cos-grow 560ms linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1); }
+/* a card in the stack beside the sheet steps down to its place as newer ones come over it, and up as they go */
+.cos-stacked { transition: top 260ms cubic-bezier(.2, .9, .3, 1), box-shadow 260ms cubic-bezier(.2, .9, .3, 1); }
 @media (prefers-reduced-motion: reduce) {
+  .cos-stacked { transition: none; }
   .cos-rise, .cos-drop, .cos-grow, .cos-slide { animation: cos-fade .2s ease; }
   @keyframes cos-fade { from { opacity: 0; } }
 }

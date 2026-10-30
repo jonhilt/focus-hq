@@ -24,7 +24,7 @@ export { type CaptainAnswer, landed } from '../shared/captainAnswer';
 /** A lead's open question, what an agent said last, and what a lead showed on their screen this turn. */
 export { openQuestion } from '../shared/artifacts';
 export { lastWords, shownThisTurn } from '../shared/leadWords';
-export { prKey, qaBadge } from '../shared/qa';
+export { prKey, qaBadge, spotCheckUrl } from '../shared/qa';
 export { autoSendBackFor } from '../shared/qaRules';
 /** What a pull request's merge button does now, as the board's does, and how a repo's pull requests merge. */
 export { type MergeAction, mergeAction } from '../shared/mergeGateRules';

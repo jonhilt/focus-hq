@@ -14,6 +14,9 @@ import { CHIEF_OF_STAFF, cosStateOf, type LineStart, readOf, SENDER } from './sh
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
 import { collapsedMessage } from './collapsedMessage';
 import type { ThreadEntry } from './thread';
+import { isRecap } from './mentionRules';
+import { type Card, cardKey, frontOf, isOpen, pressed, type StackPress } from './stackRules';
+import { artifactCard, lightMentions, mentionsRow, namedOf, prCard, questionCard } from './stackCards';
 import { TW } from './bridgeKit';
 import { type Exhibit, type ExhibitsBy, exhibitsOf, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
 
@@ -25,8 +28,9 @@ import { type Exhibit, type ExhibitsBy, exhibitsOf, type Grade, gradeOf, musterO
 // the watch began, its exhibits (a count, opening a panel of them beside it), and what it asks of the captain as
 // cards resting on it: a decision, words ready for the lead, what of it landed, their preview while it runs. Standing
 // down (the chip, or M) brings the muster up in the viewer's place, by what each unblocks. A hail from a goal underway
-// drops from the chip, put on screen in place or told to stand by. Talk (the lead's name, or T) opens the panel beside
-// the sheet, the conversation and a box to talk to the lead.
+// drops from the chip, put on screen in place or told to stand by. Beside the sheet, a stack of cards (stackRules.ts):
+// what a decision mentions, Talk (the lead's name, or T: the conversation and a box to talk to the lead) and the
+// exhibits list, the newest over the older ones, which stay as headed spines above it.
 
 /** When the captain last looked at each goal's conversation (its latest entry's time), kept in this browser. */
 const SEEN = 'cos-stream-seen';
@@ -113,26 +117,24 @@ function dotEl(lead: Agent): HTMLElement {
  */
 export function openStream(ui: CommsUi): void {
   let { conn } = watchNow();
-  // the muster up in the viewer's place; the panel slid in to talk; a muster row opened; the hail put on screen
+  // the muster up in the viewer's place; a muster row opened; the hail put on screen
   let mustering = false;
-  let talking = false;
+  // the cards open beside the sheet, oldest first and the front one last: the browser's alone, so a reload has none
+  let stack: Card[] = [];
   // the direct line to the chief of staff in the viewer, tied to no goal (README.md#the-direct-line)
   let lining = false;
   // the decision last on the sheet, kept faded once it's answered until the next one comes
   let settled: { lead: string; el: HTMLElement } | null = null;
-  // the panel's just opened: once the conversation's drawn, show the lead's latest words from their start
+  // Talk's just opened: once the conversation's drawn, show the lead's latest words from their start
   let findLatest = false;
   // the decision being discussed in the panel: quoted at its top, and what's said goes to the lead about it
   let discussing: { id: string; what: string } | null = null;
   let expanded: string | null = null;
-  // the messages folded in the panel that the user opened, by id: open still when it's drawn again
+  // the messages folded in Talk that the user opened, by id: open still when it's drawn again
   const unfolded = new Set<string>();
   let onScreen: string | null = null;
-  // the exhibits: their panel beside the sheet and how it groups them, the one open on the sheet, and the ones looked
-  // at this watch
-  let browsing = false;
+  // the exhibits: how their list groups them, and the ones looked at this watch
   let groupBy: ExhibitsBy = 'slice';
-  let opened: string | null = null;
   const had = new Set<string>();
   let open: InboxItem[] = [];
   let landed: LandedItem[] = [];
@@ -156,25 +158,25 @@ export function openStream(ui: CommsUi): void {
   const empty = h('div', { class: `${TW.table} tw:border tw:border-dashed tw:border-line tw:grid tw:place-items-center tw:text-center tw:text-muted tw:text-[14px]`, attrs: { 'data-part': 'empty' } },
     h('div', null, h('b', { class: 'tw:block tw:font-display tw:text-[15px] tw:font-semibold tw:tracking-[.06em] tw:text-ink tw:mb-1 tw:uppercase' }, 'Nothing at the conn'), 'Take the conn of one goal. The rest stay underway on their orders.'));
   const head = h('div', { class: 'tw:flex-none' });
-  const shelf = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px] tw:empty:hidden' });
   const cards = h('div', { class: 'tw:flex tw:flex-col tw:gap-[10px]' });
-  const below = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:px-[18px] tw:pt-[14px] tw:pb-[18px] tw:flex tw:flex-col tw:gap-[10px]' }, shelf, cards);
+  const below = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:px-[18px] tw:pt-[14px] tw:pb-[18px] tw:flex tw:flex-col tw:gap-[10px]' }, cards);
   const viewer = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut`, attrs: { 'data-part': 'sheet' } }, head, below);
   const muster = h('div', { class: `${TW.table} tw:overflow-y-auto tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 tw:px-[18px] tw:py-4 cos-rise`, attrs: { 'data-part': 'muster' } });
   const said = h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:overflow-x-hidden tw:[overflow-wrap:anywhere] tw:flex tw:flex-col tw:gap-5 tw:pr-1' });
   const box = h('textarea', { class: 'tw:flex-none tw:h-[72px] tw:min-h-0 tw:border tw:border-solid tw:border-line tw:bg-transparent tw:text-ink tw:text-[14.5px]/[1.5] tw:p-2 tw:resize-none tw:outline-none tw:rounded-none tw:focus:border-muted tw:font-read' });
-  const talkHead = h('div', { class: 'tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' });
   const topic = h('div', { class: 'tw:flex-none tw:border-0 tw:border-l-2 tw:border-solid tw:border-attn tw:pl-3 tw:text-[14.5px]/[1.5]', attrs: { 'data-part': 'topic' } });
-  // the panel to talk in opens beside the sheet (the sheet narrows to make room only where there isn't any)
-  const panel = h('div', { class: 'tw:absolute tw:top-[46px] tw:left-[min(1176px,calc(100%_-_472px))] tw:bottom-3 tw:w-[460px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-4 tw:py-3 tw:flex tw:flex-col tw:gap-2 cos-slide', attrs: { 'data-part': 'talk' } }, talkHead, topic, said, box);
-  const gallery = h('div', { class: 'tw:absolute tw:top-[46px] tw:left-[min(1176px,calc(100%_-_472px))] tw:bottom-3 tw:w-[460px] tw:bg-panel tw:border tw:border-solid tw:border-line tw:shadow-lift-4 tw:px-4 tw:py-3 tw:flex tw:flex-col tw:gap-3 cos-slide', attrs: { 'data-part': 'gallery' } });
+  // Talk and the exhibits list, kept whole as their cards come and go, so what's typed or scrolled stays
+  const panel = h('div', { class: 'tw:h-full tw:flex tw:flex-col tw:gap-2', attrs: { 'data-part': 'talk' } }, topic, said, box);
+  const gallery = h('div', { class: 'tw:h-full tw:flex tw:flex-col tw:gap-3', attrs: { 'data-part': 'gallery' } });
+  // the stack beside the sheet, never wider than today's panel (the sheet narrows to make room only where there isn't any)
+  const stackEl = h('div', { class: 'tw:absolute tw:top-[46px] tw:left-[min(1176px,calc(100%_-_472px))] tw:bottom-3 tw:w-[460px] tw:pointer-events-none', attrs: { 'data-part': 'stack' } });
   const hail = h('div', { class: 'tw:absolute tw:top-10 tw:right-3 tw:z-10 tw:w-[304px] tw:max-h-[calc(100%-52px)] tw:overflow-y-auto tw:bg-surface2 tw:border tw:border-solid tw:border-attn tw:shadow-lift-4 tw:pt-[9px] tw:pr-3 tw:pb-[10px] tw:pl-4 tw:origin-top-right cos-drop', attrs: { 'data-part': 'hail' } });
   const body = h('div', {
     class: 'tw:relative tw:h-full tw:min-h-[500px] tw:overflow-hidden tw:bg-well tw:bg-[radial-gradient(ellipse_at_50%_120%,#1a2230_0%,transparent_60%)] tw:text-ink tw:font-read tw:text-[14px]/[1.45]',
     attrs: { 'data-part': 'bridge' },
-  }, rail, empty, viewer, muster, panel, gallery, hud, hail);
+  }, rail, empty, viewer, muster, stackEl, hud, hail);
   const line = lineView((message) => ui.error(message));
-  body.insertBefore(line.el, panel);
+  body.insertBefore(line.el, stackEl);
 
 
   // taking the conn of a goal, or standing down (null): drawn at once, kept by Focus
@@ -182,11 +184,10 @@ export function openStream(ui: CommsUi): void {
     conn = id ?? undefined;
     mustering = id === null;
     lining = false;
-    talking = false;
+    stack = [];
     discussing = null;
     settled = null;
-    expanded = onScreen = opened = null;
-    browsing = false;
+    expanded = onScreen = null;
     ticked.clear();
     had.clear();
     watchFrom = id ? seenAt(id) : undefined;
@@ -202,9 +203,10 @@ export function openStream(ui: CommsUi): void {
   // the direct line: in the viewer's place, standing down from any watch (the conn is a goal's, and the line is no goal)
   const takeLine = () => {
     lining = true;
-    mustering = talking = browsing = false;
+    mustering = false;
+    stack = [];
     discussing = null;
-    expanded = onScreen = opened = null;
+    expanded = onScreen = null;
     if (conn) {
       conn = undefined;
       taking = true;
@@ -223,14 +225,21 @@ export function openStream(ui: CommsUi): void {
     render();
   };
   chip.onclick = muster_;
-  const talk = (on: boolean) => {
-    talking = on && !!conn;
-    if (talking) browsing = false;
-    if (!talking) discussing = null;
+  // the stack, pressed: Talk is a card like any other, and what's said about a decision is about it only while it's open
+  const TALK: Card = { kind: 'talk' };
+  const EXHIBITS: Card = { kind: 'exhibits' };
+  const stackPress = (press: StackPress) => {
+    const was = frontOf(stack);
+    // opening, Talk shows the lead's latest words from their start (what's being asked), once there are some
+    if (!isOpen(stack, TALK)) findLatest = true;
+    stack = conn ? pressed(stack, press) : [];
+    if (!isOpen(stack, TALK)) discussing = null;
     render();
-    if (talking) box.focus();
-    else box.blur();
+    const front = frontOf(stack);
+    if (front?.kind === 'talk' && was?.kind !== 'talk') box.focus();
+    else if (front?.kind !== 'talk') box.blur();
   };
+  const talk = (on: boolean) => stackPress(on ? { kind: 'open', card: TALK } : { kind: 'close', card: TALK });
 
   // across the top: where the captain is, and the Muster chip with what waits outside the goal at the conn
   const renderHud = (all: readonly Filed[], lead: Agent | undefined) => {
@@ -294,23 +303,18 @@ export function openStream(ui: CommsUi): void {
     fill(rail, lineBerth(), ...(els.length ? els : [h('div', { class: 'tw:text-muted tw:text-[13px]' }, 'No goals under way.')]));
   };
 
-  // the exhibits panel, beside the sheet in the talk panel's place: every exhibit the lead put up, by slice or newest
-  // first, a press opening one on the sheet
-  const browse = (on: boolean) => {
-    browsing = on && !!conn;
-    if (browsing) talking = false;
-    render();
-  };
-  const look = (id: string | null) => {
-    opened = opened === id ? null : id;
-    if (id) had.add(id);
-    render();
+  // the exhibits list, a card in the stack: every exhibit the lead put up, by slice or newest first, a press opening
+  // one as a card of its own in front of it
+  const browse = (on: boolean) => stackPress(on ? { kind: 'open', card: EXHIBITS } : { kind: 'close', card: EXHIBITS });
+  const look = (id: string) => {
+    had.add(id);
+    stackPress({ kind: 'open', card: { kind: 'artifact', id } });
   };
   const exhibitsFor = (lead: Agent) => exhibitsOf({ waypoints: lead.lead?.waypoints ?? [], artifacts: lead.lead?.artifacts ?? [] }, groupBy);
   const fresh = (x: Exhibit) => watchFrom !== undefined && x.at > watchFrom && !had.has(x.id);
   const exhibitRow = (x: Exhibit, lead: Agent) => h('button', {
-    class: `tw:grid tw:grid-cols-[88px_1fr] tw:gap-3 tw:items-center tw:w-full tw:text-left tw:p-[6px] tw:bg-transparent tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-surface2 ${opened === x.id ? 'tw:border-ink tw:bg-surface2' : 'tw:border-transparent'}`,
-    title: `${x.title}: open it on the sheet`, attrs: { 'data-part': 'card', 'data-id': x.id }, onclick: () => look(x.id),
+    class: `tw:grid tw:grid-cols-[88px_1fr] tw:gap-3 tw:items-center tw:w-full tw:text-left tw:p-[6px] tw:bg-transparent tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-read tw:transition-colors tw:hover:bg-surface2 ${isOpen(stack, { kind: 'artifact', id: x.id }) ? 'tw:border-ink tw:bg-surface2' : 'tw:border-transparent'}`,
+    title: `${x.title}: open it beside the sheet`, attrs: { 'data-part': 'card', 'data-id': x.id }, onclick: () => look(x.id),
   },
     h('span', { class: 'tw:block tw:h-[54px] tw:bg-surface2 tw:border tw:border-solid tw:border-hair-card tw:overflow-hidden' },
       x.image ? h('img', { class: 'tw:block tw:w-full tw:h-full tw:object-cover tw:object-top', src: artifactUrl(lead.id, x, 'jpg'), alt: '' }) : null),
@@ -320,18 +324,14 @@ export function openStream(ui: CommsUi): void {
         h('span', { class: 'tw:truncate' }, x.title)),
       h('span', { class: 'tw:block tw:text-[12.5px] tw:text-muted' }, `${groupBy === 'newest' ? `Slice ${x.slice} · ` : ''}${when(x.at)}`)));
   const renderGallery = (lead: Agent | undefined) => {
-    show(gallery, browsing);
-    if (!lead || !browsing) return;
+    if (!lead || !isOpen(stack, EXHIBITS)) return;
     const groups = exhibitsFor(lead);
-    keyed(gallery, JSON.stringify([lead.id, groups, groupBy, opened, [...had]]), () => {
+    keyed(gallery, JSON.stringify([lead.id, groups, groupBy, stack.map(cardKey), [...had]]), () => {
       const by = (b: ExhibitsBy, label: string) => h('button', {
         class: `tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase ${groupBy === b ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-transparent tw:text-muted tw:border-line tw:hover:text-ink'}`,
         attrs: { 'data-part': `by-${b}` }, onclick: () => { groupBy = b; render(); },
       }, label);
       fill(gallery,
-        h('div', { class: 'tw:flex-none tw:font-display tw:text-[11px] tw:font-semibold tw:tracking-[.12em] tw:uppercase tw:text-label tw:flex tw:justify-between tw:items-center' },
-          h('span', null, `Exhibits · ${lead.name}`),
-          h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[11px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => browse(false) }, 'Close')),
         h('div', { class: 'tw:flex-none tw:flex tw:gap-[6px]' }, by('slice', 'By slice'), by('newest', 'Newest first')),
         h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:overflow-x-hidden tw:flex tw:flex-col tw:gap-4' },
           ...(groups.length
@@ -341,21 +341,77 @@ export function openStream(ui: CommsUi): void {
             : [h('div', { class: 'tw:text-muted tw:text-[13.5px]' }, `${lead.name} hasn't put anything up yet.`)])));
     });
   };
-  // the exhibit opened from the panel, resting on the sheet above the cards that ask for the captain
-  const renderShelf = (lead: Agent) => {
-    const x = exhibitsOf({ waypoints: lead.lead?.waypoints ?? [], artifacts: lead.lead?.artifacts ?? [] }, 'newest')[0]?.exhibits.find((e) => e.id === opened);
-    keyed(shelf, JSON.stringify([lead.id, x ?? null]), () => fill(shelf, x ? openedEl(lead, x) : null));
+  // the stack beside the sheet: a card each, the front one last and whole, the older ones' spines showing above it.
+  // Each card's element is kept while it's open, and only moved: an exhibit's page isn't loaded again, nor what's
+  // typed to the lead lost, as the cards change places
+  const SPINE = 30;
+  const cardEls = new Map<string, { el: HTMLElement; spine: HTMLElement; inner: HTMLElement }>();
+  const cardEl = (card: Card) => {
+    const key = cardKey(card);
+    const kept = cardEls.get(key);
+    if (kept) return kept;
+    const spine = h('div', {
+      class: 'tw:flex-none tw:h-[30px] tw:flex tw:items-center tw:gap-[6px] tw:pl-[10px] tw:pr-[6px] tw:border-0 tw:border-b tw:border-solid tw:border-hair-card tw:text-[13px] tw:whitespace-nowrap tw:cursor-pointer',
+      title: 'Bring it forward ([ and ] move between the cards)', attrs: { 'data-part': 'spine' }, onclick: () => stackPress({ kind: 'forward', card }),
+    });
+    const inner = card.kind === 'talk' ? panel : card.kind === 'exhibits' ? gallery : h('div', null);
+    const el = h('div', {
+      class: 'cos-stacked tw:pointer-events-auto tw:absolute tw:left-0 tw:right-0 tw:bottom-0 tw:flex tw:flex-col tw:bg-panel tw:border tw:border-solid tw:border-line cos-slide',
+      attrs: { 'data-part': `card-${card.kind}`, 'data-key': key },
+    }, spine, h('div', { class: 'tw:flex-1 tw:min-h-0 tw:overflow-y-auto tw:overflow-x-hidden tw:px-4 tw:py-3' }, inner));
+    const made = { el, spine, inner };
+    cardEls.set(key, made);
+    return made;
   };
-  const openedEl = (lead: Agent, x: Exhibit) =>
-    h('div', { class: TW.card, attrs: { 'data-part': 'exhibit' } },
-      h('div', { class: 'tw:flex tw:justify-between tw:items-center tw:mb-2 tw:gap-2' },
-        h('div', { class: `${TW.ch} tw:truncate` }, `Exhibit · ${x.title} · slice ${x.slice}`),
-        h('div', { class: 'tw:flex tw:gap-[6px]' },
-          h('a', { class: TW.btn, href: artifactUrl(lead.id, x, 'html'), target: '_blank', rel: 'noopener' }, 'New tab'),
-          button('Close', false, () => look(null)))),
-      x.image
-        ? h('img', { class: 'tw:block tw:w-full tw:border tw:border-solid tw:border-hair-card', src: artifactUrl(lead.id, x, 'jpg'), alt: x.title })
-        : h('iframe', { class: 'tw:block tw:w-full tw:h-[260px] tw:border-0 tw:bg-white', src: artifactUrl(lead.id, x, 'html'), title: x.title }));
+  const drawCardBody = (card: Card, inner: HTMLElement, lead: Agent) => {
+    switch (card.kind) {
+      case 'pr': {
+        const key = JSON.stringify([focus.shownPrs().find((b) => b.pr.repo === card.repo && b.pr.number === card.number) ?? null, focus.reviews.get(`${card.repo}#${card.number}`) ?? null, lead.lead?.prs, lead.lead?.landed]);
+        return keyed(inner, key, () => fill(inner, prCard(ui, card, lead)));
+      }
+      case 'artifact':
+        return keyed(inner, JSON.stringify([lead.id, lead.lead?.artifacts?.find((a) => a.id === card.id) ?? null]), () => fill(inner, artifactCard(card.id, lead, when)));
+      case 'question':
+        return keyed(inner, JSON.stringify([lead.id, lead.lead?.questions?.find((q) => q.id === card.id) ?? null]), () => fill(inner, questionCard(ui, card.id, lead)));
+      case 'talk':
+      case 'exhibits':
+        return undefined;
+    }
+  };
+  const renderStack = (lead: Agent | undefined) => {
+    const open = lead && !mustering ? stack : [];
+    const keys = new Set(open.map(cardKey));
+    for (const [key, { el }] of cardEls) {
+      if (keys.has(key)) continue;
+      el.remove();
+      cardEls.delete(key);
+    }
+    viewer.classList.toggle('tw:right-3', !open.length);
+    viewer.classList.toggle('tw:right-[484px]', open.length > 0);
+    if (!lead) return;
+    open.forEach((card, i) => {
+      const { el, spine, inner } = cardEl(card);
+      const front = i === open.length - 1;
+      el.style.top = `${i * SPINE}px`;
+      el.style.zIndex = String(i + 1);
+      el.classList.toggle('tw:shadow-lift-4', front);
+      el.classList.toggle('tw:shadow-lift-2', !front);
+      el.toggleAttribute('data-front', front);
+      const { glyph, name, state } = namedOf(card, lead);
+      const close = h('button', {
+        class: 'tw:flex-none tw:w-6 tw:h-6 tw:bg-transparent tw:border-0 tw:text-muted tw:text-[15px] tw:cursor-pointer tw:hover:text-ink',
+        title: front ? 'Close it (Esc)' : 'Close it', attrs: { 'data-part': 'close' },
+        onclick: (e: Event) => { e.stopPropagation(); stackPress({ kind: 'close', card }); },
+      }, '×');
+      keyed(spine, JSON.stringify([glyph, name, state, front]), () => fill(spine,
+        h('span', { class: 'tw:font-mono tw:text-[10.5px] tw:font-semibold tw:text-muted' }, glyph),
+        h('span', { class: `tw:truncate ${front ? 'tw:font-semibold' : ''}` }, name),
+        state ? h('span', { class: 'tw:text-muted tw:text-[12px]' }, state) : null,
+        h('span', { class: 'tw:flex-1' }), close));
+      drawCardBody(card, inner, lead);
+      if (!el.isConnected) stackEl.append(el);
+    });
+  };
 
   // the sheet's head: the goal, the lead (Talk), what came in since the watch began, and the strip
   const renderHead = (lead: Agent) => {
@@ -363,26 +419,25 @@ export function openStream(ui: CommsUi): void {
     const project = focus.project(lead.projectId);
     const from = watchFrom;
     const since = from === undefined ? [] : entries.filter((e) => e.at > from && e.kind !== 'you');
-    const shown = work?.artifacts ?? [];
+    const shown = (work?.artifacts ?? []).filter((x) => !isRecap(x.id));
     const unseen = watchFrom === undefined ? 0 : shown.filter((x) => x.at > (watchFrom ?? 0) && !had.has(x.id)).length;
     const says = [plural(since.length, 'update'), ...bundleSays(since)];
-    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, shown.length, unseen, browsing, talking]);
-    renderShelf(lead);
+    const key = JSON.stringify([lead.id, project?.name, work?.title, lead.name, lead.status, since.length ? says : null, shown.length, unseen, isOpen(stack, EXHIBITS), isOpen(stack, TALK)]);
     keyed(head, key, () => fill(head,
       h('div', { class: 'tw:grid tw:grid-cols-[1fr_auto_auto_auto] tw:gap-x-3 tw:gap-y-[2px] tw:px-[18px] tw:pt-[14px] tw:pb-[10px] tw:border-b tw:border-solid tw:border-hair-card' },
         h('span', { class: TW.label }, project?.name ?? ''),
         h('span', { class: 'tw:col-start-1 tw:font-display tw:text-[19px]/[1.25] tw:font-semibold tw:tracking-[.02em]' }, work?.title ?? lead.name),
         h('button', {
           class: 'tw:row-span-2 tw:col-start-2 tw:row-start-1 tw:self-center tw:text-[13px] tw:text-muted tw:flex tw:items-center tw:gap-[6px] tw:bg-transparent tw:border-0 tw:p-0 tw:cursor-pointer tw:font-read tw:hover:text-ink',
-          title: `Talk to ${lead.name} (T)`, attrs: { 'data-part': 'who' }, onclick: () => talk(!talking),
+          title: `Talk to ${lead.name} (T)`, attrs: { 'data-part': 'who' }, onclick: () => talk(!isOpen(stack, TALK)),
         }, dotEl(lead), `${lead.name} · ${doing(lead.status)}`),
         h('button', {
           class: 'tw:row-span-2 tw:col-start-3 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:border-line tw:bg-surface tw:text-ink tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:rounded-none tw:cursor-pointer tw:hover:bg-surface2',
           title: `View ${lead.name}'s goal in its room: its goal viewing station, tuned to it (B)`, attrs: { 'data-part': 'beam-here' }, onclick: () => ui.goToAgent(lead.id),
         }, 'View in room'),
         h('button', {
-          class: `tw:row-span-2 tw:col-start-4 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:flex tw:items-center tw:gap-[6px] ${browsing ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-surface tw:text-ink tw:border-line tw:hover:bg-surface2'}`,
-          title: 'What the lead put up to look at, by slice or newest first (E)', attrs: { 'data-part': 'exhibits' }, onclick: () => browse(!browsing),
+          class: `tw:row-span-2 tw:col-start-4 tw:row-start-1 tw:self-center tw:h-6 tw:px-[10px] tw:border tw:border-solid tw:rounded-none tw:cursor-pointer tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:flex tw:items-center tw:gap-[6px] ${isOpen(stack, EXHIBITS) ? 'tw:bg-ink tw:text-[#111] tw:border-ink' : 'tw:bg-surface tw:text-ink tw:border-line tw:hover:bg-surface2'}`,
+          title: 'What the lead put up to look at, by slice or newest first (E)', attrs: { 'data-part': 'exhibits' }, onclick: () => browse(!isOpen(stack, EXHIBITS)),
         }, `Exhibits · ${shown.length}`, unseen ? h('span', { class: 'tw:normal-case tw:tracking-normal tw:font-read tw:font-medium' }, `${unseen} new`) : null)),
       since.length
         ? h('div', { class: 'tw:mx-[18px] tw:mt-[10px] tw:text-[13px] tw:text-muted tw:flex tw:gap-[14px] tw:whitespace-nowrap tw:overflow-hidden', attrs: { 'data-part': 'since' } },
@@ -410,7 +465,7 @@ export function openStream(ui: CommsUi): void {
         settled = { lead: lead.id, el: decisionCard(item, a, lead) };
         els.push(settled.el);
       } else if (settled?.lead === lead.id) els.push(faded(settled.el, lead));
-      if (item && ready) els.push(wordCard(item));
+      if (item && ready) els.push(wordCard(item, lead));
       for (const l of mineLanded) els.push(landedCard(l));
       const live = previewCard(lead);
       if (live) els.push(live);
@@ -435,7 +490,9 @@ export function openStream(ui: CommsUi): void {
       h('div', { class: TW.ch }, several(item) ? `Decisions · ${item.cos?.asks.length} from ${lead.name}` : `Decision · from ${lead.name}`),
       several(item) ? null : h('div', { class: 'tw:text-[16px] tw:mt-[3px] tw:mb-1' }, item.what),
       item.cos ? h('div', { class: 'cos-md tw:text-[14px]/[1.6] tw:text-ink tw:mt-2 tw:max-w-[68ch]', attrs: { 'data-part': 'brief' }, innerHTML: markdownHtml(briefOf(item.cos)) }) : null,
-      ...actsEl(item, a, 'tw:mt-[10px]'));
+      // what it mentions, each opening its card beside the sheet: a pull request's card merges it, so More goes
+      item.mentions?.length ? mentionsRow(item.mentions, lead, (m) => stackPress({ kind: 'toggle', card: m })) : null,
+      ...actsEl(item, a, 'tw:mt-[10px]', item.mentions?.some((m) => m.kind === 'pr') ? () => null : moreFold));
 
   // a decision's actions (actsOf): Make it so on the pick, the other choices named for what they do, then Discuss (the
   // panel slides in with the decision quoted, and what's said goes to its lead about it) and Got it; their open pull
@@ -496,7 +553,11 @@ export function openStream(ui: CommsUi): void {
     b.dataset.act = act.kind;
     return b;
   };
-  const actsEl = (item: InboxItem, a: Attention, gap: string): HTMLElement[] => {
+  // their open pull requests, folded under More where nothing on the card mentions them
+  const moreFold = (merges: HTMLElement[]): HTMLElement | null =>
+    h('details', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
+      h('div', { class: 'cos-acts tw:mt-2' }, ...merges));
+  const actsEl = (item: InboxItem, a: Attention, gap: string, more = moreFold): HTMLElement[] => {
     const lead = 'agent' in a ? a.agent : undefined;
     const q = lead && a.kind === 'question' ? openQuestion(lead) : undefined;
     const merges = lead ? mergesOf(ui, lead) : [];
@@ -531,10 +592,7 @@ export function openStream(ui: CommsUi): void {
           lead ? quiet('Discuss', `Talk it over with ${lead.name}: what you say goes to them about this`, () => discuss(item, lead.id)) : null,
           acts.ack ? got : null,
           turnFeedback(a))),
-      acts.more
-        ? h('details', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted' }, h('summary', { class: 'tw:cursor-pointer tw:hover:text-ink' }, 'More · their pull requests'),
-          h('div', { class: 'cos-acts tw:mt-2' }, ...merges))
-        : null,
+      acts.more ? more(merges) : null,
     ].filter((e) => e !== null);
   };
   // moving work is done at once, as the inbox's `move`: the receiving lead is told now (handoverRules.ts)
@@ -577,13 +635,13 @@ export function openStream(ui: CommsUi): void {
   const turnFeedback = (a: Attention): HTMLElement | null => ('agent' in a ? feedbackEl(a.agent, readOf(a.agent)?.turnUuid, 'comms') : null);
 
   // words the chief of staff has ready for the lead: sent with a press, or heard (Got it), nothing sent
-  const wordCard = (item: InboxItem) => {
-    const lead = focus.agent(item.agentId ?? '');
+  const wordCard = (item: InboxItem, lead: Agent) => {
     const send = button('Send', true, () => void busy(send, () => inbox.decide(item.id, { send: true }).then(refreshInbox), ui.error));
     const got = button('Got it', false, () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
     return h('div', { class: TW.card, attrs: { 'data-part': 'word' } },
       h('div', { class: TW.ch }, 'Word ready · the chief of staff'),
       h('div', { class: 'tw:text-[13.5px] tw:mt-[3px]' }, item.cos?.message ?? item.what),
+      item.mentions?.length ? mentionsRow(item.mentions, lead, (m) => stackPress({ kind: 'toggle', card: m })) : null,
       h('div', { class: 'tw:flex tw:flex-wrap tw:items-center tw:gap-[6px] tw:mt-[10px]' }, got, send, h('span', { class: 'tw:flex-1' }), feedbackEl(lead, readOf(lead)?.turnUuid, 'comms')));
   };
 
@@ -704,22 +762,16 @@ export function openStream(ui: CommsUi): void {
       ...(a ? actsEl(f.item, a, 'tw:mt-2') : []));
   };
 
-  // the panel, slid in from the right to talk to the lead: their words and the captain's, and the box
+  // Talk, a card in the stack: the lead's words and the user's, and the box
   const renderTalk = (lead: Agent | undefined) => {
-    // opening, the panel shows the lead's latest words from their start (what's being asked), once there are some
-    if (talking && panel.classList.contains('tw:hidden')) findLatest = true;
-    show(panel, talking);
-    viewer.classList.toggle('tw:right-3', !talking && !browsing);
-    viewer.classList.toggle('tw:right-[484px]', talking || browsing);
-    if (!lead) return;
-    const close = h('button', { class: 'tw:bg-transparent tw:border-0 tw:p-0 tw:text-label tw:cursor-pointer tw:font-display tw:text-[11px] tw:tracking-[.12em] tw:uppercase tw:hover:text-ink', onclick: () => talk(false) }, 'Close');
-    fill(talkHead, h('span', null, `Comms · ${lead.name}`), close);
+    const talking = isOpen(stack, TALK);
+    if (!lead || !talking) return;
     show(topic, !!discussing);
     fill(topic, discussing ? h('div', null, h('small', { class: 'tw:block tw:text-[12.5px] tw:text-muted' }, 'Discussing'), discussing.what) : null);
     box.placeholder = `Talk to ${lead.name}`;
     const key = `${lead.id}|${entries.at(-1)?.at ?? 0}|${entries.length}|${JSON.stringify(feedback.pressed())}`;
     if (said.dataset.key !== key) drawSaid(lead, key);
-    if (!findLatest || !talking || !entries.length) return;
+    if (!findLatest || !entries.length) return;
     findLatest = false;
     const latest = [...said.querySelectorAll<HTMLElement>('[data-from=lead]')].at(-1);
     said.scrollTop = latest ? latest.offsetTop - said.offsetTop : said.scrollHeight;
@@ -773,12 +825,13 @@ export function openStream(ui: CommsUi): void {
   const render = () => {
     const leads = allLeads();
     if (!taking) ({ conn } = watchNow());
-    if (!conn) talking = false;
+    if (!conn) stack = [];
     const all = filed(open, conn, watchNow().stoodBy);
     const lead = conn ? focus.agent(conn) : undefined;
     renderHud(all, lead);
     renderRail(leads, all);
     renderHail(all);
+    renderStack(lead);
     renderTalk(lead);
     renderGallery(lead);
     show(muster, mustering);
@@ -792,6 +845,7 @@ export function openStream(ui: CommsUi): void {
     if (conn !== fetched) picked();
     renderHead(lead);
     renderCards(lead);
+    lightMentions(cards, (m) => stack.some((c) => c.kind === m.kind && 'id' in c && c.id === m.id));
     const last = entries.at(-1)?.at;
     if (last !== undefined) markSeen(lead.id, last);
   };
@@ -828,24 +882,21 @@ export function openStream(ui: CommsUi): void {
   // the bridge's keys: M stands down (or brings the muster up), T talks (Esc stops), B beams to the lead at the conn,
   // 1–9 take the conn of a berth, 0 the direct line to the chief of staff
   const keys = (e: KeyboardEvent) => {
-    // Esc puts the panel away before it closes Comms
-    if (e.key === 'Escape' && talking) {
+    // Esc closes the front card, one at a time, before it closes Comms
+    if (e.key === 'Escape' && stack.length && !mustering) {
       e.preventDefault();
       e.stopPropagation();
-      return talk(false);
-    }
-    // then the exhibit open on the sheet, then their panel
-    if (e.key === 'Escape' && (opened || browsing)) {
-      e.preventDefault();
-      e.stopPropagation();
-      return opened ? look(null) : browse(false);
+      return stackPress({ kind: 'close-front' });
     }
     if (e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement || e.metaKey || e.ctrlKey || e.altKey) return;
     const berth = /^Digit([1-9])$/.exec(e.code);
     if (e.code === 'KeyM') muster_();
-    else if (e.code === 'KeyT') talk(!talking);
+    else if (e.code === 'KeyT') talk(!isOpen(stack, TALK));
     else if (e.code === 'KeyB' && conn) ui.goToAgent(conn);
-    else if (e.code === 'KeyE' && conn) browse(!browsing);
+    else if (e.code === 'KeyE' && conn) browse(!isOpen(stack, EXHIBITS));
+    // [ and ] move between the cards; G opens the front pull request on GitHub (merging has no key: M is the muster)
+    else if ((e.key === '[' || e.key === ']') && stack.length > 1) stackPress({ kind: 'cycle', by: e.key === ']' ? 1 : -1 });
+    else if (e.code === 'KeyG' && frontOf(stack)?.kind === 'pr') stackEl.querySelector<HTMLAnchorElement>('[data-front] [data-part=github]')?.click();
     else if (e.code === 'Digit0') takeLine();
     else if (berth) {
       const goal = berths(allLeads(), focus.shown).flatMap((s) => s.goals)[Number(berth[1]) - 1];

@@ -68,6 +68,9 @@ export let demoReady: ((repo: string, number: number) => void) | undefined;
 /** Someone reviewing an open demo PR on GitHub, with comments on lines of its code: the review's id. Set while a demo GitHub is around. */
 export let demoReview: ((repo: string, number: number, review: Omit<PrReview, 'id' | 'submittedAt'>, comments?: Omit<ReviewComment, 'author'>[]) => string) | undefined;
 
+/** The lines a demo pull request adds and removes and the files it changes, as gh lists them: made up, but the same for the same number. */
+const demoSize = (n: number) => ({ additions: 12 + ((n * 37) % 140), deletions: (n * 13) % 30, changedFiles: 2 + (n % 6) });
+
 export const demoLayer = Layer.sync(GitHub, () => {
   const repos = new Map<string, FakeRepo>();
   const opened = (r: FakeRepo, name: string, req: { head: string; base: string; title: string; body: string }, isDraft: boolean) => {
@@ -91,6 +94,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
       state: 'OPEN',
       body: req.body,
       headSha: Math.random().toString(16).slice(2, 12).padEnd(10, '0'),
+      ...demoSize(number),
     });
     return { number, url };
   };
@@ -153,6 +157,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
         closes: [],
         createdAt: new Date(start + 86400_000).toISOString(),
         state: 'OPEN',
+        ...demoSize(number),
       }];
       // pairs of PRs closing feature:-labelled issues in both shop repos, so ▶ Preview has a set to bring along
       for (const [title, closes, hoursAgo] of seed.prs ?? []) {
@@ -175,6 +180,7 @@ export const demoLayer = Layer.sync(GitHub, () => {
           updatedAt: new Date(Date.now() - hoursAgo * 3600_000).toISOString(),
           state: 'OPEN',
           body: `Adds ${title.toLowerCase()}.\n\nCloses #${closes}`,
+          ...demoSize(n),
         });
       }
       repos.set(name, { description: seed.description, issues, prs, nextNumber: number + prs.length });

@@ -94,6 +94,12 @@ describe('the exhibits panel', () => {
     expect(all?.exhibits[0]).toEqual({ id: 'flow', title: 'Flow', at: 4, slice: 3, image: true });
   });
 
+  it('leaves out the pull requests’ recaps, whose cards read them typed', () => {
+    const withRecaps = [...artifacts, { id: 'system-recap-11', title: 'System recap: #11', at: 9, slice: 3 }, { id: 'system-recap', title: 'System recap', at: 8, slice: 1 }];
+    expect(exhibitsOf({ waypoints, artifacts: withRecaps }, 'newest')[0]?.exhibits.map((x) => x.id)).toEqual(['flow', 'footer', 'fees', 'old']);
+    expect(exhibitsOf({ waypoints, artifacts: withRecaps }, 'slice').flatMap((g) => g.exhibits.map((x) => x.id))).not.toContain('system-recap-11');
+  });
+
   it('has no groups with nothing shown', () => {
     expect(exhibitsOf({ waypoints, artifacts: [] }, 'slice')).toEqual([]);
     expect(exhibitsOf({ waypoints: [], artifacts: [] }, 'newest')).toEqual([]);

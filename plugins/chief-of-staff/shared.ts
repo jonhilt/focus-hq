@@ -90,6 +90,17 @@ export interface Ask {
   move?: Move;
 }
 
+/**
+ * Something a decision is about, by reference (mentionRules.ts): one of the lead's open pull requests (`id` is
+ * `repo#number`), something they put up to look at (an artifact, by its id on their screen), or their open question.
+ * Built where the inbox item is, on the server, so every view (Comms, the phone, a bot) reads the same ones and only
+ * draws them.
+ */
+export type Mention =
+  | { kind: 'pr'; id: string; repo: string; number: number }
+  | { kind: 'artifact'; id: string }
+  | { kind: 'question'; id: string };
+
 /** A turn as it judged it: its route, the decisions it puts to the user (each with its replies), why, and its words. */
 export interface Verdict {
   route: CosRoute;

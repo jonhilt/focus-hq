@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Side panels grammar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens ----------
+   Brownfield: the page and its mockups are drawn in Comms' own look, dark, value for value from
+   plugins/chief-of-staff/bridge.css (@theme) and bridgeKit.ts (TW). Names follow bridge.css's: --color-*, --shadow-lift-*,
+   --ease-*. The four marked "new" are the only tokens this grammar adds. */
+:root {
+  color-scheme: dark;
+  --color-well: #0b0d10; --color-panel: #15181d; --color-surface: #1b1f25; --color-surface2: #1e232b; --color-line: #3a424e;
+  --color-ink: #e9edf2; --color-muted: #8a94a3; --color-label: #7d8794; --color-attn: #f5a524;
+  --color-hair-rail: rgb(58 66 78 / 45%); --color-hair-card: rgb(233 237 242 / 10%);
+  --color-fail: #e5484d; /* stream.ts's error dot */
+  --font-display: 'Chakra Petch', sans-serif; --font-mono: 'IBM Plex Mono', monospace;
+  --font-read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --shadow-lift-1: 0 1px 0 rgb(0 0 0 / 50%);
+  --shadow-lift-2: 0 6px 16px rgb(0 0 0 / 55%);
+  --shadow-lift-3: 0 14px 36px rgb(0 0 0 / 65%);
+  --shadow-lift-4: 0 20px 50px #000a;
+  --ease-spring: linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --ease-flick: cubic-bezier(.2, .9, .3, 1);
+  --spring-paper: 560ms var(--ease-spring);   /* cos-rise */
+  --spring-card: 420ms var(--ease-spring);
+  --spring-panel: 260ms var(--ease-flick);    /* cos-slide: settles without overshoot */
+  --spring-flick: 220ms var(--ease-flick);    /* cos-drop */
+  /* new */
+  --panel-w: 460px;  /* today a literal in stream.ts (tw:w-[460px]) */
+  --tab-h: 28px;     /* option A */
+  --spine-h: 30px;   /* option B */
+  --strip-w: 34px;   /* option C */
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--color-well); color: var(--color-ink); }
+body { font: 15px/1.6 var(--font-read); overflow-x: hidden;
+  background-image: radial-gradient(ellipse at 50% -20%, #1a2230 0%, transparent 55%); background-repeat: no-repeat; }
+.wrap { max-width: 1260px; margin: 0 auto; padding: 28px 18px 90px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--color-line); padding-bottom: 14px; }
+header.top h1 { font: 600 34px/1.1 var(--font-display); margin: 0; letter-spacing: .02em; }
+header.top h1 small { display: block; font: 500 13px/1.4 var(--font-read); color: var(--color-muted); margin-top: 6px; letter-spacing: 0; }
+nav.tabs { display: flex; border: 1px solid var(--color-line); background: var(--color-panel); }
+nav.tabs button { font: 600 12px var(--font-display); letter-spacing: .1em; text-transform: uppercase; border: 0; background: transparent; padding: 8px 16px; cursor: pointer; color: var(--color-muted); }
+nav.tabs button[aria-selected="true"] { background: var(--color-ink); color: #111; }
+.lede { font-size: 17px; line-height: 1.6; max-width: 920px; margin: 22px 0 18px; }
+.lede b { font-weight: 600; }
+.lookline { font-size: 13.5px; color: var(--color-muted); border-left: 2px solid var(--color-line); padding-left: 12px; max-width: 920px; margin: 0 0 18px; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--color-panel); border: 1px solid var(--color-line); padding: 14px 18px; }
+.box h3, .lbl { font: 600 11px var(--font-display); letter-spacing: .14em; text-transform: uppercase; margin: 0 0 6px; color: var(--color-label); }
+.box ul { margin: 0; padding-left: 18px; } .box li { margin: 5px 0; font-size: 14px; line-height: 1.5; }
+code { font: 12.5px var(--font-mono); background: var(--color-surface2); padding: 0 4px; }
+section.tab { display: none; padding-top: 28px; } section.tab.on { display: block; }
+h2 { font: 600 22px/1.2 var(--font-display); margin: 38px 0 10px; letter-spacing: .02em; }
+h2:first-child { margin-top: 0; }
+p.note { color: var(--color-muted); font-size: 14px; max-width: 880px; }
+.scroll-x { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: var(--color-panel); border: 1px solid var(--color-line); font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-hair-card); vertical-align: top; line-height: 1.5; }
+th { font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-label); background: var(--color-surface); }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; border: 1px solid var(--color-line); color: var(--color-muted); white-space: nowrap; }
+.tag.new { border-color: var(--color-ink); color: var(--color-ink); }
+.tag.miss { border-color: var(--color-attn); color: var(--color-attn); }
+.nouns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.noun { background: var(--color-panel); border: 1px solid var(--color-line); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.noun h3 { font: 600 19px var(--font-display); margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.noun .purpose { font-size: 15px; margin: 0; }
+.noun dl { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; margin: 0; font-size: 13.5px; line-height: 1.5; }
+.noun dt { color: var(--color-muted); }
+.noun dd { margin: 0; }
+.tile { background: var(--color-well); border: 1px solid var(--color-hair-card); padding: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; font: 12.5px/1.45 var(--font-read); }
+.tile .cap { width: 100%; font: 500 10.5px var(--font-mono); color: var(--color-label); }
+.matrix th, .matrix td { text-align: center; padding: 7px 4px; font-size: 13px; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+.matrix thead th { height: 46px; vertical-align: bottom; font-size: 10px; letter-spacing: .08em; }
+.matrix td.y::after { content: '●'; font-size: 11px; color: var(--color-ink); }
+.matrix td.n::after { content: 'NEW'; font: 600 9.5px var(--font-mono); border: 1px solid var(--color-ink); padding: 0 3px; }
+.matrix td.m::after { content: 'MOVED'; font: 600 9.5px var(--font-mono); border: 1px dashed var(--color-muted); color: var(--color-muted); padding: 0 3px; }
+.matrix td:nth-child(even) { background: rgb(255 255 255 / 2%); }
+.legend { font-size: 13px; color: var(--color-muted); margin: 8px 0 0; }
+.principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.principles div { background: var(--color-panel); border: 1px solid var(--color-line); padding: 12px 16px; font-size: 14.5px; line-height: 1.6; }
+.principles b { font: 600 13px var(--font-display); letter-spacing: .06em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.rule { font: 600 19px/1.45 var(--font-read); border-left: 3px solid var(--color-ink); padding-left: 14px; margin: 0 0 14px; max-width: 70ch; }
+.principle p { font-size: 15px; line-height: 1.6; margin: 0 0 10px; max-width: 72ch; }
+.stack { display: grid; grid-template-columns: 1fr .95fr 1.2fr; gap: 22px; align-items: start; margin-top: 12px; }
+.stack .defs h4 { font: 600 13px var(--font-display); letter-spacing: .1em; text-transform: uppercase; margin: 14px 0 2px; }
+.stack .defs h4:first-child { margin-top: 0; }
+.stack .defs p { margin: 0; font-size: 14px; line-height: 1.6; color: #cfd5dd; }
+.iso { position: relative; height: 420px; perspective: 1400px; }
+.iso .rig { position: absolute; left: 50%; top: 58%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-38deg); }
+.iso .pl { position: absolute; display: flex; align-items: flex-end; padding: 6px; font: 600 9.5px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-ink); }
+.iso .g { left: -150px; top: -120px; width: 300px; height: 240px; background: var(--color-well); border: 1px solid var(--color-line); transform: translateZ(0); }
+.iso .r { left: -142px; top: -112px; width: 56px; height: 224px; background: var(--color-panel); border: 1px solid var(--color-hair-rail); transform: translateZ(18px); }
+.iso .s { left: -78px; top: -112px; width: 140px; height: 224px; background: var(--color-surface); border: 1px solid var(--color-line); transform: translateZ(40px); box-shadow: var(--shadow-lift-3); }
+.iso .c { left: -70px; top: -96px; width: 124px; height: 90px; background: var(--color-surface2); border: 1px solid var(--color-hair-card); transform: translateZ(64px); box-shadow: var(--shadow-lift-2); }
+.iso .p1 { left: 70px; top: -112px; width: 76px; height: 224px; background: var(--color-panel); border: 1px solid var(--color-line); transform: translateZ(90px); opacity: .85; }
+.iso .p2 { left: 70px; top: -96px; width: 76px; height: 208px; background: var(--color-panel); border: 1px solid var(--color-line); transform: translateZ(110px); box-shadow: var(--shadow-lift-4); }
+.iso .h { left: 84px; top: -112px; width: 62px; height: 44px; background: var(--color-surface2); border: 1px solid var(--color-attn); transform: translateZ(150px); box-shadow: var(--shadow-lift-4); }
+.tokens td, .tokens th { font-size: 12.5px; padding: 6px 8px; }
+.tokens code { font-size: 11px; }
+.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
+.opt { background: var(--color-panel); border: 1px solid var(--color-line); padding: 14px 16px; font-size: 14px; line-height: 1.55; }
+.opt h4 { font: 600 15px var(--font-display); letter-spacing: .04em; margin: 0 0 6px; }
+.opt.rec { border-color: var(--color-ink); }
+.opt .pill { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: #111; padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.opt p { margin: 6px 0; }
+.opt .talk { color: var(--color-muted); font-size: 13.5px; }
+.verdict-box { margin-top: 16px; background: var(--color-surface); border: 1px solid var(--color-ink); padding: 16px 20px; max-width: 980px; }
+.verdict-box p { margin: 6px 0; font-size: 15px; }
+.scenario { display: grid; grid-template-columns: minmax(280px, .82fr) minmax(0, 1.5fr); gap: 28px; margin: 28px 0 0; padding: 26px 0 0; border-top: 1px solid var(--color-line); align-items: start; }
+.scenario h3 { font: 600 20px var(--font-display); margin: 0 0 6px; letter-spacing: .02em; }
+.scenario h3 .pill { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: #111; padding: 1px 6px; margin-left: 6px; vertical-align: 3px; }
+.scenario .today { font-size: 13.5px; background: var(--color-panel); border-left: 2px solid var(--color-muted); padding: 8px 12px; margin: 10px 0; }
+.scenario p { font-size: 14.5px; margin: 8px 0; line-height: 1.6; max-width: 60ch; }
+.scenario p.why { font-size: 13.5px; color: var(--color-muted); border-top: 1px solid var(--color-hair-card); padding-top: 10px; margin-top: 14px; }
+.scenario p.why b { color: var(--color-ink); font-weight: 600; }
+ol.steps { list-style: none; padding: 0; margin: 14px 0 0; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; cursor: pointer; color: var(--color-muted); font-size: 14px; }
+ol.steps li::before { content: counter(s); font: 600 12px var(--font-mono); padding-top: 2px; }
+ol.steps li.on { color: var(--color-ink); background: var(--color-panel); box-shadow: inset 2px 0 0 var(--color-ink); }
+ol.steps li.on b { font-weight: 700; }
+.table { position: relative; background: #07080a; border: 1px solid var(--color-line); padding: 12px; }
+.table .replay { position: absolute; bottom: 7px; right: 12px; z-index: 50; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--color-line); background: var(--color-panel); color: var(--color-ink); cursor: pointer; display: grid; place-items: center; }
+.table .replay svg { width: 15px; height: 15px; }
+.table .capline { font: 500 12px var(--font-mono); color: var(--color-muted); margin: 10px 44px 0 2px; min-height: 20px; display: flex; justify-content: space-between; gap: 12px; }
+.table .capline .stepcap { flex: none; }
+.mk-wrap { position: relative; width: 100%; aspect-ratio: 980 / 600; overflow: hidden; }
+.handover td:first-child { font-weight: 600; white-space: nowrap; }
+.data td:nth-child(2) { width: 120px; }
+
+/* ================= Mockup: Comms as built (stream.ts), at 980 × 600, scaled to its column ================= */
+.mk { position: absolute; left: 0; top: 0; width: 980px; height: 600px; transform-origin: 0 0; transform: scale(var(--s, 1)); overflow: hidden;
+  background: var(--color-well) radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%); color: var(--color-ink); font: 12.5px/1.45 var(--font-read); }
+.mk * { box-sizing: border-box; }
+.mk .hud { position: absolute; left: 12px; right: 12px; top: 8px; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.mk .where { font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-muted); }
+.mk .where b { color: var(--color-ink); font-weight: 600; }
+.mk .where .w2, .mk.conn2 .where .w1 { display: none; }
+.mk.conn2 .where .w2 { display: inline; }
+.chip { display: flex; align-items: center; height: 24px; border: 1px solid var(--color-line); background: var(--color-panel); font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
+.chip span { padding: 0 9px; color: var(--color-muted); }
+.chip .cnt { width: 26px; height: 22px; line-height: 22px; text-align: center; padding: 0; position: relative; overflow: hidden; }
+.chip .cnt i { position: absolute; inset: 0; font-style: normal; transition: transform var(--spring-card), opacity var(--spring-card); }
+.chip .cnt i + i { transform: translateY(100%); opacity: 0; }
+.mk.stood .chip .cnt i:first-child { transform: translateY(-100%); opacity: 0; }
+.mk.stood .chip .cnt i + i { transform: none; opacity: 1; }
+.mk .rail { position: absolute; left: 12px; top: 46px; width: 150px; }
+.mk .proj { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); margin: 2px 4px 5px; }
+.berth { display: grid; grid-template-columns: 10px 1fr 20px; align-items: center; gap: 6px; min-height: 30px; padding: 4px 6px 4px 8px; margin-bottom: 6px; background: var(--color-panel); border: 1px solid var(--color-hair-rail); box-shadow: var(--shadow-lift-1); font-size: 12px; opacity: .55; transition: opacity var(--spring-card), border-color var(--spring-card); }
+.berth.at { opacity: 1; background: var(--color-surface); border-color: var(--color-line); }
+.mk.conn2 .berth.at { opacity: .55; background: var(--color-panel); border-color: var(--color-hair-rail); }
+.mk.conn2 .berth.b2 { opacity: 1; background: var(--color-surface); border-color: var(--color-line); }
+.berth .n { width: 20px; height: 16px; font: 600 10.5px/16px var(--font-mono); text-align: center; color: var(--color-muted); }
+.berth .n.attn { color: var(--color-attn); box-shadow: inset 0 0 0 1px var(--color-attn); }
+.berth .n.later { opacity: 0; transition: opacity var(--spring-card); }
+.mk.stood .berth .n.later { opacity: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--color-muted); }
+.dot.work { background: var(--color-ink); }
+.sheet { position: absolute; left: 174px; top: 46px; width: 470px; height: 542px; background: var(--color-surface); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-3);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.sheet .face { position: absolute; inset: 0; transition: opacity var(--spring-card), transform var(--spring-card); }
+.sheet .face.f2 { opacity: 0; transform: translateY(10px); }
+.mk.conn2 .sheet .face.f1 { opacity: 0; transform: translateY(-10px); }
+.mk.conn2 .sheet .face.f2 { opacity: 1; transform: none; }
+.shead { padding: 11px 16px 9px; border-bottom: 1px solid var(--color-hair-card); display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; }
+.shead .p { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); }
+.shead .g { font: 600 15.5px/1.25 var(--font-display); letter-spacing: .02em; grid-column: 1; }
+.shead .who { grid-column: 1; font-size: 11.5px; color: var(--color-muted); display: flex; align-items: center; gap: 6px; }
+.shead .acts { grid-column: 2; grid-row: 1 / span 3; align-self: center; display: flex; gap: 5px; }
+.since { margin: 9px 16px 0; font-size: 11.5px; color: var(--color-muted); white-space: nowrap; }
+.since b { color: var(--color-ink); font-weight: 500; }
+.btn { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; font: 600 10px var(--font-display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--color-line); color: var(--color-ink); background: var(--color-surface); white-space: nowrap; transition: background .25s, color .25s, box-shadow .25s; }
+.btn.go { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--color-muted); padding: 0 4px; }
+.x { width: 18px; height: 18px; display: grid; place-items: center; color: var(--color-muted); font: 14px/1 var(--font-read); flex: none; }
+.card { background: var(--color-surface2); border: 1px solid var(--color-hair-card); box-shadow: var(--shadow-lift-2); padding: 11px 13px; }
+.dcard { margin: 10px 14px 0; transition: opacity 500ms; }
+.ch { font: 600 10px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.ch .t2 { display: none; }
+.mk.merged .dcard { opacity: .4; }
+.mk.merged .dcard .ch .t1 { display: none; }
+.mk.merged .dcard .ch .t2 { display: inline; }
+.dcard .what { font-size: 15px; margin: 3px 0 4px; }
+.dcard .brief { font-size: 12.5px; line-height: 1.6; color: #d6dbe2; margin: 6px 0 0; }
+.mentions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mentions .lbl2 { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); margin-right: 2px; }
+/* a mention: what it is (glyph), its name, where it stands, and a slot that lights while its panel is open */
+.mn { display: inline-grid; grid-template-columns: auto auto auto 8px; align-items: center; gap: 6px; height: 24px; padding: 0 7px; border: 1px solid var(--color-line); background: var(--color-surface); font-size: 11.5px; white-space: nowrap; transition: border-color .3s, box-shadow .3s; }
+.mn .gl { font: 600 9.5px var(--font-mono); color: var(--color-muted); letter-spacing: .04em; }
+.mn .st { color: var(--color-muted); font-size: 11px; }
+.mn .st .s2 { display: none; }
+.mk.merged .mn.m-pr .st .s1 { display: none; }
+.mk.merged .mn.m-pr .st .s2 { display: inline; }
+.mn .slot { width: 7px; height: 7px; box-shadow: inset 0 0 0 1px var(--color-muted); transition: background .3s, box-shadow .3s; }
+.mk.o-pr .mn.m-pr .slot, .mk.o-ex .mn.m-ex .slot { background: var(--color-ink); box-shadow: none; }
+.mk.o-pr .mn.m-pr, .mk.o-ex .mn.m-ex { border-color: var(--color-muted); }
+.choice { margin-top: 10px; padding: 8px 11px; border: 1px solid var(--color-line); background: var(--color-surface); }
+.choice b { font: 600 11px var(--font-display); letter-spacing: .08em; text-transform: uppercase; }
+.choice span { display: block; color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+.arow { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+.empty2 { margin: 16px; padding: 30px 16px; border: 1px dashed var(--color-line); color: var(--color-muted); text-align: center; font-size: 12.5px; }
+
+/* the views a panel shows, the same in every option */
+.vh { display: flex; align-items: center; gap: 6px; }
+.kind { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); white-space: nowrap; }
+.sp { flex: 1; }
+.pv { position: absolute; inset: 0; padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.pt { font-size: 14px; line-height: 1.3; }
+.pm { font: 10.5px var(--font-mono); color: var(--color-muted); margin-top: -4px; }
+.st3 { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--color-hair-card); }
+.st3 div { padding: 5px 8px; border-left: 1px solid var(--color-hair-card); }
+.st3 div:first-child { border-left: 0; }
+.st3 i { display: block; font: normal 600 9px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.st3 b { font-weight: 500; font-size: 12px; }
+.qa { border: 1px solid var(--color-hair-card); background: var(--color-surface); padding: 8px 10px; }
+.qa .vh b { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: #111; padding: 0 5px; }
+.qa p { margin: 6px 0 4px; font-size: 11.5px; line-height: 1.5; color: #d6dbe2; }
+.qa ul { list-style: none; padding: 0; margin: 0; font-size: 11.5px; }
+.qa li { display: grid; grid-template-columns: 14px 1fr; color: #d6dbe2; }
+.qa li::before { content: '✓'; color: var(--color-muted); }
+.spot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--color-hair-card); font-size: 11.5px; display: grid; grid-template-columns: 1fr auto; gap: 6px; color: #d6dbe2; }
+.spot .mono, .mono { font-family: var(--font-mono); font-size: 10.5px; }
+.chg .vh { margin-bottom: 3px; }
+.chg .row { display: grid; grid-template-columns: 1fr 60px 58px; gap: 6px; font: 10.5px/1.75 var(--font-mono); color: #d6dbe2; }
+.chg .row i { font-style: normal; color: var(--color-muted); }
+.chg .row span:last-child { text-align: right; color: var(--color-muted); }
+.foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+.foot .btn.go { justify-content: center; height: 28px; font-size: 10.5px; }
+.foot small { color: var(--color-muted); font-size: 10.5px; text-align: center; }
+.foot .m2 { display: none; }
+.mk.merged .foot .btn.go { background: var(--color-surface); color: var(--color-ink); border-color: var(--color-line); }
+.mk.merged .foot .m1 { display: none; }
+.mk.merged .foot .m2 { display: inline; }
+.mk.merged .foot small { visibility: hidden; }
+.mk.gh .btn.ghb { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.page { background: #fff; color: #222; padding: 14px; display: flex; gap: 14px; font: 12px/1.4 system-ui, sans-serif; }
+.page .ph { width: 96px; height: 96px; background: repeating-linear-gradient(45deg, #c9c9c9, #c9c9c9 8px, #ededed 8px, #ededed 16px); flex: none; }
+.page h5 { margin: 0 0 4px; font-size: 15px; }
+.page .low { color: #222; font-weight: 600; margin: 8px 0; border-left: 3px solid #222; padding-left: 6px; }
+.page .add { background: #222; color: #fff; padding: 6px 10px; display: inline-block; font-size: 11px; }
+.from { font-size: 11.5px; color: var(--color-muted); border-top: 1px solid var(--color-hair-card); padding-top: 8px; }
+.from b { color: var(--color-ink); font-weight: 500; }
+.topic { border-left: 2px solid var(--color-attn); padding-left: 10px; font-size: 12.5px; }
+.said { display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.5; }
+.said .who2 { font: 600 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); display: block; }
+.said .you { color: #cfd5dd; }
+.tbox { margin-top: auto; height: 50px; border: 1px solid var(--color-line); padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
+.hail { position: absolute; top: 40px; right: 12px; width: 268px; z-index: 40; background: var(--color-surface2); border: 1px solid var(--color-attn); box-shadow: var(--shadow-lift-4); padding: 9px 12px 10px 14px; transform-origin: top right;
+  opacity: 0; transform: translateY(-14px) scale(.92); transition: transform var(--spring-flick), opacity var(--spring-flick); pointer-events: none; }
+.mk.hailing .hail { opacity: 1; transform: none; }
+.hail .ch { color: var(--color-attn); }
+.hail p { margin: 4px 0 8px; font-size: 12.5px; }
+
+/* ----- Option A: one panel, a tab for each thing opened ----- */
+.optA .dock { position: absolute; left: 656px; top: 46px; width: 312px; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-4);
+  transform: translateX(340px); transition: transform var(--spring-panel); }
+.optA.o-pr .dock, .optA.o-ex .dock, .optA.o-talk .dock { transform: none; }
+.optA .tabs { position: relative; height: var(--tab-h); border-bottom: 1px solid var(--color-line); background: var(--color-well); }
+.optA .tb { position: absolute; bottom: -1px; height: 25px; display: flex; align-items: center; gap: 5px; padding: 0 7px; font: 600 9.5px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-muted);
+  border: 1px solid transparent; border-bottom: 0; opacity: 0; transform: translateY(6px); transition: transform var(--spring-panel), opacity var(--spring-panel), background .2s, color .2s; white-space: nowrap; }
+.optA .tb .x { width: 12px; height: 12px; font-size: 11px; }
+.optA .t-talk { left: 4px; opacity: 1; transform: none; }
+.optA .t-pr { left: 58px; }
+.optA .t-ex { left: 186px; }
+.optA.o-pr .t-pr, .optA.o-ex .t-ex { opacity: 1; transform: none; }
+.optA.o-ex:not(.o-pr) .t-ex { transform: translateX(-128px); }
+.optA.a-pr .t-pr, .optA.a-ex .t-ex, .optA.a-talk .t-talk { background: var(--color-panel); color: var(--color-ink); border-color: var(--color-line); box-shadow: inset 0 2px 0 var(--color-ink); }
+.optA .dbody { position: absolute; left: 0; right: 0; top: var(--tab-h); bottom: 0; }
+.optA .v { position: absolute; inset: 0; opacity: 0; transform: translateX(10px); transition: opacity var(--spring-panel), transform var(--spring-panel); }
+.optA.a-pr .v-pr, .optA.a-ex .v-ex, .optA.a-talk .v-talk { opacity: 1; transform: none; }
+
+/* ----- Option B: a stack of cards, the older ones' heads left showing as spines ----- */
+.optB .stk { position: absolute; left: 626px; top: 46px; width: 354px; height: 542px; overflow: hidden; }
+.optB .pc { position: absolute; left: 30px; top: 0; width: 312px; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-2);
+  transform: translateX(340px); opacity: 0; transition: transform var(--spring-panel), opacity var(--spring-panel), box-shadow var(--spring-panel); }
+.optB .pc .spine { height: var(--spine-h); display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--color-hair-card); font-size: 11.5px; white-space: nowrap; background: var(--color-panel); }
+.optB .pc .spine .gl { font: 600 9.5px var(--font-mono); color: var(--color-muted); }
+.optB .pc .spine .st { color: var(--color-muted); font-size: 11px; }
+.optB .pc .bd { position: absolute; left: 0; right: 0; top: var(--spine-h); bottom: 0; transition: opacity var(--spring-panel); opacity: .25; }
+.optB .pc .spine .st .s2 { display: none; }
+.mk.merged .pc.c-pr .spine .st .s1 { display: none; }
+.mk.merged .pc.c-pr .spine .st .s2 { display: inline; }
+.optB.pr-0 .c-pr, .optB.ex-0 .c-ex, .optB.talk-0 .c-talk { transform: translateY(0); opacity: 1; z-index: 1; }
+.optB.pr-1 .c-pr, .optB.ex-1 .c-ex, .optB.talk-1 .c-talk { transform: translateY(var(--spine-h)); opacity: 1; z-index: 2; }
+.optB.pr-2 .c-pr, .optB.ex-2 .c-ex, .optB.talk-2 .c-talk { transform: translateY(calc(var(--spine-h) * 2)); opacity: 1; z-index: 3; }
+.optB.top-pr .c-pr, .optB.top-ex .c-ex, .optB.top-talk .c-talk { box-shadow: var(--shadow-lift-4); }
+.optB.top-pr .c-pr .bd, .optB.top-ex .c-ex .bd, .optB.top-talk .c-talk .bd { opacity: 1; }
+.optB.top-pr .c-pr .spine, .optB.top-ex .c-ex .spine, .optB.top-talk .c-talk .spine { font-weight: 600; }
+
+/* ----- Option C: columns in the order opened; the one read is wide, the rest strips ----- */
+.optC .crumbs { position: absolute; left: 622px; top: 46px; width: 346px; height: 22px; font: 500 10.5px/22px var(--font-mono); color: var(--color-muted); white-space: nowrap; overflow: hidden; opacity: 0; transition: opacity var(--spring-panel); }
+.optC.o-pr .crumbs, .optC.o-ex .crumbs { opacity: 1; }
+.optC .crumbs span { display: none; }
+.optC .crumbs b { color: var(--color-ink); font-weight: 500; }
+.optC .col { position: absolute; left: 656px; top: 72px; width: 312px; height: 516px; transform: translateX(340px); opacity: 0; transition: transform var(--spring-panel), opacity var(--spring-panel); }
+.optC .col .wide { position: absolute; inset: 0; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-4); transform-origin: 0 0; transition: transform var(--spring-panel), opacity var(--spring-panel); }
+.optC .col .strip { position: absolute; left: 0; top: 0; width: var(--strip-w); height: 516px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-2); opacity: 0; transition: opacity var(--spring-panel);
+  display: flex; flex-direction: column; align-items: center; padding-top: 10px; gap: 8px; }
+.optC .col .strip span { writing-mode: vertical-rl; font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-muted); white-space: nowrap; }
+.optC .col .strip .gl { writing-mode: horizontal-tb; font: 600 9.5px var(--font-mono); letter-spacing: 0; }
+.optC.s-pr .c-pr .wide, .optC.s-ex .c-ex .wide { opacity: 0; transform: scaleX(.11); }
+.optC.s-pr .c-pr .strip, .optC.s-ex .c-ex .strip { opacity: 1; }
+.optC.pr-w .c-pr, .optC.ex-w .c-ex { transform: none; opacity: 1; }
+.optC.pr-wl .c-pr, .optC.pr-sl .c-pr { transform: translateX(calc(var(--strip-w) * -1)); opacity: 1; }
+.optC.ex-sr .c-ex { transform: translateX(calc(312px - var(--strip-w))); opacity: 1; }
+.optC.cr1 .crumbs .k1, .optC.cr2 .crumbs .k2, .optC.cr3 .crumbs .k3, .optC.cr4 .crumbs .k4 { display: inline; }
+
+/* ----- Today: the card's More fold opened, the Talk panel beside it ----- */
+.today .more { margin-top: 10px; font-size: 11.5px; color: var(--color-muted); }
+.today .mrow { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.today .mrow a { color: var(--color-muted); text-decoration: underline; text-decoration-color: var(--color-line); }
+.today .tk { position: absolute; left: 656px; top: 46px; width: 312px; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-4); }
+
+@media (max-width: 980px) {
+  .cols2, .nouns, .principles, .options { grid-template-columns: 1fr; }
+  .stack { grid-template-columns: 1fr; }
+  .scenario { grid-template-columns: 1fr; }
+  .iso { height: 340px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk { transition: opacity 200ms ease !important; }
+  .optB .pc, .optC .col, .optA .dock, .optA .tb, .optA .v, .hail, .sheet .face { transform: none !important; }
+  .optB.pr-1 .c-pr, .optB.ex-1 .c-ex, .optB.talk-1 .c-talk { transform: translateY(var(--spine-h)) !important; }
+  .optB.pr-2 .c-pr, .optB.ex-2 .c-ex, .optB.talk-2 .c-talk { transform: translateY(calc(var(--spine-h) * 2)) !important; }
+  .optC.pr-wl .c-pr, .optC.pr-sl .c-pr { transform: translateX(calc(var(--strip-w) * -1)) !important; }
+  .optC.ex-sr .c-ex { transform: translateX(calc(312px - var(--strip-w))) !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Side panels grammar<small>Comms · brownfield · what a decision mentions, opened beside it</small></h1>
+  <nav class="tabs" role="tablist">
+    <button data-tab="nouns" aria-selected="true">Nouns</button>
+    <button data-tab="verbs" aria-selected="false">Verbs</button>
+    <button data-tab="layers" aria-selected="false">Layers</button>
+  </nav>
+</header>
+
+<p class="lede">The job: when Comms asks the user to decide something (merge this pull request, pick this layout), they want to look at what the decision is about without leaving it. <b>Every pull request, exhibit or page a decision mentions becomes a link that opens it in a panel on the right, beside the decision, never over it.</b> Panels gather as things are opened, with a way to move between them and close them. The engine already holds every one of these things as data; a panel only renders what it holds, so opening one starts no work and closing one loses nothing. The nouns and verbs below are fixed; three ways of stacking the panels differ only in their layer rules, and the Layers tab acts each one out and recommends one.</p>
+
+<p class="lookline">Drawn in Comms' own look, dark, rather than a light spec sheet: the colours, fonts, lifts and springs are bridge.css's tokens and bridgeKit.ts's pieces, value for value, so each mockup reads as Comms with one rule changed. Brownfield: the starting point is <code>plugins/chief-of-staff/stream.ts</code> as built on 29 October 2026.</p>
+
+<div class="cols2">
+  <div class="box">
+    <h3>Assumptions</h3>
+    <ul>
+      <li>One user, one screen, Comms open for hours: a sovereign app, so dense chrome is fine, but the sheet with its decision stays the thing they look at most.</li>
+      <li>A decision mentions two or three things at most. Four open panels is a lot; past that the oldest closes, since it's only a view.</li>
+      <li>Panels belong to the goal at the conn. Taking another goal's conn puts them away; the engine still holds everything they showed.</li>
+      <li>The sheet never slides or narrows to make room (the user's 28 October rule: it made it bob). Panels open where the Talk panel opens today.</li>
+      <li>Merge in a panel is the merge press Comms already has (<code>mergePress</code>): same label, same guard, same confirm.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>To confirm</h3>
+    <ul>
+      <li>Which of A, B or C. The page recommends B.</li>
+      <li>Should an exhibit opened from the Exhibits list open in a panel too, rather than on the sheet as it does today? The grammar says yes (one way to look at a thing); it changes the 28 October choice.</li>
+      <li>A diff summary needs line counts GitHub has but Focus doesn't fetch (<code>additions</code>, <code>deletions</code>, <code>changedFiles</code>). Fetch them, or show QA's file list without counts?</li>
+      <li>Keys: Esc closes the front panel (as it puts Talk away now), <b>[</b> and <b>]</b> move between panels, <b>G</b> opens the front one on GitHub. Merge keeps no key: M is the muster's in Comms.</li>
+      <li>Should the stack survive a reload, as the conn does, or start empty?</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== NOUNS ============================== -->
+<section class="tab on" id="nouns">
+  <h2>Today</h2>
+  <p class="note">The watch (README.md#the-watch): the rail of goals on the left, the goal at the conn as a sheet in the middle with its decision card resting on it, and one panel on the right, either Talk or the Exhibits list, never both. On the decision card, the lead's open pull requests fold under <b>More · their pull requests</b>: a merge press and a muted title that links straight out to GitHub, and the slice's recap as a picture that opens in a new tab. An exhibit opens on the sheet, above the cards, with a New tab press; a question's option pictures open large over Comms (<code>zoom.ts</code>). Nothing the decision talks about opens beside it.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Today</th><th>Proposed</th><th>Change</th><th>Because</th></tr></thead>
+    <tbody>
+      <tr><td>Goal at the conn (the sheet)</td><td>Sheet</td><td><span class="tag">kept</span></td><td>It's what the user looks at; it doesn't move when panels open.</td></tr>
+      <tr><td>Decision card (<code>decisionCard</code>)</td><td>Decision</td><td><span class="tag">kept</span></td><td>Gains a row of mentions; its answers are unchanged.</td></tr>
+      <tr><td>PR row under More (<code>mergeBox</code>: merge press + GitHub link)</td><td>Mention, and Pull request in a panel</td><td><span class="tag">split</span></td><td>Reviewing needs room the card hasn't got; the card only has to say it's there and where it stands.</td></tr>
+      <tr><td>Recap picture (new tab)</td><td>Part of the Pull request panel</td><td><span class="tag">merged</span></td><td>It's what the PR is reviewed by, so it belongs with the PR.</td></tr>
+      <tr><td>Exhibit open on the sheet (<code>openedEl</code>)</td><td>Exhibit in a panel</td><td><span class="tag">moved</span></td><td>The sheet holds what asks the user; an exhibit is evidence for it. To confirm.</td></tr>
+      <tr><td>Talk panel (<code>data-part="talk"</code>)</td><td>Talk, one kind of panel</td><td><span class="tag">kept</span></td><td>Already a view onto what the engine holds (the lead's words); now it takes its place among the others.</td></tr>
+      <tr><td>Exhibits list panel (<code>data-part="gallery"</code>)</td><td>Exhibits, one kind of panel</td><td><span class="tag">kept</span></td><td>Same reason; its rows become mentions.</td></tr>
+      <tr><td>Talk and Exhibits sharing one slot</td><td>Stack</td><td><span class="tag new">new</span></td><td>Opening one no longer throws the other away.</td></tr>
+      <tr><td>GitHub link on the card</td><td>Jump out, from the Pull request panel</td><td><span class="tag">moved</span></td><td>You go to GitHub after you've looked, from what you looked at.</td></tr>
+      <tr><td>Zoom over Comms (<code>zoom.ts</code>)</td><td>Zoom</td><td><span class="tag">kept</span></td><td>Choosing between a question's pictures needs the whole window, and it's the shortest-lived thing on screen.</td></tr>
+      <tr><td>Rail, berth, muster, hail</td><td>Same</td><td><span class="tag">kept</span></td><td>Untouched. A hail sits above the panels, as it sits above the sheet.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Nouns</h2>
+  <div class="nouns">
+    <div class="noun">
+      <h3>Decision <span class="tag">kept</span></h3>
+      <p class="purpose">What a goal asks of the user right now, answered on its card.</p>
+      <dl><dt>Attributes</dt><dd>Who asks, what, the chief of staff's brief, its choices, and now its mentions.</dd>
+      <dt>States</dt><dd>Waiting · answered (faded until the lead's next one).</dd>
+      <dt>Relations</dt><dd>Rests on the sheet of one goal; mentions any number of held things.</dd>
+      <dt>Today</dt><dd><code>decisionCard</code> in stream.ts.</dd></dl>
+      <div class="tile"><div class="cap">waiting, with its mentions</div>
+        <div class="card" style="width:100%"><div class="ch">Decision · from Lt. Adeyemi</div><div style="font-size:14px;margin-top:2px">Merge webshop-frontend#9?</div>
+        <div class="mentions"><span class="mn m-pr"><span class="gl">PR</span>webshop-frontend#9<span class="st">QA passed</span><i class="slot"></i></span><span class="mn m-ex"><span class="gl">EX</span>Product page, low stock<span class="st">slice 2</span><i class="slot"></i></span></div></div></div>
+    </div>
+    <div class="noun">
+      <h3>Mention <span class="tag new">new</span></h3>
+      <p class="purpose">A way into one thing the engine holds, wherever it's named.</p>
+      <dl><dt>Attributes</dt><dd>What kind (PR a pull request, EX an exhibit, Q a question's page), its name, where it stands, and whether its panel is open.</dd>
+      <dt>States</dt><dd>Closed (an empty slot) · open (the slot lit) · its thing changed (the state text says so: merged, QA failed).</dd>
+      <dt>Relations</dt><dd>Sits on a decision, a panel or a Talk message; points at one held thing.</dd>
+      <dt>Today</dt><dd>The GitHub link in <code>mergeBox</code>, the recap's link, an Exhibits row.</dd></dl>
+      <div class="tile"><div class="cap">closed · open · its thing merged</div>
+        <span class="mn"><span class="gl">PR</span>webshop-frontend#9<span class="st">QA passed</span><i class="slot"></i></span>
+        <span class="mn" style="border-color:var(--color-muted)"><span class="gl">PR</span>webshop-frontend#9<span class="st">QA passed</span><i class="slot" style="background:var(--color-ink);box-shadow:none"></i></span>
+        <span class="mn"><span class="gl">PR</span>webshop-frontend#9<span class="st">merged</span><i class="slot"></i></span></div>
+    </div>
+    <div class="noun">
+      <h3>Pull request <span class="tag">kept</span></h3>
+      <p class="purpose">One change a lead shipped, read to decide whether it merges.</p>
+      <dl><dt>Attributes</dt><dd>Title, repo#number, branch → base, checks, whether it merges cleanly, its lane, QA's verdict (summary, checks, where to look), its changes (files, the recap's impact), the merge press.</dd>
+      <dt>States</dt><dd>QA testing · QA passed · QA failed · checks failing · conflicts · merging · merged.</dd>
+      <dt>Relations</dt><dd>Belongs to one goal's slice; has one QA review; mentions exhibits (its recap) and files on GitHub (QA's spot-checks).</dd>
+      <dt>Today</dt><dd><code>PullRequest</code>, <code>LeadPr</code>, <code>QaReview</code> (shared/types).</dd></dl>
+    </div>
+    <div class="noun">
+      <h3>Exhibit <span class="tag">kept</span></h3>
+      <p class="purpose">Something a lead put up to look at (a page, mockup or explainer).</p>
+      <dl><dt>Attributes</dt><dd>Title, the slice it's from, when, the live page or its picture.</dd>
+      <dt>States</dt><dd>New since the watch began · seen.</dd>
+      <dt>Relations</dt><dd>Belongs to one goal; mentioned by decisions, pull requests and Talk.</dd>
+      <dt>Today</dt><dd><code>GoalArtifact</code>, <code>exhibitsOf</code> in watchRules.ts.</dd></dl>
+    </div>
+    <div class="noun">
+      <h3>Panel <span class="tag new">new as a noun</span></h3>
+      <p class="purpose">One view of one held thing, open beside the sheet.</p>
+      <dl><dt>Attributes</dt><dd>What it shows (a pull request, an exhibit, Talk, the Exhibits list), its head (kind, name, Jump out, Close). One thing has at most one panel: opening it again brings that panel forward.</dd>
+      <dt>States</dt><dd>In front · behind · closed. It shows what the engine holds now: a push to the PR changes the open panel, and its head says so.</dd>
+      <dt>Relations</dt><dd>Belongs to the stack of the goal at the conn.</dd>
+      <dt>Today</dt><dd>Talk and Exhibits are panels in all but name; they share one slot.</dd></dl>
+      <div class="tile"><div class="cap">a panel's head: kind, name, jump out, close</div>
+        <div style="width:100%;background:var(--color-panel);border:1px solid var(--color-line);padding:8px 10px" class="vh"><span class="kind">Pull request</span><span class="sp"></span><span class="btn">GitHub ↗</span><span class="x">×</span></div></div>
+    </div>
+    <div class="noun">
+      <h3>Stack <span class="tag new">new</span></h3>
+      <p class="purpose">The panels open beside the sheet, in the order they were last looked at.</p>
+      <dl><dt>Attributes</dt><dd>Its panels, which is in front. Drawn as tabs (A), cards with spines (B) or columns with strips (C): the only thing the options change.</dd>
+      <dt>States</dt><dd>Empty (no panel, the table's edge) · one panel · several.</dd>
+      <dt>Relations</dt><dd>One per goal at the conn; holds up to four panels.</dd>
+      <dt>Today</dt><dd>The one slot Talk and Exhibits take turns in.</dd></dl>
+      <div class="tile"><div class="cap">B's stack, seen from the side: spines of the panels behind, the front one whole</div>
+        <div style="width:100%;position:relative;height:74px">
+          <div style="position:absolute;left:0;right:0;top:0;height:30px;background:var(--color-panel);border:1px solid var(--color-line);display:flex;align-items:center;gap:6px;padding:0 10px;font-size:11.5px;color:var(--color-muted)"><span class="mono">EX</span>Product page, low stock</div>
+          <div style="position:absolute;left:0;right:0;top:30px;height:44px;background:var(--color-panel);border:1px solid var(--color-line);box-shadow:var(--shadow-lift-4);display:flex;align-items:center;gap:6px;padding:0 10px;font-size:11.5px;font-weight:600"><span class="mono" style="color:var(--color-muted)">PR</span>webshop-frontend#9<span style="color:var(--color-muted);font-weight:400">QA passed</span><span class="sp"></span><span class="x">×</span></div>
+        </div></div>
+    </div>
+    <div class="noun">
+      <h3>Talk <span class="tag">kept</span></h3>
+      <p class="purpose">The lead's words and the user's, and a box whose words go to the lead.</p>
+      <dl><dt>Attributes</dt><dd>The conversation, the decision being discussed (quoted at its top), the box.</dd>
+      <dt>States</dt><dd>Closed · open · discussing a decision.</dd>
+      <dt>Relations</dt><dd>One per goal; a panel in its stack. Its messages can carry mentions.</dd>
+      <dt>Today</dt><dd>The Talk panel, opened by the lead's name, T or Discuss.</dd></dl>
+    </div>
+    <div class="noun">
+      <h3>Sheet, rail, muster, hail, zoom <span class="tag">kept</span></h3>
+      <p class="purpose">As README.md#the-watch has them.</p>
+      <dl><dt>Changes</dt><dd>None. The sheet keeps its place and width when panels open. A hail sits over the stack's corner as it sits over the sheet's. The muster in the viewer's place puts the stack away, as it does Talk now.</dd></dl>
+    </div>
+  </div>
+
+  <h2>What the engine holds for a pull request panel</h2>
+  <p class="note">The panel renders only what Focus already has. Most of it is there; a diff summary with line counts isn't.</p>
+  <div class="scroll-x">
+  <table class="data">
+    <thead><tr><th>In the panel</th><th>Held today?</th><th>Where</th></tr></thead>
+    <tbody>
+      <tr><td>Title, repo#number, URL, branch → base, head commit, draft</td><td><span class="tag">yes</span></td><td><code>PullRequest</code> (shared/types/github.ts), from <code>gh pr list</code></td></tr>
+      <tr><td>Merges cleanly or conflicts; Ops' merge check</td><td><span class="tag">yes</span></td><td><code>mergeable</code>, <code>mergeCheck</code></td></tr>
+      <tr><td>Checks: passing, failing, pending, none; the failing ones by name with links</td><td><span class="tag">yes</span></td><td><code>checks</code>, <code>failedChecks</code>. Passing checks aren't named or counted.</td></tr>
+      <tr><td>QA's verdict: status, summary, each check, commands, fix instructions, proofs, screenshots, recording, the comment on GitHub</td><td><span class="tag">yes</span></td><td><code>QaReview</code> and <code>QaReport</code> (shared/types/qa.ts), in the client's <code>focus.reviews</code>; <code>qaBadge</code> for its label</td></tr>
+      <tr><td>Where to look: QA's two or three spot-checks, each a file and line with a GitHub anchor</td><td><span class="tag">yes</span></td><td><code>QaReport.spotChecks</code> (<code>anchor</code>)</td></tr>
+      <tr><td>Files changed, with what tests cover each and what QA did with it</td><td><span class="tag">yes</span></td><td><code>QaReview.files.changed</code>, <code>QaReport.files</code>. From QA's checkout, so only once QA has looked.</td></tr>
+      <tr><td>The recap: primitives touched, each composes / extends / adds, with paths; invariants; the lane</td><td><span class="tag">yes</span></td><td><code>LeadPr.recap</code>, <code>LeadPr.lane</code>, the recap's page as an artifact</td></tr>
+      <tr><td>GitHub reviews on it</td><td><span class="tag">yes</span></td><td><code>PullRequest.reviews</code></td></tr>
+      <tr><td>The merge press: label, what it does, its confirm</td><td><span class="tag">yes</span></td><td><code>mergeAction</code> + <code>mergePress</code> (mergingRules.ts)</td></tr>
+      <tr><td>Lines added and removed, file count, per file</td><td><span class="tag miss">missing</span></td><td>GitHub has <code>additions</code>, <code>deletions</code>, <code>changedFiles</code> (and per-file via <code>files</code>); <code>PR_FIELDS</code> in ghCli.ts doesn't ask for them. Adding them is one field list.</td></tr>
+      <tr><td>The PR's description</td><td><span class="tag miss">not kept</span></td><td>Fetched (<code>body</code>) and read for "Closes #N", then dropped.</td></tr>
+      <tr><td>The diff itself</td><td><span class="tag miss">missing</span></td><td>Not fetched. The panel doesn't need it: it points at GitHub's, at the line QA picked.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================== VERBS ============================== -->
+<section class="tab" id="verbs">
+  <h2>Object × action</h2>
+  <div class="scroll-x">
+  <table class="matrix">
+    <thead><tr><th></th><th>Open</th><th>Bring forward</th><th>Close</th><th>Put away</th><th>Jump out</th><th>Merge</th><th>Discuss</th><th>Answer</th><th>Got it</th></tr></thead>
+    <tbody>
+      <tr><td>Decision</td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="y"></td><td class="y"></td></tr>
+      <tr><td>Mention</td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Pull request</td><td class="n"></td><td></td><td></td><td></td><td class="m"></td><td class="m"></td><td></td><td></td><td></td></tr>
+      <tr><td>Exhibit</td><td class="y"></td><td></td><td></td><td></td><td class="y"></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Talk</td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Panel</td><td></td><td class="n"></td><td class="y"></td><td></td><td class="y"></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Stack</td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="legend">● as today · NEW a new verb · MOVED as today, from a new place: a pull request's GitHub link and merge press move from the card's More fold to its panel. Removed: the card's link straight out to GitHub, and an exhibit opening on the sheet. Open on a mention opens the thing it names; Close, Bring forward and Jump out are the same verbs on every panel, whatever it shows.</p>
+
+  <h2>Operational principles</h2>
+  <div class="principles">
+    <div><b>Mention</b>A decision names what it's about. You press a mention and the thing opens in a panel beside the decision; its slot lights. Press it again and the same panel comes forward, never a second one.</div>
+    <div><b>Pull request</b>You open #9 from the merge ask. Its panel says whether the checks pass, whether it merges cleanly, what QA found and where to look. You look at the line on GitHub if you want to, come back, and merge from the panel. The decision fades as answered.</div>
+    <div><b>Panel</b>A panel shows a thing the engine holds, as it is now. You read it, move to another, close it. Closing it loses nothing: open the mention again and it's back as it was.</div>
+    <div><b>Stack</b>Panels gather beside the sheet as you open things. The one you're reading is in front; the others stay in reach. Esc closes the front one; taking another goal's conn puts them all away.</div>
+  </div>
+
+  <h2>Verb → signifier</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Verb</th><th>Signifier</th><th>Key</th></tr></thead>
+    <tbody>
+      <tr><td>Open</td><td>A mention: its kind's glyph, its name, where it stands, and an empty slot at its end that lights while its panel is open. The slot is in the same place on every mention.</td><td>—</td></tr>
+      <tr><td>Bring forward</td><td>What the option leaves showing of a panel behind: a tab (A), a spine with its name and state (B), a strip with its name down it (C). Pressing a lit mention does the same.</td><td>[ and ]</td></tr>
+      <tr><td>Close</td><td>× on the panel's head (A: on its tab).</td><td>Esc, the front panel</td></tr>
+      <tr><td>Put away</td><td>Taking another conn, or bringing up the muster.</td><td>Esc until it's empty</td></tr>
+      <tr><td>Jump out</td><td><b>GitHub ↗</b> on a pull request's head, <b>New tab ↗</b> on an exhibit's; ↗ on a spot-check to its line on GitHub.</td><td>G</td></tr>
+      <tr><td>Merge</td><td>The panel's foot: the merge press as the board and the card have it (<code>Squash &amp; merge webshop-frontend#9</code>), with what Ops does first under it.</td><td>None (M is the muster's in Comms)</td></tr>
+      <tr><td>Discuss, Answer, Got it</td><td>As on the decision card today. Discuss opens Talk as a panel, the decision quoted at its top.</td><td>T opens Talk</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================== LAYERS ============================== -->
+<section class="tab" id="layers">
+  <h2>Governing principle</h2>
+  <div class="principle">
+    <p class="rule">A thing sits as high as the attention it asks of you right now, and the higher it sits, the sooner it has to leave.</p>
+    <p>It's Comms' own principle (README.md#the-watch), kept as is. The decision rests on the sheet and stays until it's answered. What it mentions sits a layer higher, in a panel beside it, because you look at it now and then put it away; it never covers the decision, since the decision is what you're there for. Of the panels, the one you're reading asks the most of you, so it sits highest and is the first to go.</p>
+    <p>The least demanding things stay low and still: the rail, the sheet, the decision. The most demanding are a hail, which sits over everything and leaves the moment it's answered or stood by, and the zoom, the one overlay, which covers Comms only while the user picks between a question's pictures.</p>
+  </div>
+
+  <h2>The stack</h2>
+  <div class="stack">
+    <div class="defs">
+      <h4>Ground</h4><p>The dark table Comms sits on. Nothing of its own.</p>
+      <h4>Rail</h4><p>The goals in their berths down the left, a hair above the table.</p>
+      <h4>Sheet</h4><p>The goal at the conn, in the middle. It keeps its place and its width while panels come and go.</p>
+      <h4>Card</h4><p>The decision and the other cards, resting on the sheet. Mentions sit on them.</p>
+      <h4>Panel</h4><p>Slides in from the right edge, beside the sheet, never over the decision. One is in front; how the others show is what A, B and C decide.</p>
+      <h4>Hail</h4><p>Drops into the top right corner, over the sheet and the panels, until it's put on screen or stood by.</p>
+      <h4>Zoom</h4><p>Covers Comms with a question's pictures, large, until Esc. The only overlay.</p>
+    </div>
+    <div class="iso" aria-hidden="true"><div class="rig">
+      <div class="pl g">Ground</div><div class="pl r">Rail</div><div class="pl s">Sheet</div><div class="pl c">Card</div>
+      <div class="pl p1"></div><div class="pl p2">Panels</div><div class="pl h">Hail</div>
+    </div></div>
+    <div class="scroll-x">
+    <table class="tokens">
+      <thead><tr><th>Layer</th><th>Shadow</th><th>Hairline</th><th>Spring</th></tr></thead>
+      <tbody>
+        <tr><td>Ground</td><td>none</td><td>none</td><td>none</td></tr>
+        <tr><td>Rail</td><td><code>lift-1</code></td><td><code>hair-rail</code></td><td><code>ease-spring</code> 560ms</td></tr>
+        <tr><td>Sheet</td><td><code>lift-3</code></td><td><code>line</code></td><td><code>cos-rise</code> 560ms</td></tr>
+        <tr><td>Card</td><td><code>lift-2</code></td><td><code>hair-card</code></td><td><code>ease-spring</code></td></tr>
+        <tr><td>Panel, in front</td><td><code>lift-4</code></td><td><code>line</code></td><td><code>cos-slide</code> 260ms flick</td></tr>
+        <tr><td>Panel, behind</td><td><code>lift-2</code></td><td><code>line</code></td><td><code>cos-slide</code></td></tr>
+        <tr><td>Hail</td><td><code>lift-4</code></td><td><code>attn</code></td><td><code>cos-drop</code> 220ms</td></tr>
+        <tr><td>Zoom</td><td>85% scrim</td><td>none</td><td>none</td></tr>
+        <tr><td colspan="4"><span class="tag new">new</span> <code>--panel-w</code> 460px (a literal in stream.ts today) · <code>--tab-h</code> 28px (A) · <code>--spine-h</code> 30px (B) · <code>--strip-w</code> 34px (C)</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <h2>Three ways to stack panels</h2>
+  <p class="note">The same nouns and verbs; only the Panel layer's rules change. Each is acted out below with the same eight steps.</p>
+  <div class="options">
+    <div class="opt"><h4>A · Tabs in one panel</h4>
+      <p>One panel at today's width. Each thing opened is a tab along its top; the tab picked shows. Close a tab with its ×; closing the last closes the panel.</p>
+      <p>Height: every tab sits at the same height. The order is the order opened; switching doesn't change it, and closing lands on the neighbour.</p>
+      <p class="talk">Talk: replaced, in effect. It's the panel's first tab, pinned; Discuss or T picks it.</p></div>
+    <div class="opt rec"><h4>B · A stack of cards <span class="pill">Recommended</span></h4>
+      <p>Each thing opened is a card that slides in over the last. The ones behind step back and leave their heads showing above it as spines: name and state. Press a spine to bring it forward; × or Esc pops the front one and you're back where you were.</p>
+      <p>Height: the last looked at is on top, and goes first. Width never grows past today's panel.</p>
+      <p class="talk">Talk: stacks with them, a card like any other; Discuss puts it on top with the decision quoted.</p></div>
+    <div class="opt"><h4>C · Columns</h4>
+      <p>Each thing opened pushes in as a column from the right; the one you're reading is wide, the others fold to strips with their names down them, and breadcrumbs trace the order. Press a strip to widen it; close collapses a column.</p>
+      <p>Height: all on one layer, side by side. Each panel costs a strip of width.</p>
+      <p class="talk">Talk: pushed, to a strip of its own on the left.</p></div>
+  </div>
+
+  <div class="verdict-box">
+    <div class="lbl">Recommendation: B, a stack of cards</div>
+    <p>B is the principle drawn literally. The panel you're reading sits highest because it asks the most of you now, and it's the first to leave: Esc or × pops it and you're back at the one you read before, which is how the merge ask goes (look at the exhibit, back to the PR, merge). Its spines keep every panel's name and state in sight, so "QA passed" and "merged" read without opening anything.</p>
+    <p>A flattens height: the hidden tabs sit as high as the shown one, so the stack can't say which you were just reading, and closing lands on a neighbour rather than where you were. The user also took the lead's workspace tabs out of Comms on 28 October. C spends width: every panel adds a strip toward the decision, so on a 1280 or 1440 screen the second strip already crosses the sheet's edge, and the third covers the decision's text, unless the sheet moves, which the user ruled out on 28 October. B stays at today's panel width however many are open; four is the most, and the oldest closes for a fifth, since it's only a view.</p>
+  </div>
+
+  <h2>The scenarios</h2>
+  <p class="note">Scenarios 1 to 3 are the same eight steps in A, B and C: open a pull request from a merge ask, read it, open an exhibit the decision mentions, move between the two, jump to GitHub, merge from the panel, close the panels. Scenario 4 stresses B with Talk, a hail and a change of conn. Click a step to jump to it; the round arrow replays.</p>
+
+  <!-- Today -->
+  <div class="scenario">
+    <div>
+      <h3>Today</h3>
+      <p>The sheet is in the middle with the merge ask resting on it. The pull request is a row under More: a merge press, and a muted title that is a link to GitHub. Talk is open on the right.</p>
+      <p>Pressing the title leaves Comms for a GitHub tab. The exhibit Adeyemi put up is behind the Exhibits press, which swaps Talk for the list; opening one puts it on the sheet above the decision.</p>
+      <p class="why"><b>Why it changes:</b> to review #9 the user leaves Comms, and to look at the exhibit they lose Talk or push the decision down. Nothing opens beside the decision.</p>
+    </div>
+    <div class="table"><div class="mk-wrap"><div class="mk today" id="mk-today"></div></div><div class="capline"><span>Static: the watch as built</span><span></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="A">
+    <div>
+      <h3>1 · A: tabs in one panel</h3>
+      <div class="today">Today: #9's title is a link out to GitHub; the exhibit opens on the sheet.</div>
+      <p>The merge ask rests on the sheet with three mentions under its brief.</p>
+      <p>Pressing #9 slides one panel in from the right edge, beside the sheet. Its tabs are Talk and #9; #9 is picked and shows the checks, the merge state, QA's verdict and the changes.</p>
+      <p>Pressing the exhibit's mention adds a tab after #9 and picks it. The product page fills the panel. Both mentions' slots are lit.</p>
+      <p>Pressing the #9 tab picks it again. The tabs stay in the order they were opened.</p>
+      <p>GitHub ↗ on #9's head opens the pull request on GitHub in a new browser tab. Comms stays as it was.</p>
+      <p>The merge press at the panel's foot merges #9. The press reads Merged; the mention reads merged and the decision fades as answered.</p>
+      <p>× on #9's tab closes it and the exhibit's tab slides along. × on the last closes the panel and the table's edge is empty again.</p>
+      <p class="why"><b>Why:</b> one panel at today's width keeps the sheet still. Tabs are compact, but every tab sits at one height, so the order says nothing about what you read last.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="The merge ask, with its mentions"><b>Merge ask</b></li>
+        <li data-cls="o-pr a-pr" data-cap="Press PR webshop-frontend#9"><b>Open #9</b></li>
+        <li data-cls="o-pr o-ex a-ex" data-cap="Press EX Product page, low stock"><b>Open the exhibit</b></li>
+        <li data-cls="o-pr o-ex a-pr" data-cap="Press the #9 tab"><b>Back to #9</b></li>
+        <li data-cls="o-pr o-ex a-pr gh" data-cap="↗ github.com/demo/webshop-frontend/pull/9 opens in a new browser tab"><b>Jump to GitHub</b></li>
+        <li data-cls="o-pr o-ex a-pr merged" data-cap="Squash & merge webshop-frontend#9"><b>Merge</b></li>
+        <li data-cls="o-ex a-ex merged" data-cap="× on #9's tab"><b>Close #9</b></li>
+        <li data-cls="merged" data-cap="× on the last tab: the panel goes"><b>Close the panel</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk optA"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="B">
+    <div>
+      <h3>2 · B: a stack of cards <span class="pill">Recommended</span></h3>
+      <div class="today">Today: #9's title is a link out to GitHub; the exhibit opens on the sheet.</div>
+      <p>The merge ask rests on the sheet with three mentions under its brief.</p>
+      <p>Pressing #9 slides a card in from the right edge, beside the sheet: the checks, the merge state, QA's verdict and the changes.</p>
+      <p>Pressing the exhibit's mention slides a second card in over #9. #9 steps back and dims; its head stays showing above the exhibit as a spine, with its name and "QA passed".</p>
+      <p>Pressing #9's spine lifts it out and sets it in front. The exhibit steps back to a spine.</p>
+      <p>GitHub ↗ on #9's head opens the pull request on GitHub in a new browser tab. Comms stays as it was.</p>
+      <p>The merge press at the card's foot merges #9. The press reads Merged; the mention and the spine read merged and the decision fades as answered.</p>
+      <p>× pops #9 off the stack and the exhibit comes forward, whole. × again and the table's edge is empty.</p>
+      <p class="why"><b>Why:</b> what you're reading asks the most of you, so it's on top and leaves first; popping it lands you on what you read before. The spines keep names and states in sight, and the stack never gets wider than today's panel.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="The merge ask, with its mentions"><b>Merge ask</b></li>
+        <li data-cls="o-pr pr-0 top-pr" data-cap="Press PR webshop-frontend#9"><b>Open #9</b></li>
+        <li data-cls="o-pr o-ex pr-0 ex-1 top-ex" data-cap="Press EX Product page, low stock"><b>Open the exhibit</b></li>
+        <li data-cls="o-pr o-ex ex-0 pr-1 top-pr" data-cap="Press #9's spine"><b>Back to #9</b></li>
+        <li data-cls="o-pr o-ex ex-0 pr-1 top-pr gh" data-cap="↗ github.com/demo/webshop-frontend/pull/9 opens in a new browser tab"><b>Jump to GitHub</b></li>
+        <li data-cls="o-pr o-ex ex-0 pr-1 top-pr merged" data-cap="Squash & merge webshop-frontend#9"><b>Merge</b></li>
+        <li data-cls="o-ex ex-0 top-ex merged" data-cap="× (or Esc) pops #9"><b>Pop #9</b></li>
+        <li data-cls="merged" data-cap="× (or Esc) pops the last"><b>Pop the last</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk optB"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="C">
+    <div>
+      <h3>3 · C: columns</h3>
+      <div class="today">Today: #9's title is a link out to GitHub; the exhibit opens on the sheet.</div>
+      <p>The merge ask rests on the sheet with three mentions under its brief.</p>
+      <p>Pressing #9 pushes a column in from the right edge, beside the sheet. Breadcrumbs above it read Decision › #9.</p>
+      <p>Pressing the exhibit's mention pushes a second column in. #9 folds to a strip on its left with its name down it, and the strip crosses the sheet's right edge.</p>
+      <p>Pressing #9's strip widens it again, still on the left; the exhibit folds to a strip at the right edge.</p>
+      <p>GitHub ↗ on #9's head opens the pull request on GitHub in a new browser tab. Comms stays as it was.</p>
+      <p>The merge press at the column's foot merges #9. The press reads Merged; the mention reads merged and the decision fades as answered.</p>
+      <p>× collapses #9's column; the exhibit widens into its place. × again and the table's edge is empty.</p>
+      <p class="why"><b>Why:</b> every column stays in sight and the breadcrumbs say how you got there. Each panel costs a strip of width, and the sheet can't give any, so the strips cross onto it.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="The merge ask, with its mentions"><b>Merge ask</b></li>
+        <li data-cls="o-pr pr-w cr1" data-cap="Press PR webshop-frontend#9"><b>Open #9</b></li>
+        <li data-cls="o-pr o-ex pr-sl s-pr ex-w cr2" data-cap="Press EX Product page, low stock"><b>Open the exhibit</b></li>
+        <li data-cls="o-pr o-ex pr-wl ex-sr s-ex cr3" data-cap="Press #9's strip"><b>Back to #9</b></li>
+        <li data-cls="o-pr o-ex pr-wl ex-sr s-ex cr3 gh" data-cap="↗ github.com/demo/webshop-frontend/pull/9 opens in a new browser tab"><b>Jump to GitHub</b></li>
+        <li data-cls="o-pr o-ex pr-wl ex-sr s-ex cr3 merged" data-cap="Squash & merge webshop-frontend#9"><b>Merge</b></li>
+        <li data-cls="o-ex ex-w cr4 merged" data-cap="× collapses #9's column"><b>Close #9</b></li>
+        <li data-cls="merged" data-cap="× collapses the last"><b>Close the last</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk optC"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="B2">
+    <div>
+      <h3>4 · B: Talk, a hail, another conn</h3>
+      <div class="today">Today: Discuss swaps whatever is on the right for Talk; a hail sits over the sheet's corner.</div>
+      <p>#9 is a spine; the exhibit is in front.</p>
+      <p>Discuss on the decision slides Talk in on top, the decision quoted at its top. The exhibit steps back to a spine under #9's.</p>
+      <p>A hail from Lt. Chen drops into the top right corner, over the stack.</p>
+      <p>Stand by sends it to the muster: the hail goes, the chip counts three, and Saved items' berth counts one.</p>
+      <p>× pops Talk; the exhibit comes forward with #9's spine above it.</p>
+      <p>Pressing Saved items takes its conn. Its sheet comes up and the stack is put away.</p>
+      <p class="why"><b>Why:</b> Talk is a view of what the engine holds, like the rest, so it stacks with them rather than throwing them away. A hail asks more than anything open, so it sits above them all and leaves first. The stack is the goal's, so it goes with the goal; nothing it showed is lost.</p>
+      <ol class="steps">
+        <li data-cls="o-pr o-ex pr-0 ex-1 top-ex" data-cap="Two panels open"><b>Two open</b></li>
+        <li data-cls="o-pr o-ex o-talk pr-0 ex-1 talk-2 top-talk" data-cap="Discuss"><b>Discuss</b></li>
+        <li data-cls="o-pr o-ex o-talk pr-0 ex-1 talk-2 top-talk hailing" data-cap="Lt. Chen hails"><b>A hail</b></li>
+        <li data-cls="o-pr o-ex o-talk pr-0 ex-1 talk-2 top-talk stood" data-cap="Stand by"><b>Stand by</b></li>
+        <li data-cls="o-pr o-ex pr-0 ex-1 top-ex stood" data-cap="× (or Esc) pops Talk"><b>Pop Talk</b></li>
+        <li data-cls="conn2 stood" data-cap="Take the conn of Saved items"><b>Another conn</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk optB"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <h2>Hand-over</h2>
+  <div class="scroll-x">
+  <table class="handover">
+    <thead><tr><th>Noun</th><th>Creates or touches</th></tr></thead>
+    <tbody>
+      <tr><td>Mention</td><td>A row on <code>decisionCard</code> (stream.ts) from what the turn names: the lead's open PRs (<code>leadPrs</code>), its exhibits (<code>exhibitsOf</code>), its open question. Replaces the More fold (<code>acts.more</code>, <code>mergesOf</code>).</td></tr>
+      <tr><td>Pull request panel</td><td>New view in stream.ts, drawn from <code>PullRequest</code>, <code>focus.reviews</code> (<code>QaReview</code>), <code>LeadPr.recap</code>; its foot reuses <code>mergePress</code> as <code>mergeBox</code> does. Line counts need <code>additions,deletions,changedFiles</code> in <code>PR_FIELDS</code>.</td></tr>
+      <tr><td>Exhibit panel</td><td>Moves <code>openedEl</code> from the shelf on the sheet into a panel.</td></tr>
+      <tr><td>Stack</td><td>Replaces <code>talking</code> / <code>browsing</code> with an ordered list of open panels in <code>openStream</code>, and the shared slot (<code>panel</code>, <code>gallery</code>) with the option's drawing. The order and which is in front is a pure rule (a <code>panelRules.ts</code>: open, bring forward, pop, cap at four) with its test.</td></tr>
+      <tr><td>Scenarios</td><td>1–3: the merge ask on a demo ship (Sock Shop, webshop-frontend#9). 4: Discuss, a hail and a change of conn with panels open.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+</div>
+
+<script>
+// ---------- the mockup's pieces: Comms as built, with Sock Shop's merge ask ----------
+const hud = () => `<div class="hud"><div class="where">Sock Shop · <b class="w1">Show low stock on product pages</b><b class="w2">Saved items</b></div><div class="chip"><span>Muster</span><span class="cnt" style="background:var(--color-attn);color:#111"><i>2</i><i>3</i></span></div></div>`;
+const rail = () => `<div class="rail"><div class="proj">Sock Shop</div>
+  <div class="berth at"><i class="dot work"></i><span>Show low stock</span><span class="n attn">1</span></div>
+  <div class="berth b2"><i class="dot work"></i><span>Saved items</span><span class="n attn later">1</span></div>
+  <div class="proj" style="margin-top:12px">Space Dodger</div>
+  <div class="berth"><i class="dot"></i><span>High scores</span><span class="n"></span></div>
+  <div class="berth"><i class="dot work"></i><span>Touch controls</span><span class="n attn">1</span></div></div>`;
+const mention = (k, gl, name, st) => `<span class="mn m-${k}"><span class="gl">${gl}</span><span>${name}</span><span class="st">${st}</span><i class="slot"></i></span>`;
+const decision = () => `<div class="card dcard"><div class="ch"><span class="t1">Decision · from Lt. Adeyemi</span><span class="t2">Answered · merged webshop-frontend#9</span></div>
+  <div class="what">Merge webshop-frontend#9?</div>
+  <div class="brief">#9 shows “Only 3 left” under the price when stock drops below 5. QA passed it this morning, and Adeyemi put the low-stock page up to look at. It's in Ask because it reads a new field from webshop-api#14, still open: until that merges the page shows the price alone.</div>
+  <div class="mentions"><span class="lbl2">Mentions</span>${mention('pr', 'PR', 'webshop-frontend#9', '<span class="s1">QA passed</span><span class="s2">merged</span>')}${mention('ex', 'EX', 'Product page, low stock', 'slice 2')}${mention('api', 'PR', 'webshop-api#14', 'QA testing')}</div>
+  <div class="choice"><b>Wait for the API</b><span>“Hold #9 until webshop-api#14 merges, then I'll merge both.”</span></div>
+  <div class="arow"><span class="btn quiet">Discuss</span><span class="btn quiet">Got it</span></div></div>`;
+const sheetHead = (title, who) => `<div class="shead"><span class="p">Sock Shop</span><span class="acts"><span class="btn">View in room</span><span class="btn">Exhibits · 3</span></span><span class="g">${title}</span><span class="who">${who}</span></div>`;
+const sheet = () => `<div class="sheet"><div class="face f1">${sheetHead('Show low stock on product pages', '<i class="dot"></i>Lt. Adeyemi · waiting on you')}
+  <div class="since">Since your last watch (09:40): <b>2 updates</b> · <b>QA passed #9</b></div>${decision()}</div>
+  <div class="face f2">${sheetHead('Saved items', '<i class="dot work"></i>Lt. Chen · working')}<div class="empty2">Nothing asks you here. Lt. Chen is on slice 3.</div></div></div>`;
+const close = (x) => (x ? '<span class="x">×</span>' : '');
+const prView = (x) => `<div class="pv">
+  <div class="vh"><span class="kind">Pull request · Ask lane</span><span class="sp"></span><span class="btn ghb">GitHub ↗</span>${close(x)}</div>
+  <div class="pt">Show “Only N left” under the price</div>
+  <div class="pm">demo/webshop-frontend#9 · adeyemi/low-stock → main</div>
+  <div class="st3"><div><i>Checks</i><b>passing</b></div><div><i>Merges</i><b>cleanly</b></div><div><i>QA</i><b>passed</b></div></div>
+  <div class="qa"><div class="vh"><span class="kind">QA · Lt. Okafor</span><b>Passed</b><span class="sp"></span><span class="mono" style="color:var(--color-muted)">a1c9e04</span></div>
+    <p>Stock 3 shows “Only 3 left” under the price; 12 shows nothing; sold out disables Add to basket.</p>
+    <ul><li>Low stock shows the count</li><li>Plenty shows nothing</li><li>Sold out disables the button</li></ul>
+    <div class="spot"><span>Look at <span class="mono">ProductPage.tsx:42</span>: the threshold of 5 is hard-coded</span><span>↗</span></div></div>
+  <div class="chg"><div class="vh"><span class="kind">Changes · 4 files</span><span class="sp"></span><span class="mono" style="color:var(--color-muted)">+38 −4</span></div>
+    <div class="row"><span>src/ProductPage.tsx</span><i>extends</i><span>+22 −3</span></div>
+    <div class="row"><span>src/stock.ts</span><i>adds</i><span>+12</span></div>
+    <div class="row"><span>src/ProductPage.test.tsx</span><i>tests</i><span>+3 −1</span></div>
+    <div class="row"><span>src/copy/en.json</span><i>composes</i><span>+1</span></div></div>
+  <div class="foot"><span class="btn go"><span class="m1">Squash &amp; merge webshop-frontend#9</span><span class="m2">Merged into main</span></span><small>Ops checks it merged onto main first</small></div></div>`;
+const exView = (x) => `<div class="pv">
+  <div class="vh"><span class="kind">Exhibit · slice 2</span><span class="sp"></span><span class="btn">New tab ↗</span>${close(x)}</div>
+  <div class="pt">Product page, low stock</div>
+  <div class="pm">Lt. Adeyemi put it up 26 min ago</div>
+  <div class="page"><div class="ph"></div><div><h5>Stripy Socks</h5><div>£8.00</div><div class="low">Only 3 left</div><span class="add">Add to basket</span></div></div>
+  <div class="from">Also from slice 2: ${mention('ex2', 'EX', 'Product page, plenty', 'slice 2')}</div>
+  <div class="from">Mentioned by <b>Decision · Merge webshop-frontend#9?</b> and <b>#9's recap</b></div></div>`;
+const talkView = (x) => `<div class="pv">
+  <div class="vh"><span class="kind">Talk · Lt. Adeyemi</span><span class="sp"></span>${close(x)}</div>
+  <div class="topic">About: Merge webshop-frontend#9?</div>
+  <div class="said"><div><span class="who2">Lt. Adeyemi</span>#9 reads <span class="mono">stock</span> from the product API, which webshop-api#14 adds. Until that merges the page shows the price alone, as it does now.</div>
+  <div class="you"><span class="who2">You</span>If I merge #9 first, does anything break?</div>
+  <div><span class="who2">Lt. Adeyemi</span>No: no field, no line. QA ran it with the API stubbed both ways.</div></div>
+  <div class="tbox">Write to Lt. Adeyemi…</div></div>`;
+const hail = () => `<div class="hail"><div class="ch">Hail · Lt. Chen · Saved items</div><p>Wants to run a migration that drops <span class="mono">saved_items</span> on staging.</p><div style="display:flex;gap:5px"><span class="btn go">Put on screen</span><span class="btn">Stand by</span></div></div>`;
+const spine = (k, gl, name, st) => `<div class="spine"><span class="gl">${gl}</span><span>${name}</span><span class="st">${st}</span><span class="sp"></span><span class="x">×</span></div>`;
+const frame = (side) => hud() + rail() + sheet() + side + hail();
+
+const sides = {
+  A: () => `<div class="dock"><div class="tabs"><span class="tb t-talk">Talk</span><span class="tb t-pr">PR frontend#9<span class="x">×</span></span><span class="tb t-ex">EX Low stock<span class="x">×</span></span></div>
+    <div class="dbody"><div class="v v-talk">${talkView(false)}</div><div class="v v-pr">${prView(false)}</div><div class="v v-ex">${exView(false)}</div></div></div>`,
+  B: () => `<div class="stk">
+    <div class="pc c-pr">${spine('pr', 'PR', 'webshop-frontend#9', '<span class="s1">QA passed</span><span class="s2">merged</span>')}<div class="bd">${prView(false)}</div></div>
+    <div class="pc c-ex">${spine('ex', 'EX', 'Product page, low stock', 'slice 2')}<div class="bd">${exView(false)}</div></div>
+    <div class="pc c-talk">${spine('talk', 'TK', 'Talk · Lt. Adeyemi', 'discussing #9')}<div class="bd">${talkView(false)}</div></div></div>`,
+  C: () => `<div class="crumbs"><span class="k1">Decision › <b>webshop-frontend#9</b></span><span class="k2">Decision › webshop-frontend#9 › <b>Product page, low stock</b></span><span class="k3">Decision › <b>webshop-frontend#9</b> › Product page, low stock</span><span class="k4">Decision › <b>Product page, low stock</b></span></div>
+    <div class="col c-pr"><div class="wide">${prView(true)}</div><div class="strip"><span class="gl">PR</span><span>webshop-frontend#9</span></div></div>
+    <div class="col c-ex"><div class="wide">${exView(true)}</div><div class="strip"><span class="gl">EX</span><span>Product page, low stock</span></div></div>`,
+};
+sides.B2 = sides.B;
+
+// the static Today: More opened under the decision, Talk on the right
+document.getElementById('mk-today').innerHTML = hud() + rail() + sheet() + `<div class="tk">${talkView(true)}</div>`;
+(() => {
+  const card = document.querySelector('#mk-today .dcard');
+  card.querySelector('.mentions').outerHTML = `<div class="more">▾ More · their pull requests<div class="mrow"><span class="btn go">Squash &amp; merge webshop-frontend#9</span><a>Show “Only N left” under the price · QA passed</a></div></div>`;
+  document.querySelector('#mk-today .topic').remove();
+})();
+
+document.querySelectorAll('.scenario[data-mk]').forEach((sc) => {
+  const mk = sc.querySelector('.mk');
+  const base = mk.className;
+  mk.innerHTML = frame(sides[sc.dataset.mk]());
+});
+
+// ---------- the page: tabs, scaling, step timelines ----------
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach((b) => b.addEventListener('click', () => {
+  tabs.forEach((t) => t.setAttribute('aria-selected', String(t === b)));
+  document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('on', s.id === b.dataset.tab));
+  if (location.hash !== '#' + b.dataset.tab) history.replaceState(null, '', '#' + b.dataset.tab);
+  requestAnimationFrame(fit);
+}));
+const start = location.hash.slice(1).split('/')[0];
+if (start) document.querySelector(`nav.tabs button[data-tab="${start}"]`)?.click();
+function fit() {
+  document.querySelectorAll('.mk-wrap').forEach((w) => {
+    const s = w.clientWidth / 980;
+    if (s > 0) w.querySelector('.mk').style.setProperty('--s', s);
+  });
+}
+new ResizeObserver(fit).observe(document.body);
+fit();
+const players = [];
+document.querySelectorAll('.scenario[data-mk]').forEach((sc) => {
+  const mk = sc.querySelector('.mk');
+  const base = mk.className;
+  const steps = [...sc.querySelectorAll('ol.steps li')];
+  const cap = sc.querySelector('.cap');
+  const stepcap = sc.querySelector('.stepcap');
+  let i = 0, timer = null, played = false;
+  const go = (n) => {
+    i = n;
+    mk.className = (base + ' ' + (steps[n].dataset.cls || '')).trim();
+    steps.forEach((li, k) => li.classList.toggle('on', k === n));
+    cap.textContent = steps[n].dataset.cap || '';
+    stepcap.textContent = `Step ${n + 1} of ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const play = () => {
+    stop(); go(0);
+    timer = setInterval(() => { if (i >= steps.length - 1) return stop(); go(i + 1); }, 1900);
+  };
+  steps.forEach((li, k) => li.addEventListener('click', () => { stop(); go(k); }));
+  sc.querySelector('.replay').addEventListener('click', play);
+  go(0);
+  players.push({ sc, go, stop, n: steps.length });
+  new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting && !played) { played = true; play(); }
+  }), { threshold: 0.45 }).observe(sc.querySelector('.table'));
+});
+// for screenshots: window.__step(scenarioIndex, stepIndex) jumps a mockup without its timer
+window.__step = (s, n) => { const p = players[s]; p.stop(); p.go(n); };
+</script>
+</body>
+</html>

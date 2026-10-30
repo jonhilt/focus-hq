@@ -43,6 +43,9 @@ const RawPr = Schema.Struct({
   statusCheckRollup: Schema.optional(Schema.Unknown),
   createdAt: Schema.String,
   updatedAt: Schema.optional(Schema.String),
+  additions: Schema.optional(Schema.Number),
+  deletions: Schema.optional(Schema.Number),
+  changedFiles: Schema.optional(Schema.Number),
   reviews: Schema.optional(Schema.Array(Schema.Struct({
     id: Schema.String,
     author: Login,
@@ -95,7 +98,7 @@ const RawRepo = Schema.Struct({
 });
 
 const ISSUE_FIELDS = 'number,title,body,url,labels,author,createdAt';
-const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt,updatedAt,body,closingIssuesReferences,reviews';
+const PR_FIELDS = 'number,title,url,headRefName,headRefOid,baseRefName,author,isDraft,mergeable,reviewDecision,statusCheckRollup,createdAt,updatedAt,body,closingIssuesReferences,reviews,additions,deletions,changedFiles';
 
 function toIssue(repo: string, raw: typeof RawIssue.Type): Issue {
   return {
@@ -215,6 +218,9 @@ const make = Effect.gen(function* () {
             createdAt: p.createdAt,
             updatedAt: p.updatedAt,
             reviews: submittedReviews(p.reviews),
+            ...(p.additions !== undefined && { additions: p.additions }),
+            ...(p.deletions !== undefined && { deletions: p.deletions }),
+            ...(p.changedFiles !== undefined && { changedFiles: p.changedFiles }),
           })),
         ),
       ),

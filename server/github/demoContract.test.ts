@@ -40,6 +40,13 @@ describe('the demo GitHub keeps the GitHub contract', () => {
     expect(await Effect.runPromise(gh.pullRequestState(repo, pr.number))).toBe('MERGED');
   });
 
+  it('lists a pull request with the lines it adds and removes and the files it changes, as gh pr list does', async () => {
+    const { gh, repo, pr } = await opened('focus/size');
+    const listed = (await Effect.runPromise(gh.listPullRequests(repo))).find((p) => p.number === pr.number);
+    expect(listed).toMatchObject({ additions: expect.any(Number), deletions: expect.any(Number), changedFiles: expect.any(Number) });
+    expect(listed?.changedFiles).toBeGreaterThan(0);
+  });
+
   it('finds only an open pull request from a branch: none once it merged', async () => {
     const { gh, repo, pr } = await opened('focus/found');
     expect(await Effect.runPromise(gh.findPullRequest(repo, 'focus/found'))).toEqual({ number: pr.number, url: pr.url });

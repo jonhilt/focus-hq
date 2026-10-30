@@ -42,6 +42,9 @@ const prJson = JSON.stringify([{
   updatedAt: '2026-10-01T11:00:00Z',
   body: 'Adds a saved-for-later list.\n\nCloses #7, fixes #9',
   closingIssuesReferences: [{ number: 7 }, { number: 8 }],
+  additions: 38,
+  deletions: 4,
+  changedFiles: 3,
   reviews: [
     { id: 'PRR_1', author: { login: 'sam' }, state: 'CHANGES_REQUESTED', body: 'Rename it', submittedAt: '2026-10-01T12:00:00Z' },
     // a draft review is its author's alone, and one by a deleted account has no author
@@ -70,6 +73,9 @@ describe('gh CLI layer', () => {
         closes: [7, 8, 9],
         createdAt: '2026-10-01T10:00:00Z',
         updatedAt: '2026-10-01T11:00:00Z',
+        additions: 38,
+        deletions: 4,
+        changedFiles: 3,
         reviews: [
           { id: 'PRR_1', author: 'sam', state: 'CHANGES_REQUESTED', body: 'Rename it', submittedAt: '2026-10-01T12:00:00Z' },
           { id: 'PRR_3', author: 'someone', state: 'COMMENTED', body: '', submittedAt: '2026-10-01T13:00:00Z' },

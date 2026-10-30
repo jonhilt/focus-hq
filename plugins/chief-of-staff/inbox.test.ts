@@ -67,7 +67,17 @@ describe('an inbox item', () => {
     expect(inboxItem({ kind: 'question', agent: lead }, new Map(), 0)).toEqual({
       id: 'question:a1:q1', kind: 'question', projectId: 'p', agentId: 'a1', who: 'Ada', goal: 'Saved items', what: 'Pick: Which layout?', since: 50, lane: 'needs-you',
       options: [{ id: 'a', label: 'Cards', detail: 'Friendlier' }, { id: 'b', label: 'List' }],
+      mentions: [{ kind: 'question', id: 'q1' }],
     });
+  });
+
+  it('carries what it mentions, by reference: the lead’s open pull requests, the slice’s exhibits and their open question', () => {
+    const lead = agent({ lead: { title: 'Saved items', slice: 2, prs: [{ repo: 'acme/shop', number: 9, url: '' }], artifacts: [{ id: 'mockup', title: 'Mockup', at: 40, slice: 2 }] } as never });
+    expect(inboxItem({ kind: 'turn', agent: lead }, new Map(), 0).mentions).toEqual([
+      { kind: 'pr', id: 'acme/shop#9', repo: 'acme/shop', number: 9 },
+      { kind: 'artifact', id: 'mockup' },
+    ]);
+    expect(inboxItem({ kind: 'error', agent: lead }, new Map(), 0)).not.toHaveProperty('mentions');
   });
 
   it('carries what the lead said last and showed this turn, given their terminal', () => {
@@ -88,7 +98,7 @@ describe('an inbox item', () => {
   });
 
   it('names a pull request’s by the PR, with no agent', () => {
-    expect(inboxItem({ kind: 'conflicts', projectId: 'p', pr }, new Map(), 0)).toEqual({ id: 'conflicts:p:acme/shop#12', kind: 'conflicts', projectId: 'p', who: 'acme/shop#12', goal: 'Save for later', what: 'Resolve conflicts with its base branch', lane: 'needs-you' });
+    expect(inboxItem({ kind: 'conflicts', projectId: 'p', pr }, new Map(), 0)).toEqual({ id: 'conflicts:p:acme/shop#12', kind: 'conflicts', projectId: 'p', who: 'acme/shop#12', goal: 'Save for later', what: 'Resolve conflicts with its base branch', lane: 'needs-you', mentions: [{ kind: 'pr', id: 'acme/shop#12', repo: 'acme/shop', number: 12 }] });
   });
 });
 
