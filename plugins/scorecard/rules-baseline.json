@@ -11,7 +11,7 @@
   "server/agents/manager/sessions.ts": 156,
   "server/agents/pushGuard.ts": 0,
   "server/agents/recorder.ts": 41,
-  "server/agents/scratch.ts": 8,
+  "server/agents/scratch.ts": 3,
   "server/agents/workspace.ts": 271,
   "server/fileLock.ts": 4,
   "server/frameStats.ts": 16,

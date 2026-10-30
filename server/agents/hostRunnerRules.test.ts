@@ -1,17 +1,10 @@
 import type { ConversationSummary } from 'agent-host';
 import { describe, expect, it } from 'vitest';
-import { isSdkMessage, joining, outcome, reaction, runsOnHost } from './hostRunnerRules';
+import { isSdkMessage, joining, outcome, reaction } from './hostRunnerRules';
 import { askedQuestions } from './questions';
 import { STOPPED_BY_CAPTAIN } from './types';
 
 const conv = (id: string, status: string, agentSessionId?: string): ConversationSummary => ({ id, agent: 'claude', labels: {}, status, ...(agentSessionId && { agentSessionId }) });
-
-describe('runsOnHost', () => {
-  it('runs every session on the host, leads included', () => {
-    for (const task of ['issue', 'fix', 'conflicts', 'brief', 'review', 'lead'] as const) expect(runsOnHost(task)).toBe(true);
-    expect(runsOnHost(undefined)).toBe(false);
-  });
-});
 
 describe('joining', () => {
   it('starts a new conversation for a fresh session, ending the agent’s old ones', () => {

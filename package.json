@@ -38,7 +38,6 @@
     "jev-sweep": "tsx plugins/chief-of-staff/scripts/jevSweep.ts",
     "jev-fresh": "tsx plugins/chief-of-staff/scripts/jevFresh.ts",
     "jev-watch": "tsx plugins/chief-of-staff/scripts/jevWatch.ts",
-    "claude-streams": "tsx tools/claudeStreams.ts",
     "fence:lower": "tsx plugins/scorecard/scripts/fenceLower.ts"
   },
   "engines": {

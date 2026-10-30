@@ -89,7 +89,7 @@ export interface RunHooks {
 
 export interface RunRequest {
   agentId: string;
-  /** What the agent does: which runner its sessions go to (`runsOnHost`). */
+  /** What the agent does. */
   task?: AgentTask;
   agentName: string;
   cwd: string;

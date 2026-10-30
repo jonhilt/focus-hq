@@ -6,7 +6,7 @@ import { type ZodType, z } from 'zod';
 import type { Effort, Settings } from '../../shared/types';
 import { paths } from '../config';
 import { errorMessage, truncate } from '../util';
-import { agentEnv } from './claudeRunner';
+import { agentEnv } from './claudeSession';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import type { ChatProject, ShipStatus } from './shipStatus';
 import { renderToolUse } from './render';

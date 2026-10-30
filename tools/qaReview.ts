@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Effect } from 'effect';
 import { BenchmarkFileError, type Configuration } from '../server/agents/benchmarkFiles';
-import { claudeConfig } from '../server/agents/claudeRunner';
+import { claudeConfig } from '../server/agents/claudeSession';
 import { type CoreCrew, coreCrew, CrewFileError, crewWith } from '../server/agents/crewFiles';
 import { filesPrompt, openedFiles, parseQaReport, QA_SCHEMA, qaAgentModel, qaPrompt, qaStamp, qaSystemAppend, type ToolCall } from '../server/agents/qa';
 import { config } from '../server/config';

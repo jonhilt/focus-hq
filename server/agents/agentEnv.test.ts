@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { agentEnv } from './claudeRunner';
+import { agentEnv } from './claudeSession';
 
 // docs/settings.md: "A secret is never put in Focus's environment, which every agent's session is handed a copy of",
 // and one set there by hand (FOCUS_BOT_TOKEN in a shell profile, say) isn't handed on either.

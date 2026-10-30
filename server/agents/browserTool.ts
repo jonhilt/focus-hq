@@ -1,4 +1,4 @@
-import { type Tool, type ToolResult, toolServer } from 'agent-host';
+import type { Tool, ToolResult } from 'agent-host';
 import { Effect, Schema } from 'effect';
 import type { Browser, BrowserContext, LaunchOptions, Page } from 'playwright';
 import os from 'node:os';
@@ -439,9 +439,4 @@ export function browserTools(pool: BrowserPool, agentId: string, hooks: () => Pi
       return { content: [{ type: 'text', text: messages.length ? messages.join('\n') : '(no console output)' }] };
     }),
   ];
-}
-
-/** The browser tools as the old runner's in-process MCP server. */
-export function browserMcpServer(pool: BrowserPool, agentId: string, hooks: Pick<RunHooks, 'browser' | 'screenshot'>) {
-  return { type: 'sdk' as const, name: 'browser', instance: toolServer('browser', browserTools(pool, agentId, () => hooks)) };
 }

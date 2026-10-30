@@ -18,7 +18,7 @@ export { CODE_TOOLS, type ReadOnlyResult, type ReadOnlyRun, type ReadOnlyTool, t
  * `agentEnv(false)` signs in with your plan whatever the API key's doing, and with no argument as Focus's new
  * sessions do now (`host.signIn`).
  */
-export { agentEnv } from '../server/agents/claudeRunner';
+export { agentEnv } from '../server/agents/claudeSession';
 /** The ship as the crew's ship_status tool tells it (`host.shipStatus`), and its projects as a crew member's prompt lists them. */
 export { type ChatProject, projectList, type ShipStatus } from '../server/agents/shipStatus';
 /** GitHub, as a brief's Effect reads it (`BriefSpec.brief`), and a merged or closed pull request as it gives it. */

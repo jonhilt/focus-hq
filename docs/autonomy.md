@@ -12,7 +12,7 @@ The ship-wide setting is the default: it applies to agents started from then on,
 
 An agent can be given a mode of their own, whether they're working, idle or finished: the ship-wide setting and every other agent stay as they are. The choice stays on the agent: their later turns and resumes start in it, and changing the ship-wide setting afterwards doesn't touch them.
 
-- A running session switches at once, without restarting: the mode is read afresh on each tool call, so a switch applies to the very next one (`toolPermission`, tested next to it in `server/agents/claudeRunner.test.ts`). A hand already up stays up until you answer it.
+- A running session switches at once, without restarting: the mode is read afresh on each tool call, so a switch applies to the very next one (agent-host's `setAutonomy`, which `HostRunner` calls as you switch). A hand already up stays up until you answer it.
 
 Sessions are always started able to switch: bypassing permissions is allowed from the start (Claude Code needs that up front) and they carry Raise your hand's command rules whatever mode they start in. In Auto mode those rules only spare the classifier a few calls.
 

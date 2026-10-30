@@ -10,8 +10,7 @@ import { ClaudeDrafter, ClaudeQaChat, ClaudeTriager, titleGoal } from './agents/
 import { DemoQaChat } from './agents/demoQaChat';
 import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
-import { HOST_CLAUDE_DIR, HostRunner, splitRunner } from './agents/hostRunner';
-import { ClaudeRunner } from './agents/claudeRunner';
+import { HOST_CLAUDE_DIR, HostRunner } from './agents/hostRunner';
 import { CrewFileError, readCrew } from './agents/crewFiles';
 import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
@@ -99,7 +98,7 @@ function liveParts(store: Store, browsers: BrowserPool): ShipParts {
   const host = new HostRunner(browsers);
   return {
     github: ghCliLayer,
-    runner: splitRunner(new ClaudeRunner(browsers), host),
+    runner: host,
     host,
     drafter: new ClaudeDrafter(),
     triager: new ClaudeTriager(),

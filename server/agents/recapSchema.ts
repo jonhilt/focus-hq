@@ -1,11 +1,9 @@
 import { Schema } from 'effect';
-import { z } from 'zod';
 import { LANES } from '../../shared/mergeLaneRules';
 import { IMPACTS } from './recap';
 
-// The ship tool's recap, as the lead sends it (recap.ts says what each part is for): as zod for the old runner's MCP
-// server, and as an Effect Schema for agent-host's tools, the agent seeing the same JSON Schema from both
-// (opsTool.test.ts). The zod one goes with the old runner.
+// The ship tool's recap, as the lead sends it (recap.ts says what each part is for), as the Effect Schema agent-host's
+// tools decode it by.
 
 const SAY = {
   from: 'A primitive’s id, or anything else the slice talks to (“user”, “github”).',
@@ -22,26 +20,6 @@ const SAY = {
   lane: 'How it merges once QA passes it. ship: by itself; show: by itself, and the captain is told; ask: the captain merges it. Pick by how much the captain would want to see it first. The rollup sets the lowest you may pick: composes allows ship, extends show, adds only ask. Left out, it’s ask.',
   recap: 'The slice’s system recap.',
 };
-
-const step = z.object({
-  from: z.string().describe(SAY.from),
-  to: z.string(),
-  label: z.string().describe(SAY.label),
-});
-
-export const RECAP_SCHEMA = z.object({
-  primitives: z.array(z.object({
-    id: z.string().describe(SAY.id),
-    group: z.string().describe(SAY.group),
-    impact: z.enum(IMPACTS).describe(SAY.impact),
-    change: z.string().describe(SAY.change),
-    paths: z.array(z.string()).describe(SAY.paths),
-  })).describe(SAY.primitives),
-  invariants: z.array(z.string()).optional().describe(SAY.invariants),
-  map: z.array(step).optional().describe(SAY.map),
-  flow: z.array(step).optional().describe(SAY.flow),
-  lane: z.enum(LANES).optional().describe(SAY.lane),
-}).describe(SAY.recap);
 
 const described = (description: string) => Schema.String.annotate({ description });
 

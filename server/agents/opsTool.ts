@@ -1,8 +1,7 @@
-import { createSdkMcpServer, type McpSdkServerConfigWithInstance, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { Tool, ToolResult } from 'agent-host';
 import { Effect, Schema, SchemaIssue, SchemaTransformation } from 'effect';
 import { z, type ZodType } from 'zod';
-import { RECAP_SCHEMA, RecapSchema } from './recapSchema';
+import { RecapSchema } from './recapSchema';
 import { errorMessage } from '../util';
 import type { ExtraTool, OpsTools, ToolReply } from './types';
 
@@ -23,14 +22,6 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
   }
 }
 
-/** A tool's answer as MCP content, as agent-host's tool server gives it too. */
-function mcpContent(result: ToolResult): { content: ({ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string })[]; isError?: boolean } {
-  return {
-    content: [{ type: 'text', text: result.text }, ...(result.images ?? []).map((image) => ({ type: 'image' as const, data: Buffer.from(image.data).toString('base64'), mimeType: image.mimeType }))],
-    ...(result.isError && { isError: true }),
-  };
-}
-
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
 export const OPS_TOOL_NAMES = ['recap', 'show', 'ask', 'propose_close'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
@@ -47,9 +38,8 @@ export function extraTools(extra: readonly ExtraTool[]): ExtraTool[] {
 
 /**
  * A plugin's zod input as an Effect Schema: zod parses it, the tool getting what zod gives back, and a bad one reads
- * as zod's own summary of what's wrong. Its JSON Schema is the one zod makes, as the MCP server makes it from the same
- * shape (draft-07, the input's side), carried by a check, as a declaration's own JSON Schema is left open.
- * Throws when zod can't make one, as the MCP server then leaves the tool out.
+ * as zod's own summary of what's wrong. Its JSON Schema is the one zod makes from the shape (draft-07, the input's
+ * side), carried by a check, as a declaration's own JSON Schema is left open. Throws when zod can't make one.
  */
 export function zodInput(shape: Record<string, ZodType>): Schema.Codec<Record<string, unknown>> {
   const object = z.object(shape);
@@ -65,28 +55,13 @@ export function zodInput(shape: Record<string, ZodType>): Schema.Codec<Record<st
   );
 }
 
-/**
- * One of a lead's office tools, defined once: `tool` as agent-host serves it, and for the old runner's MCP server its
- * input as zod (`shape`) and `serve`, which takes what zod parsed and answers as `tool` does.
- */
-interface OfficeTool {
-  tool: Tool;
-  shape: Record<string, ZodType>;
-  serve(input: Record<string, unknown>): Promise<ToolResult>;
+/** One of Ops' own, as agent-host serves it as `office`. */
+function opsTool<A>(name: string, description: string, input: Schema.Codec<A>, failed: string, run: (input: A) => Promise<string>): Tool {
+  return { name, server: 'office', description, input, handler: (args: A) => Effect.promise(() => answer(() => run(args), failed)) };
 }
 
-/** One of Ops' own: the MCP server's zod parse is decoded again by `input` (no transforms, so it comes through as it is). */
-function opsTool<A>(name: string, description: string, input: Schema.Codec<A>, shape: Record<string, ZodType>, failed: string, run: (input: A) => Promise<string>): OfficeTool {
-  const handler = (args: A) => Effect.promise(() => answer(() => run(args), failed));
-  return {
-    tool: { name, server: 'office', description, input, handler },
-    shape,
-    serve: (args) => Effect.runPromise(Schema.decodeUnknownEffect(input)(args).pipe(Effect.flatMap(handler))),
-  };
-}
-
-/** A plugin's: zod parses it either way, once. Null when zod can't make its JSON Schema, which the MCP server leaves out too. */
-function pluginTool(t: ExtraTool): OfficeTool | null {
+/** A plugin's, zod parsing its input. Null when zod can't make its JSON Schema: it's left out. */
+function pluginTool(t: ExtraTool): Tool | null {
   let input: Schema.Codec<Record<string, unknown>>;
   try {
     input = zodInput(t.input);
@@ -94,14 +69,17 @@ function pluginTool(t: ExtraTool): OfficeTool | null {
     console.warn(`The office tool ${t.name} is left out, as its input has no JSON Schema: ${errorMessage(err)}`);
     return null;
   }
-  const handler = (args: Record<string, unknown>) => Effect.promise(() => answer(() => t.run(args), `${t.name} failed`));
-  return { tool: { name: t.name, server: 'office', description: t.description, input, handler }, shape: t.input, serve: (args) => Effect.runPromise(handler(args)) };
+  return { name: t.name, server: 'office', description: t.description, input, handler: (args: Record<string, unknown>) => Effect.promise(() => answer(() => t.run(args), `${t.name} failed`)) };
 }
 
 const Described = (description: string) => Schema.String.annotate({ description });
 
-/** Ops' tools for a goal's lead, and those the plugins switched on add, each defined once for both runners. */
-function officeTools(tools: OpsTools): OfficeTool[] {
+/**
+ * Ops' tools for a goal's lead as agent-host's tools, served as `office`: mcp__office__recap, show, ask and
+ * propose_close, and those the plugins switched on add. What they're for goes in the lead's instructions
+ * (`OPS_INSTRUCTIONS`), as the host's tool server carries none.
+ */
+export function opsTools(tools: OpsTools): Tool[] {
   const say = {
     repo: 'The pull request\'s repo, owner/name.',
     number: 'The pull request\'s number.',
@@ -121,7 +99,6 @@ function officeTools(tools: OpsTools): OfficeTool[] {
       'recap',
       'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it), which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses one that leaves a file the pull request changes under none of its primitives\' paths (paths start with the repo\'s folder), then puts it in the pull request\'s description and on your station\'s screen. It also picks the lane the pull request merges in once QA passes it: ship merges it by itself, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows. With no recap, a pull request is in ask. Send it again to replace it.',
       Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }), recap: RecapSchema }),
-      { repo: z.string().describe(say.repo), number: z.number().int().describe(say.number), recap: RECAP_SCHEMA },
       "Couldn't put the recap on it",
       (input) => tools.recap(input),
     ),
@@ -129,7 +106,6 @@ function officeTools(tools: OpsTools): OfficeTool[] {
       'show',
       "Put a visual on your station's big screen for the captain: a diagram, a mockup, options side by side. They see a picture of it on the screen, switch between what you've shown, and open each one up close, live. Showing an id again replaces it.",
       Schema.Struct({ id: Described(say.id), title: Described(say.title), html: Described(say.html) }),
-      { id: z.string().describe(say.id), title: z.string().describe(say.title), html: z.string().describe(say.html) },
       "Couldn't show it",
       (input) => tools.show(input),
     ),
@@ -141,15 +117,6 @@ function officeTools(tools: OpsTools): OfficeTool[] {
         context: Schema.optionalKey(Described(say.context)),
         options: Schema.mutable(Schema.Array(Schema.Struct({ label: Described(say.label), detail: Schema.optionalKey(Described(say.detail)), html: Described(say.optionHtml) }))).annotate({ description: say.options }),
       }),
-      {
-        question: z.string().describe(say.question),
-        context: z.string().optional().describe(say.context),
-        options: z.array(z.object({
-          label: z.string().describe(say.label),
-          detail: z.string().optional().describe(say.detail),
-          html: z.string().describe(say.optionHtml),
-        })).describe(say.options),
-      },
       "Couldn't ask",
       (input) => tools.ask(input),
     ),
@@ -157,33 +124,9 @@ function officeTools(tools: OpsTools): OfficeTool[] {
       'propose_close',
       "Tell the captain you think the goal is done (what done looks like is met), or that nothing worthwhile is left. They close it or carry on. Then tell them why, and stop.",
       Schema.Struct({ reason: Described(say.reason) }),
-      { reason: z.string().describe(say.reason) },
       "Couldn't propose closing",
       ({ reason }) => tools.proposeClose({ reason }),
     ),
     ...extraTools(tools.extra ?? []).flatMap((t) => pluginTool(t) ?? []),
   ];
-}
-
-/**
- * Ops' tools for a goal's lead as agent-host's tools, served as `office`: mcp__office__recap, show, ask and
- * propose_close, and those the plugins switched on add. What `opsMcpServer` serves, but for its instructions
- * (`OPS_INSTRUCTIONS`).
- */
-export function opsTools(tools: OpsTools): Tool[] {
-  return officeTools(tools).map((t) => t.tool);
-}
-
-/**
- * Ops' tools for a goal's lead, as the old runner's in-process MCP server: mcp__office__recap, show, ask
- * and propose_close, and those the plugins switched on add.
- */
-export function opsMcpServer(tools: OpsTools): McpSdkServerConfigWithInstance {
-  return createSdkMcpServer({
-    name: 'office',
-    version: '1.0.0',
-    alwaysLoad: true,
-    instructions: OPS_INSTRUCTIONS,
-    tools: officeTools(tools).map((t) => tool(t.tool.name, t.tool.description, t.shape, async (input) => mcpContent(await t.serve(input)))),
-  });
 }

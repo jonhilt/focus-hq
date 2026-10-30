@@ -1,19 +1,15 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy as HostAutonomy, ConversationEvent, ConversationSummary } from 'agent-host';
 import { clock } from '../../shared/clock';
-import type { AgentTask, Autonomy, TermLine } from '../../shared/types';
+import type { Autonomy, TermLine } from '../../shared/types';
 import { fieldsOf } from '../../shared/records';
 import { type AskedQuestion, askedQuestions } from './questions';
 import type { TurnResult } from './sdkMessages';
 import { type RunOutcome, STOPPED_BY_CAPTAIN } from './types';
 
-// The HostRunner's decisions (hostRunner.ts runs them): which sessions go to agent-host, which of an agent's host
+// The HostRunner's decisions (hostRunner.ts runs them): which of an agent's host
 // conversations a turn joins, and what a turn comes to. Pure, so they're unit tested (hostRunnerRules.test.ts).
 
-/** The tasks whose sessions run on agent-host: every one, leads included. */
-export function runsOnHost(task: AgentTask | undefined): boolean {
-  return task !== undefined;
-}
 
 export const HOST_AUTONOMY: Record<Autonomy, HostAutonomy> = { ask: 'raise-hand', auto: 'auto', full: 'full' };
 

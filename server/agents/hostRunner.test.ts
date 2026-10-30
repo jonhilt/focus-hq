@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { Settings, TermLine } from '../../shared/types';
 import { paths } from '../config';
 import { BrowserPool } from './browserTool';
-import { DECLINED } from './claudeRunner';
+import { DECLINED } from './claudeSession';
 import { copyTranscript, HostRunner } from './hostRunner';
 import { OPS_INSTRUCTIONS } from './opsTool';
 import { refusedFile } from './pushGuard';

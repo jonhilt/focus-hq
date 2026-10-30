@@ -8,10 +8,10 @@ import { paths } from '../config';
 import { errorMessage } from '../util';
 import { BackgroundTracker } from './backgroundTasks';
 import { browserTools, type BrowserPool } from './browserTool';
-import { agentEnv, DECLINED, sessionHooks, UNANSWERED } from './claudeRunner';
+import { agentEnv, DECLINED, sessionHooks, UNANSWERED } from './claudeSession';
 import { type CommonContext, handleCommonEvent, newCommonContext } from './commonEvents';
 import type { AskedQuestion } from './questions';
-import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction, runsOnHost } from './hostRunnerRules';
+import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction } from './hostRunnerRules';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { OPS_INSTRUCTIONS, opsTools } from './opsTool';
 import { openScratch, type Scratch } from './scratch';
@@ -161,13 +161,6 @@ export class HostRunner implements AgentRunner {
       ...(extras?.tools && { agentProgressSummaries: true, toolConfig: { askUserQuestion: { previewFormat: 'html' } } }),
     };
   }
-}
-
-/** Every session on the host; `claude` is no longer chosen for any task. */
-export function splitRunner(claude: AgentRunner, host: HostRunner): AgentRunner {
-  return {
-    start: (req, hooks) => (runsOnHost(req.task) ? host : claude).start(req, hooks),
-  };
 }
 
 /** One Focus turn of an agent's session on the host, start to finish. */

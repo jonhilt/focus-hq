@@ -1,7 +1,7 @@
 import { toolServer } from 'agent-host';
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { extraTools, opsMcpServer, opsTools } from './opsTool';
+import { extraTools, opsTools } from './opsTool';
 import type { ExtraTool, OpsTools } from './types';
 
 describe('the plugins\' tools', () => {
@@ -57,20 +57,6 @@ async function client(server: Server) {
   };
 }
 
-/**
- * A tool's JSON Schema with what's said the same either way taken out: the draft zod names at the top (`$schema`),
- * and Effect's `additionalProperties: true`, which is what leaving it out means.
- */
-function normalized(schema: unknown, top = true): unknown {
-  if (Array.isArray(schema)) return schema.map((s) => normalized(s, false));
-  if (typeof schema !== 'object' || schema === null) return schema;
-  return Object.fromEntries(
-    Object.entries(schema)
-      .filter(([key, value]) => !(top && key === '$schema') && !(key === 'additionalProperties' && value === true))
-      .map(([key, value]) => [key, normalized(value, false)]),
-  );
-}
-
 /** Ops' tools that say what they were given, and a plugin's that answers with a picture (or throws, when asked to). */
 function lent(): OpsTools {
   const said = (what: string) => (input: unknown) => Promise.resolve(`${what} ${JSON.stringify(input)}`);
@@ -97,17 +83,14 @@ function lent(): OpsTools {
   };
 }
 
-const servers = async () => {
-  const tools = lent();
-  return { mcp: await client(opsMcpServer(tools).instance), host: await client(toolServer('office', opsTools(tools))) };
-};
+const servers = async () => ({ host: await client(toolServer('office', opsTools(lent()))) });
 
 const RECAP = {
   repo: 'jonhilt/focus',
   number: 7,
   recap: {
     primitives: [{ id: 'office-tools', group: 'ops', impact: 'adds', change: 'Ops\' tools on agent-host.', paths: ['focus/server/agents/opsTool.ts'] }],
-    invariants: ['The two servers say the same.'],
+    invariants: ['The lead sees each tool as described.'],
     map: [{ from: 'office-tools', to: 'agent-host', label: 'serves' }],
     lane: 'ask',
   },
@@ -125,33 +108,32 @@ const GOOD: Record<string, unknown> = {
 describe('the office tools on agent-host', () => {
   vi.spyOn(console, 'warn').mockImplementation(() => undefined);
 
-  it('are what the MCP server serves: the same names in the same order, descriptions and JSON Schemas', async () => {
-    const { mcp, host } = await servers();
-    const [old, now] = await Promise.all([mcp.list(), host.list()]);
-    expect(now.map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'sample']);
-    expect(now.map((t) => t.name)).toEqual(old.map((t) => t.name));
-    for (const [i, t] of now.entries()) {
-      expect(t.description).toBe(old[i].description);
-      expect(normalized(t.inputSchema), t.name).toEqual(normalized(old[i].inputSchema));
-    }
+  it('are Ops\' own in order, then the plugins\' well-named ones, each described with the JSON Schema of its input', async () => {
+    const { host } = await servers();
+    const listed = await host.list();
+    expect(listed.map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'sample']);
+    for (const t of listed) expect(t.description, t.name).not.toBe('');
+    expect(listed.find((t) => t.name === 'recap')?.inputSchema).toMatchObject({ type: 'object', required: ['repo', 'number', 'recap'] });
+    expect(listed.find((t) => t.name === 'ask')?.inputSchema).toMatchObject({ type: 'object', required: ['question', 'options'] });
   });
 
   it('give a plugin\'s tool zod\'s JSON Schema as it is, the draft it names too', async () => {
-    const { mcp, host } = await servers();
-    const [old, now] = await Promise.all([mcp.list(), host.list()]);
-    expect(now.find((t) => t.name === 'sample')?.inputSchema).toEqual(old.find((t) => t.name === 'sample')?.inputSchema);
+    const { host } = await servers();
+    const sample = lent().extra?.[0];
+    const listed = (await host.list()).find((t) => t.name === 'sample');
+    expect(listed?.inputSchema).toEqual(z.toJSONSchema(z.object(sample?.input ?? {}), { target: 'draft-7', io: 'input' }));
   });
 
   it('are all served as office', () => {
     expect(opsTools(lent()).map((t) => t.server)).toEqual(['office', 'office', 'office', 'office', 'office']);
   });
 
-  it('answer as the MCP server does, words and pictures, with what zod parsed (defaults in, unknown fields out)', async () => {
-    const { mcp, host } = await servers();
+  it('answer in words and pictures, with what zod parsed (defaults in, unknown fields out)', async () => {
+    const { host } = await servers();
     for (const [name, args] of Object.entries(GOOD)) {
-      const [old, now] = await Promise.all([mcp.call(name, args), host.call(name, args)]);
-      expect(now, name).toEqual(old);
+      const now = await host.call(name, args);
       expect(now.isError, name).toBeUndefined();
+      if (name !== 'sample') expect(now.content[0].text, name).toMatch(new RegExp(`^${name === 'propose_close' ? 'proposeClose' : name} \\{`));
     }
     const sample = await host.call('sample', GOOD.sample);
     expect(sample.content).toEqual([
@@ -160,10 +142,9 @@ describe('the office tools on agent-host', () => {
     ]);
   });
 
-  it('say a tool that throws failed, in its message, as the MCP server does', async () => {
-    const { mcp, host } = await servers();
-    const [old, now] = await Promise.all([mcp.call('sample', { text: 'throw' }), host.call('sample', { text: 'throw' })]);
-    expect(now).toEqual(old);
+  it('say a tool that throws failed, in its message', async () => {
+    const { host } = await servers();
+    const now = await host.call('sample', { text: 'throw' });
     expect(now).toEqual({ content: [{ type: 'text', text: 'sample failed: it broke' }], isError: true });
   });
 
