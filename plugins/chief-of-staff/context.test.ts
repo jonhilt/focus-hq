@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { LedgerEvent, TermLine } from '../../plugin-api/shared';
-import { CAPTAIN_WORDS, captainWords, contextText, turnContext } from './context';
+import { CAPTAIN_WORDS, captainWords, contextText, otherGoals, turnContext } from './context';
 
 const msg = (t: number, text: string): TermLine => ({ t, kind: 'manager', text });
 
@@ -90,3 +90,26 @@ describe('turnContext', () => {
     expect(contextText(c)).toBe('GOAL: (untitled)');
   });
 });
+
+describe('the other open goals', () => {
+  const goal = (id: string, projectId: string, done?: string) => ({ id, projectId, task: 'lead' as const, name: `Lt. ${id}`, lead: { title: `Goal ${id}`, ...(done && { note: { done } }) } });
+  const on = (p: string) => p !== 'off';
+  const names = (p: string) => ({ q: 'Thomas & Co' })[p];
+
+  it('lists the leads of the projects it’s on for, this project’s first, the lead’s own left out', () => {
+    const agents = [goal('a', 'p'), goal('b', 'q', 'Proposals go out\nby email.'), goal('c', 'p', 'Retries work.'), goal('d', 'off'), { ...goal('e', 'p'), task: 'issue' as const }];
+    const others = otherGoals({ id: 'a', projectId: 'p' }, agents, on, names);
+    expect(others).toEqual([
+      { id: 'c', lead: 'Lt. c', goal: 'Goal c', done: 'Retries work.' },
+      { id: 'b', lead: 'Lt. b', goal: 'Goal b', project: 'Thomas & Co', done: 'Proposals go out\nby email.' },
+    ]);
+    expect(contextText({ goal: 'g', intents: [], captainSaid: [], otherGoals: others })).toBe(
+      'GOAL: g\n\nTHE OTHER OPEN GOALS (a move names one by its lead\'s id):\n- c: “Goal c” (Lt. c). Done looks like: Retries work.\n- b: “Goal b” (Lt. b, in Thomas & Co). Done looks like: Proposals go out by email.',
+    );
+  });
+
+  it('leaves the heading out when there are none', () => {
+    expect(contextText(turnContext(lead, [], [], []))).not.toContain('OTHER OPEN GOALS');
+  });
+});
+

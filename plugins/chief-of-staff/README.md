@@ -57,6 +57,13 @@ Comms is moving to one stream per project, a thread per goal in it: the captain 
 - **Trying other ways to draw it:** `lab/index.html`, opened straight from disk, draws the stream from sample data split into slots (frame, goals, header, voice, messages, quiet lines, what needs the user, talk box, skin), each drawn as it is today or by one of twenty-eight variations, combined one per slot. Nothing in it reaches Focus: it's for picking a direction before building it into `stream.ts`.
 - **The captain's words come from the lead's log, not the transcript:** there, Ops' news waiting for the lead is joined to the captain's next message, so their words would be lost under it; the log keeps each message whole, with who sent it.
 
+## Work that belongs in another goal
+
+Work moves between goals only through the chief of staff. A lead once passed a build straight into another lead's session with Claude Code's own peer tools: nothing recorded who it came from, it didn't show in the receiving goal's thread, and nobody had a say. Leads no longer have those tools, and raise work that belongs elsewhere at the end of their turn (`PEER_TOOLS`, `server/agents/hostRunner.ts`).
+
+- **It spots it as it reads a turn:** beside what's agreed, it reads the turn against the other open goals in the projects it's on for, each with what done looks like (`otherGoals`, `context.ts`), and asks itself whether any of the work belongs in one of them or in a new goal: because the lead says so, or because it sees it (`crew/judge.md`). Each piece is an ask of its own, "Move *the work* to *the lead*'s goal?" or "Start a new goal for *the work*?", carrying the move: what the work is, where it goes, what the receiving lead would be told, and its pick.
+- **Only the user moves work (P3).** A turn with a move goes to them as a card even when it would have carried on or gone back to the lead; a move to a goal it wasn't shown, or to the lead's own, is dropped and the turn goes as it would have (`handoverRules.ts`, its test and `chief.test.ts`).
+
 ## Raising a pull request's lane
 
 A goal's lead puts each of their pull requests in a [lane](../../docs/merging.md#lanes-how-a-goals-leads-slice-merges) with the recap they put on it: Ship merges by itself once QA passes it, Show merges and tells the captain, Ask waits for them. The lead picks it, so a lead that misjudges what the captain would want to see would merge it unseen; the chief of staff is the second pair of eyes, and it may raise the lane, never lower it (`crew/lane.md`, `laneJudge.ts`, `laneRules.ts`, their tests and `chief.test.ts`):

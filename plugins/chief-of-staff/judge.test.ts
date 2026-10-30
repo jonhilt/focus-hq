@@ -108,4 +108,11 @@ describe('a route decided already', () => {
     expect(verdictSchema(4).properties.route.enum).toEqual([4]);
     expect(VERDICT_SCHEMA.properties.route.enum).toEqual([1, 2, 3, 4]);
   });
+
+  it('keeps the asks that would move work on any route, and a move only when it’s whole', () => {
+    const move = { what: 'the retry build', to: 'lead_b', brief: 'Retries are built.', pick: 'move' };
+    const v = parseVerdict({ route: 1, why: 'w', message: 'm', asks: [{ ask: 'Carry on' }, { ask: 'Note it' }, { ask: 'Move the retry build?', move }, { ask: 'Move tests?', move: { ...move, pick: 'maybe' } }] });
+    expect(v?.asks).toEqual([{ ask: 'Carry on' }, { ask: 'Move the retry build?', move }]);
+    expect(VERDICT_SCHEMA.properties.asks.items.required).not.toContain('move');
+  });
 });

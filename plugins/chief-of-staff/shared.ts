@@ -56,6 +56,26 @@ export type Check = (typeof CHECKS)[number];
 /** How many separate decisions it puts to the user on one turn at most: a block each on the card. */
 export const MAX_ASKS = 4;
 
+/** Where a move takes work: an open goal, by its lead's id, or a new goal (`NEW_GOAL`). */
+export const NEW_GOAL = 'new';
+
+/**
+ * Work it found in a lead's turn that belongs in another open goal or in a new one (handoverRules.ts): the lead saying
+ * so, or the judge inferring it from what done looks like and the other open goals. Only the user moves it (P3).
+ */
+export interface Move {
+  /** The work, in a few words ("the retry build"). */
+  what: string;
+  /** The receiving goal's lead id, or `NEW_GOAL`. */
+  to: string;
+  /** What the receiving lead, or the new goal, is told: what the work is, where it stands, and what's known of it. */
+  brief: string;
+  /** Its pick: move the work, or keep it in this goal. */
+  pick: 'move' | 'keep';
+}
+
+const PICKS = ['move', 'keep'] as const;
+
 /**
  * One decision a turn puts to the user, answered on its own (askRules.ts): its headline, and the replies that
  * answer it. On a turn with nothing for the user to decide (routes 1 and 4) there's one, saying in brief what it
@@ -66,6 +86,8 @@ export interface Ask {
   ask: string;
   /** Replies to this decision alone, a button each; none when a button can't answer it. */
   replies?: Reply[];
+  /** The work this ask would move to another goal, when it's that decision ("Move the retry build to Tanaka's goal?"). */
+  move?: Move;
 }
 
 /** A turn as it judged it: its route, the decisions it puts to the user (each with its replies), why, and its words. */
@@ -141,12 +163,22 @@ export function repliesOf(v: unknown): Reply[] {
   return out;
 }
 
-/** An ask, if `v` is one: a headline said, and the replies to it (`repliesOf`, left out when there are none). */
+/** A move, if `v` is one: the work, where it goes and what they're told all said, and a pick of the two. */
+export function moveOf(v: unknown): Move | undefined {
+  if (!isRecord(v) || !isOneOf(PICKS, v.pick)) return undefined;
+  const what = trimmed(v.what);
+  const to = trimmed(v.to);
+  const brief = trimmed(v.brief);
+  return what && to && brief ? { what, to, brief, pick: v.pick } : undefined;
+}
+
+/** An ask, if `v` is one: a headline said, the replies to it (`repliesOf`, left out when there are none), and its move if it has one. */
 function askOf(v: unknown): Ask | undefined {
   if (!isRecord(v)) return undefined;
   const ask = trimmed(v.ask);
   const replies = repliesOf(v.replies);
-  return ask ? { ask, ...(replies.length && { replies }) } : undefined;
+  const move = moveOf(v.move);
+  return ask ? { ask, ...(replies.length && { replies }), ...(move && { move }) } : undefined;
 }
 
 /**

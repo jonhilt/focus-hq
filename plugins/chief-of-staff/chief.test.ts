@@ -19,7 +19,7 @@ async function aboard(answer: unknown = { route: 4, ask: 'Run the tests first', 
   const asked: { system: string; prompt: string; schema?: Record<string, unknown> }[] = [];
   const judge: Judge = {
     model: 'haiku',
-    judge: (req) => (asked.push(req), held.then(() => ({ structured: answer, costUsd: 0.001, model: 'claude-haiku-4-5' }))),
+    judge: (req) => (asked.push(req), held.then(() => ({ structured: typeof answer === 'function' ? (answer as () => unknown)() : answer, costUsd: 0.001, model: 'claude-haiku-4-5' }))),
   };
   const transcript = { jsonl: jsonl([captain('a', 'Build saved items'), said('b', 'Slice 1 is up. Shall I start slice 2?')]) };
   let chief: ChiefOfStaff | undefined;
@@ -320,6 +320,39 @@ describe('the chief of staff', () => {
 });
 
 // README.md#raising-a-pull-requests-lane: it reads each pull request's recap and raises its lane where the captain would want to see it first
+describe('the chief of staff spotting work that belongs in another goal', () => {
+  const verdict = (to: string) => ({
+    route: 1, check: 'none', why: 'Progress, but the retry build is another goal’s.', says: 'Lindqvist built retries, which are Tanaka’s.', message: 'Carry on.',
+    asks: [
+      { ask: 'Carry on to the settings page', replies: [] },
+      { ask: 'Move the retry build to Tanaka’s goal?', replies: [{ label: 'Keep it here', text: 'Keep the retry build here.' }], move: { what: 'the retry build', to, brief: 'Retries for failed pushes are built on lindqvist/retries.', pick: 'move' } },
+    ],
+  });
+
+  async function twoGoals(to: (other: Agent) => string) {
+    const started: Agent[] = [];
+    const o = await aboard(() => verdict(to(started[0])));
+    started.push(o.agents.startGoal(o.project.id, 'Pushes retry').agent);
+    o.claude.turns[0].end({ ok: true, summary: 'Settings next.' });
+    await until(() => o.verdicts().length === 1 && !!o.read()?.judged);
+    return { ...o, other: o.store.agents.get(started[0].id)! };
+  }
+
+  it('reads the turn against the other open goals, and puts a move to the captain as a card though it would carry on', async () => {
+    const o = await twoGoals((other) => other.id);
+    expect(o.asked[0].prompt).toContain(`THE OTHER OPEN GOALS (a move names one by its lead's id):\n- ${o.other.id}: “${o.other.lead?.title}” (${o.other.name})`);
+    expect(o.read()?.judged).toMatchObject({ route: 2, asks: [{ ask: 'Carry on to the settings page' }, { move: { to: o.other.id, pick: 'move' } }] });
+    // it moved nothing: the other lead heard nothing from it
+    expect(o.claude.turns[1].sent).toEqual([]);
+  });
+
+  it('drops a move to a goal it wasn’t shown, or to the lead’s own, keeping the ask', async () => {
+    const o = await twoGoals(() => 'lead_gone');
+    expect(o.read()?.judged).toMatchObject({ route: 1, asks: [{ ask: 'Carry on to the settings page' }] });
+    expect(o.read()?.judged?.asks.some((a) => a.move)).toBe(false);
+  });
+});
+
 describe('the chief of staff reading a ship’s lane', () => {
   /** A lead who shipped a slice in Ship, and a chief of staff whose judge answers its read with `answer` (or fails). */
   async function shipped(answer: unknown) {

@@ -1,6 +1,7 @@
 import type { Agent, Lane, LeadNote, PluginHost, Settings } from '../../plugin-api/server';
 import { errorMessage, hasLeadWork } from '../../plugin-api/server';
-import { contextText, turnContext } from './context';
+import { contextText, otherGoals, turnContext } from './context';
+import { movesOpen } from './handoverRules';
 import { judgePrompt, judgeSystemPrompt, judgeVersion, parseVerdict, verdictSchema } from './judge';
 import { laneJudgeVersion, LANE_SCHEMA, lanePrompt, laneSystemPrompt, parseLane } from './laneJudge';
 import type { JevRouting, Router } from './jevRouter';
@@ -157,13 +158,15 @@ export class ChiefOfStaff {
       const orders = this.standingOrders();
       // it reads the whole turn against what's agreed (context.ts); Jev routes by the goal and the turn's clipped end alone,
       // as it was trained
-      const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), await this.host.allLines(agent.id))));
+      const others = otherGoals(agent, this.host.agents(), (id) => this.host.on(id), (id) => this.host.projects().find((p) => p.id === id)?.name);
+      const prompt = judgePrompt(goal, tail.text, contextText(turnContext(agent, this.host.ledger(), await this.host.allLines(agent.id), others)));
       const { routing, failed } = await this.routeWithJev(agent.projectId, judgePrompt(goal, tail.clipped), orders);
       const pinned = routing?.route;
       const result = await this.judge.judge({ system: judgeSystemPrompt(orders, pinned), prompt, settings: this.host.settings(), ...(pinned && { schema: verdictSchema(pinned) }) });
       const parsed = parseVerdict(result.structured);
       if (!parsed) throw new Error(`the judge gave no verdict: ${JSON.stringify(result.structured)}`);
-      const verdict = pinned ? { ...parsed, route: pinned } : parsed;
+      // a move goes only to a goal it read as open, and makes the turn the captain's however it was routed (handoverRules.ts)
+      const verdict = movesOpen(pinned ? { ...parsed, route: pinned } : parsed, new Set(others.map((o) => o.id)), agent.id);
       this.host.record(agent.projectId, {
         kind: 'cos-verdict', sessionId, agent: agent.name, goal, turnUuid: tail.uuid, route: verdict.route, ...(verdict.check && { check: verdict.check }), why: verdict.why,
         ...(verdict.says && { says: verdict.says }), ...(verdict.message && { message: verdict.message }), model: result.model ?? this.judge.model,

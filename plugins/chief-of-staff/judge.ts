@@ -58,6 +58,12 @@ export const verdictSchema = (pinned?: CosRoute) => ({
             maxItems: MAX_REPLIES,
             items: { type: 'object', properties: { label: { type: 'string' }, text: { type: 'string' } }, required: ['label', 'text'], additionalProperties: false },
           },
+          move: {
+            type: 'object',
+            properties: { what: { type: 'string' }, to: { type: 'string' }, brief: { type: 'string' }, pick: { type: 'string', enum: ['move', 'keep'] } },
+            required: ['what', 'to', 'brief', 'pick'],
+            additionalProperties: false,
+          },
         },
         required: ['ask', 'replies'],
         additionalProperties: false,
@@ -79,7 +85,7 @@ const text = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
  * The judge's answer, if it's one: a route of the four, the check that decided it (left out if it gave none), a reason, its asks (each a headline
  * and the replies to it, `asksOf`; an answer from before there were several, with one `ask` and its `replies`, is a list of one), its reading for
  * the user (left out if it gave none), and the words it would send (empty if it gave none). With no ask, its reason stands in for one. A
- * turn with nothing for the user to decide (routes 1 and 4) keeps its first ask alone.
+ * turn with nothing for the user to decide (routes 1 and 4) keeps its first ask alone, and any that would move work (`movesOpen` makes those the user's).
  */
 export function parseVerdict(structured: unknown): Verdict | undefined {
   if (!isRecord(structured) || !isOneOf(ROUTES, structured.route)) return undefined;
@@ -91,7 +97,8 @@ export function parseVerdict(structured: unknown): Verdict | undefined {
   return {
     route: structured.route,
     ...(isOneOf(CHECKS, structured.check) && { check: structured.check }),
-    asks: asks.length ? (forLead ? asks.slice(0, 1) : asks) : [{ ask: why }],
+    // a move is kept on any route, for `movesOpen` to put to the user (handoverRules.ts)
+    asks: asks.length ? (forLead ? asks.filter((a, i) => i === 0 || a.move) : asks) : [{ ask: why }],
     why,
     ...(says && { says }),
     message: text(structured.message),
