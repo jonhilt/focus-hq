@@ -32,8 +32,11 @@ export type CardUi = Pick<Ui, 'openScreen' | 'openBoard' | 'goToAgent' | 'error'
 const said = (agent: Agent) => lastWords(focus.lines(agent.id));
 const open = (go: OpenAgent, agent: Agent, label: string) => h('button', { class: 'btn small', title: 'Their panel: terminal, goal and crew (G)', onclick: () => go(agent.id) }, label);
 
-/** The id Ops shows a slice's system recap under on the lead's screen (docs/goals.md#the-system-recap). */
+/** The prefix Ops shows a slice's system recap under on the lead's screen (docs/goals.md#the-system-recap). */
 const RECAP = 'system-recap';
+/** Each PR's recap, as Ops saves it: `system-recap-<number>` (server/agents/manager/goalPrs.ts). */
+const recapOf = (number: number): string => `${RECAP}-${number}`;
+const isRecap = (id: string): boolean => id === RECAP || id.startsWith(`${RECAP}-`);
 
 /** A press on one of a card's pictures opens it large over Comms; with ⌘ or Ctrl, a link still opens its own tab. */
 const zoomOn = (items: readonly Zoomable[], i: number) => (e: MouseEvent) => {
@@ -44,7 +47,7 @@ const zoomOn = (items: readonly Zoomable[], i: number) => (e: MouseEvent) => {
 
 /** What a lead showed on their screen this turn, as pictures: what they're asking about is often there. Their recap is the merge box's. */
 function shownBox(ui: CardUi, agent: Agent): HTMLElement[] {
-  const shown = shownThisTurn(agent.lead?.artifacts, focus.lines(agent.id)).filter((a) => a.id !== RECAP);
+  const shown = shownThisTurn(agent.lead?.artifacts, focus.lines(agent.id)).filter((a) => !isRecap(a.id));
   if (!shown.length) return [];
   const large: Zoomable[] = shown.map((a) => ({ title: a.title, html: artifactUrl(agent.id, a, 'html') }));
   const cards = shown.map((a, i) =>
@@ -171,9 +174,9 @@ function askBlocks(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
 function mergeBox(ui: CardUi, prs: readonly BoardPr[], lead?: Agent): HTMLElement[] {
   if (!prs.length) return [];
   // the slice's recap, what to review them by, whatever the lead or QA said since it went up
-  const recap = lead?.lead?.artifacts?.find((a) => a.id === RECAP);
-  const recapBox = lead && recap
-    ? [h('a', { class: 'cos-card-recap', href: artifactUrl(lead.id, recap, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' }, h('img', { src: artifactUrl(lead.id, recap, 'jpg'), alt: recap.title }))]
+  const recaps = lead ? prs.flatMap(({ pr }) => lead.lead?.artifacts?.find((a) => a.id === recapOf(pr.number)) ?? []) : [];
+  const recapBox = lead
+    ? recaps.map((recap) => h('a', { class: 'cos-card-recap', href: artifactUrl(lead.id, recap, 'html'), target: '_blank', rel: 'noopener', title: 'Open it live' }, h('img', { src: artifactUrl(lead.id, recap, 'jpg'), alt: recap.title })))
     : [];
   const rows = prs.map(({ projectId, pr }) => {
     const review = focus.reviews.get(prKey(pr.repo, pr.number));
