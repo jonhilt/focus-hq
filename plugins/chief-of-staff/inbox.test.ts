@@ -24,7 +24,8 @@ describe('deciding an inbox item', () => {
     expect(decideOf({ send: true })).toEqual({ send: true });
     expect(decideOf({ ack: true })).toEqual({ ack: true });
     expect(decideOf({ answer: { ask: 1, text: ' Emails first. ' } })).toEqual({ answer: { ask: 1, text: 'Emails first.' } });
-    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }, { ack: 'yes' }, { answer: { ask: '1', text: 'x' } }, { answer: { ask: 0, text: ' ' } }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close, send, ack or answer/);
+    expect(decideOf({ move: 1 })).toEqual({ move: 1 });
+    for (const bad of [null, {}, { text: '  ' }, { close: 'yes' }, { allow: 'true' }, { ack: 'yes' }, { answer: { ask: '1', text: 'x' } }, { answer: { ask: 0, text: ' ' } }, { move: '1' }, { move: 0.5 }]) expect(() => decideOf(bad)).toThrow(/allow, option, text, close, send, ack, answer or move/);
   });
 
   it('says what was decided in a few words', () => {

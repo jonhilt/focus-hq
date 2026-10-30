@@ -30,6 +30,7 @@ export function decideRefusal({ kind, cos }: Pick<InboxItem, 'kind' | 'cos'>, d:
   if ('send' in d) return cos && (cos.route === 1 || cos.route === 4) ? null : 'Only a turn the chief of staff has words ready for can be sent them';
   if ('ack' in d) return kind === 'turn' ? null : 'Only a lead’s turn is acknowledged: answer the rest';
   if ('answer' in d) return kind === 'turn' && cos ? null : 'Only a lead’s turn the chief of staff has read is answered ask by ask';
+  if ('move' in d) return kind === 'turn' && cos ? null : 'Only work the chief of staff found in a lead’s turn is moved';
   if (kind === 'qa' || kind === 'conflicts') return 'A pull request is decided on the board: merge, close or send it back there';
   if (kind === 'hand') return 'allow' in d ? null : 'A raised hand is approved or declined: allow true or false';
   if ('allow' in d) return 'Only a raised hand is approved or declined';

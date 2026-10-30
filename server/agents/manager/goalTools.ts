@@ -248,6 +248,8 @@ export class GoalTools extends Part {
     return Effect.gen({ self: this }, function* () {
       const work = agent.lead;
       if (!work) return yield* new Refused({ message: 'There’s no goal to close' });
+      const held = this.core.plugins.closeHeld(agent);
+      if (held) return yield* new Refused({ message: held });
       this.update(agent, { lead: { ...work, closing: { reason: reason.trim() || 'The goal looks done', at: Date.now() } } });
       this.print(agent, [{ kind: 'success', text: `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up: ${reason.trim()}` }]);
       this.hub.toast('success', `🏁 ${agent.name} thinks “${work.title}” is ready to wrap up`, agent.id);

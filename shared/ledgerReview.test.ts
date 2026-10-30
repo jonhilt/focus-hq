@@ -23,6 +23,13 @@ describe('ledgerRow', () => {
     expect(ledgerRow(verdict(236, 'pass', 0, 1))).toMatchObject({ tag: 'QA pass', tone: 'ok', title: 'focus #236 · 7 checks passed · first time', pr: { repo: REPO, pr: 236 } });
   });
 
+  it('says what work moved between goals, under the goals, and traces it from either', () => {
+    const moved = (started?: true) => ev({ kind: 'cos-handover', key: 'g1:5:1', agent: 'Lt. Lindqvist', goal: 'Research', from: 'g1', to: 'g2', toAgent: 'Lt. Tanaka', toGoal: 'Comms is home', what: 'the panel build', brief: 'Built.', ...(started && { started }) }, 3);
+    expect(ledgerRow(moved())).toMatchObject({ group: 'goals', tag: 'Moved', title: 'Moved the panel build from Lt. Lindqvist’s goal to Lt. Tanaka’s', detail: 'Research → Comms is home' });
+    expect(ledgerRow(moved(true)).title).toBe('Moved the panel build from Lt. Lindqvist’s goal to a new goal');
+    expect([trace([moved()], { kind: 'goal', title: 'Research' }), trace([moved()], { kind: 'goal', title: 'Comms is home' }), trace([moved()], { kind: 'goal', title: 'Other' })].map((t) => t.steps.length)).toEqual([1, 1, 0]);
+  });
+
   it('says how a scorer graded one of QA’s reports, under QA', () => {
     const graded = (label: string, score: number) => ev({ kind: 'qa-score', repo: REPO, pr: 236, goal: 'Shop', sha: 'abc', label, score, passed: score === 1, why: 'Leans on the suite.', scorer: 'qa-report-1a2b3c4d', model: 'haiku' }, 3);
     expect(ledgerRow(graded('shallow', 0.5))).toMatchObject({ group: 'qa', tag: 'Scored', tone: 'warn', title: "focus #236 · QA's report graded shallow (0.5)", detail: 'Leans on the suite. · Shop', pr: { repo: REPO, pr: 236 } });

@@ -549,6 +549,11 @@ export class DemoRunner implements AgentRunner {
         await say('The workflow is done: its results are on the transporter console.');
         return { ok: true, summary: 'Ran a workflow.' };
       }
+      // asked whether it found anything: work outside its goal, for the chief of staff to spot (handoverRules.ts)
+      if (/\bfound anything\b/i.test(req.prompt)) {
+        await say('While wiring this up I also built retries for failed pushes, on my branch with its tests passing. It isn’t part of this goal, though. Next I’ll carry on with the slice.');
+        return { ok: true, summary: 'Mentioned work outside the goal.' };
+      }
       // asked what's left to decide: several decisions in one turn, one of them a merge the card already has a button for
       if (/\bleft to decide\b/i.test(req.prompt)) {
         await think();

@@ -52,6 +52,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'intent':
     case 'pr':
     case 'pr-ready':
+    case 'cos-handover':
       return 'goals';
     case 'retro-decision':
       return 'retro';
@@ -195,8 +196,10 @@ function scoreRow(e: Of<'qa-score'>): RowParts {
 }
 
 /** A line about a goal itself: it closing, its threads, its intent, a PR its lead opened. */
-function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'pr' | 'pr-ready'>): RowParts {
+function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'pr' | 'pr-ready' | 'cos-handover'>): RowParts {
   switch (e.kind) {
+    case 'cos-handover':
+      return { tag: 'Moved', tone: 'info', title: `Moved ${e.what} from ${e.agent}’s goal to ${e.started ? 'a new goal' : `${e.toAgent}’s`}`, detail: [e.goal, e.toGoal].filter(Boolean).join(' → '), goal: e.goal };
     case 'pr-ready':
       return { tag: 'Ready', tone: 'info', title: `${short(e.repo)} #${e.pr} · ready for review`, detail: [e.agent, e.branch, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
     case 'pr':
@@ -385,6 +388,8 @@ export function trace(events: LedgerEvent[], subject: TraceSubject): Trace {
         return subject.kind === 'goal' && e.goal === subject.title;
       case 'cos-lane':
         return subject.kind === 'pr' ? e.prs.some(samePr) : e.goal === subject.title || e.prs.some(ofGoal);
+      case 'cos-handover':
+        return subject.kind === 'goal' && (e.goal === subject.title || e.toGoal === subject.title);
       case 'session-frictions':
       case 'retro-decision':
       case 'thread-proposals':

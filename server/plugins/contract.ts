@@ -84,6 +84,12 @@ export interface PluginParts {
    */
   mergeHeld?(pr: Pick<PullRequest, 'repo' | 'number' | 'headSha'>): string | undefined;
   /**
+   * Why a goal's lead shouldn't propose closing it yet, if they shouldn't: the plugin is waiting on something the goal
+   * started (the chief of staff, on work it handed on that the receiving lead hasn't picked up). Asked as the lead
+   * proposes it, and refused with this, so the lead hears why.
+   */
+  closeHeld?(lead: Agent): string | undefined;
+  /**
    * Focus's new sessions moved onto your API key (your plan's usage limit was reached), or back onto your plan:
    * where it stands now, as `host.signIn()` reads it.
    */

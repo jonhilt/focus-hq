@@ -5,7 +5,8 @@ import { decideRefusal, waiting } from './inboxRules';
 import { type LandedAnswer, landedAnswerText, type LandedItem, landedItems, landedMessage, landedWhere } from './landed';
 import { acked, held } from './laneRules';
 import { answerAsk } from './askRules';
-import { type AskAnswer, readOf, SENDER } from './shared';
+import { closeHold, goneWords, moveStep, receivedWords, startWords } from './handoverRules';
+import { type AskAnswer, NEW_GOAL, readOf, SENDER } from './shared';
 
 // The captain's inbox, as the API serves it (docs/ledger.md#the-captains-inbox-api): what needs them across the shown
 // projects, the same list Comms shows, and each answer recorded in the ledger as a `captain-decision`, whether it came
@@ -14,7 +15,7 @@ import { type AskAnswer, readOf, SENDER } from './shared';
 
 /** What the inbox needs of Focus. */
 export type InboxHost = Pick<PluginHost, 'projects' | 'agent' | 'agents' | 'boardPrs' | 'reviews' | 'recentLines' | 'ledger' | 'record'> & {
-  goals: Pick<PluginGoals, 'resolvePermission' | 'answer' | 'closeGoal' | 'message' | 'mark' | 'readTurn'>;
+  goals: Pick<PluginGoals, 'resolvePermission' | 'answer' | 'closeGoal' | 'message' | 'mark' | 'readTurn' | 'start'>;
 };
 
 export class Inbox {
@@ -86,6 +87,7 @@ export class Inbox {
     const { a, item } = found;
     if (!('agent' in a)) throw new Error('A pull request is decided on the board');
     if ('answer' in d) return this.answerAsk(a.agent, item, d.answer, via, how);
+    if ('move' in d) return this.moveWork(a.agent, item, d.move, via, how);
     const reply = await this.act(a.agent, d, item.cos?.message ?? '', how);
     // Ops asking about cost comes back as it is, to answer again with `how`; otherwise, just that it went through
     if (!landed(reply)) return reply;
@@ -120,6 +122,41 @@ export class Inbox {
     if (!landed(reply)) return reply;
     this.record(agent, item, { text: next.text }, via);
     return { ok: true };
+  }
+
+  /**
+   * The user approved moving the work one of a turn's asks names (handoverRules.ts), once: the chief of staff tells the
+   * receiving goal's lead, as its own words, so it's in their log and their goal's thread, or starts a goal for it; it
+   * writes a `cos-handover` line; and the sending lead hears the work has gone as that ask's answer, with the rest.
+   */
+  private moveWork(agent: Agent, item: InboxItem, ask: number, via: DecidedVia, how?: ResumeHow): unknown {
+    const moved = new Set(this.host.ledger().flatMap((e) => (e.kind === 'cos-handover' ? [e.key] : [])));
+    const open = new Set(this.host.agents().filter((a) => a.task === 'lead').map((a) => a.id));
+    const step = moveStep(readOf(agent), ask, agent.id, moved, open);
+    if (step.kind === 'refuse') throw new Error(step.why);
+    const { move, key } = step;
+    const from = { name: agent.name, ...(agent.lead?.title && { title: agent.lead.title }) };
+    const started = move.to === NEW_GOAL;
+    const to = started ? this.host.goals.start(agent.projectId, startWords(from, move), { from: `${SENDER}, from ${agent.name}’s goal` }).agent : this.host.agent(move.to);
+    if (!to) throw new Error('The goal it was to go to is closed: answer it with words instead');
+    if (!started && !landed(this.host.goals.message(to.id, receivedWords(from, move), { from: SENDER }))) throw new Error(`Not moved: ${to.name} couldn’t take it now (picking their conversation back up would cost on the API key): try again, or tell them yourself`);
+    const toGoal = to.lead?.title;
+    this.host.record(agent.projectId, {
+      kind: 'cos-handover', key, agent: agent.name, ...(from.title && { goal: from.title }), from: agent.id, to: to.id, toAgent: to.name, ...(toGoal && { toGoal }), ...(started && { started: true as const }), what: move.what, brief: move.brief,
+    });
+    const gone = goneWords(move, { name: to.name, ...(toGoal && { title: toGoal }) }, started);
+    try {
+      return this.answerAsk(agent, item, { ask, text: gone }, via, how);
+    } catch {
+      // the lead's at work again, so the turn can't be answered: they hear it's gone from the chief of staff instead
+      this.host.goals.message(agent.id, gone, { from: SENDER });
+      return { ok: true };
+    }
+  }
+
+  /** Why `lead` shouldn't propose closing their goal yet: work it handed on that the receiving lead hasn't picked up (`closeHold`). */
+  closeHeld(lead: Pick<Agent, 'id'>): string | undefined {
+    return closeHold(lead.id, this.host.ledger().flatMap((e) => (e.kind === 'cos-handover' ? [e] : [])), (id) => this.host.agent(id));
   }
 
   private record(agent: Agent, item: InboxItem, d: Decide, via: DecidedVia): void {
@@ -183,7 +220,7 @@ export class Inbox {
   }
 
   /** Does what the captain decided. `words` are the chief of staff's, for `send`. */
-  private act(agent: Agent, d: Exclude<Decide, { answer: AskAnswer }>, words: string, how?: ResumeHow): unknown {
+  private act(agent: Agent, d: Exclude<Decide, { answer: AskAnswer } | { move: number }>, words: string, how?: ResumeHow): unknown {
     const { goals } = this.host;
     if ('ack' in d) {
       this.acknowledge(agent);

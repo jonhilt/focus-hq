@@ -104,6 +104,12 @@ export type LedgerEntry =
       routerFailed?: string;
     }
   /**
+   * Work a plugin that judges goal leads' turns (the chief of staff) moved from `agent`'s goal (its lead `from`) as the
+   * captain approved it: to an open goal's lead (`to`), or to a goal it started for it (`started`). `key` is the turn
+   * and ask it came from, so it moves once; `what` is the work, `brief` what the receiving lead was told.
+   */
+  | { kind: 'cos-handover'; key: string; agent: string; goal?: string; from: string; to: string; toAgent: string; toGoal?: string; started?: true; what: string; brief: string }
+  /**
    * The captain answered something waiting on them (in a plugin's inbox, or an agent's panel, as that plugin records
    * it): `item` is what it was (its inbox id, kind and line), `answer` what they decided in a few words, `via` where
    * (`DecidedVia`). `agent` is who it was for.

@@ -100,13 +100,14 @@ export function inboxItem(a: Attention, reviews: ReadonlyMap<string, QaReview>, 
  * How the captain answers an item: approve or decline a hand, pick a question's option, say something, close the goal,
  * send the chief of staff's words to the lead (a turn in the `ready` lane), acknowledge a lead's turn (`ack`: read,
  * nothing sent, the lead not woken), or answer one of a turn's asks (`answer`: held until every ask has one, then all
- * of them sent together, askRules.ts).
+ * of them sent together, askRules.ts), or approve the work one of its asks would move to another goal (`move`, its
+ * place in the asks: handoverRules.ts).
  */
-export type Decide = CaptainAnswer | { send: true } | { ack: true } | { answer: AskAnswer };
+export type Decide = CaptainAnswer | { send: true } | { ack: true } | { answer: AskAnswer } | { move: number };
 
 export type { DecidedVia };
 
-const SAY_HOW = 'Say how you decide: allow, option, text, close, send, ack or answer';
+const SAY_HOW = 'Say how you decide: allow, option, text, close, send, ack, answer or move';
 
 /** An answer to one of a turn's asks, from a body: `{ answer: { ask, text } }`. */
 function askAnswerOf(v: unknown): AskAnswer | undefined {
@@ -125,6 +126,7 @@ export function decideOf(body: unknown): Decide {
   if (body.ack === true) return { ack: true };
   const answer = askAnswerOf(body.answer);
   if (answer) return { answer };
+  if (Number.isInteger(body.move) && typeof body.move === 'number') return { move: body.move };
   throw new Error(SAY_HOW);
 }
 
@@ -136,6 +138,7 @@ export function answerText(d: Decide): string {
   if ('send' in d) return SENT_WORDS;
   if ('ack' in d) return ACKNOWLEDGED;
   if ('answer' in d) return d.answer.text;
+  if ('move' in d) return `Moved the work of ask ${d.move + 1}`;
   return d.text;
 }
 

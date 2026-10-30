@@ -14,6 +14,8 @@ describe('deciding an inbox item', () => {
     expect(decideRefusal({ kind: 'hand' }, { text: 'ok' })).toMatch(/approved or declined/);
     expect(decideRefusal({ kind: 'turn' }, { allow: true })).toMatch(/Only a raised hand/);
     expect(decideRefusal({ kind: 'question' }, { option: 'a' })).toBeNull();
+    expect(decideRefusal({ kind: 'turn', cos: { route: 2, ask: 'Move it?', asks: [], why: '', message: '' } }, { move: 1 })).toBeNull();
+    expect(decideRefusal({ kind: 'question' }, { move: 1 })).toMatch(/Only work the chief of staff found/);
     expect(decideRefusal({ kind: 'question' }, { text: 'Neither' })).toBeNull();
     expect(decideRefusal({ kind: 'turn' }, { option: 'a' })).toMatch(/Only a question/);
     expect(decideRefusal({ kind: 'wrap-up' }, { close: true })).toBeNull();

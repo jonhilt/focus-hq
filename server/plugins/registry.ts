@@ -168,6 +168,15 @@ export class Plugins {
     return undefined;
   }
 
+  /** Why a plugin holds a goal's lead back from proposing to close it, if one does: the first that says. */
+  closeHeld(lead: Agent): string | undefined {
+    for (const [id, parts] of this.parts) {
+      const held = this.safely(id, 'closeHeld', () => parts.closeHeld?.(lead));
+      if (typeof held === 'string' && held) return held;
+    }
+    return undefined;
+  }
+
   private each(hook: string, call: (parts: PluginParts) => void): void {
     for (const [id, parts] of this.parts) this.safely(id, hook, () => call(parts));
   }

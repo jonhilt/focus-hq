@@ -2,7 +2,7 @@ import './bridge.css';
 import { allowTool, answerLead, busy, callPlugin, closeGoal, fill, focus, h, markdownHtml, messageAgent, onPluginState, pluginState, readPlugin, type Ui } from '../../plugin-api/client';
 import { ACTIVE_STATUSES, type Agent, artifactUrl, type Attention, openQuestion } from '../../plugin-api/shared';
 import { answerAsk } from './askRules';
-import { aboutIt, type Act, type AskBlock, askBlocksOf, actsOf, briefOf } from './decisionRules';
+import { aboutIt, type Act, actsLaidOut, type AskBlock, askBlocksOf, actsOf, briefOf } from './decisionRules';
 import { waitingNow } from './here';
 import { hailKey, type InboxItem } from './inbox';
 import { inbox } from './inboxApi';
@@ -484,9 +484,16 @@ export function openStream(ui: CommsUi): void {
       h('div', { class: 'tw:flex tw:items-baseline tw:gap-2' },
         h('span', { class: 'tw:text-[15px] tw:flex-1' }, b.ask),
         h('span', { class: `tw:font-display tw:text-[10.5px] tw:font-semibold tw:tracking-[.1em] tw:uppercase ${b.answer !== undefined ? 'tw:text-ink' : 'tw:text-attn'}` }, b.answer !== undefined ? 'Answered' : 'To answer')),
+      // its move, done at once rather than held: the receiving lead is told now, and this ask's answer says it's gone
+      b.move && b.answer === undefined ? h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-2' }, moveEl(b.move, b.move.pick, item)) : null,
       h('div', { class: 'tw:flex tw:flex-col tw:gap-2 tw:mt-2' }, ...b.choices.map((c) => choiceEl(c, false, item, lead, { ask: b.index, chosen: c.label === b.picked }))),
       b.answer !== undefined && !b.picked ? h('div', { class: 'tw:mt-2 tw:text-[13.5px]', attrs: { 'data-part': 'held' } }, h('span', { class: 'tw:text-muted' }, 'Your answer: '), b.answer) : null,
       h('div', { class: 'tw:flex tw:gap-[6px] tw:mt-2' }, own, hold));
+  };
+  const moveEl = (act: Extract<Act, { kind: 'move' }>, go: boolean, item: InboxItem) => {
+    const b = button(act.label, go, () => void busy(b, () => moveIt(act, item), ui.error), 'The chief of staff tells the receiving lead now, and this lead that it’s gone');
+    b.dataset.act = act.kind;
+    return b;
   };
   const actsEl = (item: InboxItem, a: Attention, gap: string): HTMLElement[] => {
     const lead = 'agent' in a ? a.agent : undefined;
@@ -496,10 +503,11 @@ export function openStream(ui: CommsUi): void {
     // the lead's own read of the turn, or the inbox's when the lead has moved on since (a card drawn again as it's answered)
     const asks = a.kind === 'turn' ? readOf(lead)?.judged?.asks ?? item.cos?.asks ?? [] : [];
     const acts = actsOf({
-      kind: a.kind, lead: lead?.id, replies: asks.length === 1 ? asks[0]?.replies : undefined, prs: merges.length,
+      kind: a.kind, lead: lead?.id, replies: asks.length === 1 ? asks[0]?.replies : undefined, move: asks.length === 1 ? asks[0]?.move : undefined, prs: merges.length,
       ...(q && { question: q }), ...(req && { permission: { id: req.id, tool: req.tool } }),
     });
     const press = (act: Act, go: boolean) => {
+      if (act.kind === 'move') return moveEl(act, go, item);
       const b = button(act.label, go, () => void busy(b, () => run(act, item, lead), ui.error));
       b.dataset.act = act.kind;
       return b;
@@ -507,16 +515,14 @@ export function openStream(ui: CommsUi): void {
     const quiet = (label: string, title: string, onclick: () => void) =>
       h('button', { class: 'tw:bg-transparent tw:border-0 tw:px-1 tw:h-6 tw:text-muted tw:font-display tw:text-[11.5px] tw:font-semibold tw:tracking-[.08em] tw:uppercase tw:cursor-pointer tw:hover:text-ink', title, onclick }, label);
     const got = quiet('Got it', 'Read: off your queue until their next turn. Nothing is sent', () => void busy(got, () => inbox.decide(item.id, { ack: true }).then(refreshInbox), ui.error));
-    // a reply is drawn with the words it sends beside it: a short label alone can't say what it decides
-    const isReply = (x: Act | undefined): x is Extract<Act, { kind: 'reply' }> => x?.kind === 'reply';
-    const choices = [acts.go, ...acts.others].filter(isReply);
-    const buttons = [acts.go, ...acts.others].filter((x): x is Act => !!x && !isReply(x));
+    const { moveFirst, choices, buttons } = actsLaidOut(acts);
     // a turn of several asks: a block each, answered on its own, and where they stand
     const held = asks.length > 1 ? askBlocksOf(asks, item.answers ?? [], lead?.name ?? 'the lead') : undefined;
     return [
       h('div', { class: `tw:flex tw:flex-col tw:gap-2 ${gap}`, attrs: { 'data-part': 'acts' } },
         ...(held ? held.blocks.map((b) => askEl(b, item, lead)) : []),
         held ? h('div', { class: 'tw:mt-2 tw:text-[12.5px] tw:text-muted', attrs: { 'data-part': 'asks-status' } }, held.status) : null,
+        moveFirst ? h('div', { class: 'tw:flex' }, moveEl(moveFirst, true, item)) : null,
         ...choices.map((c) => choiceEl(c, c === acts.go, item, lead)),
         h('div', { class: 'tw:flex tw:flex-wrap tw:items-center tw:gap-[6px]' },
           ...buttons.map((b) => press(b, b === acts.go)),
@@ -529,7 +535,9 @@ export function openStream(ui: CommsUi): void {
         : null,
     ].filter((e) => e !== null);
   };
-  const run = (act: Act, item: InboxItem, lead: Agent | undefined): Promise<unknown> => {
+  // moving work is done at once, as the inbox's `move`: the receiving lead is told now (handoverRules.ts)
+  const moveIt = (act: Extract<Act, { kind: 'move' }>, item: InboxItem) => inbox.decide(item.id, { move: act.ask }).then(refreshInbox);
+  const run = (act: Exclude<Act, { kind: 'move' }>, item: InboxItem, lead: Agent | undefined): Promise<unknown> => {
     switch (act.kind) {
       case 'reply': return inbox.decide(item.id, { text: act.text }).then(refreshInbox);
       case 'pick': return answerLead(act.lead, act.question, act.option);

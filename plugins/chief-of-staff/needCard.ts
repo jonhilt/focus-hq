@@ -3,7 +3,7 @@ import type { Agent, Attention } from '../../plugin-api/shared';
 import { hailKey as keyOf } from './inbox';
 import { inbox } from './inboxApi';
 import { lineOf } from './laneRules';
-import { askBlocksOf } from './decisionRules';
+import { askBlocksOf, moveAct } from './decisionRules';
 import { type BoardPr, mergePress, openPrsOf } from './mergingRules';
 import { readOf } from './shared';
 import { openZoom, type Zoomable } from './zoom';
@@ -114,6 +114,7 @@ function turnContext(agent: Agent): { context: string; folds: HTMLElement[] } {
 function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
   const asks = readOf(a.agent)?.judged?.asks ?? [];
   const replies = asks.length === 1 ? asks[0]?.replies ?? [] : [];
+  const move = asks.length === 1 ? asks[0]?.move : undefined;
   const buttons = replies.map((r, i) => {
     const b = h('button', { class: 'btn small primary cos-reply', title: `Send “${r.text}” (${i + 1})`, attrs: { 'data-act': `pick-${i + 1}` } }, `${i + 1} · ${r.label}`);
     b.onclick = () => void busy(b, () => inbox.decide(keyOf(a), { text: r.text }), ui.error);
@@ -121,7 +122,15 @@ function quickBox(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
   });
   const got = h('button', { class: 'btn small cos-got-it', title: 'You’ve read it: off your queue until their next turn. Nothing is sent, and they aren’t woken (O)', attrs: { 'data-act': 'ack' } }, 'Got it');
   got.onclick = () => void busy(got, () => inbox.decide(keyOf(a), { ack: true }), ui.error);
-  return [...(asks.length > 1 ? askBlocks(ui, a) : []), h('div', { class: 'row cos-quick' }, ...buttons, got)];
+  const moveButton = move ? moveBtn(ui, a, moveAct(move, 0), move.pick === 'move') : null;
+  return [...(asks.length > 1 ? askBlocks(ui, a) : []), h('div', { class: 'row cos-quick' }, moveButton, ...buttons, got)];
+}
+
+/** The button that moves the work an ask names (handoverRules.ts): done at once, the pick when the chief of staff picks it. */
+function moveBtn(ui: CardUi, a: Attention & { agent: Agent }, act: { label: string; ask: number }, pick: boolean): HTMLElement {
+  const b = h('button', { class: `btn small ${pick ? 'go' : 'primary'} cos-move`, title: 'The chief of staff tells the receiving lead now, and this lead that it’s gone', attrs: { 'data-act': 'move' } }, act.label);
+  b.onclick = () => void busy(b, () => inbox.decide(keyOf(a), { move: act.ask }), ui.error);
+  return b;
 }
 
 /**
@@ -148,7 +157,7 @@ function askBlocks(ui: CardUi, a: Attention & { agent: Agent }): HTMLElement[] {
       return h('div', { class: 'cos-ask', attrs: { 'data-part': 'ask' } },
         h('strong', null, b.ask),
         b.answer !== undefined ? h('small', { class: 'muted' }, `Your answer: ${b.answer}`) : null,
-        h('div', { class: 'row' }, ...picks),
+        h('div', { class: 'row' }, b.move && b.answer === undefined ? moveBtn(ui, a, b.move, b.move.pick) : null, ...picks),
         h('div', { class: 'row' }, own, hold));
     }),
     h('small', { class: 'muted' }, status),

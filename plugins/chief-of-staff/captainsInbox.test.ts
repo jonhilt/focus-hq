@@ -25,6 +25,7 @@ async function waitingLead({ verdict, autoSend = false, since = Date.now }: { ve
       inbox.host = host;
       return {
         captainAnswered: (before, answer) => it.answered(before, answer),
+        closeHeld: (lead) => it.closeHeld(lead),
         turn: (agent, phase) => {
           if (phase !== 'end' || !verdict) return;
           const at = Date.now();
@@ -467,3 +468,85 @@ describe('a slice that landed in Show', () => {
     expect(inbox.view().landed).toHaveLength(1);
   });
 });
+
+describe('moving work the chief of staff found to another goal, as the captain approves', () => {
+  const move = (to: string) => ({ what: 'the retry build', to, brief: 'Retries for failed pushes are built on lindqvist/retries; tests pass.', pick: 'move' as const });
+  const card = (to: string): Verdict => ({
+    route: 2, why: 'Two calls.', message: 'Two things to decide.',
+    asks: [{ ask: 'Next slice: shared link or emails?', replies: [{ label: 'Shared link', text: 'Shared link first.' }] }, { ask: 'Move the retry build to their goal?', replies: [{ label: 'Keep it here', text: 'Keep it here.' }], move: move(to) }],
+  });
+
+  /** A lead waiting on `card`, its move to another open goal's lead, whose own turn has ended (or not, `busy`). */
+  async function withReceiver(to?: string, busy = false) {
+    const o = await waitingLead({ verdict: card('RECEIVER') });
+    const { agent: receiver } = o.agents.startGoal(o.project.id, 'Pushes retry');
+    await until(() => o.claude.turns.length === 2);
+    if (!busy) o.claude.turns[1].end({ ok: true, summary: 'Retries are next.' });
+    if (!busy) await until(() => o.store.agent(receiver.id).status === 'done');
+    const read = o.read();
+    if (!read?.judged) throw new Error('no read');
+    o.host.goals.mark(o.id, { ...read, judged: card(to ?? receiver.id) }, read.at);
+    const handovers = () => o.store.ledger.filter((e) => e.kind === 'cos-handover');
+    return { ...o, receiver: o.store.agent(receiver.id), handovers };
+  }
+
+  it('tells the receiving lead as its own words, records it, and tells the sender it’s gone with their other answers', async () => {
+    const o = await withReceiver();
+    const [item] = o.inbox.view().open.filter((i) => i.agentId === o.id);
+    expect(await o.inbox.decide(item.id, { move: 1 }, 'office')).toEqual({ ok: true, held: 1, of: 2 });
+    // the receiving lead hears it from the chief of staff, in their log (so their goal's thread) and their conversation
+    await until(() => o.claude.turns.length === 3);
+    expect(o.claude.turns[2].req.prompt).toContain(`[Chief of Staff] The captain has moved work to your goal from ${o.store.agent(o.id).name}'s goal “Saved items”: the retry build.`);
+    expect(o.claude.turns[2].req.prompt).toContain('Retries for failed pushes are built on lindqvist/retries');
+    expect((await o.host.allLines(o.receiver.id)).some((l) => l.text.startsWith('▶ Chief of Staff: The captain has moved work'))).toBe(true);
+    expect(o.handovers()).toMatchObject([{ from: o.id, to: o.receiver.id, toAgent: o.receiver.name, toGoal: 'Pushes retry', goal: 'Saved items', what: 'the retry build' }]);
+    // the sender hears it's gone as that ask's answer, together with the rest once they're answered
+    await o.inbox.decide(item.id, { answer: { ask: 0, text: 'Shared link first.' } }, 'office');
+    await until(() => o.claude.turns.length === 4);
+    expect(o.claude.turns[3].req.prompt).toContain(`**Move the retry build to their goal?**\nMoved to ${o.receiver.name}'s goal “Pushes retry”: the retry build. It's theirs now, so leave it to them.`);
+  });
+
+  it('moves the work once, however often it’s approved', async () => {
+    const o = await withReceiver();
+    const [item] = o.inbox.view().open.filter((i) => i.agentId === o.id);
+    await o.inbox.decide(item.id, { move: 1 }, 'office');
+    await expect(o.inbox.decide(item.id, { move: 1 }, 'api')).rejects.toThrow(/has moved already/);
+    expect(o.handovers()).toHaveLength(1);
+  });
+
+  it('starts a goal for work that belongs in a new one, saying where it came from', async () => {
+    const o = await withReceiver('new');
+    const [item] = o.inbox.view().open.filter((i) => i.agentId === o.id);
+    await o.inbox.decide(item.id, { move: 1 }, 'office');
+    const started = o.host.agents().find((a) => a.lead?.brief?.startsWith('Retries for failed pushes'));
+    expect(started?.lead?.brief).toContain(`(Moved here from ${o.store.agent(o.id).name}'s goal “Saved items” by the chief of staff, as the captain approved.)`);
+    expect(o.handovers()).toMatchObject([{ to: started?.id, started: true }]);
+    expect(o.read()?.answers).toMatchObject([{ ask: 1, text: expect.stringMatching(/^A new goal was started for the retry build, led by /) }]);
+  });
+
+  it('refuses an ask that moves nothing, and a move to a goal that’s closed since', async () => {
+    const o = await withReceiver('lead_closed');
+    const [item] = o.inbox.view().open.filter((i) => i.agentId === o.id);
+    await expect(o.inbox.decide(item.id, { move: 0 }, 'api')).rejects.toThrow(/moves no work/);
+    await expect(o.inbox.decide(item.id, { move: 1 }, 'api')).rejects.toThrow(/is closed/);
+    expect(o.handovers()).toEqual([]);
+  });
+
+  it('holds the sending goal back from proposing to close until the receiving lead has picked the work up', async () => {
+    const o = await withReceiver(undefined, true);
+    const [item] = o.inbox.view().open.filter((i) => i.agentId === o.id);
+    await o.inbox.decide(item.id, { move: 1 }, 'office');
+    await o.inbox.decide(item.id, { answer: { ask: 0, text: 'Shared link first.' } }, 'office');
+    await until(() => o.claude.turns.length === 3);
+    const sender = o.claude.turns[2];
+    // the receiving lead was at work, so it reached them mid-turn: not picked up until that turn ends
+    expect(o.claude.turns[1].sent.join('\n')).toContain('The captain has moved work to your goal');
+    await expect(sender.req.tools?.proposeClose({ reason: 'Done' })).rejects.toThrow(/Not yet: work this goal handed on hasn't been picked up: the retry build \(/);
+    expect(o.store.agent(o.id).lead?.closing).toBeUndefined();
+    o.claude.turns[1].end({ ok: true, summary: 'Taking the retries.' });
+    await until(() => o.store.agent(o.receiver.id).status === 'done');
+    await sender.req.tools?.proposeClose({ reason: 'Done' });
+    expect(o.store.agent(o.id).lead?.closing).toMatchObject({ reason: 'Done' });
+  });
+});
+

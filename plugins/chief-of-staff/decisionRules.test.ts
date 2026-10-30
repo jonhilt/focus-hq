@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { aboutIt, askBlocksOf, actsOf, briefOf } from './decisionRules';
+import { aboutIt, actsLaidOut, askBlocksOf, actsOf, briefOf } from './decisionRules';
 
 describe('a decision’s actions', () => {
   it('puts the chief of staff’s first suggested reply first on a lead’s turn, as the pick, the rest named beside it, with Got it', () => {
@@ -69,5 +69,28 @@ describe('a turn’s asks, a block each', () => {
   it('says they’re going together once every ask has an answer', () => {
     const all = asks.map((_, ask) => ({ ask, text: 'x' }));
     expect(askBlocksOf(asks, all, 'Vale').status).toBe('All 3 answered: sending them to Vale as one message');
+  });
+});
+
+describe('work an ask would move to another goal', () => {
+  const move = { what: 'the retry build', to: 'lead_b', brief: 'Built.', pick: 'move' as const };
+  const keep = [{ label: 'Keep it here', text: 'Keep it here.' }];
+
+  it('is a button of its own, the pick when the chief of staff picks moving it, its replies beside it', () => {
+    expect(actsOf({ kind: 'turn', replies: keep, move, prs: 0 })).toMatchObject({ go: { kind: 'move', label: 'Move it', ask: 0 }, others: [{ kind: 'reply', label: 'Keep it here' }] });
+    expect(actsOf({ kind: 'turn', replies: keep, move: { ...move, pick: 'keep' }, prs: 0 })).toMatchObject({ go: { kind: 'reply' }, others: [{ kind: 'move' }] });
+    expect(actsOf({ kind: 'turn', move: { ...move, to: 'new' }, prs: 0 }).go).toEqual({ kind: 'move', label: 'Start a goal for it', ask: 0 });
+  });
+
+  it('leads the card when it’s the pick, the replies for keeping it under it', () => {
+    const picked = actsLaidOut(actsOf({ kind: 'turn', replies: keep, move, prs: 0 }));
+    expect(picked).toEqual({ moveFirst: { kind: 'move', label: 'Move it', ask: 0 }, choices: [{ kind: 'reply', label: 'Keep it here', text: 'Keep it here.' }], buttons: [] });
+    expect(actsLaidOut(actsOf({ kind: 'turn', replies: keep, move: { ...move, pick: 'keep' }, prs: 0 }))).toEqual({ choices: [{ kind: 'reply', label: 'Keep it here', text: 'Keep it here.' }], buttons: [{ kind: 'move', label: 'Move it', ask: 0 }] });
+  });
+
+  it('has its button in its ask’s block on a turn of several', () => {
+    const { blocks } = askBlocksOf([{ ask: 'Next slice?' }, { ask: 'Move the retry build?', replies: keep, move }], [], 'Rhee');
+    expect(blocks[0]).not.toHaveProperty('move');
+    expect(blocks[1]?.move).toEqual({ kind: 'move', label: 'Move it', ask: 1, pick: true });
   });
 });

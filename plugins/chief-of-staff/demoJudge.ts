@@ -51,6 +51,8 @@ export class DemoJudge implements Judge {
         structured: { route: 2, check: 'captains', asks: several, why: 'The lead puts several decisions to you, each of its own.', says: `The lead needs ${several.length === 1 ? 'one answer' : `${several.length} answers`} from you; each is a decision of its own.`, message: 'The lead has a few things for you to decide. Answer each, and they go to the lead together.' },
         costUsd: 0,
       };
+    const moved = demoMove(req.prompt);
+    if (moved) return { structured: moved, costUsd: 0 };
     const untested = /\b(?:untested|not tested|haven['’]t tested)\b/i.test(req.prompt.slice(req.prompt.lastIndexOf('<<<')));
     if (untested && !asks)
       return {
@@ -65,3 +67,25 @@ export class DemoJudge implements Judge {
     };
   }
 }
+
+/**
+ * Work the lead says isn't part of its goal: a move to the first other open goal the judge was shown, or a new goal
+ * when there's none (handoverRules.ts), the move picked.
+ */
+export function demoMove(prompt: string): Record<string, unknown> | undefined {
+  if (!/\bisn[’']t part of this goal\b/i.test(prompt.slice(prompt.lastIndexOf('<<<')))) return undefined;
+  const other = /THE OTHER OPEN GOALS[^\n]*\n- (\S+): “([^”]*)” \(([^,)]+)/.exec(prompt);
+  const what = 'the retries for failed pushes';
+  const ask = other ? `Move ${what} to ${other[3]}’s goal?` : `Start a new goal for ${what}?`;
+  const where = other ? `${other[3]}’s goal, “${other[2]}”` : 'a goal of its own';
+  return {
+    route: 2, check: 'captains', why: 'The lead built work that belongs outside its goal, and moving it is yours to decide.',
+    says: `The lead built retries for failed pushes along the way, which isn’t this goal’s work. I’d move it to ${where}.`,
+    message: `The lead built retries for failed pushes, outside this goal. I recommend moving them to ${where}, so this goal stays on its slice.`,
+    asks: [{
+      ask, replies: [{ label: 'Keep it here', text: 'Keep the retries here for now.' }],
+      move: { what, to: other?.[1] ?? 'new', brief: 'Retries for failed pushes are built on the lead’s branch, with their tests passing. Take them into your goal and ship them from there.', pick: 'move' },
+    }],
+  };
+}
+

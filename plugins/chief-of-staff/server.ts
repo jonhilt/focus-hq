@@ -70,6 +70,8 @@ const chiefOfStaff: FocusPlugin = {
       turn: (agent, phase) => void chief.turn(agent, phase),
       boardRefreshed: (projectId) => void chief.readShips(projectId),
       mergeHeld: (pr) => chief.mergeHeld(pr),
+      // a goal that handed work on isn't proposed for closing until the receiving lead has picked it up
+      closeHeld: (lead) => inbox.closeHeld(lead),
       leadNoted: (lead, note) => chief.noted(lead, note),
       captainAnswered: (before, answer) => inbox.answered(before, answer),
       routes: [...inboxRoutes(inbox, settings, leadsIn, () => host.bot.publicUrl), ...watchRoutes(inbox, settings, (id) => host.agent(id)?.task === 'lead'), ...lineRoutes(line), threadRoute(host)],
