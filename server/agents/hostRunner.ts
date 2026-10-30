@@ -11,7 +11,7 @@ import { browserTools, type BrowserPool } from './browserTool';
 import { agentEnv, DECLINED, sessionHooks, UNANSWERED } from './claudeSession';
 import { type CommonContext, handleCommonEvent, newCommonContext } from './commonEvents';
 import type { AskedQuestion } from './questions';
-import { HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction } from './hostRunnerRules';
+import { atTurnEnd, HOST_AUTONOMY, isSdkMessage, joining, type Reaction, reaction } from './hostRunnerRules';
 import { pushGuardEnv, refusedFile, writePushHooks } from './pushGuard';
 import { OPS_INSTRUCTIONS, opsTools } from './opsTool';
 import { openScratch, type Scratch } from './scratch';
@@ -177,6 +177,14 @@ class HostTurn {
   private readonly ctx: RunContext;
   private readonly common: CommonContext;
   private watching?: Fiber.Fiber<void, unknown>;
+  /**
+   * Messages on their way to the host; the turns a message Focus sent started of its own (`Delivery`), each this Focus
+   * turn watches on through; and the host's turn end heard while a message might still start one (`atTurnEnd`).
+   */
+  private sending = 0;
+  private started = 0;
+  private ending?: RunOutcome;
+  private resolve?: (o: RunOutcome) => void;
 
   constructor(
     private readonly runner: HostRunner,
@@ -277,7 +285,7 @@ class HostTurn {
       );
       const fiber = yield* Effect.forkDetach(watch);
       if (plan.kind === 'send') yield* host.send(id, this.req.prompt, { ...(this.effort && { effort: this.effort }), ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }) });
-      for (const text of this.early.splice(0)) yield* host.send(id, text);
+      for (const text of this.early.splice(0)) if ((yield* host.send(id, text)) === 'started') this.started++;
       if (this.stopAsked) yield* host.interrupt(id);
       return fiber;
     });
@@ -291,7 +299,14 @@ class HostTurn {
       return true;
     }
     const effort = this.effort;
-    void this.runner.run(Host.use((h) => h.send(id, text, effort ? { effort } : {}))).catch(() => undefined);
+    this.sending++;
+    void this.runner
+      .run(Host.use((h) => h.send(id, text, effort ? { effort } : {})))
+      .then((delivery) => void (delivery === 'started' && this.started++), () => undefined)
+      .finally(() => {
+        this.sending--;
+        this.settleEnd();
+      });
     return true;
   }
 
@@ -344,6 +359,25 @@ class HostTurn {
     });
   }
 
+  /**
+   * The host's turn has ended (`ending`): this Focus turn's over, unless a message it sent started a turn of its own,
+   * which it then watches to its end; while a message is on its way, it waits to hear where it went (`atTurnEnd`).
+   */
+  private settleEnd(): void {
+    if (!this.ending || !this.resolve) return;
+    const next = atTurnEnd(this.sending, this.started);
+    if (next === 'wait') return;
+    const outcome = this.ending;
+    this.ending = undefined;
+    if (next === 'carry-on') {
+      this.started--;
+      return;
+    }
+    // nothing more is taken once the turn's over, though `run` hears so a moment later
+    this.over = true;
+    this.resolve(outcome);
+  }
+
   private onEvent(event: ConversationEvent, resolve: (o: RunOutcome) => void): void {
     const r = reaction(event, this.result, this.req.outputSchema !== undefined);
     switch (r.kind) {
@@ -362,7 +396,9 @@ class HostTurn {
         if (r.activity) this.hooks.activity(null, r.activity);
         return;
       case 'end':
-        return resolve(r.outcome);
+        this.resolve = resolve;
+        this.ending = r.outcome;
+        return this.settleEnd();
       case 'answered': {
         resolve(r.outcome);
         const id = this.conversation;

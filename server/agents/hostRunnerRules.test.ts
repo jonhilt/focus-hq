@@ -1,10 +1,19 @@
 import type { ConversationSummary } from 'agent-host';
 import { describe, expect, it } from 'vitest';
-import { isSdkMessage, joining, outcome, reaction } from './hostRunnerRules';
+import { atTurnEnd, isSdkMessage, joining, outcome, reaction } from './hostRunnerRules';
 import { askedQuestions } from './questions';
 import { STOPPED_BY_CAPTAIN } from './types';
 
 const conv = (id: string, status: string, agentSessionId?: string): ConversationSummary => ({ id, agent: 'claude', labels: {}, status, ...(agentSessionId && { agentSessionId }) });
+
+describe('atTurnEnd', () => {
+  it('waits for a message on its way, carries on through a turn one started, and is otherwise over', () => {
+    expect(atTurnEnd(1, 0)).toBe('wait');
+    expect(atTurnEnd(1, 1)).toBe('wait');
+    expect(atTurnEnd(0, 1)).toBe('carry-on');
+    expect(atTurnEnd(0, 0)).toBe('over');
+  });
+});
 
 describe('joining', () => {
   it('starts a new conversation for a fresh session, ending the agent’s old ones', () => {

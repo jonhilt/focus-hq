@@ -382,23 +382,14 @@ describe('a session on agent-host, under Focus’s rule for two things at once',
     expect(seen[10]).toMatchObject({ turns: ['done: Done', 'failed: The session failed'], ended: ['completed', 'failed'], scratch: false });
   });
 
-  // a message and the turn's end at once (Claude Code's, or the captain's stop) are left out of both: a message on its
-  // way as the turn ends starts a turn of its own that no Focus turn watches (found by this check; pinned below, and in
-  // docs/invariants.md)
-  it('ends two things at once as one after the other would, a message among them', async () => {
-    await checkAtOnce(sessionOf(undefined, /the turn (ends|fails)|stops the turn/), { runs: 25, prefix: 4 });
+  it('ends two things at once as one after the other would, a message and the turn’s end among them', async () => {
+    await checkAtOnce(sessionOf(), { runs: 25, prefix: 4 });
   });
 
-  // what's under way as a turn ends: a hand up, a command, a probe, the captain stopping it
-  it('ends a turn ending at once with what happens round it as one after the other would', async () => {
-    await checkAtOnce(sessionOf(undefined, /sends a message/), { runs: 25, prefix: 4 });
-  });
-
-  // Found by the check above (docs/invariants.md): the message is accepted (the Focus turn hasn't heard the host's turn
-  // end yet), reaches Claude Code after its turn ended, and starts a turn of its own; the Focus turn then ends, and no
-  // turn watches the one the message started (the next one attaches to it, its own prompt unsent). The old runner's
-  // twin was fixed; this one isn't yet, so this test is expected to fail until it is.
-  it.fails('hears a message sent as the turn ends in a turn Focus watches', async () => {
+  // Found by the check above (docs/invariants.md): a message sent as the turn ended reached Claude Code after it and
+  // started a turn of its own that no Focus turn watched (the next one attached to it, its own prompt unsent). agent-host
+  // now says a message `started` a turn, and the Focus turn carries on through it (`atTurnEnd`).
+  it('hears a message sent as the turn ends in a turn Focus watches', async () => {
     const held: (() => void)[] = [];
     const later: Later = (_label, work) => new Promise<void>((go) => held.push(go)).then(work);
     const s = await session.start(later);

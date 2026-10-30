@@ -38,6 +38,17 @@ export function joining(found: readonly ConversationSummary[], resumeSessionId: 
   return { kind: 'start', ...(resumeSessionId && { resumes: resumeSessionId }), stop: open.map((c) => c.id) };
 }
 
+/**
+ * Where a Focus turn stands once the host's turn has ended: a message it sent that started a turn of its own (the agent
+ * had finished when it took it: agent-host's `started`) is heard in that turn, which this Focus turn carries on
+ * through rather than leave to a turn no one watches; with a message still on its way, it waits to hear where it
+ * went; otherwise the turn's over.
+ */
+export function atTurnEnd(sending: number, started: number): 'wait' | 'carry-on' | 'over' {
+  if (sending > 0) return 'wait';
+  return started > 0 ? 'carry-on' : 'over';
+}
+
 /** What a turn comes to when it ends, from its last result. */
 export function outcome(ended: Extract<ConversationEvent, { _tag: 'TurnEnded' }>, result: TurnResult | undefined): RunOutcome {
   const summary = result?.text ?? '';
