@@ -346,6 +346,29 @@ describe("HostRunner, a goal's lead", () => {
     expect(await onStart.hooks[0](compacted, undefined, { signal })).toMatchObject({ hookSpecificOutput: { additionalContext: 'The goal: resumed' } });
     await second.shutDown();
   });
+
+  it("can't reach another session once a conversation started before the peer tools were taken away opens again", async () => {
+    const file = journal();
+    const before = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const first = new HostRunner(new BrowserPool(), before, file);
+    // a conversation started without the peer tools taken away, as every lead's did before
+    const { tools: _, ...old } = lead('run the goal');
+    const session = first.start(old, hooks().h);
+    const s1 = await Effect.runPromise(before.session(1));
+    await until(() => s1.inTurn, 'the turn');
+    expect(s1.options.disallowedTools).not.toContain('SendMessage');
+    first.closingNow();
+    session.stop();
+    await first.shutDown();
+
+    const after = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const second = new HostRunner(new BrowserPool(), after, file);
+    second.extrasFor = () => ({ cwd: process.cwd(), tools, brief: { edited: () => undefined, afterCompact: () => '' } });
+    second.warmUp();
+    const s2 = await Effect.runPromise(after.session(1));
+    expect(s2.options.disallowedTools).toEqual(['EnterPlanMode', ...PEER_TOOLS]);
+    await second.shutDown();
+  });
 });
 
 describe('HostRunner, a Codex developer', () => {

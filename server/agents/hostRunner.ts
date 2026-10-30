@@ -39,6 +39,12 @@ export const HOST_CODEX_DIR = path.join(HOST_DIR, 'codex');
  */
 export const PEER_TOOLS = ['ListAgents', 'SendMessage', 'TeamCreate', 'TeamDelete'];
 
+/**
+ * Claude Code's own tools a session may not use: a lead asks the user with AskUserQuestion, and no one plans in Claude
+ * Code's own plan mode. Lent on every open too, so a conversation started before a tool was taken away loses it.
+ */
+const disallowed = (lead: boolean): string[] => (lead ? ['EnterPlanMode', ...PEER_TOOLS] : ['AskUserQuestion', 'EnterPlanMode']);
+
 /** The label a conversation is found by: the Focus agent whose it is. */
 const AGENT_LABEL = 'focusAgent';
 
@@ -65,7 +71,7 @@ export class HostRunner implements AgentRunner {
     journalPath = path.join(HOST_DIR, 'journal.sqlite'),
     codex: Adapter = makeCodexAdapter({ codexHome: HOST_CODEX_DIR, env: agentEnv(false) }),
   ) {
-    const host = Host.layer({ adapters: { claude, codex }, lend: (c) => this.lend(c.id, c.labels[AGENT_LABEL]) });
+    const host = Host.layer({ adapters: { claude, codex }, lend: (c) => this.lend(c.id, c.labels[AGENT_LABEL], c.agent === 'codex') });
     this.runtime = ManagedRuntime.make(host.pipe(Layer.provideMerge(Journal.layer(journalPath))));
   }
 
@@ -124,7 +130,7 @@ export class HostRunner implements AgentRunner {
   }
 
   /** What an agent's sessions are lent: the browser, and the scratch dir's environment (focus-wait, bash, dcg) with the push guard's. */
-  lent(agentId: string): Lent {
+  lent(agentId: string, codex = false): Lent {
     const lending = this.lendings.get(agentId) ?? { scratch: openScratch(agentId, paths.dcgConfig) };
     this.lendings.set(agentId, lending);
     const hooks = (): Pick<RunHooks, 'browser' | 'screenshot'> => lending.hooks ?? { browser: () => undefined, screenshot: () => undefined };
@@ -134,20 +140,22 @@ export class HostRunner implements AgentRunner {
     // its git runs Ops' hooks, which refuse a lead's harmful pushes and hand on to the repo's own
     writePushHooks(paths.gitHooks);
     const base = agentEnv(false);
-    return { tools, env: definedOnly(sessionEnv(base, { ...lending.scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(agentId), base) })) };
+    // Claude Code's own tools it may not use as they are now, in place of those its conversation started with (Codex's
+    // can't be switched off one by one)
+    return { tools, env: definedOnly(sessionEnv(base, { ...lending.scratch.env, ...pushGuardEnv(paths.gitHooks, refusedFile(agentId), base) })), disallowedTools: codex ? [] : disallowed(!!office) };
   }
 
   /**
    * The host opening a conversation Focus didn't start in this run (one it resumes after a restart): a lead's extras
    * come from the manager (`extrasFor`), since no turn of theirs has brought them yet.
    */
-  private lend(conversationId: string, agentId: string | undefined): Lent {
+  private lend(conversationId: string, agentId: string | undefined, codex: boolean): Lent {
     if (!agentId) return {};
     this.remember(conversationId, agentId);
     const lending = this.lendings.get(agentId) ?? { scratch: openScratch(agentId, paths.dcgConfig) };
     lending.extras ??= this.extrasFor?.(agentId);
     this.lendings.set(agentId, lending);
-    return this.lent(agentId);
+    return this.lent(agentId, codex);
   }
 
   /**
@@ -269,13 +277,12 @@ class HostTurn {
             firstMessage: this.req.prompt,
             // what Ops is, as the old runner's office server told Claude Code: the host's tools carry no instructions
             systemAppend: this.req.tools ? `${this.req.systemAppend}\n\n${OPS_INSTRUCTIONS}` : this.req.systemAppend,
-            // Claude Code's own (Codex's can't be switched off one by one); a lead asks the user with AskUserQuestion, and no
-            // one plans in Claude Code's own plan mode
-            disallowedTools: codex ? [] : this.req.tools ? ['EnterPlanMode', ...PEER_TOOLS] : ['AskUserQuestion', 'EnterPlanMode'],
+            // Claude Code's own: Codex's can't be switched off one by one
+            disallowedTools: codex ? [] : disallowed(!!this.req.tools),
             ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }),
             ...(plan.resumes && { resumeAgentSession: plan.resumes }),
           },
-          this.runner.lent(agentId),
+          this.runner.lent(agentId, codex),
         );
         this.runner.remember(id, agentId);
       } else {
