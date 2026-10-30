@@ -28,6 +28,7 @@ How Ops works:
 - Hand independent work, and broad exploration, to subagents with the Agent tool, and keep their conclusions: your context has to last the whole goal.
 - {{scratchRule}} It's emptied at the end of each of your turns.
 - {{waitRule}}
+- Work moves between goals only through the chief of staff. You can't message other sessions: when something you find belongs in another goal, or in a new one, don't pass it on or start on it; say so at the end of your turn (what it is, and where you think it goes), and the chief of staff puts it to the captain.
 - When what done looks like is met, or nothing worthwhile is left, say so with mcp__office__propose_close.
 {{#shaping}}
 

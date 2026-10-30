@@ -32,6 +32,13 @@ export const HOST_CLAUDE_DIR = path.join(HOST_DIR, 'claude');
 /** The Codex home its Codex sessions run under (you sign in there once, with `codex login`). */
 export const HOST_CODEX_DIR = path.join(HOST_DIR, 'codex');
 
+/**
+ * Claude Code's tools for reaching other sessions, which a lead doesn't get: work moves between goals only through the
+ * chief of staff, so a lead raises work that belongs elsewhere at the end of its turn rather than passing it on, where
+ * nothing would record who it came from (a lead once sent a build straight into another's session).
+ */
+export const PEER_TOOLS = ['ListAgents', 'SendMessage', 'TeamCreate', 'TeamDelete'];
+
 /** The label a conversation is found by: the Focus agent whose it is. */
 const AGENT_LABEL = 'focusAgent';
 
@@ -264,7 +271,7 @@ class HostTurn {
             systemAppend: this.req.tools ? `${this.req.systemAppend}\n\n${OPS_INSTRUCTIONS}` : this.req.systemAppend,
             // Claude Code's own (Codex's can't be switched off one by one); a lead asks the user with AskUserQuestion, and no
             // one plans in Claude Code's own plan mode
-            disallowedTools: codex ? [] : this.req.tools ? ['EnterPlanMode'] : ['AskUserQuestion', 'EnterPlanMode'],
+            disallowedTools: codex ? [] : this.req.tools ? ['EnterPlanMode', ...PEER_TOOLS] : ['AskUserQuestion', 'EnterPlanMode'],
             ...(this.req.outputSchema && { outputSchema: this.req.outputSchema }),
             ...(plan.resumes && { resumeAgentSession: plan.resumes }),
           },

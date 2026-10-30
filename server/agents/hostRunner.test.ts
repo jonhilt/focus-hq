@@ -8,7 +8,7 @@ import type { Settings, TermLine } from '../../shared/types';
 import { paths } from '../config';
 import { BrowserPool } from './browserTool';
 import { DECLINED } from './claudeSession';
-import { copyTranscript, HostRunner } from './hostRunner';
+import { copyTranscript, HostRunner, PEER_TOOLS } from './hostRunner';
 import { OPS_INSTRUCTIONS } from './opsTool';
 import { refusedFile } from './pushGuard';
 import { askedQuestions } from './questions';
@@ -256,6 +256,17 @@ describe("HostRunner, a goal's lead", () => {
   const edit = (file: string) => ({ hook_event_name: 'PostToolUse' as const, tool_name: 'Edit', tool_input: { file_path: file }, tool_response: {}, tool_use_id: 't1', session_id: 's', transcript_path: '', cwd: process.cwd() });
   const compacted = { hook_event_name: 'SessionStart' as const, source: 'compact' as const, session_id: 's', transcript_path: '', cwd: process.cwd() };
 
+  it("can't reach another session: Claude Code's SendMessage and ListAgents are switched off for a lead", async () => {
+    const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
+    const runner = new HostRunner(new BrowserPool(), fake, journal());
+    const session = runner.start(lead('run the goal', vi.fn()), hooks().h);
+    const s = await Effect.runPromise(fake.session(1));
+    await until(() => s.inTurn, 'the turn');
+    expect(s.options.disallowedTools).toEqual(expect.arrayContaining(['SendMessage', 'ListAgents']));
+    session.stop();
+    await session.done;
+  });
+
   it('may ask the user, reads their brief again as they edit it, has it back after a compaction, and has helpers summed up', async () => {
     const fake = makeFakeAdapter({ script: (s) => s.beginTurn() });
     const runner = new HostRunner(new BrowserPool(), fake, journal());
@@ -263,7 +274,7 @@ describe("HostRunner, a goal's lead", () => {
     const session = runner.start(lead('run the goal', edited), hooks().h);
     const s = await Effect.runPromise(fake.session(1));
     await until(() => s.inTurn, 'the turn');
-    expect(s.options.disallowedTools).toEqual(['EnterPlanMode']);
+    expect(s.options.disallowedTools).toEqual(['EnterPlanMode', ...PEER_TOOLS]);
     // Ops' office tools, lent, and what Ops is, in their instructions
     expect(s.options.tools.filter((t) => t.server === 'office').map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close']);
     expect(s.options.systemAppend).toBe(`Work the issue.\n\n${OPS_INSTRUCTIONS}`);
