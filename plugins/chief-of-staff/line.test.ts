@@ -158,7 +158,9 @@ describe('the demo’s line', () => {
       return line.current().messages.at(-1)?.text ?? '';
     };
     expect(await say('About saved items: mind the footer')).toContain('told its lead');
-    expect(world.told).toEqual(['About saved items: mind the footer']);
+    // a brief of a few paragraphs, as the live one writes, opening with what the user said
+    expect(world.told).toHaveLength(1);
+    expect(world.told[0]).toMatch(/^The user has more for “Saved items”: About saved items: mind the footer\n\n.+\n\n/);
     expect(await say('Let’s add search to the web shop')).toContain('I started it in Web shop');
     expect(await say('How are things?')).toContain('Understood');
     expect(line.current().started).toHaveLength(1);

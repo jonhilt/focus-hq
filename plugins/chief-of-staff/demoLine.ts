@@ -15,6 +15,14 @@ function listed(prompt: string): { projects: { id: string; name: string }[]; goa
   return { projects, goals };
 }
 
+/** What it tells a goal's lead: a brief of a few paragraphs, as the live one writes, so Comms has a long one to fold. */
+const briefFor = (title: string, said: string): string => [
+  `The user has more for “${title}”: ${said}`,
+  'Fold it into the slice you’re on if it fits there; if it’s bigger than that, finish the slice first and take it as the next one, so nothing half-done lands.',
+  'Before you start, check what’s already in place for it: there may be part of it built, and a test or two that pins down how it behaves today.',
+  'When it’s done, put up something to look at (a screenshot of it working, or a short note of what changed) and say what you’d do next.',
+].join('\n\n');
+
 export class DemoLine implements LineOfficer {
   async turn(req: LineTurn, activity: (text: string) => void): Promise<LineReply> {
     const wait = async (seconds: number) => {
@@ -31,7 +39,7 @@ export class DemoLine implements LineOfficer {
     const goal = goals.find((g) => q.includes(g.title.toLowerCase()));
     if (goal) {
       activity('Telling a goal’s lead');
-      await tool('tell_goal')?.run({ leadId: goal.id, text: said });
+      await tool('tell_goal')?.run({ leadId: goal.id, text: briefFor(goal.title, said) });
       return reply(`That fits “${goal.title}”, which is open already, so I told its lead rather than starting another goal.`);
     }
     if (/\b(build|add|make|start|we need|let'?s|fix)\b/.test(q)) {

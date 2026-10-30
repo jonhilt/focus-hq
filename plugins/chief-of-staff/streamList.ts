@@ -37,7 +37,8 @@ export function bundleSays(entries: readonly ThreadEntry[]): string[] {
   const says: string[] = [];
   const merged = entries.flatMap((e) => (e.kind === 'merged' ? [`#${e.number}`] : []));
   if (merged.length) says.push(`merged ${merged.join(', ')}`);
-  const passed = entries.filter((e) => e.kind === 'ops' && /^QA/.test(e.from) && /\bpassed\b/.test(e.text)).length;
+  // QA's verdict is its message's first line: what follows (its findings) may say "passed" of anything
+  const passed = entries.filter((e) => e.kind === 'ops' && /^QA/.test(e.from) && /\bpassed\b/.test(e.text.split('\n')[0] ?? '')).length;
   if (passed) says.push(passed > 1 ? `QA passed ${passed}` : 'QA passed');
   const back = entries.filter((e) => e.kind === 'cos' && e.route === 4).length;
   if (back) says.push(back > 1 ? `sent back ${back}×` : 'sent back once');
@@ -45,8 +46,11 @@ export function bundleSays(entries: readonly ThreadEntry[]): string[] {
   return says;
 }
 
-/** A lead's conversation, for the panel: what they said and what the captain said to them, nothing between. */
-export const conversation = (entries: readonly ThreadEntry[]): ThreadEntry[] => entries.filter((e) => e.kind === 'lead' || e.kind === 'you');
+/**
+ * A lead's conversation, for the panel: what they said, what the user said to them, and what anyone else told them
+ * (drawn folded, collapsedMessage.ts), nothing else.
+ */
+export const conversation = (entries: readonly ThreadEntry[]): ThreadEntry[] => entries.filter((e) => e.kind === 'lead' || e.kind === 'you' || e.kind === 'ops');
 
 /** The project's preview, when it's running one of this lead's pull requests: on the exhibit card. */
 export function previewFor<P extends { repo: string; number: number }>(preview: P | undefined, prs: readonly { repo: string; number: number }[]): P | undefined {

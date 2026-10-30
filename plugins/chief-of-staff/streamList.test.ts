@@ -52,18 +52,20 @@ describe('what came in since the watch began', () => {
       { kind: 'cos', at: 6, route: 3, why: 'Stuck.' },
     ])).toEqual(['merged #689', 'QA passed', 'sent back once', 'flagged to you']);
     expect(bundleSays([{ kind: 'ops', at: 1, from: 'Ops', text: 'Following it.' }])).toEqual([]);
+    // QA's verdict is its first line: a failure whose findings mention a pass isn't one
+    expect(bundleSays([{ kind: 'ops', at: 1, from: 'QA officer Lt. Nakamura', text: 'QA failed a/b#690.\nThe old tests passed; the new one didn’t.' }])).toEqual([]);
   });
 });
 
 describe('the panel and the exhibit', () => {
-  it('keeps the conversation alone: their words and the captain’s, nothing between', () => {
+  it('keeps the conversation: their words, the user’s and what others told them, not the ledger’s lines', () => {
     const entries: ThreadEntry[] = [
       { kind: 'you', at: 1, text: 'Go' },
       { kind: 'ops', at: 2, from: 'Ops', text: 'Following it.' },
       { kind: 'lead', at: 3, text: 'Done.' },
       { kind: 'cos', at: 4, route: 1, why: 'Fine.' },
     ];
-    expect(conversation(entries).map((e) => e.at)).toEqual([1, 3]);
+    expect(conversation(entries).map((e) => e.at)).toEqual([1, 2, 3]);
   });
 
   it('shows the project’s preview only when it runs one of this lead’s pull requests', () => {

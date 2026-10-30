@@ -11,6 +11,7 @@ import { closeStarted, lineView, startedNow } from './lineView';
 import { mergesOf } from './needCard';
 import { CHIEF_OF_STAFF, cosStateOf, type LineStart, readOf, SENDER } from './shared';
 import { berths, bundleSays, conversation, doing, footOf, previewFor, seenOf } from './streamList';
+import { collapsedMessage } from './collapsedMessage';
 import type { ThreadEntry } from './thread';
 import { TW } from './bridgeKit';
 import { type Exhibit, type ExhibitsBy, exhibitsOf, type Grade, gradeOf, musterOrder, type Reach, reachOf, watchOf } from './watchRules';
@@ -123,6 +124,8 @@ export function openStream(ui: CommsUi): void {
   // the decision being discussed in the panel: quoted at its top, and what's said goes to the lead about it
   let discussing: { id: string; what: string } | null = null;
   let expanded: string | null = null;
+  // the messages folded in the panel that the user opened, by id: open still when it's drawn again
+  const unfolded = new Set<string>();
   let onScreen: string | null = null;
   // the exhibits: their panel beside the sheet and how it groups them, the one open on the sheet, and the ones looked
   // at this watch
@@ -693,6 +696,8 @@ export function openStream(ui: CommsUi): void {
   const drawSaid = (lead: Agent, key: string) => {
     said.dataset.key = key;
     fill(said, ...conversation(entries).map((e) => {
+      // what Ops, QA, the chief of staff or the scheduler told them: folded to a line, opening to all of it
+      if (e.kind === 'ops') return collapsedMessage({ id: `${e.from}@${e.at}`, head: `${e.from} told ${lead.name} · ${clock(e.at)}`, text: e.text, open: unfolded, part: 'told' });
       const text = h('div', { class: 'cos-md' });
       text.innerHTML = markdownHtml(e.kind === 'lead' || e.kind === 'you' ? e.text : '');
       return h('div', { class: `tw:text-[14.5px]/[1.65] ${e.kind === 'you' ? 'tw:pl-3 tw:border-0 tw:border-l-2 tw:border-solid tw:border-line' : ''}`, attrs: { 'data-from': e.kind } },

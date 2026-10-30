@@ -8,8 +8,12 @@ import { blocks, clip, messageFrom, transcriptLines } from '../../plugin-api/ser
 // to the lead (and the cards set aside) from its log (each whole, and who it's from: in its transcript, Ops' news is
 // joined to the captain's next message), its words from its transcript, and the rest from the ledger. Pure, so it's tested (thread.test.ts).
 
-/** How much of a turn's last words, and of a message to the lead, a thread keeps. */
-export const THREAD_LIMITS = { lead: 4000, you: 2000, quiet: 240, entries: 200 } as const;
+/**
+ * How much of a turn's last words, and of a message to the lead, a thread keeps. Someone else's message is kept whole
+ * up to `told`, since Comms folds it to a line that opens to all of it (collapsedMessage.ts): a brief runs to a few
+ * thousand characters, and the thread is asked for by the goal at the conn, not kept or sent to every browser.
+ */
+export const THREAD_LIMITS = { lead: 4000, you: 2000, told: 8000, entries: 200 } as const;
 
 /** One entry in a goal's thread. */
 export type ThreadEntry =
@@ -17,7 +21,7 @@ export type ThreadEntry =
   | { kind: 'you'; at: number; text: string; via?: string }
   /** What the lead said as a turn ended. */
   | { kind: 'lead'; at: number; text: string }
-  /** What someone else told the lead (Ops, QA, the chief of staff, the scheduler), in brief. */
+  /** What someone else told the lead (Ops, QA, the chief of staff, the scheduler): whole, up to `THREAD_LIMITS.told`. */
   | { kind: 'ops'; at: number; from: string; text: string }
   /** One of the goal's pull requests merged. */
   | { kind: 'merged'; at: number; repo: string; number: number }
@@ -31,9 +35,6 @@ const time = (iso: unknown): number | undefined => {
   return Number.isNaN(t) ? undefined : t;
 };
 
-/** A message's first line, clipped: how a quiet entry shows it. */
-const firstLine = (text: string, max: number) => clip(text.trim().split('\n')[0] ?? '', max);
-
 /** A message to the lead as its log prints it: `▶ Captain: …`, `▶ Captain, from phone: …`, `▶ Ops: …`. */
 const MESSAGE = /^▶ ([^:\n]+): ([\s\S]*)$/;
 
@@ -41,7 +42,7 @@ const MESSAGE = /^▶ ([^:\n]+): ([\s\S]*)$/;
 const SET_ASIDE = /^✻ (.+ — set aside: .+ carried on)$/;
 
 /**
- * The messages to the lead in its log, in order: the captain's in full, everyone else's in brief, and the cards set
+ * The messages to the lead in its log, in order, each whole but clipped: the user's, everyone else's, and the cards set
  * aside as the lead carried on. `firstWords`, the goal as the captain first put it, is left out where it's the first
  * message: the thread's header has it.
  */
@@ -54,7 +55,7 @@ export function messageEntries(lines: readonly TermLine[], firstWords?: string):
     if (!m) continue;
     const [, who, text] = m;
     const captain = /^Captain(?:, from (.+))?$/.exec(who);
-    if (!captain) out.push({ kind: 'ops', at: line.t, from: who, text: firstLine(text, THREAD_LIMITS.quiet) });
+    if (!captain) out.push({ kind: 'ops', at: line.t, from: who, text: clip(text.trim(), THREAD_LIMITS.told) });
     else if (!(out.length === 0 && firstWords && text.trim() === firstWords.trim()))
       out.push({ kind: 'you', at: line.t, text: clip(text, THREAD_LIMITS.you), ...(captain[1] && { via: captain[1] }) });
   }

@@ -342,7 +342,7 @@ describe('talking to the lead', () => {
     await settle();
     expect(shown('talk')).toBe(true);
     expect(part('talk')?.textContent).toContain('Done.');
-    expect(part('talk')?.textContent).not.toContain('Following it.');
+    expect(part('told')?.textContent).toContain('Ops told Lt. a');
     const box = part('talk')?.querySelector('textarea');
     if (!box) throw new Error('no box to talk to them');
     box.value = 'Ship it';
@@ -350,6 +350,40 @@ describe('talking to the lead', () => {
     expect(messageAgent).toHaveBeenCalledWith('a', 'Lt. a', 'Ship it');
     press('Escape', 'Escape');
     expect(shown('talk')).toBe(false);
+  });
+
+  it('folds what others told the lead to a line saying who told them, which opens to all of it and stays open as the thread is drawn again', async () => {
+    const brief = 'Here is the plan for the saved list.\n\nFirst, store the items per user.\n\nThen show them on the page.';
+    fake.conn = 'a';
+    fake.threads.a = [{ kind: 'you', at: 1, text: 'Go' }, { kind: 'ops', at: 2, from: 'Chief of Staff', text: brief }, { kind: 'ops', at: 3, from: 'QA officer Lt. Okafor', text: 'QA passed acme/shop#3' }, { kind: 'lead', at: 4, text: 'Done.' }];
+    await open();
+    part('who')?.click();
+    await settle();
+    const said = part('talk')?.querySelector('[data-part=told]')?.parentElement;
+    expect([...(said?.children ?? [])].map((c) => c.getAttribute('data-from') ?? c.getAttribute('data-part'))).toEqual(['you', 'told', 'told', 'lead']);
+    const [cos, qa] = parts('told');
+    const toggle = cos?.querySelector<HTMLButtonElement>('[data-part=msg-toggle]');
+    expect(toggle?.textContent).toContain('Chief of Staff told Lt. a');
+    expect(toggle?.textContent).toContain('Here is the plan for the saved list.');
+    expect(qa?.textContent).toContain('QA officer Lt. Okafor told Lt. a');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(cos?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(true);
+    toggle?.click();
+    expect(cos?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
+    expect(cos?.textContent).toContain('Then show them on the page.');
+    // the lead answers, and the thread is drawn again with it: what was opened is open still
+    fake.threads.a = [...fake.threads.a, { kind: 'you', at: 5, text: 'Ship it' }];
+    const box = part('talk')?.querySelector('textarea');
+    if (!box) throw new Error('no box to talk to them');
+    box.value = 'Ship it';
+    box.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+    await new Promise((r) => setTimeout(r, 1100));
+    expect(part('talk')?.textContent).toContain('Ship it');
+    const again = parts('told')[0];
+    expect(again).not.toBe(cos);
+    expect(again?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(again?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
+    expect(parts('told')[1]?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('false');
   });
 });
 
@@ -415,6 +449,30 @@ describe('the direct line to the chief of staff', () => {
     part('line-close')?.click();
     await settle();
     expect(fake.said).toEqual([{ path: '/line/close', key: started.key }, { path: '/line/close', key: started.key, force: true }]);
+  });
+
+  it('folds what it told a lead to “Told <lead> · <goal> · <time>”, opening to all of it and open still as the line is drawn again', async () => {
+    const brief = 'Mind the footer.\n\nIt overlaps the cart on small screens.\n\nCheck it at 320px wide.';
+    fake.line = { ...line, told: [{ ...line.told[0], text: brief }] };
+    await open();
+    part('line-berth')?.click();
+    await settle();
+    const told = part('line-told');
+    const toggle = told?.querySelector<HTMLButtonElement>('[data-part=msg-toggle]');
+    expect(toggle?.textContent).toMatch(/Told Lt\. a · Goal a · \d\d:\d\d/);
+    expect(toggle?.textContent).toContain('Mind the footer.');
+    expect(toggle?.getAttribute('aria-expanded')).toBe('false');
+    expect(told?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(true);
+    toggle?.click();
+    expect(toggle?.getAttribute('aria-expanded')).toBe('true');
+    expect(told?.querySelector<HTMLElement>('[data-part=msg-body]')?.textContent).toContain('Check it at 320px wide.');
+    // its reply comes in, and the line is drawn again: what was opened is open still
+    fake.line = { ...fake.line as object, messages: [...line.messages, { from: 'cos', text: 'Anything else?', at: 5 }] };
+    fake.state?.();
+    await settle();
+    expect(part('line-told')).not.toBe(told);
+    expect(part('line-told')?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(part('line-told')?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
   });
 
   it('sends what’s typed on Enter, and says what it’s doing while it thinks', async () => {

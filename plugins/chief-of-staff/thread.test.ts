@@ -13,7 +13,7 @@ let seq = 0;
 const line = (e: Record<string, unknown>): LedgerEvent => ({ projectId: 'p', seq: ++seq, ...e }) as LedgerEvent;
 
 describe('messageEntries', () => {
-  it('keeps the captain’s messages whole and everyone else’s in brief, each from its log line', () => {
+  it('keeps every message whole, the user’s and everyone else’s, each from its log line', () => {
     const lines: TermLine[] = [
       msg(1, '▶ Captain: Build saved items'),
       { t: 2, kind: 'text', text: 'Looking.' },
@@ -25,7 +25,7 @@ describe('messageEntries', () => {
     ];
     expect(messageEntries(lines, 'Build saved items')).toEqual([
       { kind: 'you', at: 3, text: 'Use a list.\nAnd keep it small.' },
-      { kind: 'ops', at: 4, from: 'Ops', text: 'Slice 1 has landed.' },
+      { kind: 'ops', at: 4, from: 'Ops', text: 'Slice 1 has landed.\nMore detail.' },
       { kind: 'ops', at: 5, from: 'QA officer Lt. Okafor', text: 'QA passed acme/shop#3' },
       { kind: 'you', at: 6, text: 'Ship it', via: 'phone' },
     ]);
@@ -48,6 +48,14 @@ describe('messageEntries', () => {
   it('clips what it keeps', () => {
     const [you] = messageEntries([msg(1, `▶ Captain: ${'x'.repeat(THREAD_LIMITS.you + 5)}`)]);
     expect(you).toMatchObject({ text: `${'x'.repeat(THREAD_LIMITS.you)} …[+5]` });
+    const [told] = messageEntries([msg(1, `▶ Chief of Staff: ${'y'.repeat(THREAD_LIMITS.told + 5)}`)]);
+    expect(told).toMatchObject({ kind: 'ops', text: `${'y'.repeat(THREAD_LIMITS.told)} …[+5]` });
+  });
+
+  it('keeps a long brief to the lead whole, every paragraph of it, past what a line shows', () => {
+    const brief = ['Here is the plan for the saved list.', '', 'First, store the items per user.', '', 'Then, '.concat('show them on the page. '.repeat(30)).trim()].join('\n');
+    expect(brief.length).toBeGreaterThan(240);
+    expect(messageEntries([msg(1, `▶ Chief of Staff: ${brief}`)])).toEqual([{ kind: 'ops', at: 1, from: 'Chief of Staff', text: brief }]);
   });
 });
 

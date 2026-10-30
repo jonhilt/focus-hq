@@ -1,13 +1,15 @@
 import { busy, callPlugin, confirmDialog, fill, focus, h, markdownHtml, pluginState } from '../../plugin-api/client';
 import { isRecord } from '../../plugin-api/shared';
 import { TW } from './bridgeKit';
+import { collapsedMessage } from './collapsedMessage';
 import { lineEntries } from './lineList';
 import { startedWaiting } from './lineRules';
 import { CHIEF_OF_STAFF, cosStateOf, freshLine, type LineStart } from './shared';
 
 // The direct line in Comms (README.md#the-direct-line): the user's conversation with the chief of staff, tied to no
 // goal, in the viewer's place, looking as the Talk panel does. What it started from the line is a notice in the
-// conversation, "I started … because …", with Close (its undo); what it told an open goal's lead, a quieter one.
+// conversation, "I started … because …", with Close (its undo); what it told an open goal's lead, a quieter one, folded
+// to "Told <lead> · <goal> · <time>" and opening to all of it (collapsedMessage.ts).
 
 const clock = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 
@@ -52,6 +54,9 @@ export function lineView(error: (message: string) => void): { el: HTMLElement; r
   });
   const el = h('div', { class: `${TW.table} tw:flex tw:flex-col tw:bg-surface tw:border tw:border-solid tw:border-line tw:shadow-lift-3 cos-cut`, attrs: { 'data-part': 'line' } }, head, said, box);
 
+  // the words it told a lead that the user opened, by id: open still when the line's drawn again
+  const unfolded = new Set<string>();
+
   fresh.onclick = () => void busy(fresh, () => callPlugin(CHIEF_OF_STAFF, '/line/new', {}), error);
 
   const startedEl = (s: LineStart) => {
@@ -71,13 +76,14 @@ export function lineView(error: (message: string) => void): { el: HTMLElement; r
     status.textContent = line.status === 'thinking' ? `Thinking · ${activity || 'reading what you said'}` : line.status === 'failed' ? `Lost the thread: ${line.error ?? 'it failed'}` : 'Waiting for you';
     box.disabled = line.status === 'thinking';
     const entries = lineEntries(line);
-    const key = JSON.stringify([entries, entries.flatMap((e) => (e.kind === 'started' ? [focus.agent(e.start.leadId)?.lead?.title ?? null, !!focus.agent(e.start.leadId)] : []))]);
+    const key = JSON.stringify([entries, entries.flatMap((e) => (e.kind === 'started' ? [focus.agent(e.start.leadId)?.lead?.title ?? null, !!focus.agent(e.start.leadId)] : e.kind === 'told' ? [focus.agent(e.told.leadId)?.name ?? null] : []))]);
     if (said.dataset.key === key) return;
     said.dataset.key = key;
     fill(said, ...entries.map((e) => {
       if (e.kind === 'started') return startedEl(e.start);
       if (e.kind === 'told') {
-        return h('div', { class: 'tw:text-[13px] tw:text-muted tw:pl-3 tw:border-0 tw:border-l-2 tw:border-solid tw:border-line', attrs: { 'data-part': 'line-told' } }, `Told “${e.told.goal}” · ${clock(e.told.at)}: ${e.told.text}`);
+        const { leadId, goal, at, text } = e.told;
+        return collapsedMessage({ id: `${leadId}@${at}`, head: `Told ${focus.agent(leadId)?.name ?? 'its lead'} · ${goal} · ${clock(at)}`, text, open: unfolded, part: 'line-told' });
       }
       const text = h('div', { class: 'cos-md' });
       text.innerHTML = markdownHtml(e.message.text);
