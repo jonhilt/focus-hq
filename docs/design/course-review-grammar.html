@@ -1,0 +1,1182 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Course review grammar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens ----------
+   Brownfield: drawn in Comms' own look, dark, value for value from plugins/chief-of-staff/bridge.css (@theme) and
+   bridgeKit.ts, and from the side panels grammar (docs/design/side-panels-grammar.html), whose panel stack (option B)
+   this page builds on. The page itself is a light spec sheet, as the other grammar pages are (warm grey ground, near-white
+   surfaces); the mockups, specimens and layer drawing are Comms, dark. The two marked "new" are the only tokens this
+   grammar adds. */
+:root {
+  color-scheme: light;
+  --color-well: #e8e6e1; --color-panel: #fbfaf8; --color-surface: #f4f2ee; --color-surface2: #efece7; --color-line: rgb(28 30 34 / 16%);
+  --color-ink: #1c1e22; --color-muted: #61666e; --color-label: #6b7079; --color-attn: #b26a00; --color-on-ink: #fff;
+  --color-hair-rail: rgb(28 30 34 / 10%); --color-hair-card: rgb(28 30 34 / 10%);
+  --color-fail: #e5484d; /* stream.ts's error dot */
+  --font-display: 'Chakra Petch', sans-serif; --font-mono: 'IBM Plex Mono', monospace;
+  --font-read: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --shadow-lift-1: 0 1px 0 rgb(0 0 0 / 50%);
+  --shadow-lift-2: 0 6px 16px rgb(0 0 0 / 55%);
+  --shadow-lift-3: 0 14px 36px rgb(0 0 0 / 65%);
+  --shadow-lift-4: 0 20px 50px #000a;
+  --ease-spring: linear(0, .08 4%, .3 10%, .56 18%, .78 28%, .9 38%, .97 52%, 1.006 66%, 1.008 76%, 1);
+  --ease-flick: cubic-bezier(.2, .9, .3, 1);
+  --spring-paper: 560ms var(--ease-spring);   /* cos-rise */
+  --spring-card: 420ms var(--ease-spring);
+  --spring-panel: 260ms var(--ease-flick);    /* cos-slide */
+  --spring-flick: 220ms var(--ease-flick);    /* cos-drop */
+  --panel-w: 460px;  /* side panels grammar */
+  --spine-h: 30px;   /* side panels grammar, option B */
+  /* new */
+  --step-h: 32px;    /* one step's row on the direction */
+  --mark-w: 3px;     /* the preview point's bar */
+}
+/* Comms, dark, value for value from bridge.css */
+.mk, .tile, .iso, .table {
+  color-scheme: dark;
+  --color-well: #0b0d10; --color-panel: #15181d; --color-surface: #1b1f25; --color-surface2: #1e232b; --color-line: #3a424e;
+  --color-ink: #e9edf2; --color-muted: #8a94a3; --color-label: #7d8794; --color-attn: #f5a524; --color-on-ink: #111;
+  --color-hair-rail: rgb(58 66 78 / 45%); --color-hair-card: rgb(233 237 242 / 10%);
+  color: var(--color-ink);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--color-well); color: var(--color-ink); }
+body { font: 15px/1.6 var(--font-read); overflow-x: hidden; }
+.wrap { max-width: 1260px; margin: 0 auto; padding: 28px 18px 90px; }
+header.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--color-line); padding-bottom: 14px; }
+header.top h1 { font: 600 34px/1.1 var(--font-display); margin: 0; letter-spacing: .02em; }
+header.top h1 small { display: block; font: 500 13px/1.4 var(--font-read); color: var(--color-muted); margin-top: 6px; letter-spacing: 0; }
+nav.tabs { display: flex; border: 1px solid var(--color-line); background: var(--color-panel); }
+nav.tabs button { font: 600 12px var(--font-display); letter-spacing: .1em; text-transform: uppercase; border: 0; background: transparent; padding: 8px 16px; cursor: pointer; color: var(--color-muted); }
+nav.tabs button[aria-selected="true"] { background: var(--color-ink); color: var(--color-on-ink); }
+.lede { font-size: 17px; line-height: 1.6; max-width: 920px; margin: 22px 0 18px; }
+.lede b { font-weight: 600; }
+.lookline { font-size: 13.5px; color: var(--color-muted); border-left: 2px solid var(--color-line); padding-left: 12px; max-width: 920px; margin: 0 0 18px; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.box { background: var(--color-panel); border: 1px solid var(--color-line); padding: 14px 18px; }
+.box h3, .lbl { font: 600 11px var(--font-display); letter-spacing: .14em; text-transform: uppercase; margin: 0 0 6px; color: var(--color-label); }
+.box ul { margin: 0; padding-left: 18px; } .box li { margin: 5px 0; font-size: 14px; line-height: 1.5; }
+code { font: 12.5px var(--font-mono); background: var(--color-surface2); padding: 0 4px; }
+section.tab { display: none; padding-top: 28px; } section.tab.on { display: block; }
+h2 { font: 600 22px/1.2 var(--font-display); margin: 38px 0 10px; letter-spacing: .02em; }
+h2:first-child { margin-top: 0; }
+p.note { color: var(--color-muted); font-size: 14px; max-width: 880px; }
+.scroll-x { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; background: var(--color-panel); border: 1px solid var(--color-line); font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--color-hair-card); vertical-align: top; line-height: 1.5; }
+th { font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-label); background: var(--color-surface); }
+tr:last-child td { border-bottom: 0; }
+.tag { display: inline-block; font: 500 10.5px var(--font-mono); text-transform: uppercase; letter-spacing: .04em; padding: 0 6px; border: 1px solid var(--color-line); color: var(--color-muted); white-space: nowrap; }
+.tag.new { border-color: var(--color-ink); color: var(--color-ink); }
+.tag.miss { border-color: var(--color-attn); color: var(--color-attn); }
+.nouns { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px; }
+.noun { background: var(--color-panel); border: 1px solid var(--color-line); padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.noun h3 { font: 600 19px var(--font-display); margin: 0; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.noun .purpose { font-size: 15px; margin: 0; }
+.noun dl { display: grid; grid-template-columns: 96px 1fr; gap: 4px 10px; margin: 0; font-size: 13.5px; line-height: 1.5; }
+.noun dt { color: var(--color-muted); }
+.noun dd { margin: 0; }
+.tile { background: var(--color-well); border: 1px solid var(--color-hair-card); padding: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-start; font: 12.5px/1.45 var(--font-read); }
+.tile .cap { width: 100%; font: 500 10.5px var(--font-mono); color: var(--color-label); }
+.matrix th, .matrix td { text-align: center; padding: 7px 4px; font-size: 13px; }
+.matrix th:first-child, .matrix td:first-child { text-align: left; padding-left: 12px; white-space: nowrap; font-weight: 600; }
+.matrix thead th { height: 46px; vertical-align: bottom; font-size: 10px; letter-spacing: .08em; }
+.matrix td.y::after { content: '●'; font-size: 11px; color: var(--color-ink); }
+.matrix td.n::after { content: 'NEW'; font: 600 9.5px var(--font-mono); border: 1px solid var(--color-ink); padding: 0 3px; }
+.matrix td.m::after { content: 'MOVED'; font: 600 9.5px var(--font-mono); border: 1px dashed var(--color-muted); color: var(--color-muted); padding: 0 3px; }
+.matrix td:nth-child(even) { background: rgb(0 0 0 / 2.5%); }
+.legend { font-size: 13px; color: var(--color-muted); margin: 8px 0 0; }
+.principles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
+.principles div { background: var(--color-panel); border: 1px solid var(--color-line); padding: 12px 16px; font-size: 14.5px; line-height: 1.6; }
+.principles b { font: 600 13px var(--font-display); letter-spacing: .06em; text-transform: uppercase; display: block; margin-bottom: 2px; }
+.rule { font: 600 19px/1.45 var(--font-read); border-left: 3px solid var(--color-ink); padding-left: 14px; margin: 0 0 14px; max-width: 70ch; }
+.principle p { font-size: 15px; line-height: 1.6; margin: 0 0 10px; max-width: 72ch; }
+.stack { display: grid; grid-template-columns: 1fr .95fr 1.2fr; gap: 22px; align-items: start; margin-top: 12px; }
+.stack .defs h4 { font: 600 13px var(--font-display); letter-spacing: .1em; text-transform: uppercase; margin: 14px 0 2px; }
+.stack .defs h4:first-child { margin-top: 0; }
+.stack .defs p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--color-ink); }
+.iso { position: relative; height: 420px; perspective: 1400px; }
+.iso .rig { position: absolute; left: 50%; top: 58%; width: 0; height: 0; transform-style: preserve-3d; transform: rotateX(58deg) rotateZ(-38deg); }
+.iso .pl { position: absolute; display: flex; align-items: flex-end; padding: 6px; font: 600 9.5px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-ink); }
+.iso .g { left: -150px; top: -120px; width: 300px; height: 240px; background: var(--color-well); border: 1px solid var(--color-line); transform: translateZ(0); }
+.iso .r { left: -142px; top: -112px; width: 56px; height: 224px; background: var(--color-panel); border: 1px solid var(--color-hair-rail); transform: translateZ(18px); }
+.iso .s { left: -78px; top: -112px; width: 140px; height: 224px; background: var(--color-surface); border: 1px solid var(--color-line); transform: translateZ(40px); box-shadow: var(--shadow-lift-3); }
+.iso .c { left: -70px; top: -96px; width: 124px; height: 90px; background: var(--color-surface2); border: 1px solid var(--color-hair-card); transform: translateZ(64px); box-shadow: var(--shadow-lift-2); }
+.iso .p1 { left: 70px; top: -112px; width: 76px; height: 224px; background: var(--color-panel); border: 1px solid var(--color-line); transform: translateZ(90px); opacity: .85; }
+.iso .p2 { left: 70px; top: -96px; width: 76px; height: 208px; background: var(--color-panel); border: 1px solid var(--color-line); transform: translateZ(110px); box-shadow: var(--shadow-lift-4); }
+.iso .h { left: 84px; top: -112px; width: 62px; height: 44px; background: var(--color-surface2); border: 1px solid var(--color-attn); transform: translateZ(150px); box-shadow: var(--shadow-lift-4); }
+.tokens td, .tokens th { font-size: 12.5px; padding: 6px 8px; }
+.tokens code { font-size: 11px; }
+.options { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 12px; }
+.opt { background: var(--color-panel); border: 1px solid var(--color-line); padding: 14px 16px; font-size: 14px; line-height: 1.55; }
+.opt h4 { font: 600 15px var(--font-display); letter-spacing: .04em; margin: 0 0 6px; }
+.opt.rec { border-color: var(--color-ink); }
+.opt .pill { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: var(--color-on-ink); padding: 1px 6px; margin-left: 6px; vertical-align: 2px; }
+.opt p { margin: 6px 0; }
+.opt .talk { color: var(--color-muted); font-size: 13.5px; }
+.verdict-box { margin-top: 16px; background: var(--color-surface); border: 1px solid var(--color-ink); padding: 16px 20px; max-width: 980px; }
+.verdict-box p { margin: 6px 0; font-size: 15px; }
+.scenario { display: grid; grid-template-columns: minmax(280px, .82fr) minmax(0, 1.5fr); gap: 28px; margin: 28px 0 0; padding: 26px 0 0; border-top: 1px solid var(--color-line); align-items: start; }
+.scenario h3 { font: 600 20px var(--font-display); margin: 0 0 6px; letter-spacing: .02em; }
+.scenario h3 .pill { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: var(--color-on-ink); padding: 1px 6px; margin-left: 6px; vertical-align: 3px; }
+.scenario .today { font-size: 13.5px; background: var(--color-panel); border-left: 2px solid var(--color-muted); padding: 8px 12px; margin: 10px 0; }
+.scenario p { font-size: 14.5px; margin: 8px 0; line-height: 1.6; max-width: 60ch; }
+.scenario p.why { font-size: 13.5px; color: var(--color-muted); border-top: 1px solid var(--color-hair-card); padding-top: 10px; margin-top: 14px; }
+.scenario p.why b { color: var(--color-ink); font-weight: 600; }
+ol.steps { list-style: none; padding: 0; margin: 14px 0 0; counter-reset: s; }
+ol.steps li { counter-increment: s; display: grid; grid-template-columns: 26px 1fr; gap: 4px; padding: 5px 8px; cursor: pointer; color: var(--color-muted); font-size: 14px; }
+ol.steps li::before { content: counter(s); font: 600 12px var(--font-mono); padding-top: 2px; }
+ol.steps li.on { color: var(--color-ink); background: var(--color-panel); box-shadow: inset 2px 0 0 var(--color-ink); }
+ol.steps li.on b { font-weight: 700; }
+.table { position: relative; background: #07080a; border: 1px solid var(--color-line); padding: 12px; }
+.table .replay { position: absolute; bottom: 7px; right: 12px; z-index: 50; width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--color-line); background: var(--color-panel); color: var(--color-ink); cursor: pointer; display: grid; place-items: center; }
+.table .replay svg { width: 15px; height: 15px; }
+.table .capline { font: 500 12px var(--font-mono); color: var(--color-muted); margin: 10px 44px 0 2px; min-height: 20px; display: flex; justify-content: space-between; gap: 12px; }
+.table .capline .stepcap { flex: none; }
+.mk-wrap { position: relative; width: 100%; aspect-ratio: 980 / 600; overflow: hidden; }
+.handover td:first-child { font-weight: 600; white-space: nowrap; }
+.data td:nth-child(2) { width: 120px; }
+
+/* ================= Mockup: Comms as built (stream.ts), at 980 × 600, scaled to its column ================= */
+.mk { position: absolute; left: 0; top: 0; width: 980px; height: 600px; transform-origin: 0 0; transform: scale(var(--s, 1)); overflow: hidden;
+  background: var(--color-well) radial-gradient(ellipse at 50% 120%, #1a2230 0%, transparent 60%); color: var(--color-ink); font: 12.5px/1.45 var(--font-read); }
+.mk * { box-sizing: border-box; }
+.mk .hud { position: absolute; left: 12px; right: 12px; top: 8px; height: 28px; display: flex; align-items: center; justify-content: space-between; }
+.mk .where { font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-muted); }
+.mk .where b { color: var(--color-ink); font-weight: 600; }
+.mk .where .w2, .mk.conn2 .where .w1 { display: none; }
+.mk.conn2 .where .w2 { display: inline; }
+.chip { display: flex; align-items: center; height: 24px; border: 1px solid var(--color-line); background: var(--color-panel); font: 600 11px var(--font-display); letter-spacing: .1em; text-transform: uppercase; }
+.chip span { padding: 0 9px; color: var(--color-muted); }
+.chip .cnt { width: 26px; height: 22px; line-height: 22px; text-align: center; padding: 0; position: relative; overflow: hidden; }
+.chip .cnt i { position: absolute; inset: 0; font-style: normal; transition: transform var(--spring-card), opacity var(--spring-card); }
+.chip .cnt i + i { transform: translateY(100%); opacity: 0; }
+.mk.stood .chip .cnt i:first-child { transform: translateY(-100%); opacity: 0; }
+.mk.stood .chip .cnt i + i { transform: none; opacity: 1; }
+.mk .rail { position: absolute; left: 12px; top: 46px; width: 150px; }
+.mk .proj { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); margin: 2px 4px 5px; }
+.berth { display: grid; grid-template-columns: 10px 1fr 20px; align-items: center; gap: 6px; min-height: 30px; padding: 4px 6px 4px 8px; margin-bottom: 6px; background: var(--color-panel); border: 1px solid var(--color-hair-rail); box-shadow: var(--shadow-lift-1); font-size: 12px; opacity: .55; transition: opacity var(--spring-card), border-color var(--spring-card); }
+.berth.at { opacity: 1; background: var(--color-surface); border-color: var(--color-line); }
+.mk.conn2 .berth.at { opacity: .55; background: var(--color-panel); border-color: var(--color-hair-rail); }
+.mk.conn2 .berth.b2 { opacity: 1; background: var(--color-surface); border-color: var(--color-line); }
+.berth .n { width: 20px; height: 16px; font: 600 10.5px/16px var(--font-mono); text-align: center; color: var(--color-muted); }
+.berth .n.attn { color: var(--color-attn); box-shadow: inset 0 0 0 1px var(--color-attn); }
+.berth .n.later { opacity: 0; transition: opacity var(--spring-card); }
+.mk.stood .berth .n.later { opacity: 1; }
+.dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; background: var(--color-muted); }
+.dot.work { background: var(--color-ink); }
+.sheet { position: absolute; left: 174px; top: 46px; width: 470px; height: 542px; background: var(--color-surface); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-3);
+  clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
+.sheet .face { position: absolute; inset: 0; transition: opacity var(--spring-card), transform var(--spring-card); }
+.sheet .face.f2 { opacity: 0; transform: translateY(10px); }
+.mk.conn2 .sheet .face.f1 { opacity: 0; transform: translateY(-10px); }
+.mk.conn2 .sheet .face.f2 { opacity: 1; transform: none; }
+.shead { padding: 11px 16px 9px; border-bottom: 1px solid var(--color-hair-card); display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; }
+.shead .p { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); }
+.shead .g { font: 600 15.5px/1.25 var(--font-display); letter-spacing: .02em; grid-column: 1; }
+.shead .who { grid-column: 1; font-size: 11.5px; color: var(--color-muted); display: flex; align-items: center; gap: 6px; }
+.shead .acts { grid-column: 2; grid-row: 1 / span 3; align-self: center; display: flex; gap: 5px; }
+.since { margin: 9px 16px 0; font-size: 11.5px; color: var(--color-muted); white-space: nowrap; }
+.since b { color: var(--color-ink); font-weight: 500; }
+.btn { display: inline-flex; align-items: center; gap: 5px; height: 22px; padding: 0 8px; font: 600 10px var(--font-display); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--color-line); color: var(--color-ink); background: var(--color-surface); white-space: nowrap; transition: background .25s, color .25s, box-shadow .25s; }
+.btn.go { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.btn.quiet { border-color: transparent; background: transparent; color: var(--color-muted); padding: 0 4px; }
+.x { width: 18px; height: 18px; display: grid; place-items: center; color: var(--color-muted); font: 14px/1 var(--font-read); flex: none; }
+.card { background: var(--color-surface2); border: 1px solid var(--color-hair-card); box-shadow: var(--shadow-lift-2); padding: 11px 13px; }
+.dcard { margin: 10px 14px 0; transition: opacity 500ms; }
+.ch { font: 600 10px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.ch .t2 { display: none; }
+.mk.merged .dcard { opacity: .4; }
+.mk.merged .dcard .ch .t1 { display: none; }
+.mk.merged .dcard .ch .t2 { display: inline; }
+.dcard .what { font-size: 15px; margin: 3px 0 4px; }
+.dcard .brief { font-size: 12.5px; line-height: 1.6; color: #d6dbe2; margin: 6px 0 0; }
+.mentions { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.mentions .lbl2 { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); margin-right: 2px; }
+/* a mention: what it is (glyph), its name, where it stands, and a slot that lights while its panel is open */
+.mn { display: inline-grid; grid-template-columns: auto auto auto 8px; align-items: center; gap: 6px; height: 24px; padding: 0 7px; border: 1px solid var(--color-line); background: var(--color-surface); font-size: 11.5px; white-space: nowrap; transition: border-color .3s, box-shadow .3s; }
+.mn .gl { font: 600 9.5px var(--font-mono); color: var(--color-muted); letter-spacing: .04em; }
+.mn .st { color: var(--color-muted); font-size: 11px; }
+.mn .st .s2 { display: none; }
+.mk.merged .mn.m-pr .st .s1 { display: none; }
+.mk.merged .mn.m-pr .st .s2 { display: inline; }
+.mn .slot { width: 7px; height: 7px; box-shadow: inset 0 0 0 1px var(--color-muted); transition: background .3s, box-shadow .3s; }
+.mk.o-pr .mn.m-pr .slot, .mk.o-ex .mn.m-ex .slot { background: var(--color-ink); box-shadow: none; }
+.mk.o-pr .mn.m-pr, .mk.o-ex .mn.m-ex { border-color: var(--color-muted); }
+.choice { margin-top: 10px; padding: 8px 11px; border: 1px solid var(--color-line); background: var(--color-surface); }
+.choice b { font: 600 11px var(--font-display); letter-spacing: .08em; text-transform: uppercase; }
+.choice span { display: block; color: var(--color-muted); font-size: 12px; margin-top: 2px; }
+.arow { display: flex; justify-content: flex-end; gap: 4px; margin-top: 8px; }
+.empty2 { margin: 16px; padding: 30px 16px; border: 1px dashed var(--color-line); color: var(--color-muted); text-align: center; font-size: 12.5px; }
+
+/* the views a panel shows, the same in every option */
+.vh { display: flex; align-items: center; gap: 6px; }
+.kind { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); white-space: nowrap; }
+.sp { flex: 1; }
+.pv { position: absolute; inset: 0; padding: 9px 12px; display: flex; flex-direction: column; gap: 6px; overflow: hidden; }
+.pt { font-size: 14px; line-height: 1.3; }
+.pm { font: 10.5px var(--font-mono); color: var(--color-muted); margin-top: -4px; }
+.st3 { display: grid; grid-template-columns: repeat(3, 1fr); border: 1px solid var(--color-hair-card); }
+.st3 div { padding: 5px 8px; border-left: 1px solid var(--color-hair-card); }
+.st3 div:first-child { border-left: 0; }
+.st3 i { display: block; font: normal 600 9px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.st3 b { font-weight: 500; font-size: 12px; }
+.qa { border: 1px solid var(--color-hair-card); background: var(--color-surface); padding: 8px 10px; }
+.qa .vh b { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; background: var(--color-ink); color: #111; padding: 0 5px; }
+.qa p { margin: 6px 0 4px; font-size: 11.5px; line-height: 1.5; color: #d6dbe2; }
+.qa ul { list-style: none; padding: 0; margin: 0; font-size: 11.5px; }
+.qa li { display: grid; grid-template-columns: 14px 1fr; color: #d6dbe2; }
+.qa li::before { content: '✓'; color: var(--color-muted); }
+.spot { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--color-hair-card); font-size: 11.5px; display: grid; grid-template-columns: 1fr auto; gap: 6px; color: #d6dbe2; }
+.spot .mono, .mono { font-family: var(--font-mono); font-size: 10.5px; }
+.chg .vh { margin-bottom: 3px; }
+.chg .row { display: grid; grid-template-columns: 1fr 60px 58px; gap: 6px; font: 10.5px/1.75 var(--font-mono); color: #d6dbe2; }
+.chg .row i { font-style: normal; color: var(--color-muted); }
+.chg .row span:last-child { text-align: right; color: var(--color-muted); }
+.foot { margin-top: auto; display: flex; flex-direction: column; gap: 4px; }
+.foot .btn.go { justify-content: center; height: 28px; font-size: 10.5px; }
+.foot small { color: var(--color-muted); font-size: 10.5px; text-align: center; }
+.foot .m2 { display: none; }
+.mk.merged .foot .btn.go { background: var(--color-surface); color: var(--color-ink); border-color: var(--color-line); }
+.mk.merged .foot .m1 { display: none; }
+.mk.merged .foot .m2 { display: inline; }
+.mk.merged .foot small { visibility: hidden; }
+.mk.gh .btn.ghb { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.page { background: #fff; color: #222; padding: 14px; display: flex; gap: 14px; font: 12px/1.4 system-ui, sans-serif; }
+.page .ph { width: 96px; height: 96px; background: repeating-linear-gradient(45deg, #c9c9c9, #c9c9c9 8px, #ededed 8px, #ededed 16px); flex: none; }
+.page h5 { margin: 0 0 4px; font-size: 15px; }
+.page .low { color: #222; font-weight: 600; margin: 8px 0; border-left: 3px solid #222; padding-left: 6px; }
+.page .add { background: #222; color: #fff; padding: 6px 10px; display: inline-block; font-size: 11px; }
+.from { font-size: 11.5px; color: var(--color-muted); border-top: 1px solid var(--color-hair-card); padding-top: 8px; }
+.from b { color: var(--color-ink); font-weight: 500; }
+.topic { border-left: 2px solid var(--color-attn); padding-left: 10px; font-size: 12.5px; }
+.said { display: flex; flex-direction: column; gap: 10px; font-size: 12px; line-height: 1.5; }
+.said .who2 { font: 600 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); display: block; }
+.said .you { color: #cfd5dd; }
+.tbox { margin-top: auto; height: 50px; border: 1px solid var(--color-line); padding: 6px 8px; color: var(--color-muted); font-size: 12px; }
+.hail { position: absolute; top: 40px; right: 12px; width: 268px; z-index: 40; background: var(--color-surface2); border: 1px solid var(--color-attn); box-shadow: var(--shadow-lift-4); padding: 9px 12px 10px 14px; transform-origin: top right;
+  opacity: 0; transform: translateY(-14px) scale(.92); transition: transform var(--spring-flick), opacity var(--spring-flick); pointer-events: none; }
+.mk.hailing .hail { opacity: 1; transform: none; }
+.hail .ch { color: var(--color-attn); }
+.hail p { margin: 4px 0 8px; font-size: 12.5px; }
+
+/* ================= This grammar's pieces ================= */
+.off { display: none !important; }
+nav.tabs button { padding: 8px 14px; }
+.flow { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 12px; }
+.flow .lane { background: var(--color-panel); border: 1px solid var(--color-line); padding: 14px 16px; }
+.flow .lane.rec { border-color: var(--color-ink); }
+.flow ol { margin: 6px 0 0; padding-left: 20px; font-size: 14px; line-height: 1.55; }
+.flow li { margin: 6px 0; }
+.flow li .who { font: 600 10px var(--font-display); letter-spacing: .1em; text-transform: uppercase; color: var(--color-label); margin-right: 4px; }
+.flow li .you { color: var(--color-attn); }
+.tally { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; margin-top: 12px; border: 1px solid var(--color-line); background: var(--color-panel); }
+.tally div { padding: 10px 14px; border-left: 1px solid var(--color-hair-card); }
+.tally div:first-child { border-left: 0; }
+.tally i { display: block; font: normal 600 10px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.tally b { font: 500 20px var(--font-mono); }
+.tally span { color: var(--color-muted); font-size: 13px; }
+.cost td:nth-child(4) { white-space: nowrap; font-family: var(--font-mono); font-size: 12.5px; }
+.nouns > *, .tile > * { min-width: 0; }
+.stx { font: 600 9.5px var(--font-display); letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--color-line); color: var(--color-muted); padding: 2px 7px; white-space: nowrap; }
+.stx.on { color: var(--color-ink); border-color: var(--color-ink); }
+.stx.yours { color: var(--color-attn); border-color: var(--color-attn); }
+.tile .pvl, .tile .parts, .tile .qa, .tile .rows { width: 100%; margin-top: 0; }
+.tile .srow { grid-template-columns: 16px 14px minmax(0, 1fr) auto; }
+.tile .srow .pp { display: none; }
+.table .capline > span:first-child { min-width: 0; }
+.scenario > * { min-width: 0; }
+.noun dd { overflow-wrap: anywhere; }
+.cost td:first-child { font-weight: 600; white-space: nowrap; }
+ol.order { font-size: 14.5px; line-height: 1.6; max-width: 900px; }
+ol.order li { margin: 4px 0; }
+
+/* the panel stack, as the side panels grammar's option B, for this page's panel kinds */
+.stk { position: absolute; left: 626px; top: 46px; width: 354px; height: 542px; overflow: hidden; }
+.pc { position: absolute; left: 30px; top: 0; width: 312px; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-2);
+  transform: translateX(340px); opacity: 0; transition: transform var(--spring-panel), opacity var(--spring-panel), box-shadow var(--spring-panel); }
+.pc .spine { height: var(--spine-h); display: flex; align-items: center; gap: 6px; padding: 0 6px 0 10px; border-bottom: 1px solid var(--color-hair-card); font-size: 11.5px; white-space: nowrap; background: var(--color-panel); }
+.pc .spine .gl { font: 600 9.5px var(--font-mono); color: var(--color-muted); }
+.pc .spine .st { color: var(--color-muted); font-size: 11px; }
+.pc .bd { position: absolute; left: 0; right: 0; top: var(--spine-h); bottom: 0; transition: opacity var(--spring-panel); opacity: .25; }
+.mk.dir-0 .c-dir, .mk.st3-0 .c-st3, .mk.st5-0 .c-st5, .mk.fd-0 .c-fd { transform: translateY(0); opacity: 1; z-index: 1; }
+.mk.dir-1 .c-dir, .mk.st3-1 .c-st3, .mk.st5-1 .c-st5, .mk.fd-1 .c-fd { transform: translateY(var(--spine-h)); opacity: 1; z-index: 2; }
+.mk.top-dir .c-dir, .mk.top-st3 .c-st3, .mk.top-st5 .c-st5, .mk.top-fd .c-fd { box-shadow: var(--shadow-lift-4); }
+.mk.top-dir .c-dir .bd, .mk.top-st3 .c-st3 .bd, .mk.top-st5 .c-st5 .bd, .mk.top-fd .c-fd .bd { opacity: 1; }
+.mk.top-dir .c-dir .spine, .mk.top-st3 .c-st3 .spine, .mk.top-st5 .c-st5 .spine, .mk.top-fd .c-fd .spine { font-weight: 600; }
+
+/* the direction: its head, its preview, its steps in order, the land press */
+.dir { margin: 8px 14px 0; }
+.dir .dh { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.dir .dl { font: 600 9.5px var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--color-label); flex: none; }
+.dir .dl2 { font-size: 11.5px; color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pvl { margin-top: 6px; height: 28px; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 8px; padding: 0 4px 0 9px; border: 1px solid var(--color-hair-card); background: var(--color-surface2); font-size: 11.5px; white-space: nowrap; overflow: hidden; }
+.pvl .k { font: 600 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.pvl .v { overflow: hidden; text-overflow: ellipsis; }
+.pvl .v .mono { color: var(--color-muted); }
+.rows { position: relative; margin-top: 6px; }
+.srow { height: var(--step-h); display: grid; grid-template-columns: 16px 14px minmax(0, 1fr) 84px 112px; align-items: center; gap: 6px; padding-right: 8px; border-top: 1px solid var(--color-hair-card); font-size: 12px; transition: opacity .5s, background .3s; }
+.srow .n { font: 500 10.5px var(--font-mono); color: var(--color-muted); }
+.srow .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.srow .pp { font: 10px var(--font-mono); color: var(--color-muted); white-space: nowrap; overflow: hidden; }
+.srow .ss { font-size: 11px; color: var(--color-muted); text-align: right; white-space: nowrap; overflow: hidden; }
+.srow .ss b { font-weight: 500; color: var(--color-ink); }
+.srow .ss .yours { color: var(--color-attn); }
+.srow.landed { opacity: .45; }
+.srow.open { background: rgb(255 255 255 / 4%); box-shadow: inset 0 0 0 1px var(--color-line); }
+.pv .srow { grid-template-columns: 14px 14px minmax(0, 1fr) auto; }
+.pv .srow .pp { display: none; }
+.lastlook { height: 18px; display: flex; align-items: center; gap: 8px; font: 500 9.5px var(--font-mono); color: var(--color-muted); padding-left: 16px; }
+.lastlook::after { content: ''; height: 1px; background: var(--color-muted); flex: 1; opacity: .45; }
+/* the preview point: a bar beside the step the direction is previewed at; it slides between steps */
+.pmark { position: absolute; left: 0; top: 0; width: 12px; height: var(--step-h); transform: translateY(var(--step-h)); transition: transform var(--spring-card); pointer-events: none; }
+.pmark::before { content: ''; position: absolute; left: 2px; top: 7px; bottom: 7px; width: var(--mark-w); background: var(--color-ink); }
+.pmark::after { content: ''; position: absolute; left: 5px; top: 50%; margin-top: -4px; border: 4px solid transparent; border-left-color: var(--color-ink); }
+.mk.pt3 .pmark { transform: translateY(calc(var(--step-h) * 2)); }
+.mk.pt5 .pmark { transform: none; }
+.landrow { margin-top: 8px; display: flex; align-items: center; gap: 10px; }
+.landrow .btn.go { height: 26px; }
+.landrow small { color: var(--color-muted); font-size: 11px; }
+.mk.landing .landrow .btn.go { background: var(--color-surface); color: var(--color-ink); border-color: var(--color-line); }
+
+/* a step's panel, a finding's panel */
+.parts { display: flex; flex-direction: column; border: 1px solid var(--color-hair-card); }
+.part { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0 8px; padding: 3px 8px; border-top: 1px solid var(--color-hair-card); font-size: 11.5px; }
+.part:first-child { border-top: 0; }
+.part > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.part .r { font: 10.5px var(--font-mono); }
+.part .s { grid-column: 1; color: var(--color-muted); font-size: 10.5px; }
+.part .btn { grid-column: 2; grid-row: 1 / span 2; align-self: center; }
+.vid { position: relative; height: 96px; background: #000; border: 1px solid var(--color-hair-card); overflow: hidden; margin-top: 6px; }
+.vid .scr { position: absolute; left: 8px; top: 7px; right: 8px; bottom: 24px; background: #f4f2ee; color: #222; font: 10.5px/1.35 system-ui, sans-serif; padding: 7px 9px; display: flex; gap: 9px; }
+.vid .scr .ph { width: 44px; height: 44px; flex: none; background: repeating-linear-gradient(45deg, #c9c9c9, #c9c9c9 6px, #ededed 6px, #ededed 12px); }
+.vid .scr b { display: block; font-size: 11.5px; }
+.vid .scr .low { font-weight: 600; border-left: 2px solid #222; padding-left: 4px; margin: 3px 0; }
+.vid .scr .add { display: inline-block; background: #222; color: #fff; padding: 2px 7px; font-size: 9.5px; }
+.vid .cur { position: absolute; left: 160px; top: 20px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid #e5484d; transition: transform 1.6s ease-in-out; }
+.mk.watching .vid .cur { transform: translate(-70px, 42px); }
+.vid .play { position: absolute; left: 22px; top: 22px; width: 30px; height: 30px; border-radius: 50%; background: rgb(0 0 0 / 65%); color: #fff; display: grid; place-items: center; font-size: 11px; transition: opacity .3s; }
+.mk.watching .vid .play { opacity: 0; }
+.vid .bar { position: absolute; left: 8px; right: 92px; bottom: 10px; height: 3px; background: #333; }
+.vid .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--color-ink); transition: width 1.8s linear; }
+.mk.watching .vid .bar i { width: 58%; }
+.vid .tc { position: absolute; right: 8px; bottom: 5px; font: 9.5px var(--font-mono); color: #9aa3ad; }
+.shots { display: flex; gap: 6px; margin-top: 6px; }
+.shots span { flex: 1; height: 30px; background: #f4f2ee; border: 1px solid var(--color-hair-card); position: relative; }
+.shots span::after { content: ''; position: absolute; left: 6px; top: 6px; width: 14px; height: 14px; background: repeating-linear-gradient(45deg, #c9c9c9, #c9c9c9 3px, #ededed 3px, #ededed 6px); }
+.fds { border: 1px solid var(--color-hair-card); }
+.fd { display: grid; grid-template-columns: 1fr; gap: 1px 8px; padding: 5px 8px; border-top: 1px solid var(--color-hair-card); font-size: 11.5px; line-height: 1.4; }
+.fd:first-child { border-top: 0; }
+.fd .w { grid-column: 1; color: var(--color-muted); font-size: 10.5px; }
+.fd .btn { grid-row: 3; justify-self: start; height: 18px; font-size: 9px; padding: 0; margin-top: 2px; }
+.fd .btn.quiet { color: var(--color-muted); }
+.fd.yours { box-shadow: inset 2px 0 0 var(--color-attn); }
+.route { font-size: 11px; color: var(--color-muted); border-top: 1px solid var(--color-hair-card); padding-top: 6px; }
+.route b { color: var(--color-ink); font-weight: 500; }
+.shot { background: #f4f2ee; color: #222; padding: 10px; font: 11px/1.4 system-ui, sans-serif; position: relative; }
+.shot .f { border: 1px solid #bbb; background: #fff; padding: 5px 7px; color: #666; margin: 5px 0; }
+.shot .toast { background: #222; color: #fff; padding: 4px 8px; display: inline-block; font-size: 10.5px; }
+.shot .toast { outline: 2px solid #e5484d; outline-offset: 3px; }
+
+/* a decision that rises onto the sheet, and the answered fade (as Comms does today) */
+.dcard.rise { opacity: 0; transform: translateY(12px); transition: opacity var(--spring-card), transform var(--spring-card); }
+.mk.asked .dcard.rise { opacity: 1; transform: none; box-shadow: var(--shadow-lift-2), inset 2px 0 0 var(--color-attn); }
+.mk.answered .dcard.rise { opacity: .4; box-shadow: var(--shadow-lift-2); }
+.dcard .ch .yours { color: var(--color-attn); }
+.mk.answered .choice.c1 { border-color: var(--color-ink); }
+.today-more { margin-top: 10px; font-size: 11.5px; color: var(--color-muted); }
+.today-more .mrow { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: center; margin-top: 5px; }
+.today-more .mrow a { color: var(--color-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board { position: absolute; left: 656px; top: 46px; width: 312px; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-4); padding: 9px 12px; }
+.board .brow { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 0; border-top: 1px solid var(--color-hair-card); font-size: 11.5px; }
+.board .brow .s { color: var(--color-muted); font: 10px var(--font-mono); }
+.board .brow .btn { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+
+/* states the scenarios move through */
+.mk.o3 .srow.r3, .mk.o5 .srow.r5 { background: rgb(255 255 255 / 5%); box-shadow: inset 0 0 0 1px var(--color-line); }
+.mk.landed3 .srow.r3 { opacity: .45; }
+.mk.pvup .pvl .ob, .mk.pt3 .ph3, .mk.answered .btn.c1 { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.mk.fd-0 .mn.m-fd .slot, .mk.st3-0 .mn.m-st3 .slot { background: var(--color-ink); box-shadow: none; }
+.mk.fd-0 .mn.m-fd, .mk.st3-0 .mn.m-st3 { border-color: var(--color-muted); }
+.pv .dir { margin: 0; }
+
+@media (max-width: 980px) {
+  .cols2, .nouns, .principles, .options, .stack, .scenario, .flow, .tally { grid-template-columns: 1fr; }
+  .iso { height: 340px; }
+  .tally div { border-left: 0; border-top: 1px solid var(--color-hair-card); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mk *, .mk { transition: opacity 200ms ease !important; }
+  .pc, .hail, .dcard.rise { transform: none !important; }
+  .mk.dir-1 .c-dir, .mk.st3-1 .c-st3, .mk.st5-1 .c-st5, .mk.fd-1 .c-fd { transform: translateY(var(--spine-h)) !important; }
+  .pmark { transition: none !important; }
+  .mk.pt3 .pmark { transform: translateY(calc(var(--step-h) * 2)) !important; }
+  .mk.pt5 .pmark { transform: none !important; }
+  .pmark { transform: translateY(var(--step-h)); }
+  .vid .cur { display: none; }
+}
+
+/* ================= Option B: the course as a panel, cascading to the right ================= */
+:root { --fold-w: 28px; /* new: a folded panel's spine */ }
+.cas { position: absolute; left: 656px; top: 46px; width: 312px; height: 542px; overflow: hidden; }
+.lv { position: absolute; top: 0; height: 542px; background: var(--color-panel); border: 1px solid var(--color-line); box-shadow: var(--shadow-lift-2);
+  transform: translateX(340px); opacity: 0; transition: transform var(--spring-panel), opacity var(--spring-panel), box-shadow var(--spring-panel); }
+.lv.d0 { left: 0; width: 312px; z-index: 1; }
+.lv.d1 { left: var(--fold-w); width: calc(312px - var(--fold-w)); z-index: 2; }
+.lv.d2 { left: calc(var(--fold-w) * 2); width: calc(312px - var(--fold-w) * 2); z-index: 3; }
+.lv.d3 { left: calc(var(--fold-w) * 3); width: calc(312px - var(--fold-w) * 3); z-index: 4; }
+.lv > .pv { transition: opacity var(--spring-panel); }
+.mk.o-prs .lv.l-prs, .mk.o-pr15 .lv.l-pr15 { transform: none; opacity: 1; box-shadow: var(--shadow-lift-4); }
+.mk.f-prs .lv.l-prs .fold { opacity: 1; }
+.mk.f-prs .lv.l-prs { box-shadow: var(--shadow-lift-2); }
+.mk.f-prs .lv.l-prs > .pv { opacity: .3; }
+.mk.o-prs .drill.dr-prs, .mk.o-pr15 .drill.dr-pr15 { border-color: var(--color-muted); background: var(--color-surface2); }
+.lv.d3 .st3 b { font-size: 11px; }
+.lv.d3 .chg .row { grid-template-columns: minmax(0, 1fr) auto 30px; }
+.lv.d3 .chg .row span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv .fold { position: absolute; left: 0; top: 0; bottom: 0; width: var(--fold-w); background: var(--color-panel); border-right: 1px solid var(--color-line); z-index: 5;
+  display: flex; flex-direction: column; align-items: center; gap: 8px; padding-top: 9px; opacity: 0; pointer-events: none; transition: opacity var(--spring-panel); }
+.lv .fold span { writing-mode: vertical-rl; transform: rotate(180deg); font: 600 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-muted); white-space: nowrap; }
+.lv .fold .gl { writing-mode: horizontal-tb; transform: none; font: 600 9px var(--font-mono); letter-spacing: 0; }
+/* open: slid in at its depth; folded: a deeper one covers it, leaving its spine */
+.mk.o-course .lv.l-course, .mk.o-wp3 .lv.l-wp3, .mk.o-wp5 .lv.l-wp5, .mk.o-mis .lv.l-mis, .mk.o-gap .lv.l-gap, .mk.o-bug .lv.l-bug { transform: none; opacity: 1; box-shadow: var(--shadow-lift-4); }
+.mk.f-course .lv.l-course .fold, .mk.f-wp3 .lv.l-wp3 .fold, .mk.f-wp5 .lv.l-wp5 .fold { opacity: 1; }
+.mk.f-course .lv.l-course, .mk.f-wp3 .lv.l-wp3, .mk.f-wp5 .lv.l-wp5 { box-shadow: var(--shadow-lift-2); }
+.mk.f-course .lv.l-course > .pv, .mk.f-wp3 .lv.l-wp3 > .pv, .mk.f-wp5 .lv.l-wp5 > .pv { opacity: .3; }
+/* a waypoint's panel: one line each for what it holds, each opening the next panel to the right */
+.drill { display: grid; grid-template-columns: 1fr 14px; gap: 1px 8px; padding: 8px 10px; border: 1px solid var(--color-hair-card); background: var(--color-surface); font-size: 12px; align-items: center; transition: border-color .3s, background .3s; }
+.drill .k2 { font: 600 9.5px var(--font-display); letter-spacing: .12em; text-transform: uppercase; color: var(--color-label); }
+.drill .w { color: var(--color-muted); font-size: 11px; grid-column: 1; }
+.drill .ar { grid-column: 2; grid-row: 1 / span 3; color: var(--color-muted); font-size: 14px; }
+.drill.yours { box-shadow: inset 2px 0 0 var(--color-attn); }
+.mk.o-mis .drill.dr-mis, .mk.o-gap .drill.dr-gap, .mk.o-bug .drill.dr-bug { border-color: var(--color-muted); background: var(--color-surface2); }
+.mk.o-course .cb { background: var(--color-ink); color: #111; border-color: var(--color-ink); }
+.summ { font-size: 12px; line-height: 1.5; color: #d6dbe2; margin: 0; }
+.holo { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--color-muted); }
+.vid.big { height: 150px; }
+.mk.o-gap .mn.m-fd .slot { background: var(--color-ink); box-shadow: none; }
+.mk.o-gap .mn.m-fd { border-color: var(--color-muted); }
+.mk.answered .drill.dr-gap { box-shadow: none; }
+.mk.o-wp3 .mn.m-st3 .slot { background: var(--color-ink); box-shadow: none; }
+.mk.o-wp3 .mn.m-st3 { border-color: var(--color-muted); }
+.scenario .mk p.summ { font-size: 12px; line-height: 1.5; margin: 0; max-width: none; }
+.pv .pvl .mono { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .lv { transform: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="top">
+  <h1>Course review grammar<small>Comms · brownfield · a goal reviewed as its course and the waypoints on it</small></h1>
+  <nav class="tabs" role="tablist">
+    <button data-tab="nouns" aria-selected="true">Nouns</button>
+    <button data-tab="verbs" aria-selected="false">Verbs</button>
+    <button data-tab="layers" aria-selected="false">Layers</button>
+  </nav>
+</header>
+
+<p class="lede">The job: small pull requests are right and each runs CI, but every one also lands on the user's list of things to see through to production, and there are now a lot of them. <b>A goal is on a course with its waypoints in order; the user reviews the course at a waypoint, and never manages a pull request or starts a preview.</b> The engine keeps every waypoint built on the one before, keeps a holodeck running across the repos at a waypoint, sends an away mission into that same holodeck on video, and routes each anomaly it brings back: to the lead, or to the user. All of it is data the engine holds. In Comms the course opens as a panel beside the sheet, and each thing in it opens the next panel to its right, one level at a time; Comms starts no work of its own.</p>
+
+<p class="lookline">The mockups and specimens are drawn in Comms' own look, dark, with the side panels grammar's tokens; the course is one card in its stack (option B, with Tanaka to build). The words are the ship's: course and waypoint are already what the star chart calls a goal's path and its slices (<code>course.ts</code>, <code>Waypoint</code>). Brownfield: the starting points are <code>server/previews.ts</code>, <code>shared/types/goals.ts</code>, <code>shared/types/qa.ts</code> and <code>plugins/chief-of-staff/stream.ts</code> as built on 30 October 2026. The demo is a made-up shop.</p>
+
+<div class="cols2">
+  <div class="box">
+    <h3>Assumptions</h3>
+    <ul>
+      <li>One user, Comms open for hours. The sheet stays quiet: the course is there when they open it, and only what's brought to them rises.</li>
+      <li>How the work is sliced is the lead's call: waypoints side by side when they're independent (a frontend and a backend change can already share one), stacked only when one needs the one before. The engine sets no order and no cap; it only shows them.</li>
+      <li>Pull requests stay: one per repo per waypoint, each running CI, QA's diff review and the ratchet script. They leave the user's list, not GitHub.</li>
+      <li>The holodeck runs on this machine, as previews do today. A project with several repos already has one command that brings them all up (<code>{dir:&lt;repo&gt;}</code>).</li>
+      <li>The side panels (option B) and the two one-tap buttons ("Didn't need me", "You should have asked me") ship first. The course is a card in that stack, and its levels cascade inside the card's width.</li>
+    </ul>
+  </div>
+  <div class="box">
+    <h3>Settled with the user, 30 October</h3>
+    <ul>
+      <li>B, the course as a panel that cascades to the right. A and C stay below for comparison.</li>
+      <li>The ship's words: course, waypoint, holodeck, away mission (and its log), anomaly, last watch, make it so, belay.</li>
+      <li>A pull request opens as a fourth panel in the cascade, rather than jumping out to GitHub.</li>
+      <li>Slicing is the lead's call. The engine sets no order and no cap on open waypoints; the chief of staff says when work has waited on you a while.</li>
+      <li>Lanes carry over: a waypoint takes its riskiest pull request's lane; Ship and Show waypoints land themselves once what they depend on has; only Ask waypoints wait for Make it so.</li>
+      <li>One holodeck per project for now. Several come with sandboxes, where each agent session runs on its own machine with its own holodeck.</li>
+      <li>The ratchet script runs before QA; GitHub's merge queue where a repo has CI, Focus's own merge check where it doesn't, and the conflict-resolving agent stays; a cheap Done check at close compares Done looks like with what was delivered.</li>
+      <li>Nothing is left to confirm.</li>
+    </ul>
+  </div>
+</div>
+
+<!-- ============================== NOUNS ============================== -->
+<section class="tab on" id="nouns">
+  <h2>Today → proposed</h2>
+  <p class="note">Every noun the user meets in this area today, and what it becomes.</p>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Today</th><th>Proposed</th><th>Change</th><th>Because</th></tr></thead>
+    <tbody>
+      <tr><td>Goal, with its brief's Done looks like (<code>LeadWork</code>, <code>brief.md</code>)</td><td>Course, with its heading</td><td><span class="tag">renamed</span></td><td>The user reviews where the work is going; Done looks like becomes its heading. The star chart already draws a goal's course. The code keeps <code>Goal</code>.</td></tr>
+      <tr><td>Slice (a waypoint on the chart) and its pull requests</td><td>Waypoint</td><td><span class="tag">merged</span></td><td>One change across repos, reviewed, tried and landed whole; today its pull requests are separate rows. The chart already calls a slice a waypoint (<code>Waypoint</code>).</td></tr>
+      <tr><td>One open slice at a time (<code>sliceLanded</code>)</td><td>Several waypoints open, side by side or one on another</td><td><span class="tag">split</span></td><td>The lead keeps going while earlier waypoints wait for the user. The engine no longer makes slices wait their turn; how to slice is the lead's call.</td></tr>
+      <tr><td>Pull request (<code>LeadPr</code>)</td><td>Pull request, one repo's part of a waypoint</td><td><span class="tag">kept</span></td><td>Still where CI, the ratchet script and QA's diff review run. It leaves the user's list.</td></tr>
+      <tr><td>Merge press per pull request, under More</td><td>Make it so, on the course</td><td><span class="tag">moved</span></td><td>The user lands the course to a waypoint; the engine merges each pull request on the way, in order.</td></tr>
+      <tr><td>Preview: one per project, a pull request picked on the board, started by hand; its set guessed from feature labels</td><td>Holodeck, set to a waypoint</td><td><span class="tag">renamed</span></td><td>The engine keeps it running with every repo at the waypoint's commits. Where it's set (the tip, or held at an earlier waypoint) is part of it, not a noun of its own.</td></tr>
+      <tr><td>QA's browser pass, on its own dev server, per pull request</td><td>Away mission</td><td><span class="tag">split</span></td><td>The browser half of QA's review moves to the waypoint and goes into the user's holodeck, so what QA saw is what the user enters. Its video and stills are its log.</td></tr>
+      <tr><td>A QA fail: fix instructions, spot-checks, proofs</td><td>Anomaly</td><td><span class="tag new">new</span></td><td>Each bug or gap is one piece of data with its evidence, so each can be routed on its own.</td></tr>
+      <tr><td>"Since your last watch" line</td><td>Last watch</td><td><span class="tag">kept</span></td><td>Comms' own words, drawn on the course: waypoints above the line are new.</td></tr>
+      <tr><td>Decision, Mention, Panel, Stack, Talk (side panels grammar)</td><td>The same</td><td><span class="tag">kept</span></td><td>Mentions gain two kinds: waypoint (WP) and anomaly (AN). The course is a card in the stack; its levels cascade inside it.</td></tr>
+      <tr><td>Direction, Step, Preview point, Run, Finding, Land (this page's first draft)</td><td>Course, Waypoint, Holodeck, Away mission, Anomaly, Make it so</td><td><span class="tag">renamed</span></td><td>The ship's words, as the rest of Focus uses.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Today's flow and the proposed one</h2>
+  <p class="note">One goal on the demo shop, "Show stock on the shop": five changes across two repos, seven pull requests. Amber marks what lands on the user.</p>
+  <div class="flow">
+    <div class="lane"><div class="lbl">Today</div>
+      <ol>
+        <li><span class="who">Lead</span> works one slice at a time, a pull request per repo; the next slice starts when this one's have all merged or closed.</li>
+        <li><span class="who">CI · QA</span> each pull request is reviewed on its own. QA starts its own dev server, checks out sibling pull requests beside it, and may record a video.</li>
+        <li><span class="who">Chief of staff</span> reads the lead's turn and puts a decision on the sheet. The pull requests are rows under More, each with its own merge press.</li>
+        <li><span class="who you">You</span> to try it, pick a pull request on the ship's board and press Preview. One preview per project: starting another stops this one. Other repos' refs are guessed from feature labels.</li>
+        <li><span class="who you">You</span> merge each pull request, in the right order, and keep the rest in your head until they've all landed.</li>
+      </ol>
+    </div>
+    <div class="lane rec"><div class="lbl">Proposed</div>
+      <ol>
+        <li><span class="who">Lead</span> plots waypoints as it sees fit, side by side or one on another, across repos; a pull request per repo per waypoint still runs CI, the ratchet script and QA's diff review.</li>
+        <li><span class="who">Engine</span> keeps the holodeck running at the course's tip: every repo at the newest ready waypoint's commits.</li>
+        <li><span class="who">QA</span> sends an away mission into that holodeck for each waypoint, on video, and logs each bug or gap as an anomaly.</li>
+        <li><span class="who">Chief of staff</span> routes each anomaly: a plain bug goes back to the lead, quietly, with "You should have asked me" beside it; a gap that's a choice comes to you as a decision.</li>
+        <li><span class="who you">You</span> open the course whenever you like: what's new since your last watch, a mission's log, the holodeck at any waypoint. Make it so to a waypoint and the engine merges every pull request on the way, in order.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="tally">
+    <div><i>On your list</i><b>7 → 1</b><br><span>pull requests → one course</span></div>
+    <div><i>Previews you start</i><b>7 → 0</b><br><span>the engine keeps the holodeck</span></div>
+    <div><i>Browser runs</i><b>7 → 5</b><br><span>one away mission per waypoint</span></div>
+    <div><i>Merge presses</i><b>7 → 1+</b><br><span>one Make it so per waypoint you land to</span></div>
+  </div>
+
+  <h2>Nouns</h2>
+  <div class="nouns">
+    <div class="noun"><h3>Course <span class="tag">renamed</span></h3>
+      <p class="purpose">Where a goal is going, and its waypoints on the way, in order.</p>
+      <dl><dt>Attributes</dt><dd>Its heading (Done looks like); its waypoints, newest on top; the holodeck; your last watch; what Make it so would land.</dd>
+        <dt>States</dt><dd>Under way (a waypoint being built or surveyed) · waiting on you · holding · arrived (closed, its heading checked).</dd>
+        <dt>Relations</dt><dd>One per goal. Has many waypoints, one holodeck, one last watch.</dd>
+        <dt>Today</dt><dd><code>LeadWork</code>, the brief's Done looks like, the chart's course.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: a course's heading, and its four states</span><div class="dir" style="margin:0;width:100%"><div class="dh"><span class="dl">Heading</span><span class="dl2">a shopper sees low stock, sold out and back in stock</span></div></div><span class="stx on">Under way · waypoint 5</span><span class="stx yours">Waiting on you · 1</span><span class="stx">Holding</span><span class="stx">Arrived · heading checked</span></div>
+    </div>
+    <div class="noun"><h3>Waypoint <span class="tag">merged</span></h3>
+      <p class="purpose">One change on the course, across every repo it touches, reviewed and landed whole.</p>
+      <dl><dt>Attributes</dt><dd>Number and title; its pull requests, one per repo; the waypoint it's on; its away mission and anomalies; its lane, the highest of its pull requests'.</dd>
+        <dt>States</dt><dd>Building · surveying · ready · for you · landing · landed.</dd>
+        <dt>Relations</dt><dd>Belongs to one course; on an earlier waypoint when it needs it, or beside the others; has one or more pull requests, missions and anomalies.</dd>
+        <dt>Today</dt><dd>A slice (<code>Waypoint</code>) and its <code>LeadPr</code>s with their recaps.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: waypoints on a course, the holodeck's marker beside 4</span>
+        <div class="rows">
+          <div class="srow"><span></span><span class="n">5</span><span class="t">Back-in-stock alerts</span><span class="pp"></span><span class="ss">Surveying…</span></div>
+          <div class="srow" style="background:rgb(255 255 255 / 3%)"><span style="border-left:3px solid var(--color-ink);height:18px"></span><span class="n">4</span><span class="t">Sold out blocks Add to basket</span><span class="pp"></span><span class="ss"><b>Ready</b></span></div>
+          <div class="srow"><span></span><span class="n">3</span><span class="t">Low stock in the basket</span><span class="pp"></span><span class="ss"><span class="yours">1 for you</span></span></div>
+          <div class="lastlook">your last watch · 09:40</div>
+          <div class="srow landed"><span></span><span class="n">2</span><span class="t">“Only N left” under the price</span><span class="pp"></span><span class="ss">Landed</span></div>
+        </div></div>
+    </div>
+    <div class="noun"><h3>Pull request <span class="tag">kept</span></h3>
+      <p class="purpose">One repo's part of a waypoint: where CI, the ratchet script and QA's diff review run.</p>
+      <dl><dt>Attributes</dt><dd>repo#number; branch on the waypoint before's branch in that repo; checks; QA's verdict; its recap.</dd>
+        <dt>States</dt><dd>As today: QA testing · passed · failed · checks failing · conflicts · merging · merged.</dd>
+        <dt>Relations</dt><dd>Belongs to one waypoint.</dd>
+        <dt>Today</dt><dd><code>LeadPr</code>, <code>PullRequest</code>, <code>QaReview</code>. Its merge press moves to Make it so.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: a waypoint's two pull requests, before and after it lands</span><div class="parts"><div class="part"><span><span class="r">webshop-api#15</span> · stock on each basket line</span><span class="btn quiet">GitHub ↗</span><span class="s">checks passing · QA passed</span></div><div class="part"><span><span class="r">webshop-frontend#10</span> · “Only N left” in the basket</span><span class="btn quiet">GitHub ↗</span><span class="s">merged</span></div></div></div>
+    </div>
+    <div class="noun"><h3>Holodeck <span class="tag">renamed</span></h3>
+      <p class="purpose">The app running with every repo at one waypoint's commits, to walk through.</p>
+      <dl><dt>Attributes</dt><dd>The waypoint it's set to, at the tip or held; the commit per repo; links; who's in it (you, an away mission).</dd>
+        <dt>States</dt><dd>Loading · running · failed · ending (today's <code>PreviewStatus</code>); and at the tip (follows each new ready waypoint) · held (until you make it so or follow the course again).</dd>
+        <dt>Relations</dt><dd>One per course; to begin with, one per project.</dd>
+        <dt>Today</dt><dd><code>Preview</code> and its <code>PreviewSet</code>. No longer started from the board.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: at the tip, and held at waypoint 3</span><div class="pvl"><span class="k">Holodeck</span><span class="v">waypoint 4 · the tip · running <span class="mono">fe 9c4e1a0 · api 77de913</span></span><span class="btn">Enter ↗</span></div><div class="pvl"><span class="k">Holodeck</span><span class="v">waypoint 3 · held · running <span class="mono">fe 4e1a2c0</span></span><span class="btn">Follow the course</span></div></div>
+    </div>
+    <div class="noun"><h3>Away mission <span class="tag">split</span></h3>
+      <p class="purpose">An agent going into the holodeck at one waypoint in a browser, and its log.</p>
+      <dl><dt>Attributes</dt><dd>The waypoint and its commits; who went (Lt. Okafor); the log: video (real and shown length) and stills; what it checked; its anomalies.</dd>
+        <dt>States</dt><dd>Waiting · away · back clean · back with anomalies.</dd>
+        <dt>Relations</dt><dd>Surveys one waypoint at its commits; has anomalies.</dd>
+        <dt>Today</dt><dd>QA's browser pass with <code>QaRecording</code> and <code>QaScreenshot</code>, per pull request.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: a mission back clean, and its states</span><div class="qa"><div class="vh"><span class="kind">Away mission · Lt. Okafor · waypoint 3</span><b>Clean</b><span class="sp"></span><span class="mono" style="color:var(--color-muted)">1:12</span></div><ul><li>The basket shows “Only 2 left” on the socks</li><li>A quantity above stock is capped at 2</li></ul></div><span class="stx">Waiting</span><span class="stx on">Away</span><span class="stx on">Back clean</span><span class="stx">Back · 2 anomalies</span></div>
+    </div>
+    <div class="noun"><h3>Anomaly <span class="tag new">new</span></h3>
+      <p class="purpose">One bug or gap an away mission found, with the moment in its log.</p>
+      <dl><dt>Attributes</dt><dd>Kind (bug, gap); title; evidence (a still, a time in the log); where it went and who acted.</dd>
+        <dt>States</dt><dd>Logged · being fixed · for you · fixed (re-surveyed clean) · answered · dismissed.</dd>
+        <dt>Relations</dt><dd>From one mission, about one waypoint; mentioned by at most one decision.</dd>
+        <dt>Today</dt><dd><code>QaReport.fixInstructions</code>, <code>spotChecks</code>, <code>proofs</code>, all inside one verdict.</dd></dl>
+      <div class="tile"><span class="cap">Specimen: two anomalies on waypoint 5, one fixed quietly, one for you</span>
+        <div class="fds" style="width:100%">
+          <div class="fd"><span>“Notify me” stayed pressable after signing up</span><span class="btn quiet">You should have asked me</span><span class="w">Fixed by Lt. Adeyemi, re-surveyed clean · sent back by the chief of staff</span></div>
+          <div class="fd yours"><span>No sender address for back-in-stock emails</span><span class="btn">Open</span><span class="w">A gap · brought to you</span></div>
+        </div></div>
+    </div>
+    <div class="noun"><h3>Last watch <span class="tag">kept</span></h3>
+      <p class="purpose">The place on the course where you last looked.</p>
+      <dl><dt>Attributes</dt><dd>When; the waypoints and anomalies since.</dd>
+        <dt>States</dt><dd>It moves up when you leave the goal's conn.</dd>
+        <dt>Relations</dt><dd>One per course.</dd>
+        <dt>Today</dt><dd>"Since your last watch" on the sheet (stream.ts).</dd></dl>
+      <div class="tile"><span class="cap">Specimen: the line, with what's new above it</span><div class="rows"><div class="srow"><span></span><span class="n">3</span><span class="t">Low stock in the basket</span><span class="pp"></span><span class="ss"><b>Ready</b></span></div><div class="lastlook">your last watch · 09:40</div><div class="srow landed"><span></span><span class="n">2</span><span class="t">“Only N left” under the price</span><span class="pp"></span><span class="ss">Landed</span></div></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== VERBS ============================== -->
+<section class="tab" id="verbs">
+  <h2>Object × action</h2>
+  <div class="scroll-x">
+  <table class="matrix">
+    <thead><tr><th></th><th>Open</th><th>Back</th><th>Load here</th><th>Follow the course</th><th>Play the log</th><th>Enter / jump out</th><th>Make it so</th><th>Belay</th><th>Send back</th><th>Dismiss</th><th>Answer</th><th>Discuss</th><th>Feedback</th><th>Merge</th></tr></thead>
+    <tbody>
+      <tr><td>Course</td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Waypoint</td><td class="n"></td><td class="n"></td><td class="n"></td><td></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td></tr>
+      <tr><td>Pull request</td><td class="y"></td><td></td><td></td><td></td><td></td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="m"></td></tr>
+      <tr><td>Holodeck</td><td></td><td></td><td></td><td class="n"></td><td></td><td class="y"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Away mission</td><td class="n"></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>
+      <tr><td>Anomaly</td><td class="n"></td><td></td><td></td><td></td><td class="n"></td><td></td><td></td><td></td><td class="n"></td><td class="n"></td><td></td><td class="n"></td><td class="n"></td><td></td></tr>
+      <tr><td>Decision</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="y"></td><td class="y"></td><td class="y"></td><td></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="legend">● kept · NEW in this grammar · MOVED: a pull request's merge press moves to Make it so on the course. Removed: Preview on the board for a goal's pull requests (the engine keeps the holodeck). Feedback is the side panels goal's two one-tap buttons, "Didn't need me" on a decision and "You should have asked me" on anything done without asking; here it also goes on an anomaly fixed quietly.</p>
+
+  <h2>Operational principles</h2>
+  <div class="principles">
+    <div><b>Course</b>The lead plots waypoints; each lands on the course as it's pushed, then is built, loaded and surveyed. Whenever you open the course, the waypoints above your last watch are new. You open one, play its mission's log, load the holodeck there, and make it so.</div>
+    <div><b>Waypoint</b>Opening a waypoint slides its panel in to the right of the course, and the course folds to a spine. The panel says what the waypoint is in a line, and holds one row each for its pull requests, its away mission and its anomalies; each row opens the next panel to the right.</div>
+    <div><b>Holodeck</b>The holodeck runs at the course's tip. Load here on waypoint 3 resets it there, every repo at waypoint 3's commits; it stays held until you make it so or follow the course again, and then follows the tip.</div>
+    <div><b>Anomaly</b>An away mission logs something. The chief of staff reads it: a plain bug goes back to the lead and is fixed and re-surveyed without you, and the waypoint says so with "You should have asked me" beside it. A gap that's a choice comes to you as a decision mentioning the anomaly.</div>
+  </div>
+
+  <h2>Verb → signifier</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Verb</th><th>Signifier</th></tr></thead>
+    <tbody>
+      <tr><td>Open</td><td><b>Course · 3 new</b> on the sheet's head. In a panel, a row with › at its end: it opens the next panel to the right and the row lights. A mention (WP, AN) on a decision opens its thing with the panels on its way there folded beside it.</td></tr>
+      <tr><td>Back</td><td>A folded panel's spine, on the left: press it and the panels to its right slide away. × or Esc goes back one; × on the course closes them all.</td></tr>
+      <tr><td>Load here</td><td><b>Load the holodeck here</b> on a waypoint's panel. The holodeck line on the course and the marker beside the waypoint's row move to it. Key H.</td></tr>
+      <tr><td>Follow the course</td><td><b>Follow the course</b> on the holodeck line while it's held.</td></tr>
+      <tr><td>Play the log</td><td>The video in an away mission's panel: press to play; <b>⤢</b> plays it large in the Zoom. An anomaly's still has <b>Play at 0:52</b>.</td></tr>
+      <tr><td>Enter / jump out</td><td><b>Enter ↗</b> on the holodeck line (a browser tab at its waypoint); <b>GitHub ↗</b> on a pull request's panel, the fourth in the cascade.</td></tr>
+      <tr><td>Make it so</td><td><b>Make it so</b> at the foot of the course, with what it lands under it: to the holodeck's waypoint, so you land what you tried.</td></tr>
+      <tr><td>Belay</td><td><b>Belay</b> at the foot of a waypoint's panel: a Ship or Show waypoint stops landing itself.</td></tr>
+      <tr><td>Send back · Dismiss</td><td>On an anomaly brought to you, beside its decision's choices: <b>Send back</b> (the lead fixes it), <b>Not a problem</b>.</td></tr>
+      <tr><td>Feedback</td><td><b>Didn't need me</b> on a decision; <b>You should have asked me</b> on an anomaly fixed without you. One tap; a second undoes.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<!-- ============================== LAYERS ============================== -->
+<section class="tab" id="layers">
+  <h2>Governing principle</h2>
+  <div class="principle">
+    <p class="rule">A thing sits as high as the attention it asks of you right now, and the higher it sits, the sooner it has to leave.</p>
+    <p>Comms' own principle, kept as the side panels grammar keeps it. The course asks nothing until you open it, so the sheet only carries its count. Opened, it is a panel beside the sheet. Each thing you open from it asks more of you than what you opened it from, so it sits a step higher and further right, and the one before folds back to a spine; it's the first to leave when you go back.</p>
+    <p>An anomaly brought to you is a decision on the sheet with an amber edge, as decisions are. An anomaly fixed without you never rises: it's a row in its waypoint. The holodeck is not in Comms at all; you enter it in a browser tab, because walking through the app is the thing itself, not a view of it.</p>
+  </div>
+
+  <h2>The stack</h2>
+  <div class="stack">
+    <div class="defs">
+      <h4>Ground</h4><p>The dark table Comms sits on.</p>
+      <h4>Rail</h4><p>The goals in their berths down the left. A berth counts only what's brought to the user.</p>
+      <h4>Sheet</h4><p>The goal at the conn, as today. Its head has Course, with how many waypoints are new.</p>
+      <h4>Card</h4><p>A decision rests on the sheet. An anomaly brought to the user is one.</p>
+      <h4>Panel</h4><p>The course slides in from the right as a card in the side panels' stack. What you open in it slides in to its right, inside the card's width, and the panel before folds to a spine on the left. Four levels at most: course, waypoint, one thing in it (its pull requests, its away mission or an anomaly), and one pull request.</p>
+      <h4>Hail</h4><p>As today. An anomaly is never a hail.</p>
+      <h4>Zoom</h4><p>⤢ plays a mission's log large over Comms until Esc. The only overlay, as today.</p>
+    </div>
+    <div class="iso" aria-hidden="true"><div class="rig">
+      <div class="pl g">Ground</div><div class="pl r">Rail</div><div class="pl s">Sheet</div><div class="pl c">Card</div>
+      <div class="pl p1">Course</div><div class="pl p2">Waypoint ›</div><div class="pl h">Hail</div>
+    </div></div>
+    <div class="scroll-x">
+    <table class="tokens">
+      <thead><tr><th>Layer</th><th>Shadow</th><th>Hairline</th><th>Spring</th></tr></thead>
+      <tbody>
+        <tr><td>Ground</td><td>none</td><td>none</td><td>none</td></tr>
+        <tr><td>Rail</td><td><code>lift-1</code></td><td><code>hair-rail</code></td><td><code>ease-spring</code></td></tr>
+        <tr><td>Sheet</td><td><code>lift-3</code></td><td><code>line</code></td><td><code>cos-rise</code></td></tr>
+        <tr><td>Card</td><td><code>lift-2</code></td><td><code>hair-card</code>, <code>attn</code> edge when it's for you</td><td><code>ease-spring</code></td></tr>
+        <tr><td>Panel, in front</td><td><code>lift-4</code></td><td><code>line</code></td><td><code>cos-slide</code></td></tr>
+        <tr><td>Panel, folded</td><td><code>lift-2</code></td><td><code>line</code></td><td><code>cos-slide</code></td></tr>
+        <tr><td>Hail</td><td><code>lift-4</code></td><td><code>attn</code></td><td><code>cos-drop</code></td></tr>
+        <tr><td>Zoom</td><td>85% scrim</td><td>none</td><td>none</td></tr>
+        <tr><td colspan="4"><span class="tag new">new</span> <code>--fold-w</code> 28px (a folded panel's spine) · <code>--step-h</code> 32px (a waypoint's row) · <code>--mark-w</code> 3px (the holodeck's marker)</td></tr>
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <h2>Three ways to show a course in Comms</h2>
+  <p class="note">The same nouns, verbs and engine; only where the course lives changes. Each is acted out below.</p>
+  <div class="options">
+    <div class="opt rec"><h4>B · As a panel that cascades <span class="pill">Recommended</span></h4>
+      <p>The sheet stays as it is today. <b>Course</b> on its head opens the course as a panel. Each thing in it opens the next panel to its right, one level at a time, and the panels before fold to spines you can go back to.</p>
+      <p>Nothing on the sheet changes, and no panel holds more than one level.</p></div>
+    <div class="opt"><h4>A · On the sheet</h4>
+      <p>The goal's sheet shows its course under the head: the holodeck line, the waypoints, your last watch, and Make it so. Decisions rest under it. A waypoint opens as a panel.</p>
+      <p>Always in sight, and the sheet gets busy.</p></div>
+    <div class="opt"><h4>C · Only through decisions</h4>
+      <p>No view of the course. When waypoints are ready, the chief of staff puts one decision on the sheet ("Make it so to waypoint 4?") mentioning them.</p>
+      <p>Quietest, but there's nothing to look at until you're asked.</p></div>
+  </div>
+
+  <div class="verdict-box">
+    <div class="lbl">Recommendation: B, the course as a panel that cascades</div>
+    <p>B keeps today's quiet: the sheet doesn't change, and the course is one press away whenever you want it. The first draft of B crammed a whole step into one panel; cascading fixes that. Each panel holds one level: the course is a list of waypoints, a waypoint is a line of what it is and one row each for its pull requests, its away mission and its anomalies, and only the panel after that shows a log or a still. You always see the way back, as spines on the left.</p>
+    <p>It stays inside the side panels' card width however deep you go, so the sheet never narrows or gets covered, which was the 28 October rule and the reason the side panels grammar turned down columns. It's still one card in that stack: Talk or a pull request opened from a decision stack over it as they do there; going deeper into the course moves right, inside it.</p>
+    <p>A puts the course in sight all the time, and the sheet gets busy with it. C keeps Comms exactly as quiet as today, but you only see work you've been asked about.</p>
+  </div>
+
+  <h2>The scenarios</h2>
+  <p class="note">Scenario 1 is the review in B: open the course, look at waypoint 3 and its log, load the holodeck there, make it so. Scenario 2 stresses B with an away mission's anomalies, and scenario 3 goes down to a pull request, the fourth level. Scenarios 4 and 5 are the same review in A and C. Click a step to jump to it; the round arrow replays.</p>
+
+  <div class="scenario">
+    <div>
+      <h3>Today</h3>
+      <p>The sheet is in the middle with a merge ask resting on it. Its pull requests are rows under More, five of them across two repos, each with its own merge press.</p>
+      <p>The preview is elsewhere, on the ship's board: a Preview press on each pull request, one running per project. Starting #11's stops #10's.</p>
+      <p class="why"><b>Why it changes:</b> to see waypoint 3 working, the user has to know which pull requests make it, start a preview of one and hope the other repo's guess is right, then merge them in the right order. Waypoints 4 and 5 wait in their head meanwhile.</p>
+    </div>
+    <div class="table"><div class="mk-wrap"><div class="mk" id="mk-today"></div></div><div class="capline"><span>Static: Comms and the board as built</span><span></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="B">
+    <div>
+      <h3>1 · B: the course, cascading <span class="pill">Recommended</span></h3>
+      <div class="today">Today: a merge ask with five rows under More; the preview is started from the board.</div>
+      <p>The sheet is as it is today, with nothing asking. Its head has Course, saying three waypoints are new.</p>
+      <p>Pressing Course slides the course in from the right, beside the sheet: the holodeck line at waypoint 4, the waypoints newest on top, the last watch line, and Make it so.</p>
+      <p>Pressing waypoint 3 slides its panel in to the right. The course folds to a spine on the left. The waypoint says what it is in a line, then one row each for its pull requests, its away mission and its anomaly.</p>
+      <p>Pressing the away mission's row slides its panel in to the right, and the waypoint folds to a second spine. The log plays: the basket, “Only 2 left”.</p>
+      <p>Pressing waypoint 3's spine slides the mission away. Waypoint 3 is in front again.</p>
+      <p>Load the holodeck here: the button reads Holodeck here, loading.</p>
+      <p>Pressing the course's spine slides waypoint 3 away. The course is in front with the marker beside waypoint 3, the holodeck running there, Enter ↗ lit, and Make it so landing waypoint 3.</p>
+      <p>Make it so merges webshop-api#15, then webshop-frontend#10. Waypoint 3's row reads Landing.</p>
+      <p class="why"><b>Why:</b> each panel asks a little more of you than the one before, so it sits further right and higher, and leaves first; the spines keep the way back in sight. One level per panel means none of them has to cram. You land what you tried, so Make it so follows the holodeck.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="The sheet as today; Course · 3 new on its head"><b>The sheet</b></li>
+        <li data-cls="o-course" data-cap="Press Course"><b>Open the course</b></li>
+        <li data-cls="o-course f-course o-wp3 o3" data-cap="Press waypoint 3"><b>Open waypoint 3</b></li>
+        <li data-cls="o-course f-course o-wp3 o3 f-wp3 o-mis watching" data-cap="Press the away mission"><b>Play the log</b></li>
+        <li data-cls="o-course f-course o-wp3 o3" data-cap="Press waypoint 3's spine"><b>Back to waypoint 3</b></li>
+        <li data-cls="o-course f-course o-wp3 o3 pt3 rebuilding" data-cap="Load the holodeck here"><b>Load the holodeck</b></li>
+        <li data-cls="o-course o3 pt3 pvup" data-cap="Press the course's spine; Enter ↗ opens the shop at waypoint 3 in a browser tab"><b>Back to the course</b></li>
+        <li data-cls="o-course o3 pt3 pvup landing" data-cap="Make it so"><b>Make it so</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="B2">
+    <div>
+      <h3>2 · B: an away mission's anomalies</h3>
+      <div class="today">Today: a QA fail is one verdict on one pull request; the chief of staff sees the lead's turn, not the evidence.</div>
+      <p>The course is open. Waypoint 5's row reads Surveying: Lt. Okafor's away mission is in the holodeck at waypoint 5.</p>
+      <p>The row reads 2 anomalies.</p>
+      <p>The row reads 1 fixing and, in amber, 1 for you. A decision rises onto the sheet with an amber edge: which address sends back-in-stock emails? It mentions the anomaly and waypoint 5.</p>
+      <p>Pressing the anomaly's mention opens it on the right with its way there folded beside it: the course's spine, waypoint 5's spine, then the anomaly with its still at 0:52.</p>
+      <p>Pressing Use hello@sockshop.test answers it. The decision fades as answered; the anomaly says Lt. Adeyemi is on it.</p>
+      <p>Pressing waypoint 5's spine slides the anomaly away. Waypoint 5 reads Ready: its mission went again and came back clean, and both anomalies are rows.</p>
+      <p>Pressing the bug's row slides it in: fixed by Lt. Adeyemi, sent back by the chief of staff, with You should have asked me beside it.</p>
+      <p class="why"><b>Why:</b> a bug the lead can fix asks nothing of you, so it stays a row in its waypoint; a gap that's a choice about the shop asks for you, so it rises as a decision. Opening it from the decision shows where it lives, so going back lands you in its waypoint.</p>
+      <ol class="steps">
+        <li data-cls="o-course" data-cap="Lt. Okafor's away mission is in the holodeck at waypoint 5"><b>Surveying</b></li>
+        <li data-cls="o-course found" data-cap="The mission logs two anomalies"><b>Logged</b></li>
+        <li data-cls="o-course found routed asked" data-cap="The chief of staff routes them"><b>Routed</b></li>
+        <li data-cls="o-course f-course o-wp5 f-wp5 o-gap o5 found routed asked" data-cap="Press AN No sender address"><b>Open the anomaly</b></li>
+        <li data-cls="o-course f-course o-wp5 f-wp5 o-gap o5 found routed asked answered" data-cap="Use hello@sockshop.test"><b>Answer</b></li>
+        <li data-cls="o-course f-course o-wp5 o5 found routed asked answered fixed" data-cap="Press waypoint 5's spine"><b>Back to waypoint 5</b></li>
+        <li data-cls="o-course f-course o-wp5 f-wp5 o-bug o5 found routed asked answered fixed" data-cap="Press the fixed anomaly"><b>The quiet fix</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="B3">
+    <div>
+      <h3>3 · B: down to a pull request</h3>
+      <div class="today">Today: a pull request is a row under More whose title is a link out to GitHub.</div>
+      <p>Waypoint 3 is open beside the folded course.</p>
+      <p>Pressing its pull requests' row slides a third panel in to the right, and the waypoint folds to a second spine. The two pull requests are rows, in the order they land: webshop-api#15 first, because #10 reads its field.</p>
+      <p>Pressing webshop-api#15 slides a fourth panel in. The list folds to a third spine. The pull request shows its checks, whether it merges cleanly, QA's verdict with where to look, and its changes. It has no merge press: it lands with its waypoint.</p>
+      <p>GitHub ↗ on its head opens the pull request on GitHub in a new browser tab. Comms stays as it was.</p>
+      <p>Pressing the course's spine slides the three panels to its right away. The course is in front.</p>
+      <p class="why"><b>Why:</b> a pull request is the most detailed thing on the course, so it's the furthest right and the first to leave. It shows what QA and CI found without leaving Comms; landing stays with the waypoint, so the pull request has nothing to press but GitHub.</p>
+      <ol class="steps">
+        <li data-cls="o-course f-course o-wp3 o3" data-cap="Waypoint 3 is open"><b>Waypoint 3</b></li>
+        <li data-cls="o-course f-course o-wp3 o3 f-wp3 o-prs" data-cap="Press Pull requests · 2"><b>Its pull requests</b></li>
+        <li data-cls="o-course f-course o-wp3 o3 f-wp3 o-prs f-prs o-pr15" data-cap="Press webshop-api#15"><b>One pull request</b></li>
+        <li data-cls="o-course f-course o-wp3 o3 f-wp3 o-prs f-prs o-pr15 gh" data-cap="↗ github.com/demo/webshop-api/pull/15 opens in a new browser tab"><b>Jump to GitHub</b></li>
+        <li data-cls="o-course o3" data-cap="Press the course's spine"><b>Back to the course</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="A">
+    <div>
+      <h3>4 · A: on the sheet</h3>
+      <div class="today">Today: a merge ask with five rows under More; the preview is started from the board.</div>
+      <p>The goal's sheet shows its course under the head: the holodeck line at waypoint 4, the waypoints, the last watch line, Make it so. Nothing on the sheet asks anything.</p>
+      <p>Pressing waypoint 3's row slides its panel in beside the sheet, with its rows.</p>
+      <p>Pressing the away mission's row slides its panel in to the right; the waypoint folds to a spine. The log plays.</p>
+      <p>Back on waypoint 3, Load the holodeck here moves the marker on the sheet down to waypoint 3. The holodeck line reads loading.</p>
+      <p>The holodeck line reads running at waypoint 3, and Enter ↗ is lit.</p>
+      <p>Make it so lands waypoint 3; its row reads Landing.</p>
+      <p>Waypoint 3's row reads Landed and dims. The marker goes back to the tip.</p>
+      <p>× closes the panel. The table's edge is empty.</p>
+      <p class="why"><b>Why:</b> the course is always in sight, so taking the conn is looking at it. The cost is a busy sheet: the course takes most of it before any decision arrives.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="The course on the goal's sheet"><b>Look</b></li>
+        <li data-cls="o-wp3 o3" data-cap="Press waypoint 3"><b>Open waypoint 3</b></li>
+        <li data-cls="o-wp3 o3 f-wp3 o-mis watching" data-cap="Press the away mission"><b>Play the log</b></li>
+        <li data-cls="o-wp3 o3 pt3 rebuilding" data-cap="Back; Load the holodeck here"><b>Load the holodeck</b></li>
+        <li data-cls="o-wp3 o3 pt3 pvup" data-cap="Enter ↗ opens the shop at waypoint 3 in a browser tab"><b>Enter</b></li>
+        <li data-cls="o-wp3 o3 pt3 pvup landing" data-cap="Make it so"><b>Make it so</b></li>
+        <li data-cls="o-wp3 o3 landed3" data-cap="Waypoint 3 landed; the holodeck follows the course again"><b>Landed</b></li>
+        <li data-cls="landed3" data-cap="× (or Esc)"><b>Close</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <div class="scenario" data-mk="C">
+    <div>
+      <h3>5 · C: only through decisions</h3>
+      <div class="today">Today: a merge ask with five rows under More; the preview is started from the board.</div>
+      <p>The sheet is as it is today, with nothing asking. Waypoints 3 and 4 are ready, but nothing says so.</p>
+      <p>The chief of staff puts a decision on the sheet: make it so to waypoint 4? It mentions both waypoints and the holodeck.</p>
+      <p>Pressing waypoint 3's mention slides its panel in beside the sheet.</p>
+      <p>× closes it. The decision is still there.</p>
+      <p>Pressing Make it so answers it. The decision fades as answered, and the engine lands waypoints 3 and 4 in order.</p>
+      <p class="why"><b>Why:</b> nothing is drawn that doesn't ask, so the sheet stays as quiet as today. But there's no way in between asks, and the holodeck is set wherever the decision says.</p>
+      <ol class="steps">
+        <li data-cls="" data-cap="Nothing asks; waypoints 3 and 4 are ready"><b>Quiet</b></li>
+        <li data-cls="asked" data-cap="The chief of staff asks"><b>A decision</b></li>
+        <li data-cls="asked o-wp3" data-cap="Press WP Waypoint 3"><b>Open waypoint 3</b></li>
+        <li data-cls="asked" data-cap="× (or Esc)"><b>Close</b></li>
+        <li data-cls="asked answered" data-cap="Make it so"><b>Make it so</b></li>
+      </ol>
+    </div>
+    <div class="table"><button class="replay" title="Replay" aria-label="Replay"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/></svg></button><div class="mk-wrap"><div class="mk"></div></div><div class="capline"><span class="cap"></span><span class="stepcap"></span></div></div>
+  </div>
+
+  <!-- the engine and the hand-over -->
+  <h2>What the engine needs</h2>
+  <p class="note">Everything Comms shows here is data the engine holds: waypoints, the holodeck and where it's set, away missions with their logs, anomalies and their routes. Comms only draws them, and its presses are the engine's actions. Cost is in pull requests of today's size: S is one, M two or three, L four or more.</p>
+  <div class="scroll-x">
+  <table class="cost">
+    <thead><tr><th>Change</th><th>What it takes</th><th>Builds on</th><th>Cost</th></tr></thead>
+    <tbody>
+      <tr><td>Waypoints as data</td><td>Take the one-slice-at-a-time rule out of the engine: today the next slice starts only when every pull request of this one has merged or closed (<code>sliceLanded</code>, <code>server/agents/lead.ts:49</code>). The engine sets no order and no cap. It records what the lead says: which pull requests make a waypoint, and the waypoint it's on, if any (named with a tool, as a recap is sent). How to slice goes in the lead's instructions, and the chief of staff says when work has waited on the user a while.</td><td><code>LeadWork.slice</code>, <code>LeadPr.slice</code>, <code>Waypoint</code>, <code>goalPrs.ts</code></td><td>M · 2</td></tr>
+      <tr><td>Stacked branches</td><td>A waypoint's branch in each repo is cut from the waypoint before's branch in that repo, or from the default branch if no earlier open waypoint touches it. Its pull request's base is that branch, so GitHub shows only the waypoint's diff and CI runs on each. When an earlier waypoint changes or lands, Focus moves the later ones on (<code>git rebase --onto</code>, then the base retargeted with <code>gh pr edit</code>) and hands any conflict to the conflict resolver. The landing order is a pure rule (a <code>waypointRules.ts</code>).</td><td>The conflict resolver; <code>mergeGateRules.ts</code></td><td>M–L · 3</td></tr>
+      <tr><td>Holodeck at a waypoint</td><td><code>PreviewRef</code> gains <code>{ sha }</code>. A pure <code>waypointSet(course, n)</code> picks each repo's commit (the highest waypoint at or below n that touches it, else the default branch), replacing the feature-label guess for a goal's work. The engine starts or reloads it when a waypoint becomes ready or Load here moves it; where it's set, not the process, survives a restart. Still one per project.</td><td><code>server/previews.ts</code>, <code>shared/previewSet.ts</code>, <code>checkoutPreview</code></td><td>M · 2</td></tr>
+      <tr><td>Away missions in the holodeck</td><td>QA's browser pass goes into the course's holodeck at a waypoint instead of its own dev server; a mission holds the holodeck until it's back, and Load here waits for it. Diff review, CI and the ratchet script stay on each pull request. A mission and its log are engine artifacts (waypoint, commits, video, stills, checks), as the presentation audit's artifact store proposes.</td><td><code>recorder.ts</code> and <code>recording.ts</code> (video exists), <code>browserTool.ts</code>, <code>QaRecording</code></td><td>M · 2–3</td></tr>
+      <tr><td>Anomalies and their route</td><td>An <code>Anomaly</code> (mission, waypoint, kind, title, evidence: a still and a time in the log, route). The chief of staff judges each with its existing routes (back to the lead, or a card), reading the evidence as data rather than the terminal. Before it's switched on, replay recorded QA fails through it and compare, as the research goal's evals did.</td><td>The judge's <code>Verdict</code> routes; <code>wakeRules.ts</code> fix rounds</td><td>M · 2, plus an eval</td></tr>
+      <tr><td>Make it so</td><td>Lands each waypoint's pull requests in order, repo by repo, through GitHub's merge queue where the repo has CI and Focus's own merge check where it doesn't; the conflict-resolving agent stays for both. A waypoint's lane is the highest of its pull requests'; Ship and Show waypoints land themselves once the ones before them have.</td><td><code>mergeStep</code>, <code>mergeLaneRules.ts</code></td><td>S–M · 1–2</td></tr>
+      <tr><td>Comms view</td><td>Course on the sheet's head; the course as a card in the side panels' stack, its levels cascading inside it (a pure <code>cascadeRules.ts</code>: open to the right, back to a spine, four deep); waypoint, mission, anomaly, pull-request list and pull request views (the last drawn as the side panels grammar's pull request panel, without its merge press); mentions of kinds WP and AN built by the engine as typed refs.</td><td>The side panels (option B) and the two one-tap buttons</td><td>M · 3</td></tr>
+      <tr><td>Holodecks in sandboxes (later)</td><td>Not built here. Several holodecks per project are left to sandboxes: when agent sessions run in sandboxes of their own (a disposable machine each, as cua sandboxes are, local or in the cloud), an away mission loads its holodeck in its own sandbox and the user's holodeck is one more. The holodeck stays the same data, so Comms doesn't change; only where it runs does. Sharing one machine instead (a folder and ports per holodeck, a cap) was costed at L · 3–4 and isn't worth building first.</td><td>A sandboxes goal of its own; agent-host's "the client hands the host a folder to run in"</td><td>its own goal</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="note">In all, about 12 to 15 pull requests, with several holodecks left to sandboxes. Ongoing cost: one away mission per waypoint rather than one browser pass per pull request, so fewer QA sessions for the same work; logs go where QA's screenshots already go.</p>
+
+  <h2>Prove first</h2>
+  <ol class="order">
+    <li><b>Restacking after a squash merge.</b> Squashing waypoint 3 leaves waypoint 4's branch carrying 3's old commits. A spike: two scratch repos, three stacked waypoints, squash the first, move the rest on with <code>rebase --onto</code>, and count what the conflict resolver would be handed. Half a day; everything rests on it.</li>
+    <li><b>Loading the holodeck at a waypoint is quick enough.</b> Point the demo shop's preview command at given commits in both repos and time a reload. If it's minutes, taking turns will grate, and sandboxes move up the list.</li>
+    <li><b>A lead can run two waypoints ahead without tangling them.</b> Try it on one real goal with instructions alone, before any engine change.</li>
+    <li><b>Logs help once they're seen.</b> The research goal found recordings didn't lower the user's attention, and that they weren't visible in Comms. Measure again once logs play in the mission's panel, with the one-tap buttons as the measure.</li>
+  </ol>
+
+  <h2>Order</h2>
+  <ol class="order">
+    <li>The two spikes above.</li>
+    <li>Waypoints as data, then stacked branches: leads can work ahead, and each waypoint's pull requests still run CI.</li>
+    <li>Holodeck at a waypoint: the engine keeps one per project at the tip.</li>
+    <li>Away missions in that holodeck, then anomalies and their route.</li>
+    <li>The Comms view, once the side panels have shipped.</li>
+    <li>Make it so; the merge queue when the repos have CI.</li>
+    <li>Sandboxes, as a goal of their own: a holodeck per agent session.</li>
+  </ol>
+
+  <h2>What this design relies on</h2>
+  <div class="scroll-x">
+  <table>
+    <thead><tr><th>Decided already</th><th>Where this design leans on it</th></tr></thead>
+    <tbody>
+      <tr><td>Side panels, option B, with Tanaka</td><td>The course is a card in its stack; its levels cascade inside the card's width; mentions are its typed refs. No new surface.</td></tr>
+      <tr><td>The two one-tap buttons</td><td>"You should have asked me" goes on every anomaly fixed without the user, so quiet fixes stay measurable; "Didn't need me" on every anomaly brought.</td></tr>
+      <tr><td>Don't rebuild the factory around GitHub</td><td>Waypoints, the holodeck, missions and anomalies live in Focus's data. GitHub only holds the pull requests, as now; their bases are the one new thing it's told.</td></tr>
+      <tr><td>The ratchet checks as a script before QA</td><td>They stay on each pull request, before the waypoint's away mission, so a mission never spends a browser session on a change the script would refuse.</td></tr>
+      <tr><td>GitHub's merge queue once the repos have CI, keeping the conflict resolver</td><td>Make it so enqueues in order once the queue exists; until then it uses today's merge check. The conflict resolver also restacks waypoints.</td></tr>
+      <tr><td>A free Done-looks-like check when a goal closes</td><td>Done looks like is the course's heading, so the check reads the same thing the user reviews by.</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <h2>Hand-over</h2>
+  <div class="scroll-x">
+  <table class="handover">
+    <thead><tr><th>Noun</th><th>Creates or touches</th></tr></thead>
+    <tbody>
+      <tr><td>Course</td><td>A Course press on the sheet's head in stream.ts and a course view drawn from <code>LeadWork</code> (waypoints, landed) and the preview; the last watch line from today's since line.</td></tr>
+      <tr><td>Waypoint</td><td><code>LeadWork</code> gains ordered open slices; <code>goalPrs.ts</code> claims a pull request into its waypoint and records its base; a <code>waypointRules.ts</code> for order, landing and restacking, with its test.</td></tr>
+      <tr><td>Holodeck</td><td><code>PreviewRef</code> <code>{ sha }</code>; <code>waypointSet</code> beside <code>previewSet</code>; <code>Focus.startPreview</code> called by the engine, not only by the board's press.</td></tr>
+      <tr><td>Away mission · Anomaly</td><td>QA's crew instructions and <code>reviews.ts</code> (go into the holodeck); new artifact kinds; the judge reads anomalies with their evidence.</td></tr>
+      <tr><td>Make it so</td><td>A course-level press over <code>mergePress</code>, merging in order through <code>mergeStep</code>.</td></tr>
+      <tr><td>Scenarios</td><td>1: the review in B on a demo ship with a goal of five waypoints across two repos. 2: a mission with two anomalies, one routed to the lead and one to the user. 3: down to a pull request. 4–5: the same review in A and C.</td></tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+</div>
+
+<script>
+// ---------- the mockup's pieces: Comms with the side panels, and a goal's course ----------
+// A piece shows only in some states: data-show needs every class listed on the mockup, data-hide hides on any.
+const hud = () => `<div class="hud"><div class="where">Demo shop · <b>Show stock on the shop</b></div><div class="chip"><span>Muster</span><span class="cnt" style="background:var(--color-attn);color:#111"><i>2</i><i>3</i></span></div></div>`;
+const rail = (n) => `<div class="rail"><div class="proj">Demo shop</div>
+  <div class="berth at"><i class="dot work"></i><span>Show stock</span>${n === 'ask' ? '<span class="n attn" data-show="asked" data-hide="answered">1</span>' : `<span class="n ${n ? 'attn' : ''}">${n || ''}</span>`}</div>
+  <div class="berth"><i class="dot work"></i><span>Saved items</span><span class="n attn">1</span></div>
+  <div class="proj" style="margin-top:12px">Space Dodger</div>
+  <div class="berth"><i class="dot"></i><span>High scores</span><span class="n"></span></div>
+  <div class="berth"><i class="dot work"></i><span>Touch controls</span><span class="n attn">1</span></div></div>`;
+const mention = (k, gl, name, st) => `<span class="mn m-${k}"><span class="gl">${gl}</span><span>${name}</span><span class="st">${st}</span><i class="slot"></i></span>`;
+const sheetHead = (who, acts = '') => `<div class="shead"><span class="p">Demo shop</span><span class="acts">${acts}<span class="btn">Exhibits · 3</span></span><span class="g">Show stock on the shop</span><span class="who">${who}</span></div>`;
+const close = '<span class="x">×</span>';
+const working = '<i class="dot work"></i>Lt. Adeyemi · working on waypoint 5';
+
+// the course: heading, holodeck line, waypoints newest on top with the holodeck's marker, the last watch, Make it so
+const row = (n, t, pp, ss, cls = '') => `<div class="srow r${n} ${cls}"><span></span><span class="n">${n}</span><span class="t">${t}</span><span class="pp">${pp}</span><span class="ss">${ss}</span></div>`;
+const ready3 = `<span data-hide="landing landed3"><b>Ready</b></span><span data-show="landing" data-hide="landed3">Landing…</span><span data-show="landed3">Landed</span>`;
+const wp5 = (v) => v === 'B2'
+  ? `<span data-hide="found">Surveying…</span><span data-show="found" data-hide="routed">2 anomalies</span><span data-show="routed" data-hide="fixed">1 fixing · <span class="yours" data-hide="answered">1 for you</span><span data-show="answered">1 answered</span></span><span data-show="fixed"><b>Ready</b></span>`
+  : 'Surveying…';
+const course = (v) => `<div class="dir">
+  <div class="dh"><span class="dl">Heading</span><span class="dl2">a shopper sees low stock, sold out and back in stock, on product pages and in the basket</span></div>
+  <div class="pvl"><span class="k">Holodeck</span>
+    <span class="v"><span data-hide="pt3">waypoint 4 · the tip · running <span class="mono">fe 9c4e1a0 · api 77de913</span></span><span data-show="pt3 rebuilding">waypoint 3 · held · loading…</span><span data-show="pt3" data-hide="rebuilding">waypoint 3 · held · running <span class="mono">fe 4e1a2c0 · api 77de913</span></span></span>
+    <span class="btn ob">Enter ↗</span></div>
+  <div class="rows"><i class="pmark"></i>
+    ${row(5, 'Back-in-stock alerts', 'fe#12 api#16', wp5(v))}
+    ${row(4, 'Sold out blocks Add to basket', 'fe#11', '<b>Ready</b>')}
+    ${row(3, 'Low stock in the basket', 'fe#10 api#15', ready3)}
+    <div class="lastlook">your last watch · 09:40</div>
+    ${row(2, '“Only N left” under the price', 'fe#9', 'Landed', 'landed')}
+    ${row(1, 'Stock on the product API', 'api#14', 'Landed', 'landed')}
+  </div>
+  <div class="landrow"><span class="btn go">Make it so</span>
+    <small><span data-hide="pt3 landed3">lands waypoints 3 and 4 · 3 pull requests, in order</span><span data-show="pt3" data-hide="landing">lands waypoint 3 · 2 pull requests</span><span data-show="landing">merging webshop-api#15, then webshop-frontend#10</span><span data-show="landed3">lands waypoint 4 · 1 pull request</span></small></div>
+</div>`;
+
+// a mission's log: a frame of the shop, a cursor, the play mark and the bar
+const vid = (scr, tc, big) => `<div class="vid ${big ? 'big' : ''}"><div class="scr">${scr}</div><i class="cur"></i><span class="play">▶</span><div class="bar"><i></i></div><span class="tc">${tc}</span></div>`;
+const basket = `<div class="ph"></div><div><b>Basket</b>Stripy socks × 2 · £16.00<div class="low">Only 2 left</div><span class="add">Checkout</span></div>`;
+const drill = (cls, k, line, w) => `<div class="drill ${cls}"><span class="k2">${k}</span><span>${line}</span><span class="w">${w}</span><span class="ar">›</span></div>`;
+const merged = `<span data-hide="landing landed3">checks passing · QA passed</span><span data-show="landing" data-hide="landed3">merging…</span><span data-show="landed3">merged</span>`;
+
+// the cascade's levels: each opens to the right of the last, which folds to its spine
+const lv = (key, depth, gl, label, view) => `<div class="lv d${depth} l-${key}"><div class="fold"><span class="gl">${gl}</span><span>${label}</span></div>${view}</div>`;
+const courseView = (v) => `<div class="pv"><div class="vh"><span class="kind">Course · Show stock on the shop</span><span class="sp"></span>${close}</div>${course(v)}</div>`;
+const wp3View = () => `<div class="pv">
+  <div class="vh"><span class="kind">Waypoint 3 · on 2</span><span class="sp"></span>${close}</div>
+  <div class="pt">Low stock in the basket</div>
+  <p class="summ">The basket shows “Only N left” on each line and caps the quantity at what's in stock.</p>
+  <div class="holo"><span class="btn ph3"><span data-hide="pt3">Load the holodeck here</span><span data-show="pt3 rebuilding">Holodeck here · loading…</span><span data-show="pt3" data-hide="rebuilding">Holodeck here · running</span></span></div>
+  ${drill('dr-prs', 'Pull requests · 2', 'webshop-api#15 · webshop-frontend#10', merged)}
+  ${drill('dr-mis', 'Away mission · back clean', 'Lt. Okafor · log 1:12', '3 checks · 2 stills')}
+  ${drill('dr-an', 'Anomaly · fixed', 'The cap message covered the price at 375px', 'fixed by Lt. Adeyemi · re-surveyed clean')}
+  <div class="foot" style="flex-direction:row;align-items:center"><small style="text-align:left">New since your last watch</small><span class="sp"></span><span class="btn quiet">Belay</span></div>
+</div>`;
+const prsView = () => `<div class="pv">
+  <div class="vh"><span class="kind">Pull requests · waypoint 3</span><span class="sp"></span>${close}</div>
+  <div class="pm">In the order they land: #10 reads the field #15 adds.</div>
+  ${drill('dr-pr15', 'webshop-api#15', 'Stock on each basket line', 'checks passing · QA passed · 3 files')}
+  ${drill('dr-pr10', 'webshop-frontend#10', '“Only N left” in the basket', 'checks passing · QA passed · 4 files')}
+</div>`;
+const pr15View = () => `<div class="pv">
+  <div class="vh"><span class="kind">Pull request</span><span class="sp"></span><span class="btn ghb">GitHub ↗</span>${close}</div>
+  <div class="pt">Stock on each basket line</div>
+  <div class="pm">webshop-api#15 · basket-stock → main</div>
+  <div class="st3"><div><i>Checks</i><b>passing</b></div><div><i>Merges</i><b>cleanly</b></div><div><i>QA</i><b>passed</b></div></div>
+  <div class="qa"><div class="vh"><span class="kind">QA · Lt. Okafor</span><b>Passed</b></div>
+    <p>Each basket line carries its product's stock; a line for a deleted product carries none.</p>
+    <div class="spot"><span>Look at <span class="mono">basket.ts:58</span>: one stock read per line</span><span>↗</span></div></div>
+  <div class="chg"><div class="vh"><span class="kind">Changes · 3 files</span></div>
+    <div class="row"><span>src/basket.ts</span><i>extends</i><span>+14</span></div>
+    <div class="row"><span>src/stock.ts</span><i>composes</i><span>+2</span></div>
+    <div class="row"><span>basket.test.ts</span><i>tests</i><span>+9</span></div></div>
+  <div class="foot"><small>Lands with waypoint 3, when you make it so</small></div>
+</div>`;
+const misView = () => `<div class="pv">
+  <div class="vh"><span class="kind">Away mission · waypoint 3</span><span class="sp"></span><span class="btn quiet" title="Play large">⤢</span>${close}</div>
+  <div class="pt">Lt. Okafor · back clean</div>
+  ${vid(basket, '0:41 / 1:12', true)}
+  <div class="qa"><ul><li>The basket shows “Only 2 left” on the socks</li><li>A quantity above stock is capped at 2</li><li>Plenty in stock shows nothing</li></ul></div>
+  <div class="shots"><span></span><span></span></div>
+  <div class="pm" style="margin-top:2px">Reviewed at fe 4e1a2c0 · api 77de913</div>
+</div>`;
+const wp5View = () => `<div class="pv">
+  <div class="vh"><span class="kind">Waypoint 5 · on 4</span><span class="sp"></span>${close}</div>
+  <div class="pt">Back-in-stock alerts</div>
+  <p class="summ">Sold-out pages offer Notify me, and an email goes out when stock comes back.</p>
+  <div class="holo"><span class="btn">Load the holodeck here</span></div>
+  ${drill('dr-prs', 'Pull requests · 2', 'webshop-api#16 · webshop-frontend#12', 'checks passing · QA passed')}
+  ${drill('dr-mis', '<span data-hide="fixed">Away mission · 2 anomalies</span><span data-show="fixed">Away mission · again, back clean</span>', 'Lt. Okafor · log 1:30', '2 checks · 3 stills')}
+  ${drill('dr-bug', '<span data-hide="fixed">Anomaly · being fixed</span><span data-show="fixed">Anomaly · fixed</span>', '“Notify me” stayed pressable after signing up', 'sent back to Lt. Adeyemi by the chief of staff')}
+  ${drill('dr-gap yours', '<span data-hide="answered">Anomaly · for you</span><span data-show="answered">Anomaly · answered</span>', 'No sender address for back-in-stock emails', '<span data-hide="answered">a gap · brought to you</span><span data-show="answered">you chose hello@sockshop.test</span>')}
+</div>`;
+const gapView = () => `<div class="pv">
+  <div class="vh"><span class="kind">Anomaly · a gap</span><span class="sp"></span><span class="btn">Play at 0:52</span>${close}</div>
+  <div class="pt">No sender address for back-in-stock emails</div>
+  <div class="pm">Lt. Okafor's away mission · waypoint 5 · 0:52</div>
+  <div class="shot"><b>Wool socks · sold out</b><div class="f">you@example.com</div><span class="toast">Couldn't send: no from-address</span></div>
+  <p class="summ">The email service needs a from-address. Staging has none, and the brief doesn't say which address speaks for the shop.</p>
+  <div class="route"><b>Brought to you by the chief of staff:</b> which address speaks for the shop is a call about the shop, not a bug.</div>
+  <div class="route" data-show="answered"><b>You chose hello@sockshop.test.</b> Lt. Adeyemi is on it; the mission goes again when it's pushed.</div>
+</div>`;
+const bugView = () => `<div class="pv">
+  <div class="vh"><span class="kind">Anomaly · a bug</span><span class="sp"></span><span class="btn">Play at 0:31</span>${close}</div>
+  <div class="pt">“Notify me” stayed pressable after signing up</div>
+  <div class="pm">Lt. Okafor's away mission · waypoint 5 · 0:31</div>
+  <div class="shot"><b>Wool socks · sold out</b><div class="f">you@example.com</div><span class="toast">Notify me</span></div>
+  <p class="summ">Pressing it twice signed the shopper up twice.</p>
+  <div class="route"><b>Sent back to Lt. Adeyemi by the chief of staff:</b> a plain bug, and the fix doesn't change what the shop does.</div>
+  <div class="route"><b>Fixed in webshop-frontend#12.</b> The mission went again and came back clean.</div>
+  <div><span class="btn">You should have asked me</span></div>
+</div>`;
+
+// decisions that rise onto the sheet
+const anomalyAsk = () => `<div class="card dcard rise"><div class="ch"><span data-hide="answered" class="yours">Decision · an anomaly at waypoint 5</span><span data-show="answered">Answered · Lt. Adeyemi is on it</span></div>
+  <div class="what">Which address sends back-in-stock emails?</div>
+  <div class="mentions"><span class="lbl2">Mentions</span>${mention('fd', 'AN', 'No sender address', 'a gap')}${mention('wp', 'WP', 'Waypoint 5', 'surveying')}</div>
+  <div class="arow" style="justify-content:flex-start"><span class="btn c1">Use hello@sockshop.test</span><span class="btn">Send back</span><span class="btn">Belay waypoint 5</span></div><div class="arow"><span class="btn quiet">Discuss</span><span class="btn quiet">Didn't need me</span></div></div>`;
+const courseAsk = () => `<div class="card dcard rise"><div class="ch"><span data-hide="answered" class="yours">Decision · from the chief of staff</span><span data-show="answered">Answered · landing waypoints 3 and 4</span></div>
+  <div class="what">Make it so to waypoint 4?</div>
+  <div class="brief">Both away missions came back clean; one anomaly was fixed by the lead. Waypoint 5 is still being surveyed and stays.</div>
+  <div class="mentions"><span class="lbl2">Mentions</span>${mention('st3', 'WP', 'Waypoint 3', 'ready')}${mention('st4', 'WP', 'Waypoint 4', 'ready')}${mention('pv', 'HD', 'Holodeck at 4', 'running')}</div>
+  <div class="arow" style="justify-content:flex-start"><span class="btn c1">Make it so</span><span class="btn">Waypoint 3 only</span><span class="sp"></span><span class="btn quiet">Discuss</span><span class="btn quiet">Didn't need me</span></div></div>`;
+
+const since = '<div class="since">Since your last watch (09:40): <b>3 waypoints ready or surveying</b> · <b>1 anomaly fixed</b></div>';
+const quiet = '<div class="empty2" data-hide="asked">Nothing asks you here. Lt. Adeyemi is on waypoint 5.</div>';
+const courseBtn = '<span class="btn cb">Course · 3 new</span>';
+const frames = {
+  B: () => hud() + rail(0) + `<div class="sheet">${sheetHead(working, courseBtn)}${since}${quiet}</div>`
+    + `<div class="cas">${lv('course', 0, 'CO', 'Course', courseView('B'))}${lv('wp3', 1, 'WP', 'Waypoint 3', wp3View())}${lv('mis', 2, 'AM', 'Away mission', misView())}</div>`,
+  B2: () => hud() + rail('ask') + `<div class="sheet">${sheetHead(working, courseBtn)}${since}${quiet}${anomalyAsk()}</div>`
+    + `<div class="cas">${lv('course', 0, 'CO', 'Course', courseView('B2'))}${lv('wp5', 1, 'WP', 'Waypoint 5', wp5View())}${lv('gap', 2, 'AN', 'Anomaly', gapView())}${lv('bug', 2, 'AN', 'Anomaly', bugView())}</div>`,
+  B3: () => hud() + rail(0) + `<div class="sheet">${sheetHead(working, courseBtn)}${since}${quiet}</div>`
+    + `<div class="cas">${lv('course', 0, 'CO', 'Course', courseView('B'))}${lv('wp3', 1, 'WP', 'Waypoint 3', wp3View())}${lv('prs', 2, 'PR', 'Pull requests', prsView())}${lv('pr15', 3, 'PR', 'api#15', pr15View())}</div>`,
+  A: () => hud() + rail(0) + `<div class="sheet">${sheetHead(working)}${course('A')}</div>`
+    + `<div class="cas">${lv('wp3', 0, 'WP', 'Waypoint 3', wp3View())}${lv('mis', 1, 'AM', 'Away mission', misView())}</div>`,
+  C: () => hud() + rail('ask') + `<div class="sheet">${sheetHead(working)}${since}${quiet}${courseAsk()}</div>`
+    + `<div class="cas">${lv('wp3', 0, 'WP', 'Waypoint 3', wp3View())}</div>`,
+};
+const sync = (mk) => mk.querySelectorAll('[data-show],[data-hide]').forEach((el) => {
+  const has = (c) => mk.classList.contains(c);
+  const shown = (el.dataset.show ? el.dataset.show.split(' ').every(has) : true) && !(el.dataset.hide ? el.dataset.hide.split(' ').some(has) : false);
+  el.classList.toggle('off', !shown);
+});
+
+// the static Today: a merge ask with its pull requests under More, and the ship's board where previews start
+(() => {
+  const mk = document.getElementById('mk-today');
+  const mrow = (r, t) => `<div class="mrow"><span class="btn go">Squash &amp; merge ${r}</span><a>${t}</a></div>`;
+  const brow = (r, t, b) => `<div class="brow"><span>${t}</span>${b}<span class="s">${r}</span></div>`;
+  mk.innerHTML = hud() + rail(1) + `<div class="sheet">${sheetHead('<i class="dot"></i>Lt. Adeyemi · waiting on you')}
+    <div class="since">Since your last watch (09:40): <b>6 updates</b> · <b>QA passed 3</b></div>
+    <div class="card dcard"><div class="ch">Decision · from Lt. Adeyemi</div><div class="what">Merge webshop-api#15 and webshop-frontend#10?</div>
+    <div class="brief">The basket shows “Only N left”. #10 reads the field #15 adds, so #15 goes first. #11 and #12 build on these and wait for them.</div>
+    <div class="today-more">▾ More · their pull requests
+      ${mrow('webshop-api#15', 'Stock on each basket line · QA passed')}${mrow('webshop-frontend#10', '“Only N left” in the basket · QA passed')}${mrow('webshop-frontend#11', 'Sold out blocks Add to basket · QA passed')}${mrow('webshop-frontend#12', 'Notify me on sold-out pages · QA testing')}${mrow('webshop-api#16', 'Back-in-stock emails · QA testing')}</div>
+    <div class="arow"><span class="btn quiet">Discuss</span><span class="btn quiet">Got it</span></div></div></div>
+    <div class="board"><div class="vh" style="margin-bottom:6px"><span class="kind">Board · in the ship, not Comms</span></div>
+      ${brow('webshop-api#15', 'Stock on each basket line', '<span class="btn">Preview</span>')}
+      ${brow('webshop-frontend#10', '“Only N left” in the basket', '<span class="btn go">Running</span>')}
+      ${brow('webshop-frontend#11', 'Sold out blocks Add to basket', '<span class="btn">Preview</span>')}
+      ${brow('webshop-frontend#12', 'Notify me on sold-out pages', '<span class="btn">Preview</span>')}
+      ${brow('webshop-api#16', 'Back-in-stock emails', '<span class="btn">Preview</span>')}
+      <div class="pm" style="margin-top:10px;font:11px/1.5 var(--font-read)">One preview per project. #10's has webshop-api at main: #15 isn't linked by a feature label, so the basket shows no stock.</div></div>`;
+})();
+
+document.querySelectorAll('.scenario[data-mk]').forEach((sc) => {
+  const mk = sc.querySelector('.mk');
+  mk.classList.add('v' + sc.dataset.mk);
+  mk.innerHTML = frames[sc.dataset.mk]();
+});
+
+// ---------- the page: tabs, scaling, step timelines (as the side panels grammar) ----------
+const tabs = document.querySelectorAll('nav.tabs button');
+tabs.forEach((b) => b.addEventListener('click', () => {
+  tabs.forEach((t) => t.setAttribute('aria-selected', String(t === b)));
+  document.querySelectorAll('section.tab').forEach((s) => s.classList.toggle('on', s.id === b.dataset.tab));
+  if (location.hash !== '#' + b.dataset.tab) history.replaceState(null, '', '#' + b.dataset.tab);
+  requestAnimationFrame(fit);
+}));
+const start = location.hash.slice(1).split('/')[0];
+if (start) document.querySelector(`nav.tabs button[data-tab="${start}"]`)?.click();
+function fit() {
+  document.querySelectorAll('.mk-wrap').forEach((w) => {
+    const s = w.clientWidth / 980;
+    if (s > 0) w.querySelector('.mk').style.setProperty('--s', s);
+  });
+}
+new ResizeObserver(fit).observe(document.body);
+fit();
+const players = [];
+document.querySelectorAll('.scenario[data-mk]').forEach((sc) => {
+  const mk = sc.querySelector('.mk');
+  const base = mk.className;
+  const steps = [...sc.querySelectorAll('ol.steps li')];
+  const cap = sc.querySelector('.cap');
+  const stepcap = sc.querySelector('.stepcap');
+  let i = 0, timer = null, played = false;
+  const go = (n) => {
+    i = n;
+    mk.className = (base + ' ' + (steps[n].dataset.cls || '')).trim();
+    sync(mk);
+    steps.forEach((li, k) => li.classList.toggle('on', k === n));
+    cap.textContent = steps[n].dataset.cap || '';
+    stepcap.textContent = `Step ${n + 1} of ${steps.length}`;
+  };
+  const stop = () => { clearInterval(timer); timer = null; };
+  const play = () => {
+    stop(); go(0);
+    timer = setInterval(() => { if (i >= steps.length - 1) return stop(); go(i + 1); }, 2000);
+  };
+  steps.forEach((li, k) => li.addEventListener('click', () => { stop(); go(k); }));
+  sc.querySelector('.replay').addEventListener('click', play);
+  go(0);
+  players.push({ sc, go, stop, n: steps.length });
+  new IntersectionObserver((es) => es.forEach((e) => {
+    if (e.isIntersecting && !played) { played = true; play(); }
+  }), { threshold: 0.45 }).observe(sc.querySelector('.table'));
+});
+// for screenshots: window.__step(scenarioIndex, stepIndex) jumps a mockup without its timer
+window.__step = (s, n) => { const p = players[s]; p.stop(); p.go(n); };
+</script>
+</body>
+</html>
