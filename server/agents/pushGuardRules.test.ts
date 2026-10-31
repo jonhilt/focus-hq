@@ -27,6 +27,12 @@ describe('mergeDenial', () => {
       'gh api repos/acme/web/pulls/12/reviews -f event=APPROVE',
       `gh api graphql -f query='mutation { mergePullRequest(input: {pullRequestId: "x"}) { clientMutationId } }'`,
       `gh api graphql -f query='mutation { enablePullRequestAutoMerge(input: {pullRequestId: "x"}) { clientMutationId } }'`,
+      // gh by its path, flags run together, and a field run into its flag
+      '/opt/homebrew/bin/gh pr merge 12',
+      'gh pr review 12 -ab "fine"',
+      'gh pr review 12 -ca',
+      'gh api repos/acme/web/pulls/12/reviews -fevent=APPROVE',
+      'gh api repos/acme/web/pulls/12/reviews --field=event=APPROVE',
     ]) expect(mergeDenial(command), command).toMatch(/^Refused by Ops: only Ops or the user merges/);
   });
 
@@ -40,6 +46,9 @@ describe('mergeDenial', () => {
       'gh api repos/acme/web/pulls/12/reviews',
       'git merge origin/main',
       'echo "gh pr merge 12"',
+      // a body that starts with a: the rest of -b's word is its value, not flags
+      'gh pr review 12 -bapprove',
+      'gh pr review 12 -c -b "approve once the test passes"',
     ]) expect(mergeDenial(command), command).toBeNull();
   });
 });

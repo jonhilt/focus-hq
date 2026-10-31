@@ -30,11 +30,26 @@ export function pushDenial(command: string): string | null {
 /** `gh pr <sub>` somewhere in `words`, as gh has it: the subcommand right after `pr`. */
 const prSub = (words: string[], sub: string) => words.some((w, i) => w === 'pr' && words[i + 1] === sub);
 
+/**
+ * `gh pr review`'s approve, on its own (`--approve`, `-a`) or among short flags (`-ab "Fine"`): read left to right up to
+ * one that takes a value (`-b`, `-F`), since the rest of the word is that value.
+ */
+function approves(word: string): boolean {
+  if (word === '--approve') return true;
+  if (!/^-[A-Za-z]/.test(word)) return false;
+  for (const flag of word.slice(1)) {
+    if (flag === 'a') return true;
+    if (flag === 'b' || flag === 'F') return false;
+  }
+  return false;
+}
+
 /** A `gh api` call that merges a pull request, turns on its auto-merge, or approves it. */
 const apiMerges = (words: string[]) =>
   words[0] === 'api' &&
   words.some(
-    (w) => /\/pulls\/[^/\s]+\/merge\b/.test(w) || /\b(?:mergePullRequest|enablePullRequestAutoMerge|addPullRequestReview\b[\s\S]*\bAPPROVE)\b/.test(w) || /^event=APPROVE$/i.test(w),
+    // a field as its own word or run into its flag (`-f event=APPROVE`, `-fevent=APPROVE`, `--field=event=APPROVE`)
+    (w) => /\/pulls\/[^/\s]+\/merge\b/.test(w) || /\b(?:mergePullRequest|enablePullRequestAutoMerge|addPullRequestReview\b[\s\S]*\bAPPROVE)\b/.test(w) || /(?:^|[-=f])event=APPROVE$/i.test(w),
   );
 
 /**
@@ -43,10 +58,11 @@ const apiMerges = (words: string[]) =>
  */
 export function mergeDenial(command: string): string | null {
   const merges = shellCommands(command).some((words) => {
-    const at = words.indexOf('gh');
+    // gh by name or by path (`/opt/homebrew/bin/gh`)
+    const at = words.findIndex((w) => w === 'gh' || w.endsWith('/gh'));
     if (at < 0) return false;
     const rest = words.slice(at + 1);
-    return prSub(rest, 'merge') || (prSub(rest, 'review') && rest.some((w) => w === '--approve' || w === '-a')) || apiMerges(rest);
+    return prSub(rest, 'merge') || (prSub(rest, 'review') && rest.some(approves)) || apiMerges(rest);
   });
   return merges
     ? 'Refused by Ops: only Ops or the user merges or approves a pull request. Mark it ready (`gh pr ready`): QA reviews it, and Ops merges it at the commit QA passed when its lane allows, or the user does.'
