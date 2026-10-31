@@ -245,7 +245,7 @@ describe('HostRunner', () => {
 
 describe("HostRunner, a goal's lead", () => {
   const signal = new AbortController().signal;
-  const tools = { recap: async () => '', show: async () => '', ask: async () => '', proposeClose: async () => '', mergeWhenPassed: async () => '', extra: [] };
+  const tools = { recap: async () => '', waypoint: async () => '', show: async () => '', ask: async () => '', proposeClose: async () => '', mergeWhenPassed: async () => '', extra: [] };
   const lead = (prompt: string, edited = () => undefined, resumeSessionId?: string): RunRequest => ({
     ...request(prompt, resumeSessionId),
     agentId: 'lead_1',
@@ -276,7 +276,7 @@ describe("HostRunner, a goal's lead", () => {
     await until(() => s.inTurn, 'the turn');
     expect(s.options.disallowedTools).toEqual(['EnterPlanMode', ...PEER_TOOLS]);
     // Ops' office tools, lent, and what Ops is, in their instructions
-    expect(s.options.tools.filter((t) => t.server === 'office').map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'merge_when_passed']);
+    expect(s.options.tools.filter((t) => t.server === 'office').map((t) => t.name)).toEqual(['recap', 'waypoint', 'show', 'ask', 'propose_close', 'merge_when_passed']);
     expect(s.options.systemAppend).toBe(`Work the issue.\n\n${OPS_INSTRUCTIONS}`);
     const extension = runner.extend(s.options.conversationId, s.options.labels);
     expect(extension).toMatchObject({ agentProgressSummaries: true, toolConfig: { askUserQuestion: { previewFormat: 'html' } } });

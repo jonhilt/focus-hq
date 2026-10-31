@@ -9,7 +9,7 @@ import type { ExtraTool, OpsTools, ToolReply } from './types';
  * What the office server is, as the old runner's MCP server tells Claude. agent-host's tool server has no
  * instructions to carry it, so a lead on the host is to be told it in its system prompt.
  */
-export const OPS_INSTRUCTIONS = 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.';
+export const OPS_INSTRUCTIONS = 'Ops, the automated side of Focus: it follows the pull requests you open as the goal\'s and sends them to QA once they\'re ready, puts a recap on one when you send it, keeps the waypoints you name, puts what you show on your station\'s screen, and tells the captain when you think the goal is done.';
 
 /** One tool's answer: what happened, in words (and any pictures), or (marked as an error) why it didn't. */
 async function answer(run: () => Promise<string | ToolReply>, failed: string): Promise<ToolResult> {
@@ -23,7 +23,7 @@ async function answer(run: () => Promise<string | ToolReply>, failed: string): P
 }
 
 /** Ops' own tools' names: a plugin's tool with one of them is left out. */
-export const OPS_TOOL_NAMES = ['recap', 'show', 'ask', 'propose_close'] as const;
+export const OPS_TOOL_NAMES = ['recap', 'waypoint', 'show', 'ask', 'propose_close'] as const;
 const TOOL_NAME = /^[a-z][a-z0-9_]{0,40}$/;
 
 /** The plugins' tools a lead's `office` server takes: well named, clear of Ops' own and of each other's (the first wins). */
@@ -75,7 +75,7 @@ function pluginTool(t: ExtraTool): Tool | null {
 const Described = (description: string) => Schema.String.annotate({ description });
 
 /**
- * Ops' tools for a goal's lead as agent-host's tools, served as `office`: mcp__office__recap, show, ask and
+ * Ops' tools for a goal's lead as agent-host's tools, served as `office`: mcp__office__recap, waypoint, show, ask and
  * propose_close, and those the plugins switched on add. What they're for goes in the lead's instructions
  * (`OPS_INSTRUCTIONS`), as the host's tool server carries none.
  */
@@ -93,6 +93,9 @@ export function opsTools(tools: OpsTools): Tool[] {
     optionHtml: 'A self-contained HTML page showing it, laid out for 1280 × 800 like the show tool\'s.',
     options: '2 to 4 options: the captain sees them lettered A, B, C, D in this order.',
     reason: 'Why, in a sentence or two.',
+    prs: 'The pull requests that make the waypoint, one per repo it touches: each one of the goal\'s open ones.',
+    waypoint: 'Which open waypoint they make, by number. Leave it out for a new one (or the one under way, while it has no other pull request).',
+    on: 'The open waypoint below it that it builds on, when it does: its branches are cut from that one\'s. Leave it out when it sits on the base branch.',
   };
   return [
     opsTool(
@@ -102,6 +105,17 @@ export function opsTools(tools: OpsTools): Tool[] {
       Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }), recap: RecapSchema }),
       "Couldn't put the recap on it",
       (input) => tools.recap(input),
+    ),
+    opsTool(
+      'waypoint',
+      'Name a waypoint of the goal\'s course: the open pull requests (one per repo) that make one change, reviewed and landed whole, and the open waypoint it\'s stacked on, if any. A pull request you open is in the waypoint under way until you name another for it. Name the next waypoint when you start it before the one before has landed; the engine sets no order and no cap. Send it again to move a pull request, or to change what it\'s on.',
+      Schema.Struct({
+        prs: Schema.mutable(Schema.Array(Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }) }))).annotate({ description: say.prs }),
+        waypoint: Schema.optionalKey(Schema.Int.annotate({ description: say.waypoint })),
+        on: Schema.optionalKey(Schema.Int.annotate({ description: say.on })),
+      }),
+      "Couldn't name the waypoint",
+      (input) => tools.waypoint(input),
     ),
     opsTool(
       'show',

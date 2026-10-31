@@ -11,7 +11,7 @@ import { demoLayer } from '../github/demo';
 import { GitHub } from '../github/service';
 import { Hub } from '../hub';
 import type { PluginHost } from '../plugins/contract';
-import { demoWorkspace } from './demoRunner';
+import { demoSawBranch, demoWorkspace } from './demoRunner';
 import { focus, leadOpensPrs, restarted, until } from './fakeFocus';
 import { Recordings } from './services';
 import type { AgentManager } from './manager';
@@ -1480,6 +1480,30 @@ describe('AgentManager', () => {
     await until(() => leads().length === 2);
     expect(leads()[1].req.resumeSessionId).toBe('session-1');
     expect(leads()[1].req.prompt).toMatch(/^\[Ops\] Slice 1 has landed: .*\n\nGo on$/s);
+  });
+
+  it('lands an earlier waypoint on its own while the lead works ahead on the next one, named on it', async () => {
+    const { agents, claude, store, project, github } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.some((t) => t.req.agentId === lead.id));
+    const first = await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first waypoint');
+    // the lead cuts the next waypoint's branch from the first one's, and opens its pull request before the first lands
+    const work = store.agent(lead.id).lead!;
+    const repo = work.repos[0];
+    demoSawBranch(demoWorkspace.dir(leadWorktreeId(lead.id, repo.folder)), 'focus/saved-items-next');
+    const { number, url } = await Effect.runPromise(github.createPullRequest(repo.repo, { head: 'focus/saved-items-next', base: first[0].branch, title: 'Saved items, next', body: 'On the first.' }));
+    await agents.boardRefreshed(project.id, [...first, { ...first[0], number, url, title: 'Saved items, next', branch: 'focus/saved-items-next', baseBranch: first[0].branch }]);
+    const tools = claude.turns.find((t) => t.req.agentId === lead.id)!.req.tools!;
+    expect(await tools.waypoint({ prs: [{ repo: repo.repo, number }], on: 1 })).toBe(`Waypoint 2, on waypoint 1: ${repo.repo}#${number}.`);
+    expect(store.agent(lead.id).lead).toMatchObject({ slice: 2, waypoints: [expect.objectContaining({ slice: 1 }), expect.objectContaining({ slice: 2, on: 1 })] });
+
+    for (const pr of first) agents.prClosed(pr.repo, pr.number, true);
+    const after = store.agent(lead.id).lead!;
+    expect(after.slice).toBe(2);
+    expect(after.prs.map((p) => p.number)).toEqual([number]);
+    expect(after.landed?.map((p) => p.slice)).toEqual(first.map(() => 1));
+    expect(after.waypoints?.find((w) => w.slice === 1)?.landedAt).toBeDefined();
+    expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed: /)]);
   });
 
   it('hands a lead mid-turn their notes with the captain’s message into the turn, ahead of it', async () => {

@@ -81,7 +81,7 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/Keep the goal's brief in \.\/brief\.md, at the root of your workspace beside the repos/);
     expect(prompt).not.toContain('mcp__office__note');
     expect(prompt).toMatch(/When what done looks like is met, or nothing worthwhile is left, say so with mcp__office__propose_close/);
-    expect(prompt).toMatch(/You hear when a slice's pull requests have all merged or closed; your checkouts stay as they are/);
+    expect(prompt).toMatch(/You hear when a waypoint's pull requests have all merged or closed; your checkouts stay as they are/);
   });
 
   it('draws the star chart from what the lead does, not from a checklist in the note', () => {
@@ -123,10 +123,10 @@ describe('what the lead writes and hears', () => {
   it('tells the lead when the slice has landed, and that their checkouts stay as they are, without telling them to act on it', () => {
     const landed = { ...work, prs: [work.prs[0], { ...work.prs[1], outcome: 'closed' as const }] };
     // a note, heard with the next message they get: mid-turn or as a turn starts
-    expect(landedNote(landed)).toBe(
+    expect(landedNote(2, landed.prs)).toBe(
       'Slice 2 has landed: acme/web#12 merged, acme/api#7 was closed unmerged. Your checkouts stay as they are: start what\'s next on a fresh branch from the base, since a push to a branch whose pull request merged is refused.',
     );
-    expect(landedNote(landed)).not.toMatch(/Carry on/);
+    expect(landedNote(2, landed.prs)).not.toMatch(/Carry on/);
   });
 
   it('tells a lead whose repos were checked out again where they are, and that unshipped commits stayed behind', () => {
@@ -322,13 +322,17 @@ describe('reopening a closed goal', () => {
       title: 'Saved items', brief: 'Saved items\nAcross devices', note: undefined, repos: work.repos, slice: 2, prs: work.prs.map((p) => ({ ...p, slice: 2 })), reopening: { closedAt },
     });
     // closed before the new slice shipped anything: it's that slice again, with the earlier slices' pull requests kept
-    const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [], landed: everyPr(work) } }, closedAt);
-    expect(reopenedWork(unshipped)).toMatchObject({ slice: 3, prs: [], landed: everyPr(work) });
+    const shipped = { ...work, prs: work.prs.map((p) => ({ ...p, outcome: p.outcome ?? ('closed' as const) })) };
+    const unshipped = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [], landed: everyPr(shipped) } }, closedAt);
+    expect(reopenedWork(unshipped)).toMatchObject({ slice: 3, prs: [], landed: everyPr(shipped) });
     expect(goalRecord({ ...lead, lead: reopenedWork(unshipped) }, closedAt).prs).toEqual(unshipped.prs);
     // closed before goals kept their slice: what it kept is the last slice's
     const old = { ...record, slice: undefined, prs: work.prs };
     expect(reopenedWork(old)).toMatchObject({ slice: 2, prs: work.prs });
     expect(reopenedWork(old).landed).toBeUndefined();
+    // closed with an earlier waypoint still open: it stays open beside the one it was on
+    const ahead = goalRecord({ ...lead, lead: { ...work, slice: 3, prs: [{ ...work.prs[1], slice: 2 }], landed: [{ ...work.prs[0], slice: 1 }] } }, closedAt);
+    expect(reopenedWork(ahead)).toMatchObject({ slice: 3, prs: [{ ...work.prs[1], slice: 2 }], landed: [{ ...work.prs[0], slice: 1 }] });
   });
 
   it('keeps what the lead showed and asked with the closed goal, and brings it back when it reopens', () => {
@@ -403,7 +407,7 @@ describe('a goal’s own QA reviewer', () => {
     expect(goalOf({ repo: 'acme/api', number: 3 }, [developer, lead])).toBeUndefined();
   });
 
-  it('tests a PR beside the other repos’ PRs of the same slice, and nothing else', () => {
+  it('tests a PR beside the other repos’ PRs of the same waypoint, and nothing else', () => {
     const prs = [
       { repo: 'acme/api', number: 7, url: '', sha: 'a1', branch: 'focus/s' },
       { repo: 'acme/web', number: 40, url: '', sha: 'b2', branch: 'focus/s' },
@@ -416,6 +420,10 @@ describe('a goal’s own QA reviewer', () => {
     expect(sliceSiblings({ repo: 'acme/api', number: 7 }, undefined)).toEqual([]);
     const alone = { ...lead, lead: { ...work, prs: [prs[0]] } } as Agent;
     expect(sliceSiblings({ repo: 'acme/api', number: 7 }, alone)).toEqual([]);
+    // another open waypoint's pull request isn't this one's change: it's left out
+    const ahead = { ...lead, lead: { ...work, slice: 3, prs: [{ ...prs[0], slice: 2 }, { ...prs[1], slice: 2 }, prs[2]] } } as Agent;
+    expect(sliceSiblings({ repo: 'acme/api', number: 7 }, ahead).map((p) => `${p.repo}#${p.number}`)).toEqual(['acme/web#40']);
+    expect(sliceSiblings({ repo: 'acme/docs', number: 3 }, ahead)).toEqual([]);
   });
 });
 

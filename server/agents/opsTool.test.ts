@@ -76,6 +76,7 @@ function lent(): OpsTools {
   };
   return {
     recap: said('recap'),
+    waypoint: said('waypoint'),
     show: said('show'),
     ask: said('ask'),
     proposeClose: said('proposeClose'),
@@ -113,7 +114,7 @@ describe('the office tools on agent-host', () => {
   it('are Ops\' own in order, then the plugins\' well-named ones, each described with the JSON Schema of its input', async () => {
     const { host } = await servers();
     const listed = await host.list();
-    expect(listed.map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'merge_when_passed', 'sample']);
+    expect(listed.map((t) => t.name)).toEqual(['recap', 'waypoint', 'show', 'ask', 'propose_close', 'merge_when_passed', 'sample']);
     for (const t of listed) expect(t.description, t.name).not.toBe('');
     expect(listed.find((t) => t.name === 'recap')?.inputSchema).toMatchObject({ type: 'object', required: ['repo', 'number', 'recap'] });
     expect(listed.find((t) => t.name === 'ask')?.inputSchema).toMatchObject({ type: 'object', required: ['question', 'options'] });
@@ -127,7 +128,7 @@ describe('the office tools on agent-host', () => {
   });
 
   it('are all served as office', () => {
-    expect(opsTools(lent()).map((t) => t.server)).toEqual(['office', 'office', 'office', 'office', 'office', 'office']);
+    expect(opsTools(lent()).map((t) => t.server)).toEqual(['office', 'office', 'office', 'office', 'office', 'office', 'office']);
   });
 
   it('answer in words and pictures, with what zod parsed (defaults in, unknown fields out)', async () => {

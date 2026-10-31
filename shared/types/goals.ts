@@ -39,9 +39,11 @@ export interface GoalNote {
 export interface Waypoint {
   /** Which slice: 1, 2, … */
   slice: number;
-  /** When the slice started (the goal opened, or the slice before moved on), and when its last pull request landed. */
+  /** When the slice started (the goal opened, the slice before moved on, or the lead named it), and when its last pull request landed. */
   startedAt: number;
   landedAt?: number;
+  /** The open waypoint it's stacked on, as the lead named it (`waypointRules.ts`): its branches build on that one's. Missing: on the base branch. */
+  on?: number;
   /** What it set out to do: the title it last shipped under. Missing until it ships. */
   title?: string;
   /** What the lead said it was heading for as it started, on goals from when the note tool took a heading: its name until it ships. */
@@ -189,7 +191,7 @@ export interface LeadPr {
   branch?: string;
   /** Missing while it's open. */
   outcome?: 'merged' | 'closed';
-  /** The slice it shipped in. Set once the slice is over (it lands, or the goal closes); missing on goals closed before. */
+  /** The waypoint it's part of: set when the lead names one for it, and once its waypoint lands or the goal closes. Missing while open: the one under way. */
   slice?: number;
   /** How it merges once QA passes it, as last shipped (shared/mergeLaneRules.ts). Missing is Ask. */
   lane?: Lane;
@@ -203,7 +205,8 @@ export interface LeadPr {
 
 /**
  * A goal's lead at work: every repo of the project checked out side by side on the slice's branch, and the pull
- * requests the slice shipped. Once they've all merged or closed, the next slice starts on fresh code.
+ * requests of its open waypoints. Each waypoint lands once its pull requests have all merged or closed; when the one under
+ * way lands, the next starts.
  */
 export interface LeadWork {
   /** The goal in a few words. */
@@ -260,11 +263,11 @@ export interface LeadWork {
    * the goal's filed finishes the close (`Leads.recoverCloses`), so a snapshot never stays on a goal that's still open.
    */
   closeStarted?: { at: number };
-  /** Which slice this is: 1, 2, … */
+  /** Which slice this is, the waypoint under way (the newest): 1, 2, … */
   slice: number;
-  /** This slice's pull requests. */
+  /** The open waypoints' pull requests: this slice's, and any earlier one's that hasn't landed yet. */
   prs: LeadPr[];
-  /** The pull requests of the slices that landed before this one, each with its `slice`, so the closed goal keeps them all. */
+  /** The pull requests of the waypoints that landed, each with its `slice`, so the closed goal keeps them all. */
   landed?: LeadPr[];
   /** Every slice so far as a waypoint on the goal's chart, this one last. Missing on goals started before they were kept. */
   waypoints?: Waypoint[];

@@ -6,6 +6,8 @@ import { INSTALL_STAMP, installable, installCommand, installFailedNote, installS
 import { CommandError, errorMessage, KeyedLock, run, sleep } from '../util';
 import { type MergeHeads, type MergeTrial, mergeTreeConflicts } from '../../shared/mergeCheckRules';
 import { sameCommit } from '../../shared/qa';
+import type { PreviewRef } from '../../shared/types';
+import { pinnedCommit } from './pinnedCommit';
 import { autoMergePlan, conflictStages, type MergeRule, mergeRules } from './conflicts';
 import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retestRules';
 import type { CommandRun } from './qaProofRules';
@@ -197,13 +199,14 @@ function subfolders(dir: string): string[] {
 }
 
 /**
- * Checks a pull request's head (or a branch) out into a preview folder. Preview folders are reused from one preview to
- * the next, so installed dependencies and build output (ignored files) survive. Returns the commit checked out.
+ * Checks a pull request's head (or a branch) out into a preview folder, or the commit `sha` when it's pinned to one.
+ * Preview folders are reused from one preview to the next, so installed dependencies and build output (ignored files)
+ * survive. Returns the commit checked out.
  */
-export function checkoutPreview(repo: string, dir: string, ref: { pr: number } | { branch: string }): Promise<string> {
+export function checkoutPreview(repo: string, dir: string, ref: PreviewRef): Promise<string> {
   // refs/pull/N/head exists for every PR, forks included
   const source = 'pr' in ref ? `refs/pull/${ref.pr}/head` : `refs/heads/${ref.branch}`;
-  return checkoutDetached(repo, dir, source, 'refs/focus/preview');
+  return checkoutDetached(repo, dir, source, 'refs/focus/preview', ref.sha);
 }
 
 /** The default branch's latest commit, detached in `dir`, for agents that only read the code (the planner). */
@@ -211,15 +214,19 @@ export function checkoutLatest(repo: string, dir: string): Promise<string> {
   return checkoutDetached(repo, dir, 'HEAD', 'refs/focus/latest');
 }
 
-/** Fetches `source` from origin into the mirror's `localRef` and checks it out, detached, in a reusable folder. */
-function checkoutDetached(repo: string, dir: string, source: string, localRef: string): Promise<string> {
+/**
+ * Fetches `source` from origin into the mirror's `localRef` and checks it out, detached, in a reusable folder; or `pin`,
+ * fetched on its own when the branch has moved on from it (GitHub serves a commit a branch no longer reaches until it's
+ * collected). One gone from GitHub too fails, saying so: a restack rewrote the branch.
+ */
+function checkoutDetached(repo: string, dir: string, source: string, localRef: string, pin?: string): Promise<string> {
   const mirror = mirrorDir(repo);
   return lock.with(repo, async () => {
     await ensureMirror(repo);
     const base = await defaultBranch(mirror);
     await git(mirror, ['fetch', 'origin', `+${source}:${localRef}`, ...(base ? [`+refs/heads/${base}:refs/remotes/origin/${base}`] : [])], 10 * 60_000);
     if (base) await followOrigin(mirror, base, mirror);
-    const sha = (await git(mirror, ['rev-parse', localRef])).trim();
+    const sha = pin ? await pinnedCommit(repo, mirror, pin) : (await git(mirror, ['rev-parse', localRef])).trim();
     await detachAt(mirror, dir, sha);
     return sha;
   });

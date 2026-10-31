@@ -708,7 +708,7 @@ const shortName = (repo: string) => repo.split('/')[1] ?? repo;
 const refName = (ref: PreviewRef) => ('pr' in ref ? `PR #${ref.pr}` : ref.branch);
 
 /** "▸ web: PR #12 @ 1a2b3c4" or "▸ api: main @ 5d6e7f8". */
-const checkoutLine = (repo: string, ref: PreviewRef, sha: string) => `▸ ${shortName(repo)}: ${refName(ref)} @ ${sha.slice(0, 7)}`;
+const checkoutLine = (repo: string, ref: PreviewRef, sha: string) => `▸ ${shortName(repo)}: ${refName(ref)} @ ${sha.slice(0, 7)}${ref.sha ? ' (pinned)' : ''}`;
 
 /** Finds the repo a {dir:<name>} placeholder means, by owner/name or just name. */
 function resolveRepo(name: string, repos: string[]): string | BadDirPlaceholder {

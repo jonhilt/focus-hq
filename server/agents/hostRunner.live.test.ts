@@ -94,6 +94,7 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
       resumeSessionId,
       tools: {
         recap: async () => 'recapped',
+        waypoint: async () => 'named',
         show: async (input) => (shown.push(input.title), 'Shown on your screen.'),
         ask: async () => 'asked',
         proposeClose: async () => 'proposed',

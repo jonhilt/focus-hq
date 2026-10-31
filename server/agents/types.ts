@@ -8,6 +8,7 @@ import type { CommandRun } from './qaProofRules';
 import type { PackageFacts } from '../packageManager';
 import type { BackgroundEvent } from './backgroundTasks';
 import type { RecapInput } from './recap';
+import type { WaypointInput } from './waypointRules';
 import type { Answers, AskedQuestion } from './questions';
 
 /** What Claude Code says about a subagent the session started: started, busy with something, finished. */
@@ -131,6 +132,8 @@ export interface ToolReply {
 export interface OpsTools {
   /** Puts a recap on one of the goal's open pull requests, which sets its lane. Throws, in words, when it's refused. */
   recap(input: RecapInput): Promise<string>;
+  /** Names a waypoint: which of the goal's open pull requests make it, and the one it's stacked on. Throws, in words, when it's refused. */
+  waypoint(input: WaypointInput): Promise<string>;
   /** Puts a visual on the lead's station's screen, or replaces the one with that id. Throws, in words, when it's refused. */
   show(input: ArtifactInput): Promise<string>;
   /** Puts a question to the captain with visual options, on the lead's station's screen. Their pick comes back as a message. */

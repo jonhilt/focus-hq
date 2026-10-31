@@ -4,14 +4,15 @@ import { prKey } from '../../../shared/qa';
 import { autoQaFor } from '../../../shared/qaRules';
 import type { Agent, LeadPr, PrReview, PullRequest, ReviewComment } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
-import { everyPr, landedNote, leadWorktreeId, sliceLanded } from '../lead';
+import { landedNote, leadWorktreeId } from '../lead';
 import { hasLeadWork } from '../leadRules';
 import { claims, filedClaims, readyPrs, retestAfterTurn, reviewNote, type SeenBranches, unheardReviews } from '../prRules';
 import { writeRefused } from '../pushGuard';
 import { diffFiles, type RecapInput, recapLane, recapMarkdown, recapPage, recapProblems, type SliceRecap, withRecap } from '../recap';
 import { backedMap, MAX_FILES, primitivesToRead, SOURCE } from '../recapImports';
 import { type Renderer, Workspace } from '../services';
-import { nextWaypoints, shippedWaypoint } from '../waypoints';
+import { shippedWaypoint } from '../waypoints';
+import { landing, named, type WaypointInput, waypointFor } from '../waypointRules';
 import { Part, Refused } from './core';
 
 /**
@@ -55,22 +56,40 @@ export class GoalPrs extends Part {
     }
   }
 
-  /** The lead's pull request was merged or closed. Once the slice's have all landed, the goal moves on to its next slice and the lead hears about it. */
+  /**
+   * The lead's pull request was merged or closed. Once its waypoint's have all landed, the waypoint lands whole
+   * (`landing`) and the lead hears about it; when that was the one under way, the goal moves on to its next.
+   */
   landed(repo: string, number: number, merged: boolean): boolean {
     const lead = this.ownerOf(repo, number);
     if (!lead?.lead) return false;
-    const prs = lead.lead.prs.map((p) => (p.repo === repo && p.number === number ? { ...p, outcome: merged ? ('merged' as const) : ('closed' as const) } : p));
-    const work = { ...lead.lead, prs };
-    // every pull request of the slice in: the goal moves on to its next slice there and then, its checkouts as they are
-    const landed = sliceLanded(prs);
-    this.update(lead, { lead: landed ? { ...work, slice: work.slice + 1, prs: [], landed: everyPr(work), waypoints: nextWaypoints(work, Date.now()) } : work });
+    // its checkouts stay as they are, whatever lands
+    const next = landing(lead.lead, repo, number, merged, Date.now());
+    this.update(lead, { lead: { ...lead.lead, ...next.work } });
     if (merged) this.guardPushes(lead.id);
     this.print(lead, [{ kind: merged ? 'success' : 'system', text: `${merged ? '🎉' : '✻'} ${repo}#${number} was ${merged ? 'merged' : 'closed'}` }]);
-    if (landed) {
-      this.core.ledger.digestSession(lead, prs.map((p) => ({ repo: p.repo, pr: p.number })));
-      this.core.leads.noteForLead(lead, 'Ops', landedNote(work), { kind: 'slice-landed', slice: work.slice });
+    if (next.kind === 'landed') {
+      this.core.ledger.digestSession(lead, next.prs.map((p) => ({ repo: p.repo, pr: p.number })));
+      this.core.leads.noteForLead(lead, 'Ops', landedNote(next.waypoint, next.prs), { kind: 'slice-landed', slice: next.waypoint });
     }
     return true;
+  }
+
+  /**
+   * The lead names a waypoint (`named`): which of the goal's open pull requests make it, and the open waypoint it's
+   * stacked on. Kept with the goal and drawn on its chart; refused, in words, when it doesn't fit the goal's waypoints.
+   */
+  waypoint(agent: Agent, input: WaypointInput): Effect.Effect<string, Refused> {
+    return Effect.gen({ self: this }, function* () {
+      const lead = this.store.agent(agent.id);
+      if (!hasLeadWork(lead)) return yield* new Refused({ message: 'There’s no goal under way here' });
+      const next = named(lead.lead, input, Date.now());
+      if (next.kind === 'refused') return yield* new Refused({ message: next.why });
+      this.update(lead, { lead: { ...lead.lead, ...next.work } });
+      this.print(lead, [{ kind: 'system', text: `✻ ${next.said}` }]);
+      this.boardChanged(lead.projectId);
+      return next.said;
+    });
   }
 
   /**
@@ -197,7 +216,7 @@ export class GoalPrs extends Part {
       if (!lead?.lead) continue;
       this.core.ledger.record(projectId, { kind: 'pr-ready', repo: pr.repo, pr: pr.number, goal: lead.lead.title, lead: lead.id, agent: lead.name, branch: pr.branch });
       // the chart's waypoint for the slice takes what it set out to do from the first of its pull requests to go out
-      this.update(lead, { lead: { ...lead.lead, waypoints: shippedWaypoint(lead.lead, { title: pr.title, summary: '' }, Date.now()) } });
+      this.update(lead, { lead: { ...lead.lead, waypoints: shippedWaypoint(lead.lead, { title: pr.title, summary: '' }, Date.now(), waypointFor(lead.lead, pr.repo, pr.number)) } });
     }
     if (claimed.length) this.boardChanged(projectId);
   }

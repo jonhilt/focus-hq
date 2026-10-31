@@ -11,6 +11,7 @@ import { closeCheck, hasLeadWork, queuedStart, reopenable, verdictStands, verdic
 import { contactToSpinOff, spunOff, spunOffIdea, spunOffIdeaNote } from '../contacts';
 import { Workspace } from '../services';
 import { EVIDENCE_PER_PR, evidenceFile, shieldedWaypoint, tickedSpotCheck } from '../waypoints';
+import { waypointFor } from '../waypointRules';
 import type { LeadNews } from '../../plugins/contract';
 import { type ManagerServices, Part, Refused, type WorkError } from './core';
 import { FINISHED } from './sessionRules';
@@ -290,7 +291,7 @@ export class Leads extends Part {
         evidence.push({ repo, pr: number, caption: shot.caption, file });
       }
       const work = this.store.agent(lead.id).lead ?? lead.lead;
-      this.update(lead, { lead: { ...work, waypoints: shieldedWaypoint(work, { repo, pr: number, report, failedRounds, ci, evidence }, Date.now()) } });
+      this.update(lead, { lead: { ...work, waypoints: shieldedWaypoint(work, { repo, pr: number, report, failedRounds, ci, evidence }, Date.now(), waypointFor(work, repo, number)) } });
     });
   }
 

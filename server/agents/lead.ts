@@ -10,6 +10,7 @@ import { proofsToKeep } from './qaProof';
 import { BRIEF_FILE, briefForPrompt } from './briefFile';
 import { probedWaypoints, taskedWaypoint } from './waypoints';
 import { QUESTION_LIMITS } from './leadRules';
+import { splitLanded, waypointOf } from './waypointRules';
 
 /** The lead's checkout of one repo: a folder inside their workspace. */
 export const leadWorktreeId = (agentId: string, folder: string) => `${agentId}/${folder}`;
@@ -145,8 +146,7 @@ export function goalRecord(agent: LeadAgent, now: number): GoalRecord {
 export function reopenedWork(goal: GoalRecord): LeadWork {
   // goals closed before they kept their slice kept only that slice's pull requests
   const slice = goal.slice ?? (goal.prs.length ? goal.slices : goal.slices + 1);
-  const current = goal.slice === undefined ? goal.prs : goal.prs.filter((p) => p.slice === slice);
-  const landed = goal.slice === undefined ? [] : goal.prs.filter((p) => p.slice !== slice);
+  const { open: current, landed } = goal.slice === undefined ? { open: goal.prs, landed: [] } : splitLanded(goal.prs, slice);
   return {
     title: goal.title, brief: goal.brief, ...(goal.briefMd !== undefined && { briefMd: goal.briefMd }), ...(goal.shaping && { shaping: true }), note: goal.note, repos: goal.repos ?? [], slice, prs: current,
     ...(landed.length && { landed }), reopening: { closedAt: goal.closedAt },
@@ -198,11 +198,15 @@ export function workspaceNote(work: LeadWork, branch: string): string {
 export const goalReviewerId = (leadId: string) => `qa_${leadId}`;
 
 /**
- * The other pull requests of the slice `pr` belongs to, one per repo, which QA checks out beside it to test the slice's
+ * The other pull requests of the waypoint `pr` belongs to, one per repo, which QA checks out beside it to test the slice's
  * change across repos as one. None when no goal shipped it, or its slice touched no other repo.
  */
-export const sliceSiblings = (pr: Pick<QaReview, 'repo' | 'number'>, goal: Agent | undefined): LeadPr[] =>
-  goal?.lead?.prs.some((p) => p.repo === pr.repo && p.number === pr.number) ? goal.lead.prs.filter((p) => p.repo !== pr.repo) : [];
+export function sliceSiblings(pr: Pick<QaReview, 'repo' | 'number'>, goal: Agent | undefined): LeadPr[] {
+  const work = goal?.lead;
+  const held = work?.prs.find((p) => p.repo === pr.repo && p.number === pr.number);
+  if (!work || !held) return [];
+  return work.prs.filter((p) => p.repo !== pr.repo && waypointOf(p, work) === waypointOf(held, work));
+}
 
 /** The goal whose lead shipped this pull request, if one did: its own reviewer reviews it. */
 export const goalOf = (review: Pick<QaReview, 'repo' | 'number'>, leads: Agent[]): Agent | undefined =>
@@ -262,17 +266,17 @@ export function conflictsResolvedNote(pr: { repo: string; number: number; baseBr
 }
 
 /** The slice's pull requests, each merged or closed unmerged. */
-function landedPrs(work: LeadWork): string {
-  return work.prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
+function landedPrs(prs: LeadPr[]): string {
+  return prs.map((p) => `${p.repo}#${p.number} ${p.outcome === 'merged' ? 'merged' : 'was closed unmerged'}`).join(', ');
 }
 
 /**
  * The slice's pull requests have all merged or closed, as a note for the lead: heard with the next message they get,
  * mid-turn or as a turn starts, so it says what landed and where their checkouts stand rather than what to do next.
  */
-export function landedNote(work: LeadWork): string {
+export function landedNote(waypoint: number, prs: LeadPr[]): string {
   return [
-    `Slice ${work.slice} has landed: ${landedPrs(work)}.`,
+    `Slice ${waypoint} has landed: ${landedPrs(prs)}.`,
     `Your checkouts stay as they are: start what's next on a fresh branch from the base, since a push to a branch whose pull request merged is refused.`,
   ].join(' ');
 }

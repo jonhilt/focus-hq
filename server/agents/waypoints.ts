@@ -39,10 +39,10 @@ export function opening(markdown: string, max: number = WAYPOINT_LIMITS.summary)
  * is the title and opening that pull request first went out with (pushing again, to fix what QA found, say, updates its
  * code but not what it says).
  */
-export function shippedWaypoint(work: Course, input: { title: string; summary: string }, now: number): Waypoint[] {
+export function shippedWaypoint(work: Course, input: { title: string; summary: string }, now: number, slice = work.slice): Waypoint[] {
   const title = input.title.replace(/\s+/g, ' ').trim();
   const summary = opening(input.summary);
-  return withWaypoint(work, now, (w) => ({ ...w, ...(!w.title && title && { title }), ...(!w.summary && summary && { summary }) }));
+  return withWaypoint(work, now, (w) => ({ ...w, ...(!w.title && title && { title }), ...(!w.summary && summary && { summary }) }), slice);
 }
 
 /**
@@ -96,7 +96,7 @@ const sameSpot = (a: SpotCheck, b: Omit<SpotCheck, 'checked'>) => a.repo === b.r
  * The waypoints once QA gives its verdict on one of the slice's pull requests: its shield is that verdict (replacing the
  * last round's), and its spot-checks are this round's picks, keeping the tick on any the captain has already looked at.
  */
-export function shieldedWaypoint(work: Course, v: Verdict, now: number): Waypoint[] {
+export function shieldedWaypoint(work: Course, v: Verdict, now: number, slice = work.slice): Waypoint[] {
   const checks = { pass: 0, fail: 0, skip: 0 };
   for (const c of v.report.checks) checks[c.result]++;
   const failing = v.report.checks.filter((c) => c.result === 'fail').map((c) => c.name).filter(Boolean);
@@ -115,7 +115,7 @@ export function shieldedWaypoint(work: Course, v: Verdict, now: number): Waypoin
       ...(spotChecks.length && { spotChecks }),
       ...(evidence.length && { evidence }),
     };
-  });
+  }, slice);
 }
 
 /** The waypoints once the captain ticks off (or un-ticks) the `index`th spot-check of `slice`'s, or why not. */

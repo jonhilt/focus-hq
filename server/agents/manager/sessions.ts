@@ -254,7 +254,7 @@ export class AgentSessions extends Part {
     const tool = <A>(effect: Effect.Effect<A, WorkError, ManagerServices>) => this.runtime.runPromise(effect);
     return {
       brief: { edited: () => this.background(this.core.goalTools.readBrief(agent.id)), afterCompact: () => this.core.goalTools.afterCompact(agent.id) },
-      tools: { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), mergeWhenPassed: (input) => tool(this.core.goalPrs.mergeWhenPassed(agent, input.repo, input.number)), extra: this.leadTools(agent, cwd) },
+      tools: { recap: (input) => tool(this.core.goalPrs.recap(agent, input)), waypoint: (input) => tool(this.core.goalPrs.waypoint(agent, input)), show: (input) => tool(this.core.goalTools.showArtifact(agent, input)), ask: (input) => tool(this.core.goalTools.askCaptain(agent, input)), proposeClose: (input) => tool(this.core.goalTools.proposeClose(agent, input.reason)), mergeWhenPassed: (input) => tool(this.core.goalPrs.mergeWhenPassed(agent, input.repo, input.number)), extra: this.leadTools(agent, cwd) },
     };
   }
 

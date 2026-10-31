@@ -49,7 +49,8 @@ export interface PreviewLogFile {
 /** Which pull request each repository of a project runs in a preview: its number, or null for the default branch. */
 export type PreviewSet = Record<string, number | null>;
 
-export type PreviewRef = { pr: number } | { branch: string };
+/** A pull request's head or a branch, pinned to `sha` when given (a waypoint's commit, which its branch may have moved on from). */
+export type PreviewRef = ({ pr: number } | { branch: string }) & { sha?: string };
 
 /** One repository a preview checked out (or is about to). */
 export interface PreviewCheckout {

@@ -264,7 +264,7 @@ describe('a goal’s lead, under Focus’s rule for a restart', () => {
     const extras = after.agents.sessionExtras(started.agent.id);
     expect(extras?.cwd).toBeTruthy();
     expect(extras?.brief?.afterCompact()).toContain('Saved items');
-    expect(Object.keys(extras?.tools ?? {})).toEqual(['recap', 'show', 'ask', 'proposeClose', 'mergeWhenPassed', 'extra']);
+    expect(Object.keys(extras?.tools ?? {})).toEqual(['recap', 'waypoint', 'show', 'ask', 'proposeClose', 'mergeWhenPassed', 'extra']);
     expect(after.agents.sessionExtras('nobody')).toBeUndefined();
     after.agents.shutDown();
   });
