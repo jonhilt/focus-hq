@@ -102,7 +102,9 @@ async function main() {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.domElement.className = 'world';
-  document.getElementById('app')!.append(renderer.domElement);
+  const app = document.getElementById('app');
+  if (!app) throw new Error('The page has no #app to draw the ship into');
+  app.append(renderer.domElement);
 
   const scene = new THREE.Scene();
   const background = new THREE.Color('#9ad7ff');

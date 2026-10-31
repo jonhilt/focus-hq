@@ -45,7 +45,8 @@ export class TransporterFeeds {
       this.station = station;
       if (station) this.watch(station, world);
     }
-    if (!station) return;
+    const targets = station && this.targets.get(station);
+    if (!station || !targets) return;
     this.view.setFromProjectionMatrix(this.viewMatrix.multiplyMatrices(viewer.projectionMatrix, viewer.matrixWorldInverse));
     const inView = (i: number) => {
       const screen = station.feedScreen(i);
@@ -67,7 +68,7 @@ export class TransporterFeeds {
       world.reveal(room.camera.at);
       // the monitors show the platform, not what hangs over the console for whoever's in the room
       room.offFeed.visible = false;
-      this.frame.render(scene, cam, this.targets.get(station)![i]);
+      this.frame.render(scene, cam, targets[i]);
       room.offFeed.visible = true;
       this.renderer.setRenderTarget(null);
       return;

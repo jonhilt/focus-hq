@@ -7,7 +7,11 @@ import { home, type HomeContext, prCardId, projectKey } from './home';
 
 // The Tricorder: Focus on a phone, at /tricorder. No three.js and nothing from world/, so it stays small.
 
-const app = document.getElementById('app')!;
+const app = ((): HTMLElement => {
+  const el = document.getElementById('app');
+  if (!el) throw new Error('The page has no #app to show the Tricorder in');
+  return el;
+})();
 
 const agentInHash = () => {
   const m = /^#agent\/(.+)$/.exec(location.hash);

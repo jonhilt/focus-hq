@@ -87,6 +87,11 @@ export interface StationSeat {
   view?: CrewView;
 }
 
+/** Whether someone sits in `seat`, so the goal board's roster has them. */
+function isSeated(seat: StationSeat): seat is StationSeat & { view: CrewView } {
+  return seat.view !== undefined;
+}
+
 /** A seat marker faces along its forward (-Z); a Character faces +X. */
 const CHARACTER_TURN = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
 
@@ -327,9 +332,10 @@ export class GoalStation {
   /** The pictures the feeds draw each room into (TransporterFeeds), for the monitors of the rooms in use to show. */
   showFeeds(pictures: THREE.Texture[]): void {
     for (const mat of this.live ?? []) mat.dispose();
-    this.live = pictures.map((map) => new THREE.MeshBasicMaterial({ map }));
+    const live = pictures.map((map) => new THREE.MeshBasicMaterial({ map }));
+    this.live = live;
     this.feeds.forEach((feed, i) => {
-      if (this.feedLive(i)) feed.picture.material = this.live![i];
+      if (this.feedLive(i)) feed.picture.material = live[i];
     });
   }
 
@@ -486,9 +492,10 @@ export class GoalStation {
    * project's `goals`; none while there are no goals.
    */
   show(lead: Agent | undefined, goals: number, at: number, prs?: StationView['prs']): void {
-    const seated = (s: StationSeat) => (s.view ? s : undefined);
-    this.crew = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
-    const crew = this.crew.map(({ who, role }) => ({ who: who.view!, role: role === 'Helper' ? (who.view!.tag ?? role) : role }));
+    const seated = (s: StationSeat) => (isSeated(s) ? s : undefined);
+    const seats = roster(seated(this.lead), seated(this.reviewer), this.helpers.map(seated));
+    this.crew = seats;
+    const crew = seats.map(({ who, role }) => ({ who: who.view, role: role === 'Helper' ? (who.view.tag ?? role) : role }));
     const view: StationView = { goals, at, accent: this.accent, lead, crew, prs, whose: lead && whoseMove(lead, prs, Date.now()) };
     this.view = view;
     this.sign.show(view);

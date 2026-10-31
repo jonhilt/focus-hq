@@ -99,13 +99,15 @@ export class TermView {
     const part = replyPart(line);
     const last = this.reply && this.el.lastElementChild === this.reply.el ? this.reply : null;
     if (part && (part.start || last)) {
-      if (part.start || !last) {
-        this.reply = { el: h('div', { class: 'text md' }), source: part.text };
-        this.el.append(this.reply.el);
+      let reply = last;
+      if (part.start || !reply) {
+        reply = { el: h('div', { class: 'text md' }), source: part.text };
+        this.reply = reply;
+        this.el.append(reply.el);
       } else {
-        last.source += `\n${part.text}`;
+        reply.source += `\n${part.text}`;
       }
-      changed.add(this.reply!);
+      changed.add(reply);
     } else if (saysLine(line) || (!line.text.trim() && this.el.lastElementChild !== this.fold?.el)) {
       // a blank line doesn't start a fold of its own
       this.el.append(sentLine(line) ? sentEl(line.text, `sent:${t}`, this.open) : h('div', { class: lineClass(line) }, line.text || ' '));

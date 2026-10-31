@@ -50,9 +50,10 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
   };
   const resized = new ResizeObserver((entries) => entries.forEach((e) => fit(e.target)));
   // its own origin (no allow-same-origin): its scripts run, but can't reach Focus
-  const stage = (url: string, title: string, cls = '') => {
-    const el = h('div', { class: `artifact-stage${cls}` },
-      h('iframe', { src: url, title, style: `width:${ARTIFACT_SIZE.w}px;height:${ARTIFACT_SIZE.h}px`, attrs: { sandbox: 'allow-scripts allow-popups' } }));
+  const frameOf = (url: string, title: string) =>
+    h('iframe', { src: url, title, style: `width:${ARTIFACT_SIZE.w}px;height:${ARTIFACT_SIZE.h}px`, attrs: { sandbox: 'allow-scripts allow-popups' } });
+  const stage = (frame: HTMLIFrameElement, cls = '') => {
+    const el = h('div', { class: `artifact-stage${cls}` }, frame);
     // on hover, a button to fill the screen with it (Esc comes back); the fit follows it there, since its box resizes
     el.append(h('button', { class: 'stage-full', title: 'Fill the screen with it (Esc to come back)', onclick: () => toggleFull(el) }, 'Full screen'));
     resized.observe(el);
@@ -64,7 +65,8 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     else el.requestFullscreen().catch((e: Error) => ui.error(e.message));
   };
   const open = () => (live ? unanswered(questions()) : undefined);
-  let picked = open() ? asked(open()!) : latestArtifact(artifacts())?.id ?? '';
+  const openNow = open();
+  let picked = openNow ? asked(openNow) : latestArtifact(artifacts())?.id ?? '';
   // what's on show, so a new version (or your answer) redraws it and anything else leaves it be
   let shown = '';
   const nav = new SideNav<string>((key) => {
@@ -104,7 +106,7 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
     const cards = q.options.map((o) => {
       const chosen = answer?.option === o.id;
       return h('div', { class: `question-option${chosen ? ' picked' : ''}${answer && !chosen ? ' passed' : ''}` },
-        stage(optionUrl(leadId, q, o.id, 'html'), o.label, ' option'),
+        stage(frameOf(optionUrl(leadId, q, o.id, 'html'), o.label), ' option'),
         h('div', { class: 'option-side' },
           h('b', null, `${o.id.toUpperCase()} · ${o.label}`),
           o.detail ? h('p', null, o.detail) : null,
@@ -176,8 +178,9 @@ function openShown(ui: Ui, title: string, shownBy: { leadId: string; artifacts: 
       body.replaceChildren(...questionView(question));
     } else if (artifact) {
       const url = artifactUrl(leadId, artifact, 'html');
-      const shownHere = stage(url, artifact.title);
-      parts = screenParts({ ui, leadId, artifact, frame: shownHere.querySelector('iframe')!, live }, before);
+      const frame = frameOf(url, artifact.title);
+      const shownHere = stage(frame);
+      parts = screenParts({ ui, leadId, artifact, frame, live }, before);
       body.replaceChildren(
         h('div', { class: 'row artifact-head' },
           h('h3', { class: 'grow' }, artifact.title),

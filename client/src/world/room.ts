@@ -433,7 +433,7 @@ export class ProjectRoom {
         }
         continue;
       }
-      if (slot.agentId !== agent.id) {
+      if (slot.agentId !== agent.id || !slot.character) {
         if (slot.character) this.leave(slot.seat, slot.character);
         slot.character = new Character(agentView(agent));
         this.arrive(slot.seat, slot.character);
@@ -441,7 +441,7 @@ export class ProjectRoom {
         interactive(slot.character.group, { kind: 'agent', id: agent.id }, () => `Talk to ${agent.name} (#${agent.issue.number})`);
         interactive(slot.station, { kind: 'agent', id: agent.id }, () => this.deskLabel(slot));
       }
-      slot.character!.set(agentView(agent));
+      slot.character.set(agentView(agent));
       slot.screen.setAgent(agent);
     }
     this.syncStation();
@@ -641,13 +641,13 @@ export class ProjectRoom {
     this.qaScreen.maybeDraw(now, hallView(inRoom && qaDist < 6), qaAgent && state.lines.get(qaAgent.id), qaAgent && state.browser.get(qaAgent.id));
     this.updateStation(t, now, camera, inRoom && !briefing);
     for (const slot of this.desks) {
-      if (!slot.character) {
+      if (!slot.character || !slot.agentId) {
         slot.screen.maybeDraw(now, hallView(false), undefined, undefined);
         continue;
       }
       const dist = eye.distanceTo(slot.character.group.getWorldPosition(tmp));
       if (inRoom) slot.character.update(t, dist);
-      slot.screen.maybeDraw(now, hallView(inRoom && dist < 6), state.lines.get(slot.agentId!), state.browser.get(slot.agentId!));
+      slot.screen.maybeDraw(now, hallView(inRoom && dist < 6), state.lines.get(slot.agentId), state.browser.get(slot.agentId));
     }
   }
 

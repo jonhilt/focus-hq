@@ -13,7 +13,9 @@ export function makeCanvas(w: number, h: number): { canvas: HTMLCanvasElement; c
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  return { canvas, ctx: canvas.getContext('2d', canvasTest.software ? { willReadFrequently: true } : undefined)! };
+  const ctx = canvas.getContext('2d', canvasTest.software ? { willReadFrequently: true } : undefined);
+  if (!ctx) throw new Error('A new canvas gave no 2D context');
+  return { canvas, ctx };
 }
 
 export function canvasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {

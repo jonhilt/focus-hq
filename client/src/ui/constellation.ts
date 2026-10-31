@@ -303,8 +303,8 @@ export function sky(plot: CoursePlot, workOf: (slice: number) => WorkNode[], foc
     const after = plot.points[i + 1] ?? (plot.projected.length ? plot.objective : undefined);
     return [toward(p, before), ...(after ? [toward(p, after)] : [])];
   };
-  const at = plot.points.findIndex((p) => p.waypoint.slice === focus);
-  const placed = at < 0 ? undefined : column(plot.points[at], workOf(focus!), { px, avoid: avoid.filter((b) => !overlaps(b, square(plot.points[at], 1))), lines, course: ways(at), width: plot.width, height: plot.height });
+  const at = focus === undefined ? -1 : plot.points.findIndex((p) => p.waypoint.slice === focus);
+  const placed = at < 0 || focus === undefined ? undefined : column(plot.points[at], workOf(focus), { px, avoid: avoid.filter((b) => !overlaps(b, square(plot.points[at], 1))), lines, course: ways(at), width: plot.width, height: plot.height });
   const taken = [...avoid, ...(placed ? [...placed.nodes.map((p) => square(p, ORBIT.focus.mark * px)), ...placed.nodes.map((p) => labelBox(p.label, p.name, ORBIT.focus.size * px))] : [])];
   const quietOnes = new Map<number, Quiet>();
   for (const [i, p] of plot.points.entries()) {
@@ -326,5 +326,5 @@ export function sky(plot: CoursePlot, workOf: (slice: number) => WorkNode[], foc
   const own = at < 0 ? undefined : plot.points[at];
   const name = own?.label && labelBox(own.label, own.lines, nameSize);
   const bounds = placed && name ? { x0: Math.min(placed.bounds.x0, name.x0), y0: Math.min(placed.bounds.y0, name.y0), x1: Math.max(placed.bounds.x1, name.x1), y1: Math.max(placed.bounds.y1, name.y1) } : placed?.bounds;
-  return { ...(placed && bounds && { column: { ...placed, bounds, slice: focus! } }), quiet: quietOnes };
+  return { ...(placed && bounds && focus !== undefined && { column: { ...placed, bounds, slice: focus } }), quiet: quietOnes };
 }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { boundsOf } from './boundsOf';
 import { isMesh } from './isMesh';
 
 /**
@@ -130,8 +131,7 @@ export function mergeStatic(root: THREE.Object3D, keep: Iterable<THREE.Object3D>
     if (kept.has(o) || used(o) || !o.visible) return;
     if (isMesh(o) && !(o instanceof THREE.SkinnedMesh) && !(o instanceof THREE.InstancedMesh) && !Array.isArray(o.material)) {
       const mesh = o;
-      if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-      box.copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld).applyMatrix4(toRoot).getCenter(centre);
+      box.copy(boundsOf(mesh.geometry)).applyMatrix4(mesh.matrixWorld).applyMatrix4(toRoot).getCenter(centre);
       const key = mergeKey(mesh, centre);
       const group = groups.get(key);
       if (group) group.push(mesh);

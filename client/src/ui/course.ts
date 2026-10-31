@@ -583,8 +583,9 @@ export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: Reado
     const from = plot.points.find((p) => p.waypoint.slice === w.slice);
     if (!from) return [];
     return (w.probes ?? []).flatMap((probe, k) => {
-      const phase = probe.endedAt ? 'transmitting' : 'out';
-      if (phase === 'out' ? !out.has(probe.id) : now - probe.endedAt! > TRANSMIT_MS) return [];
+      const ended = probe.endedAt;
+      const phase = ended ? 'transmitting' : 'out';
+      if (ended ? now - ended > TRANSMIT_MS : !out.has(probe.id)) return [];
       // a waypoint's probes fan out either side of the way ahead, each a little wider than the pair before, so ones
       // launched together part company
       const ahead = Math.atan2(plot.objective.y - from.y, plot.objective.x - from.x);
@@ -594,7 +595,7 @@ export function probeFlights(plot: CoursePlot, waypoints: Waypoint[], out: Reado
       const d = 40 + (PROBE_REACH[kind] - 40) * (1 - Math.exp(-flown / PROBE_PACE[kind]));
       const x = Math.max(pad / 2, Math.min(width - pad / 2, from.x + Math.cos(angle) * d));
       const y = Math.max(pad / 2, Math.min(height - pad / 2, from.y + Math.sin(angle) * d));
-      const sent = phase === 'out' ? 0 : Math.min(1, (now - probe.endedAt!) / TRANSMIT_MS);
+      const sent = ended ? Math.min(1, (now - ended) / TRANSMIT_MS) : 0;
       const label = clear(x < width - 260 * scale ? { x: x + 16, y: y - 8, anchor: 'start' } : { x: x - 16, y: y - 8, anchor: 'end' });
       return [{ x, y, probe, slice: w.slice, from: { x: from.x, y: from.y }, angle, phase, sent, label }];
     });

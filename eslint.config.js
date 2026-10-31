@@ -89,8 +89,9 @@ export default tseslint.config(
     },
   },
   {
-    // A wrong `x!` in Focus's server is a crash mid-run; say what's missing instead (tests may still assert).
-    files: ['shared/**/*.ts', 'server/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts'],
+    // A wrong `x!` is a crash mid-run in the server, or mid-frame in the page; say what's missing instead (tests may
+    // still assert).
+    files: ['shared/**/*.ts', 'server/**/*.ts', 'client/src/**/*.ts', 'plugins/**/*.ts', 'plugin-api/**/*.ts'],
     ignores: ['**/*.test.ts'],
     rules: {
       '@typescript-eslint/no-non-null-assertion': 'error',

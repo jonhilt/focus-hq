@@ -106,11 +106,8 @@ class Probe {
   private readonly label = new Label(0.7);
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly materials: THREE.Material[] = [];
-  /** The cube's glass and outline. */
-  private readonly hologram?: Hologram;
-  /** The dish's glass, and its rim, feed and tip, which glow in its tone. */
-  private readonly glass?: THREE.MeshBasicMaterial;
-  private readonly glow?: THREE.MeshBasicMaterial;
+  /** The cube's glass and outline, or the dish's glass and the glow of its rim, feed and tip, in its tone. */
+  private readonly look: { hologram: Hologram } | { glass: THREE.MeshBasicMaterial; glow: THREE.MeshBasicMaterial };
   private readonly tone = new THREE.Color();
   /** 0 gone, 1 there: rises as it shimmers in, falls once its task has gone. */
   private presence = 0;
@@ -122,27 +119,29 @@ class Probe {
     this.task = task;
     this.group.add(this.body);
     if (task.kind === 'shell') {
-      this.hologram = new Hologram(terminalTexture(), 1);
-      this.materials.push(this.hologram.material);
-      const cube = this.mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), this.hologram.material);
+      const hologram = new Hologram(terminalTexture(), 1);
+      this.look = { hologram };
+      this.materials.push(hologram.material);
+      const cube = this.mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), hologram.material);
       cube.rotation.x = 0.35;
       this.body.add(cube);
     } else {
-      this.glass = new THREE.MeshBasicMaterial({ color: '#0a2348', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
-      this.glow = new THREE.MeshBasicMaterial({ color: TONE.running, transparent: true, depthWrite: false, toneMapped: false });
-      this.materials.push(this.glass, this.glow);
+      const glass = new THREE.MeshBasicMaterial({ color: '#0a2348', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false, toneMapped: false });
+      const glow = new THREE.MeshBasicMaterial({ color: TONE.running, transparent: true, depthWrite: false, toneMapped: false });
+      this.look = { glass, glow };
+      this.materials.push(glass, glow);
       // a shallow bowl opening along +X, its rim and a feed arm out to a glowing tip at its focus
       const cap = 0.75;
       const r = 0.15;
-      const dish = this.mesh(new THREE.SphereGeometry(r, 20, 6, 0, Math.PI * 2, Math.PI - cap, cap), this.glass);
+      const dish = this.mesh(new THREE.SphereGeometry(r, 20, 6, 0, Math.PI * 2, Math.PI - cap, cap), glass);
       dish.rotation.z = -Math.PI / 2;
       dish.position.x = r * Math.cos(cap);
-      const rim = this.mesh(new THREE.TorusGeometry(r * Math.sin(cap), 0.007, 6, 28), this.glow);
+      const rim = this.mesh(new THREE.TorusGeometry(r * Math.sin(cap), 0.007, 6, 28), glow);
       rim.rotation.y = Math.PI / 2;
-      const arm = this.mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.11, 6), this.glow);
+      const arm = this.mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.11, 6), glow);
       arm.rotation.z = Math.PI / 2;
       arm.position.x = 0.03;
-      const tip = this.mesh(new THREE.SphereGeometry(0.018, 10, 8), this.glow);
+      const tip = this.mesh(new THREE.SphereGeometry(0.018, 10, 8), glow);
       tip.position.x = 0.09;
       this.body.add(dish, rim, arm, tip);
     }
@@ -181,17 +180,19 @@ class Probe {
     const opacity = this.presence * shimmer;
     const breathe = running ? 0.7 + 0.3 * Math.sin(p * 3) : 1;
     this.tone.set(TONE[this.task.status]).multiplyScalar(breathe);
-    if (this.hologram) {
+    if ('hologram' in this.look) {
+      const { hologram } = this.look;
       if (running) this.body.rotation.y += dt * 0.6;
-      this.hologram.tint.copy(this.tone);
-      this.hologram.material.opacity = opacity;
+      hologram.tint.copy(this.tone);
+      hologram.material.opacity = opacity;
     } else {
+      const { glow, glass } = this.look;
       // sweeping to and fro while it watches; at rest, looking out, once it's ended
       this.body.rotation.y = running ? Math.sin(p * 0.8) * 0.8 : this.body.rotation.y * (1 - Math.min(1, dt * 2));
       this.body.rotation.z = 0.25;
-      this.glow!.color.copy(this.tone);
-      this.glow!.opacity = opacity;
-      this.glass!.opacity = 0.8 * opacity;
+      glow.color.copy(this.tone);
+      glow.opacity = opacity;
+      glass.opacity = 0.8 * opacity;
     }
     this.label.opacity = opacity;
     return true;
@@ -242,7 +243,8 @@ export class BackgroundProbes {
       if (!probe || probe.leaving) {
         probe?.dispose();
         if (probe) this.group.remove(probe.group);
-        probe = new Probe(task, this.use(task.id), () => this.label(probe!.task));
+        const made: Probe = new Probe(task, this.use(task.id), () => this.label(made.task));
+        probe = made;
         probe.group.position.copy(slotAt(i, this.side, this.at));
         this.probes.set(task.id, probe);
         this.group.add(probe.group);

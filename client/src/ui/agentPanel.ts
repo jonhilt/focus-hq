@@ -151,6 +151,9 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     if (nearBottom) terminal.scrollTop = terminal.scrollHeight;
   };
 
+  const previewButton = (projectId: string, repo: string, pr: number) =>
+    h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(projectId, repo, pr) }, 'Preview');
+
   const renderHeader = (a: Agent) => {
     // a bar coming or going above the terminal (a hand up) leaves it scrolled to the end
     const atEnd = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;
@@ -176,7 +179,7 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
         a.task === 'lead' ? h('button', { class: 'btn small', onclick: () => ui.openBoard(a.projectId, 'prs') }, 'Board') : null,
         close,
         a.pr && a.status === 'done'
-          ? h('button', { class: 'btn small', title: 'Run the PR on your machine and open it in your browser', onclick: () => ui.previewPr(a.projectId, a.repo, a.pr!.number) }, 'Preview')
+          ? previewButton(a.projectId, a.repo, a.pr.number)
           : null,
         paneToggle,
       ),
@@ -241,8 +244,8 @@ export function openAgentPanel(ui: Ui, id: string, view?: AgentView): void {
     } else if (frame.mock) {
       browserImg.style.display = 'none';
       browserCanvas.style.display = '';
-      const ctx = browserCanvas.getContext('2d')!;
-      drawMockPage(ctx, frame.mock, 0, 0, browserCanvas.width, browserCanvas.height);
+      const ctx = browserCanvas.getContext('2d');
+      if (ctx) drawMockPage(ctx, frame.mock, 0, 0, browserCanvas.width, browserCanvas.height);
     }
   };
 

@@ -43,26 +43,42 @@ function envelope(ctx: BaseAudioContext, t: number, attack: number, end: number,
   return env;
 }
 
+/** What sound has once it's started, made together: the context, the volume everything goes through, the hiss's noise. */
+interface Audio {
+  ctx: AudioContext;
+  master: GainNode;
+  white: AudioBuffer;
+}
+
+/** White noise, or brown (integrated, so it rumbles) for the engines. */
+function noise(ctx: BaseAudioContext, seconds: number, brown: boolean): AudioBuffer {
+  const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < data.length; i++) {
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.02 * white) / 1.02;
+    data[i] = brown ? last * 3.5 : white * 0.5;
+  }
+  return buffer;
+}
+
 class ShipSound {
-  private ctx: AudioContext | null = null;
-  private master: GainNode | null = null;
-  private brown: AudioBuffer | null = null;
-  private white: AudioBuffer | null = null;
+  private audio: Audio | null = null;
   private readonly clips: Partial<Record<Clip, AudioBuffer[]>> = {};
   private readonly ear = new THREE.Vector3();
   enabled = localStorage.getItem(STORAGE_KEY) !== 'off';
 
   /** Browsers only allow audio after a user gesture, so call this from one (the splash screen's button). */
   start(): void {
-    if (this.ctx) return;
-    this.ctx = new AudioContext();
-    this.master = this.ctx.createGain();
-    this.master.gain.value = this.enabled ? 1 : 0;
-    this.master.connect(this.ctx.destination);
-    this.brown = this.noise(4, true);
-    this.white = this.noise(2, false);
-    this.thrum();
-    void this.load(this.ctx);
+    if (this.audio) return;
+    const ctx = new AudioContext();
+    const master = ctx.createGain();
+    master.gain.value = this.enabled ? 1 : 0;
+    master.connect(ctx.destination);
+    this.audio = { ctx, master, white: noise(ctx, 2, false) };
+    this.thrum(this.audio);
+    void this.load(ctx);
   }
 
   /** Fetches and decodes every clip. A take that fails to load is left out; a clip with none keeps its synthesised sound. */
@@ -93,19 +109,20 @@ class ShipSound {
   toggle(): boolean {
     this.enabled = !this.enabled;
     localStorage.setItem(STORAGE_KEY, this.enabled ? 'on' : 'off');
-    if (this.ctx && this.master) this.master.gain.setTargetAtTime(this.enabled ? 1 : 0, this.ctx.currentTime, 0.2);
+    if (this.audio) this.audio.master.gain.setTargetAtTime(this.enabled ? 1 : 0, this.audio.ctx.currentTime, 0.2);
     return this.enabled;
   }
 
   /** Moves the listener to the camera, so positioned sounds (doors) come from the right direction. */
   listen(camera: THREE.Camera): void {
-    if (!this.ctx) return;
+    if (!this.audio) return;
+    const { ctx } = this.audio;
     camera.getWorldDirection(forward);
-    const l = this.ctx.listener;
+    const l = ctx.listener;
     const p = camera.position;
     this.ear.copy(p);
     if (l.positionX) {
-      const t = this.ctx.currentTime;
+      const t = ctx.currentTime;
       l.positionX.setTargetAtTime(p.x, t, 0.02);
       l.positionY.setTargetAtTime(p.y, t, 0.02);
       l.positionZ.setTargetAtTime(p.z, t, 0.02);
@@ -131,13 +148,13 @@ class ShipSound {
     const panner = this.panner(ctx, at.x, 1.6, at.z, gain);
 
     const travel = opening ? 0.3 : 0.4;
-    if (opening) this.hiss(panner, t, { type: 'highpass', from: 3500, to: 3500, q: 0.7, attack: 0.002, end: 0.03, peak: 0.35 }); // unlatch
+    if (opening) this.hiss(out, panner, t, { type: 'highpass', from: 3500, to: 3500, q: 0.7, attack: 0.002, end: 0.03, peak: 0.35 }); // unlatch
     // the air: bright and fast when the seal breaks, darker and slower when it closes
-    this.hiss(panner, t + (opening ? 0.01 : 0), opening
+    this.hiss(out, panner, t + (opening ? 0.01 : 0), opening
       ? { type: 'bandpass', from: 1400, to: 5200, q: 0.8, attack: 0.012, end: 0.45, peak: 0.9 }
       : { type: 'bandpass', from: 4200, to: 1300, q: 0.8, attack: 0.05, end: 0.42, peak: 0.55 });
     // the leaves pushing air aside
-    this.hiss(panner, t, opening
+    this.hiss(out, panner, t, opening
       ? { type: 'bandpass', from: 320, to: 1300, q: 3, attack: 0.03, end: travel + 0.12, peak: 0.8 }
       : { type: 'bandpass', from: 1200, to: 300, q: 3, attack: 0.04, end: travel + 0.06, peak: 0.8 });
 
@@ -162,7 +179,7 @@ class ShipSound {
       thunk.connect(envelope(ctx, meet, 0.004, 0.16, 0.22)).connect(panner);
       thunk.start(meet);
       thunk.stop(meet + 0.2);
-      this.hiss(panner, meet, { type: 'lowpass', from: 1200, to: 400, q: 0.7, attack: 0.002, end: 0.06, peak: 0.8 });
+      this.hiss(out, panner, meet, { type: 'lowpass', from: 1200, to: 400, q: 0.7, attack: 0.002, end: 0.06, peak: 0.8 });
     }
   }
 
@@ -185,9 +202,8 @@ class ShipSound {
   }
 
   /** A burst of filtered white noise starting at `t`, its filter swept from `from` to `to` Hz. */
-  private hiss(dest: AudioNode, t: number, o: { type: BiquadFilterType; from: number; to: number; q: number; attack: number; end: number; peak: number }): void {
-    const ctx = this.ctx!;
-    const src = this.source(ctx, this.white!);
+  private hiss({ ctx, white }: Audio, dest: AudioNode, t: number, o: { type: BiquadFilterType; from: number; to: number; q: number; attack: number; end: number; peak: number }): void {
+    const src = this.source(ctx, white);
     const filter = ctx.createBiquadFilter();
     filter.type = o.type;
     filter.Q.value = o.q;
@@ -233,7 +249,7 @@ class ShipSound {
     let t = ctx.currentTime;
     for (let i = 2 + Math.floor(Math.random() * 3); i > 0; i--) {
       const step = 0.05 + Math.random() * 0.07;
-      this.blip(panner, t, pick(LCARS_BLIPS), step * 0.8, 0.06, 'sine');
+      this.blip(ctx, panner, t, pick(LCARS_BLIPS), step * 0.8, 0.06, 'sine');
       t += step;
     }
   }
@@ -292,17 +308,16 @@ class ShipSound {
     motor.connect(tone).connect(envelope(ctx, t, 0.25, 1.7, 0.6)).connect(gain);
     motor.start(t);
     motor.stop(t + 1.8);
-    this.hiss(gain, t + 0.1, { type: 'bandpass', from: 280, to: 1700, q: 1.2, attack: 0.5, end: 1.5, peak: 0.5 });
+    this.hiss(out, gain, t + 0.1, { type: 'bandpass', from: 280, to: 1700, q: 1.2, attack: 0.5, end: 1.5, peak: 0.5 });
   }
 
   /** The engines: brown noise rumble over a quiet, steady hum. Runs for as long as the page does. */
-  private thrum(): void {
-    const ctx = this.ctx!;
+  private thrum({ ctx, master }: Audio): void {
     const bus = ctx.createGain();
     bus.gain.value = 0.16;
-    bus.connect(this.master!);
+    bus.connect(master);
 
-    const rumble = this.source(ctx, this.brown!);
+    const rumble = this.source(ctx, noise(ctx, 4, true));
     rumble.loop = true;
     const low = ctx.createBiquadFilter();
     low.type = 'lowpass';
@@ -328,12 +343,11 @@ class ShipSound {
     const out = this.out(volume);
     if (!out) return;
     const { ctx, gain } = out;
-    freqs.forEach((f, i) => this.blip(gain, ctx.currentTime + i * step, f, step, 1, type));
+    freqs.forEach((f, i) => this.blip(ctx, gain, ctx.currentTime + i * step, f, step, 1, type));
   }
 
   /** One short tone of `length` seconds at `t`. */
-  private blip(dest: AudioNode, t: number, freq: number, length: number, peak: number, type: OscillatorType): void {
-    const ctx = this.ctx!;
+  private blip(ctx: AudioContext, dest: AudioNode, t: number, freq: number, length: number, peak: number, type: OscillatorType): void {
     const osc = ctx.createOscillator();
     osc.type = type;
     osc.frequency.value = freq;
@@ -343,32 +357,18 @@ class ShipSound {
   }
 
   /** A one-shot's output at `volume`, or null when sound hasn't started or is off (no point building the graph). */
-  private out(volume: number): { ctx: AudioContext; gain: GainNode } | null {
-    if (!this.ctx || !this.master || !this.enabled) return null;
-    const gain = this.ctx.createGain();
+  private out(volume: number): (Audio & { gain: GainNode }) | null {
+    if (!this.audio || !this.enabled) return null;
+    const gain = this.audio.ctx.createGain();
     gain.gain.value = volume;
-    gain.connect(this.master);
-    return { ctx: this.ctx, gain };
+    gain.connect(this.audio.master);
+    return { ...this.audio, gain };
   }
 
   private source(ctx: AudioContext, buffer: AudioBuffer): AudioBufferSourceNode {
     const src = ctx.createBufferSource();
     src.buffer = buffer;
     return src;
-  }
-
-  /** White noise, or brown (integrated, so it rumbles) for the engines. */
-  private noise(seconds: number, brown: boolean): AudioBuffer {
-    const ctx = this.ctx!;
-    const buffer = ctx.createBuffer(1, ctx.sampleRate * seconds, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-    let last = 0;
-    for (let i = 0; i < data.length; i++) {
-      const white = Math.random() * 2 - 1;
-      last = (last + 0.02 * white) / 1.02;
-      data[i] = brown ? last * 3.5 : white * 0.5;
-    }
-    return buffer;
   }
 }
 

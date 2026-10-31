@@ -54,7 +54,9 @@ function alcove({ width, height, depth }: Doorway): THREE.BufferGeometry {
   const deep = depth - 0.05;
   const g = new THREE.BoxGeometry(w, h, deep).translate(0, 0.01 + h / 2, deep / 2);
   // BoxGeometry's faces come +x, -x, +y, -y, +z, -z, two triangles each: the last is the one across the doorway
-  g.setIndex(Array.from(g.getIndex()!.array.slice(0, 30)));
+  const index = g.getIndex();
+  if (!index) throw new Error('A BoxGeometry comes indexed');
+  g.setIndex(Array.from(index.array.slice(0, 30)));
   g.clearGroups();
   return g;
 }
@@ -70,7 +72,7 @@ export interface PortalEnd {
   doors: SlidingDoors;
   /** The alcove behind the doorway, showing the other end while you look through the open doors. */
   view: THREE.Mesh;
-  other: PortalEnd;
+  readonly other: PortalEnd;
 }
 
 const tmp = new THREE.Vector3();
@@ -80,7 +82,7 @@ export class Portal {
   readonly ends: [PortalEnd, PortalEnd];
 
   constructor(a: Doorway, b: Doorway) {
-    const end = (d: Doorway, to: Doorway): PortalEnd => {
+    const end = (d: Doorway, to: Doorway, other: () => PortalEnd): PortalEnd => {
       const at = new THREE.Vector3().setFromMatrixPosition(d.matrix);
       const along = new THREE.Vector3().setFromMatrixColumn(d.matrix, 0);
       const doors = new SlidingDoors(at, Math.atan2(-along.z, along.x), d.width, d.height);
@@ -92,12 +94,10 @@ export class Portal {
       // you can't use what's at the other end from here: look straight through to what's behind
       view.raycast = () => {};
       const group = new THREE.Group().add(doors.group, view);
-      return { doorway: d, group, inverse: d.matrix.clone().invert(), through: throughDoor(d.matrix, to.matrix), doors, view, other: undefined! };
+      return { doorway: d, group, inverse: d.matrix.clone().invert(), through: throughDoor(d.matrix, to.matrix), doors, view, get other() { return other(); } };
     };
-    const ea = end(a, b);
-    const eb = end(b, a);
-    ea.other = eb;
-    eb.other = ea;
+    const ea = end(a, b, () => eb);
+    const eb = end(b, a, () => ea);
     this.ends = [ea, eb];
   }
 
