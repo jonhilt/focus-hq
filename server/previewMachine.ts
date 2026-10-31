@@ -41,7 +41,7 @@ export interface ShellOptions {
   onStderr: (chunk: Buffer) => void;
 }
 
-/** What a preview does to this machine: run its commands, signal what they started, and look at the sites. */
+/** What a preview does to this machine, behind `localSandboxes`: run its commands, signal what they started, and look at the sites. */
 export class PreviewMachine extends Context.Service<PreviewMachine, {
   /** Starts a command line in its own process group. Neither waits for it nor stops it: see `killTree` in previews.ts. */
   spawn(command: string, options: ShellOptions): Effect.Effect<ShellProcess>;

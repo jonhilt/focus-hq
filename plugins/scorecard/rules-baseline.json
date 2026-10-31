@@ -18,7 +18,7 @@
   "server/journals.ts": 1,
   "server/ledgerLog.ts": 28,
   "server/plugins/dataDir.ts": 14,
-  "server/previews.ts": 358,
+  "server/previews.ts": 356,
   "server/secrets.ts": 0,
   "server/speech.ts": 81,
   "server/speechWorker.ts": 35,

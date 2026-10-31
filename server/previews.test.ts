@@ -5,6 +5,7 @@ import type { PreviewConfig, ServerEvent } from '../shared/types';
 import { demoLayer } from './github/demo';
 import { toProvider } from './github/service';
 import { Hub } from './hub';
+import { localSandboxes } from './localSandboxes';
 import { type ExitStatus, PreviewMachine } from './previewMachine';
 import { Previews } from './previews';
 
@@ -81,7 +82,8 @@ afterEach(async () => {
 
 function setup(behave: (command: string) => Behaviour) {
   const machine = fakeMachine(behave);
-  const runtime = ManagedRuntime.make(Layer.merge(machine.layer, TestClock.layer()));
+  // the real sandboxes on this machine, run by a machine that runs nothing
+  const runtime = ManagedRuntime.make(Layer.merge(localSandboxes(machine.layer), TestClock.layer()));
   runtimes.push(runtime);
   const hub = new RecordingHub();
   const previews = new Previews(hub, toProvider(demoLayer), false, runtime);

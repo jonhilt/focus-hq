@@ -4,15 +4,17 @@ import path from 'node:path';
 import { Clock, Data, Effect, Exit, ManagedRuntime, Schedule, Scope, type Duration } from 'effect';
 import { previewIncludes } from '../shared/previewSet';
 import type { Preview, PreviewCheckout, PreviewConfig, PreviewLink, PreviewLog, PreviewLogFile, PreviewRef, PreviewSet } from '../shared/types';
-import { config, paths } from './config';
+import { config } from './config';
 import type { GitHubProvider } from './github/provider';
 import type { Hub } from './hub';
 import { packageManagerIn, packageScriptsIn } from './packageManager';
 import { type DemoStep, demoKind, demoScript } from './previewDemoScript';
-import { CheckoutFailed, type CommandNotStarted, PreviewMachine, type ShellProcess } from './previewMachine';
+import { localSandboxes } from './localSandboxes';
+import { CheckoutFailed, type CommandNotStarted, type ShellProcess } from './previewMachine';
 import type { PreviewMirrors } from './previewMirrors';
 import { lastJson, localUrls, MAX_LINKS, ourStack, resultChanges } from './previewResults';
 import { exitVerdict, linksVerdict, stackVerdict } from './previewRules';
+import { type Sandbox, Sandboxes } from './sandbox';
 import { errorMessage, truncate } from './util';
 import { withoutSecrets } from './secrets';
 
@@ -59,8 +61,8 @@ interface Run {
   /** Every repository in the project, for {dir:<repo>}. */
   repos: string[];
   /**
-   * Everything the preview has running: the start command's process tree, its polling and the log flush. Closing it
-   * runs the stop command and kills the tree.
+   * Everything the preview has running: its sandbox, the start command's process tree, its polling and the log flush.
+   * Closing it runs the stop command, kills the tree, then releases the sandbox.
    */
   scope: Scope.Closeable;
   /** Closes `scope`, once; anyone else waits for that. */
@@ -104,9 +106,10 @@ export interface StartPreview {
 }
 
 /**
- * Runs pull requests on this machine so the manager can click through them in their own browser. One preview per
- * project: the PR is checked out in data/previews/<project>/<repo>, the repos its commands mention ({dir:<repo>}) next to
- * it, each at its PR from the preview's set or else its default branch, and the project's preview command runs there. Its links come from the JSON it prints
+ * Runs pull requests in a sandbox (`Sandboxes`; a folder and a free port on this machine by default) so the manager can
+ * click through them in their own browser. One preview per project, in a sandbox keyed by the project: the PR is checked
+ * out in the sandbox, the repos its commands mention ({dir:<repo>}) next to it, each at its PR from the preview's set or
+ * else its default branch, and the project's preview command runs there. Its links come from the JSON it prints
  * ({"urls": {...}}), the local URLs in its output, or the free port we offered it.
  *
  * Promise-based outside, Effect inside: each preview's lifetime is a `Scope`, run on this one runtime.
@@ -118,7 +121,7 @@ export class Previews {
     private readonly hub: Hub,
     private readonly github: GitHubProvider,
     private readonly demo: boolean,
-    private readonly runtime: ManagedRuntime.ManagedRuntime<PreviewMachine, never> = ManagedRuntime.make(PreviewMachine.layer),
+    private readonly runtime: ManagedRuntime.ManagedRuntime<Sandboxes, never> = ManagedRuntime.make(localSandboxes()),
     /** Mirrors the previews' sites for browsers on other machines; none in tests and the demo. */
     private readonly mirrors?: PreviewMirrors,
   ) {
@@ -217,15 +220,28 @@ export class Previews {
     // forked first, so closing the scope stops it last: the stop command's output still reaches the panel
     const flush = Effect.sync(() => this.flush(run));
     this.background(run, flush.pipe(Effect.repeat(Schedule.spaced('150 millis')), Effect.ensuring(flush)));
-    this.background(
-      run,
-      (this.demo ? this.launchDemo(run) : this.launch(run)).pipe(
-        Effect.catch((err) => Effect.sync(() => this.fail(run, err.message))),
-        // a bug shouldn't leave the preview "starting" forever
-        Effect.catchDefect((defect) => Effect.sync(() => this.fail(run, errorMessage(defect)))),
-      ),
-    );
+    this.background(run, this.inSandbox(run));
     return run.preview;
+  }
+
+  /**
+   * Acquires the preview's sandbox, then launches it there in a fiber of its own: forked after the sandbox's release
+   * joined the scope, so closing the scope interrupts the launch before the sandbox goes.
+   */
+  private inSandbox(run: Run): Effect.Effect<void, never, Sandboxes> {
+    const acquired = Effect.gen({ self: this }, function* () {
+      const sandbox = yield* Sandboxes.use((s) => s.acquire(run.preview.projectId, run.repos)).pipe(Scope.provide(run.scope));
+      const launched = (this.demo ? this.launchDemo(run, sandbox) : this.launch(run, sandbox)).pipe(
+        Effect.catch((err) => Effect.sync(() => this.fail(run, err.message))),
+      );
+      yield* Effect.forkIn(this.failOnDefect(run, launched), run.scope);
+    });
+    return this.failOnDefect(run, acquired);
+  }
+
+  /** A bug shouldn't leave the preview "starting" forever. */
+  private failOnDefect<R>(run: Run, effect: Effect.Effect<void, never, R>): Effect.Effect<void, never, R> {
+    return effect.pipe(Effect.catchDefect((defect) => Effect.sync(() => this.fail(run, errorMessage(defect)))));
   }
 
   /** Runs the stop command, kills what's left of the start command, then drops the preview. */
@@ -246,7 +262,7 @@ export class Previews {
   /** The project is gone: stop its preview and delete its checkouts. */
   async remove(projectId: string): Promise<void> {
     await this.stop(projectId);
-    fs.rmSync(path.join(paths.previews, projectId), { recursive: true, force: true });
+    await this.runtime.runPromise(Sandboxes.use((s) => s.remove(projectId)));
   }
 
   async shutdown(): Promise<void> {
@@ -256,14 +272,13 @@ export class Previews {
 
   // ---------------------------------------------------------------- running
 
-  private launch(run: Run): Effect.Effect<void, LaunchError, PreviewMachine> {
+  private launch(run: Run, sandbox: Sandbox): Effect.Effect<void, LaunchError> {
     return Effect.gen({ self: this }, function* () {
-      const machine = yield* PreviewMachine;
-      const { projectId, repo, number } = run.preview;
+      const { repo, number } = run.preview;
       const cfg = run.config;
       const mentioned = [cfg.command, cfg.stopCommand, cfg.statusCommand].filter(Boolean).join('\n');
       const dirs = new Map<string, string>();
-      for (const r of [repo, ...(yield* referencedRepos(mentioned, run.repos))]) dirs.set(r, previewDir(projectId, r, run.repos));
+      for (const r of [repo, ...(yield* referencedRepos(mentioned, run.repos))]) dirs.set(r, sandbox.dir(r));
       const refs = yield* Effect.forEach(
         [...dirs.keys()],
         (r): Effect.Effect<PreviewCheckout, CheckoutFailed> => {
@@ -277,9 +292,9 @@ export class Previews {
         { concurrency: 'unbounded' },
       );
       this.update(run, { checkouts: refs });
-      const port = yield* machine.freePort;
+      const port = yield* sandbox.port;
       const expand = (template: string) => expandCommand(template, { port, number, repo, repos: run.repos, dirs });
-      run.cwd = previewDir(projectId, repo, run.repos);
+      run.cwd = sandbox.dir(repo);
       run.paths = [...dirs.values()];
       run.env = previewEnv(port, !cfg.command);
       const stopCommand = cfg.stopCommand ? expand(cfg.stopCommand) : undefined;
@@ -288,15 +303,15 @@ export class Previews {
       if (stopCommand && [...dirs.values()].every((d) => fs.existsSync(d))) {
         this.update(run, { activity: 'Stopping anything an earlier preview left running' });
         this.print(run, '▸ Making sure nothing from an earlier preview is still running', `$ ${stopCommand}`);
-        yield* this.runCommand(run, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line)).pipe(
+        yield* this.runCommand(run, sandbox, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line)).pipe(
           Effect.catch((err) => Effect.sync(() => this.print(run, `⚠ ${err.message}`))),
         );
       }
 
       for (const { repo: r, ref } of refs) {
-        const dir = previewDir(projectId, r, run.repos);
+        const dir = sandbox.dir(r);
         this.update(run, { activity: `Fetching ${shortName(r)} ${refName(ref)}` });
-        const checkout = yield* machine.checkout(r, dir, ref);
+        const checkout = yield* sandbox.checkout(r, ref);
         this.checkedOut(run, r, checkout.sha);
         run.paths.push(checkout.path);
         this.print(run, `${checkoutLine(r, ref, checkout.sha)} in ${dir}`);
@@ -311,7 +326,7 @@ export class Previews {
       this.print(run, `$ ${command}`);
 
       const onLine = lineSplitter((line) => this.output(run, line));
-      const child = yield* this.spawn(run, command, {
+      const child = yield* this.spawn(run, sandbox, command, {
         onStdout: (chunk) => {
           run.stdout = (run.stdout + chunk.toString('utf8')).slice(-256_000);
           onLine(chunk);
@@ -320,17 +335,17 @@ export class Previews {
         onStderr: onLine,
         // The stop command first (the CLI knows how to take its own stack down, and its supervisor may share the start
         // command's process group), then whatever is left of the start command's process tree.
-        release: (proc) => Effect.andThen(this.runStopCommand(run, stopCommand), killTree(proc)),
+        release: (proc) => Effect.andThen(this.runStopCommand(run, sandbox, stopCommand), killTree(sandbox, proc)),
       }).pipe(Scope.provide(run.scope));
-      this.background(run, this.waitUntilUp(run, offered ? [{ url: `http://localhost:${port}/` }] : []));
+      this.background(run, this.waitUntilUp(run, sandbox, offered ? [{ url: `http://localhost:${port}/` }] : []));
       const { code, signal } = yield* child.exited;
       onLine(null);
-      this.exited(run, code, signal, offered);
+      this.exited(run, sandbox, code, signal, offered);
     });
   }
 
   /** Demo mode: plays the preview's demo script (`demoScript`), pretending to install and start the site(s). */
-  private launchDemo(run: Run): Effect.Effect<void, CheckoutFailed, PreviewMachine> {
+  private launchDemo(run: Run, sandbox: Sandbox): Effect.Effect<void, CheckoutFailed> {
     return Effect.gen({ self: this }, function* () {
       const kind = demoKind(run.preview.repo, run.repos);
       const logs = kind === 'dev-server' ? undefined : demoLogs(run.preview.projectId, kind === 'unhealthy-stack');
@@ -348,12 +363,12 @@ export class Previews {
         { concurrency: 'unbounded' },
       );
       this.update(run, { command: script.command, activity: 'Starting' });
-      this.background(run, this.waitUntilUp(run, []));
+      this.background(run, this.waitUntilUp(run, sandbox, []));
       for (const step of script.steps) {
         yield* Effect.sleep(step.wait);
         this.playDemoStep(run, step, script.checkouts, shas);
       }
-      if (script.exit !== undefined) this.exited(run, script.exit, null, false);
+      if (script.exit !== undefined) this.exited(run, sandbox, script.exit, null, false);
     });
   }
 
@@ -421,21 +436,20 @@ export class Previews {
   }
 
   /** The progress command's view of our stack; nothing when it fails or times out (the next poll tries again). */
-  private progress(run: Run, statusCommand: string): Effect.Effect<Record<string, unknown> | 'gone' | undefined, never, PreviewMachine> {
-    return this.runCommand(run, 'progress command', statusCommand, STATUS_TIMEOUT).pipe(
+  private progress(run: Run, sandbox: Sandbox, statusCommand: string): Effect.Effect<Record<string, unknown> | 'gone' | undefined> {
+    return this.runCommand(run, sandbox, 'progress command', statusCommand, STATUS_TIMEOUT).pipe(
       Effect.map(({ stdout }) => this.ourStack(run, stdout)),
       Effect.orElseSucceed(() => undefined),
     );
   }
 
   /** Polls the site(s) until one answers, showing the progress command's progress meanwhile. */
-  private waitUntilUp(run: Run, fallback: PreviewLink[]): Effect.Effect<void, never, PreviewMachine> {
+  private waitUntilUp(run: Run, sandbox: Sandbox, fallback: PreviewLink[]): Effect.Effect<void> {
     const starting = () => this.live(run) && run.preview.status === 'starting';
     return Effect.gen({ self: this }, function* () {
-      const machine = yield* PreviewMachine;
       const { statusCommand } = run;
       if (statusCommand) {
-        const poll = this.progress(run, statusCommand).pipe(
+        const poll = this.progress(run, sandbox, statusCommand).pipe(
           Effect.map((stack) => {
             if (!starting()) return;
             if (stack === 'gone') this.fail(run, 'The stack went away while starting: it is no longer in the progress command’s list');
@@ -455,14 +469,14 @@ export class Previews {
       const answered = Effect.gen({ self: this }, function* () {
         const candidates = run.preview.links.length ? run.preview.links : fallback;
         for (const { url } of candidates) {
-          if ((yield* machine.probe(url)) === null || !starting()) continue;
-          const links = yield* checkLinks(run.preview.links.length ? run.preview.links : [{ url }]);
+          if ((yield* sandbox.probe(url)) === null || !starting()) continue;
+          const links = yield* checkLinks(sandbox, run.preview.links.length ? run.preview.links : [{ url }]);
           if (!starting()) return true;
           const names = links.map((l) => l.name).filter(Boolean);
           const activity = links.length > 1 ? `Up – ${names.length ? names.join(', ') : `${links.length} sites`}` : `Up at ${links[0].url}`;
           this.update(run, { status: 'running', links, activity, warning: run.complaint });
           this.print(run, `✔ ${url} is answering`);
-          this.watch(run);
+          this.watch(run, sandbox);
           return true;
         }
         return false;
@@ -476,7 +490,7 @@ export class Previews {
    * the warning follows it ("unhealthy", back to "ready"). When the command has exited, nothing else would notice the
    * sites going away: three checks with no answer, or the stack dropping out of the progress command's list, fail it.
    */
-  private watch(run: Run): void {
+  private watch(run: Run, sandbox: Sandbox): void {
     if (run.watching) return;
     run.watching = true;
     const running = () => this.live(run) && run.preview.status === 'running';
@@ -484,7 +498,7 @@ export class Previews {
     /** False once there's nothing left to watch. */
     const check = Effect.gen({ self: this }, function* () {
       if (!running()) return false;
-      const links = yield* checkLinks(run.preview.links);
+      const links = yield* checkLinks(sandbox, run.preview.links);
       if (!running()) return false;
       if (JSON.stringify(links) !== JSON.stringify(run.preview.links)) this.update(run, { links });
       const health = linksVerdict(links, misses, !!run.detached);
@@ -494,7 +508,7 @@ export class Previews {
         return false;
       }
       if (!run.statusCommand) return true;
-      const verdict = stackVerdict(yield* this.progress(run, run.statusCommand));
+      const verdict = stackVerdict(yield* this.progress(run, sandbox, run.statusCommand));
       if (!running()) return false;
       if (verdict && 'fail' in verdict) {
         this.fail(run, verdict.fail);
@@ -511,14 +525,14 @@ export class Previews {
     this.background(run, Effect.delay(check.pipe(Effect.repeat({ schedule: every, while: (more) => more })), '10 seconds'));
   }
 
-  private exited(run: Run, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {
+  private exited(run: Run, sandbox: Sandbox, code: number | null, signal: NodeJS.Signals | null, offered: boolean): void {
     if (!this.live(run) || run.preview.status === 'failed') return;
     const result = this.readResult(run);
     const verdict = exitVerdict({ code, signal, result, hasLinks: run.preview.links.length > 0, offered, namedLinks: !!run.namedLinks });
     if (verdict.kind === 'detached') {
       run.detached = true;
       this.print(run, '▸ The command finished; the sites keep running on their own');
-      if (run.preview.status === 'running') this.watch(run);
+      if (run.preview.status === 'running') this.watch(run, sandbox);
     } else if (verdict.kind === 'complained') {
       const { complaint } = verdict;
       run.detached = true;
@@ -526,7 +540,7 @@ export class Previews {
       if (run.preview.status === 'running') {
         this.print(run, `⚠ ${complaint}`);
         this.update(run, { warning: complaint });
-        this.watch(run);
+        this.watch(run, sandbox);
       } else {
         this.print(run, `⚠ ${complaint}. Checking whether its sites answer anyway…`);
         const giveUp = Effect.sync(() => {
@@ -557,12 +571,12 @@ export class Previews {
   }
 
   /** The stop command, on the way down. A failing one only gets a warning: the process tree gets killed regardless. */
-  private runStopCommand(run: Run, stopCommand: string | undefined): Effect.Effect<void, never, PreviewMachine> {
+  private runStopCommand(run: Run, sandbox: Sandbox, stopCommand: string | undefined): Effect.Effect<void> {
     if (!stopCommand) return Effect.void;
     const label = `Preview stop command for ${run.preview.repo}#${run.preview.number}`;
     return Effect.gen({ self: this }, function* () {
       this.print(run, `$ ${stopCommand}`);
-      const { code } = yield* this.runCommand(run, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
+      const { code } = yield* this.runCommand(run, sandbox, 'stop command', stopCommand, STOP_TIMEOUT, (line) => this.print(run, line));
       if (code !== 0) console.warn(`  ⚠ ${label} exited with ${code}: ${stopCommand}`);
     }).pipe(
       Effect.catch((err) =>
@@ -577,22 +591,23 @@ export class Previews {
   /** Runs a stop or progress command to the end, or kills it once it has taken `timeout`. */
   private runCommand(
     run: Run,
+    sandbox: Sandbox,
     what: string,
     command: string,
     timeout: Duration.Input,
     onLine?: (line: string) => void,
-  ): Effect.Effect<{ code: number | null; stdout: string }, CommandNotStarted | CommandTimedOut, PreviewMachine> {
+  ): Effect.Effect<{ code: number | null; stdout: string }, CommandNotStarted | CommandTimedOut> {
     return Effect.gen({ self: this }, function* () {
       let stdout = '';
       const lines = lineSplitter((line) => onLine?.(truncate(stripAnsi(line), 2000)));
-      const child = yield* this.spawn(run, command, {
+      const child = yield* this.spawn(run, sandbox, command, {
         onStdout: (chunk) => {
           stdout = (stdout + chunk.toString('utf8')).slice(-256_000);
           lines(chunk);
         },
         onStderr: lines,
         // Left alone once it has exited: whatever it started in the background is meant to outlive it.
-        release: (proc, exit) => (Exit.isSuccess(exit) ? Effect.void : killTree(proc)),
+        release: (proc, exit) => (Exit.isSuccess(exit) ? Effect.void : killTree(sandbox, proc)),
       });
       const { code } = yield* child.exited;
       lines(null);
@@ -606,15 +621,16 @@ export class Previews {
   /** Spawns a command in the preview's checkout, owned by the current scope: closing it runs `release`. */
   private spawn(
     run: Run,
+    sandbox: Sandbox,
     command: string,
     options: {
       onStdout: (chunk: Buffer) => void;
       onStderr: (chunk: Buffer) => void;
-      release: (proc: ShellProcess, exit: Exit.Exit<unknown, unknown>) => Effect.Effect<void, never, PreviewMachine>;
+      release: (proc: ShellProcess, exit: Exit.Exit<unknown, unknown>) => Effect.Effect<void>;
     },
-  ): Effect.Effect<ShellProcess, never, PreviewMachine | Scope.Scope> {
+  ): Effect.Effect<ShellProcess, never, Scope.Scope> {
     return Effect.acquireRelease(
-      PreviewMachine.use((machine) => machine.spawn(command, { cwd: run.cwd, env: run.env, onStdout: options.onStdout, onStderr: options.onStderr })),
+      sandbox.spawn(command, { cwd: run.cwd, env: run.env, onStdout: options.onStdout, onStderr: options.onStderr }),
       options.release,
     );
   }
@@ -622,7 +638,7 @@ export class Previews {
   // ---------------------------------------------------------------- plumbing
 
   /** Runs an effect for as long as the preview lasts: closing its scope interrupts it. */
-  private background(run: Run, effect: Effect.Effect<void, never, PreviewMachine>): void {
+  private background(run: Run, effect: Effect.Effect<void, never, Sandboxes>): void {
     this.runtime.runFork(Effect.forkIn(effect, run.scope));
   }
 
@@ -665,27 +681,24 @@ export class Previews {
  * Takes down a command and everything it started: SIGTERM, then SIGKILL for whatever is still there after a grace
  * period.
  */
-function killTree(proc: ShellProcess): Effect.Effect<void, never, PreviewMachine> {
+function killTree(sandbox: Sandbox, proc: ShellProcess): Effect.Effect<void> {
   const { pid } = proc;
   if (pid === undefined) return Effect.void;
   return Effect.gen(function* () {
-    const machine = yield* PreviewMachine;
-    if (!(yield* machine.signal(pid, 'SIGTERM'))) return;
-    yield* machine.signal(pid, 0).pipe(
+    if (!(yield* sandbox.signal(pid, 'SIGTERM'))) return;
+    yield* sandbox.signal(pid, 0).pipe(
       Effect.repeat({ schedule: Schedule.spaced('200 millis'), while: (alive) => alive }),
-      Effect.timeoutOrElse({ duration: KILL_GRACE, orElse: () => machine.signal(pid, 'SIGKILL') }),
+      Effect.timeoutOrElse({ duration: KILL_GRACE, orElse: () => sandbox.signal(pid, 'SIGKILL') }),
     );
   });
 }
 
 /** Checks every link: answering, answering with a 5xx, or not at all. */
-function checkLinks(links: PreviewLink[]): Effect.Effect<PreviewLink[], never, PreviewMachine> {
-  return PreviewMachine.use((machine) =>
-    Effect.forEach(links, ({ health: _h, code: _c, ...link }) =>
-      machine.probe(link.url).pipe(
-        Effect.map((code): PreviewLink => (code === null ? { ...link, health: 'down' } : { ...link, health: code >= 500 ? 'error' : 'up', code })),
-      ), { concurrency: 'unbounded' }),
-  );
+function checkLinks(sandbox: Sandbox, links: PreviewLink[]): Effect.Effect<PreviewLink[]> {
+  return Effect.forEach(links, ({ health: _h, code: _c, ...link }) =>
+    sandbox.probe(link.url).pipe(
+      Effect.map((code): PreviewLink => (code === null ? { ...link, health: 'down' } : { ...link, health: code >= 500 ? 'error' : 'up', code })),
+    ), { concurrency: 'unbounded' });
 }
 
 // ---------------------------------------------------------------- commands
@@ -696,12 +709,6 @@ const refName = (ref: PreviewRef) => ('pr' in ref ? `PR #${ref.pr}` : ref.branch
 
 /** "▸ web: PR #12 @ 1a2b3c4" or "▸ api: main @ 5d6e7f8". */
 const checkoutLine = (repo: string, ref: PreviewRef, sha: string) => `▸ ${shortName(repo)}: ${refName(ref)} @ ${sha.slice(0, 7)}`;
-
-/** data/previews/<project>/<repo name>, or <owner>__<name> when two repos in the project share a name. */
-function previewDir(projectId: string, repo: string, repos: string[]): string {
-  const clash = repos.some((r) => r !== repo && shortName(r).toLowerCase() === shortName(repo).toLowerCase());
-  return path.join(paths.previews, projectId, clash ? repo.replace('/', '__') : shortName(repo));
-}
 
 /** Finds the repo a {dir:<name>} placeholder means, by owner/name or just name. */
 function resolveRepo(name: string, repos: string[]): string | BadDirPlaceholder {
