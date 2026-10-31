@@ -168,3 +168,90 @@ describe('the store, under Focus’s two rules', () => {
     expect((await crewRestart(forgetful)).after.closed).toEqual([]);
   });
 });
+
+// A session's images (Store.saveSessionImage, server/sessionImages.ts), files named by their content: what's kept is
+// each saved file's bytes. A save waits on nothing outside, so a restart falls between saves; a save cut off part way
+// is the promise's to show (docs/agents.md, "A session's transcript keeps everything the agent did, whole").
+
+const IMAGES = { a: Buffer.from('first image'), b: Buffer.from('second image, a little longer') };
+
+/** Each saved image's bytes, by file: what a browser asking for it would get. */
+const savedImages = (): Record<string, string> => {
+  const files = fs.existsSync(paths.sessionImages) ? fs.readdirSync(paths.sessionImages).filter((f) => !f.endsWith('.tmp')).sort() : [];
+  return Object.fromEntries(files.map((f) => [f, fs.readFileSync(`${paths.sessionImages}/${f}`, 'utf8')]));
+};
+
+const imagesSubject = (make: () => Store = () => new Store(true)): Subject<Record<string, string>> => ({
+  name: "a session's images",
+  start: () => {
+    fs.rmSync(paths.sessionImages, { recursive: true, force: true });
+    const life = (): Running<Record<string, string>> => {
+      const store = make();
+      return {
+        actions: () => Object.entries(IMAGES).map(([name, bytes]) => ({ name: `save image ${name}`, run: () => store.saveSessionImage(`${name}.png`, bytes) })),
+        durable: savedImages,
+        settle: () => Promise.resolve(),
+        restart: () => life(),
+      };
+    };
+    return life();
+  },
+});
+
+/** Focus going down part way through saving image a: half its bytes written, by `store`'s own way of saving. */
+function cutOffSave(store: Store): void {
+  const write = fs.writeFileSync;
+  const spy = vi.spyOn(fs, 'writeFileSync').mockImplementation((file, data, ...rest) => {
+    write(file, Buffer.isBuffer(data) ? data.subarray(0, 3) : data, ...rest);
+    throw new Error('Focus went down');
+  });
+  try {
+    store.saveSessionImage('a.png', IMAGES.a);
+  } catch {
+    // as Focus going down leaves it
+  } finally {
+    spy.mockRestore();
+  }
+}
+
+describe("a session's images, under Focus's two rules", () => {
+  it('ends a restart as if a save had never started, or had finished', async () => {
+    await checkRestart(imagesSubject(), { runs: 25 });
+  });
+
+  it('ends two saves at once as one after the other would', async () => {
+    await checkAtOnce(imagesSubject(), { runs: 25 });
+  });
+
+  // docs/agents.md: "an image saved is read back whole after a restart, and one cut off as Focus went down is written
+  // again the next time it comes"
+  it('reads an image back whole after a restart, and writes one cut off as Focus went down again the next time', async () => {
+    fs.rmSync(paths.sessionImages, { recursive: true, force: true });
+    cutOffSave(new Store(true));
+    expect(savedImages()).toEqual({});
+    const after = new Store(true);
+    after.saveSessionImage('a.png', IMAGES.a);
+    after.saveSessionImage('b.png', IMAGES.b);
+    expect(await new Store(true).readSessionImage('a.png')).toEqual(IMAGES.a);
+    expect(savedImages()).toEqual({ 'a.png': 'first image', 'b.png': 'second image, a little longer' });
+    // a store that keeps nothing on disk (a demo's) keeps them for as long as it runs
+    const demo = new Store(false);
+    demo.saveSessionImage('a.png', IMAGES.a);
+    expect(await demo.readSessionImage('a.png')).toEqual(IMAGES.a);
+  });
+
+  it('catches a break with that promise: a store that writes an image straight to its name', async () => {
+    class Straight extends Store {
+      override saveSessionImage(file: string, bytes: Buffer): void {
+        const full = `${paths.sessionImages}/${file}`;
+        if (fs.existsSync(full)) return;
+        fs.mkdirSync(paths.sessionImages, { recursive: true });
+        fs.writeFileSync(full, bytes);
+      }
+    }
+    fs.rmSync(paths.sessionImages, { recursive: true, force: true });
+    cutOffSave(new Straight(true));
+    new Straight(true).saveSessionImage('a.png', IMAGES.a);
+    expect(savedImages()['a.png']).not.toBe('first image');
+  });
+});

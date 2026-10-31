@@ -1,17 +1,17 @@
 import { describe, expect, it } from 'vitest';
-import type { TermLine } from './types';
+import type { TextLine } from './types';
 import { foldSummary, lastReply, plainMarkdown, replyPart, saysLine, sentLine, termBlocks } from './termText';
 
 describe('replyPart', () => {
   it('starts a reply at the marker and carries it on through indented text lines', () => {
-    expect(replyPart({ t: 0, kind: 'text', text: '⏺ **Done.** Here it is:' })).toEqual({ start: true, text: '**Done.** Here it is:' });
-    expect(replyPart({ t: 0, kind: 'text', text: '  - one' })).toEqual({ start: false, text: '- one' });
-    expect(replyPart({ t: 0, kind: 'text', text: '    nested' })).toEqual({ start: false, text: '  nested' });
+    expect(replyPart({ kind: 'text', text: '⏺ **Done.** Here it is:' })).toEqual({ start: true, text: '**Done.** Here it is:' });
+    expect(replyPart({ kind: 'text', text: '  - one' })).toEqual({ start: false, text: '- one' });
+    expect(replyPart({ kind: 'text', text: '    nested' })).toEqual({ start: false, text: '  nested' });
   });
 
   it('leaves everything that is not Claude talking alone', () => {
-    expect(replyPart({ t: 0, kind: 'tool', text: '⏺ Bash(ls)' })).toBeNull();
-    expect(replyPart({ t: 0, kind: 'manager', text: '▶ Captain: **hi**' })).toBeNull();
+    expect(replyPart({ kind: 'tool', text: '⏺ Bash(ls)' })).toBeNull();
+    expect(replyPart({ kind: 'manager', text: '▶ Captain: **hi**' })).toBeNull();
   });
 });
 
@@ -39,65 +39,75 @@ describe('plainMarkdown', () => {
 describe('lastReply', () => {
   it('is the last reply, without its markdown, up to the next tool call', () => {
     expect(lastReply([
-      { t: 0, kind: 'text', text: '⏺ First thoughts' },
-      { t: 1, kind: 'tool', text: '⏺ Bash(npm test)' },
-      { t: 2, kind: 'text', text: '⏺ Slice **shipped**.' },
-      { t: 3, kind: 'text', text: '  - QA passed' },
-      { t: 4, kind: 'text', text: '  ' },
-      { t: 5, kind: 'system', text: '✻ Turn ended' },
+      { kind: 'text', text: '⏺ First thoughts' },
+      { kind: 'tool', text: '⏺ Bash(npm test)' },
+      { kind: 'text', text: '⏺ Slice **shipped**.' },
+      { kind: 'text', text: '  - QA passed' },
+      { kind: 'text', text: '  ' },
+      { kind: 'system', text: '✻ Turn ended' },
+    ])).toBe('Slice shipped.\n• QA passed');
+  });
+
+  it('reads typed steps as their lines: the last reply, whole, up to the next call', () => {
+    expect(lastReply([
+      { kind: 'reply', text: 'First thoughts' },
+      { kind: 'call', id: 't1', tool: 'Bash', input: { command: 'npm test' }, cwd: '/work' },
+      { kind: 'result', id: 't1', ok: true, text: 'passed' },
+      { kind: 'reply', text: 'Slice **shipped**.\n- QA passed' },
+      { kind: 'think', text: '' },
     ])).toBe('Slice shipped.\n• QA passed');
   });
 
   it('is empty before Claude has said anything', () => {
-    expect(lastReply([{ t: 0, kind: 'manager', text: '▶ Captain: hello' }])).toBe('');
+    expect(lastReply([{ kind: 'manager', text: '▶ Captain: hello' }])).toBe('');
   });
 });
 
 describe('saysLine', () => {
   it("keeps Claude's replies and the messages it was sent out of the fold, and folds the rest", () => {
     const kinds = ['text', 'manager', 'system', 'thinking', 'tool', 'output', 'error', 'success'] as const;
-    expect(kinds.filter((kind) => saysLine({ t: 0, kind, text: '' }))).toEqual(['text', 'manager']);
+    expect(kinds.filter((kind) => saysLine({ kind, text: '' }))).toEqual(['text', 'manager']);
   });
 });
 
 describe('sentLine', () => {
   it('tells a message sent to the session from a notice about it', () => {
-    expect(sentLine({ t: 0, kind: 'manager', text: '▶ Captain: try the other layout' })).toBe(true);
-    expect(sentLine({ t: 0, kind: 'manager', text: '❓ Asked the captain: Which layout? (A: Cards · B: List)' })).toBe(false);
-    expect(sentLine({ t: 0, kind: 'manager', text: '✋ Waiting for the captain to approve git push' })).toBe(false);
-    expect(sentLine({ t: 0, kind: 'text', text: '▶ not a message' })).toBe(false);
+    expect(sentLine({ kind: 'manager', text: '▶ Captain: try the other layout' })).toBe(true);
+    expect(sentLine({ kind: 'manager', text: '❓ Asked the captain: Which layout? (A: Cards · B: List)' })).toBe(false);
+    expect(sentLine({ kind: 'manager', text: '✋ Waiting for the captain to approve git push' })).toBe(false);
+    expect(sentLine({ kind: 'text', text: '▶ not a message' })).toBe(false);
   });
 });
 
 describe('foldSummary', () => {
   it('counts the tool calls and names the latest step', () => {
     expect(foldSummary([
-      { t: 0, kind: 'tool', text: '⏺ Read(CLAUDE.md)' },
-      { t: 1, kind: 'output', text: '  ⎿  Read 78 lines' },
-      { t: 2, kind: 'thinking', text: '✻ Thinking…' },
-      { t: 3, kind: 'tool', text: '⏺ Write(brief.md)' },
-      { t: 4, kind: 'success', text: '  + # Brief' },
+      { kind: 'tool', text: '⏺ Read(CLAUDE.md)' },
+      { kind: 'output', text: '  ⎿  Read 78 lines' },
+      { kind: 'thinking', text: '✻ Thinking…' },
+      { kind: 'tool', text: '⏺ Write(brief.md)' },
+      { kind: 'success', text: '  + # Brief' },
     ])).toBe('2 steps · Write(brief.md)');
   });
 
   it('says how many failed', () => {
     expect(foldSummary([
-      { t: 0, kind: 'tool', text: '⏺ Bash(pnpm build)' },
-      { t: 1, kind: 'error', text: '  ⎿  Declined' },
+      { kind: 'tool', text: '⏺ Bash(pnpm build)' },
+      { kind: 'error', text: '  ⎿  Declined' },
     ])).toBe('1 step · 1 failed · Bash(pnpm build)');
   });
 
   it('counts lines when there is no tool call among them, and clips a long step', () => {
-    expect(foldSummary([{ t: 0, kind: 'system', text: `✻ ${'x'.repeat(120)}` }])).toBe(`1 line · ${'x'.repeat(89)}…`);
+    expect(foldSummary([{ kind: 'system', text: `✻ ${'x'.repeat(120)}` }])).toBe(`1 line · ${'x'.repeat(89)}…`);
   });
 
   it("reads as the latest line when there's no step among them", () => {
-    expect(foldSummary([{ t: 0, kind: 'output', text: '  ⎿  Your question is on your screen' }, { t: 1, kind: 'output', text: '' }])).toBe('2 lines · Your question is on your screen');
+    expect(foldSummary([{ kind: 'output', text: '  ⎿  Your question is on your screen' }, { kind: 'output', text: '' }])).toBe('2 lines · Your question is on your screen');
   });
 });
 
 describe('termBlocks', () => {
-  const line = (kind: TermLine['kind'], text: string): TermLine => ({ t: 0, kind, text });
+  const line = (kind: TextLine['kind'], text: string): TextLine => ({ kind, text });
 
   it('reads a session the way its panel does: what it said in view, what it did folded between', () => {
     expect(termBlocks([
@@ -125,6 +135,17 @@ describe('termBlocks', () => {
       { kind: 'reply', text: 'First' },
       { kind: 'fold', text: '1 step · 1 failed · Bash(test)', failed: true },
       { kind: 'line', text: '  carried on' },
+    ]);
+  });
+
+  it('folds typed steps as the panel draws them', () => {
+    expect(termBlocks([
+      { kind: 'call', id: 't1', tool: 'Read', input: { file_path: '/work/cart.ts' }, cwd: '/work' },
+      { kind: 'result', id: 't1', ok: false, text: 'missing' },
+      { kind: 'reply', text: '**Done.**' },
+    ])).toEqual([
+      { kind: 'fold', text: '1 step · 1 failed · Read(cart.ts)', failed: true },
+      { kind: 'reply', text: 'Done.' },
     ]);
   });
 

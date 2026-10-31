@@ -1,9 +1,11 @@
 import { Data, Effect, type Fiber, FiberMap, type Layer, ManagedRuntime, Scope } from 'effect';
-import type { Agent, AgentStatus, BrowserFrame, PermissionRequest, TermLine } from '../../../shared/types';
+import { isTextLine } from '../../../shared/stepText';
+import type { Agent, AgentStatus, BrowserFrame, PermissionRequest, TermEntry } from '../../../shared/types';
 import type { GitHub, GitHubError } from '../../github/service';
 import type { Hub } from '../../hub';
 import { Plugins } from '../../plugins/registry';
 import type { Store } from '../../store';
+import { savingImages } from '../../sessionImages';
 import { errorMessage } from '../../util';
 import { type GitFailed, type QaChat, type Recordings, type Renderer, retryServerErrors, SHIP_RETRIES, type Sessions, type Triage, Workspace } from '../services';
 import { Inbox } from '../inbox';
@@ -177,20 +179,25 @@ export class Core {
   }
 
   /** A lead's helper's lines: its own transcript, which goes when it does. */
-  printHelper(agent: Agent, id: string, lines: Omit<TermLine, 't'>[]): void {
+  printHelper(agent: Agent, id: string, lines: TermEntry[]): void {
     // one we don't know of (Claude Code never said it started) keeps to the lead's own lines
-    if (!agent.helpers?.some((h) => h.id === id)) return this.print(agent, lines.map((l) => ({ ...l, text: `    ${l.text}` })));
+    if (!agent.helpers?.some((h) => h.id === id)) return this.print(agent, lines.map((l) => (isTextLine(l) ? { ...l, text: `    ${l.text}` } : { ...l, helper: id })));
     if (!lines.length || !this.store.agents.has(agent.id)) return;
     const t = Date.now();
-    const stamped = lines.map((l) => ({ t, ...l }));
+    const stamped = this.saved(lines).map((l) => ({ t, ...l }));
     this.store.appendLines(id, stamped, false);
     this.hub.send({ type: 'lines', id, lines: stamped });
   }
 
-  print(agent: Agent, lines: Omit<TermLine, 't'>[]): void {
+  /** Entries with their images saved as files, so what's kept and sent points at them (server/sessionImages.ts). */
+  private saved(lines: TermEntry[]): TermEntry[] {
+    return savingImages(lines, (file, bytes) => this.store.saveSessionImage(file, bytes));
+  }
+
+  print(agent: Agent, lines: TermEntry[]): void {
     if (!lines.length || !this.store.agents.has(agent.id)) return;
     const t = Date.now();
-    const stamped = lines.map((l) => ({ t, ...l }));
+    const stamped = this.saved(lines).map((l) => ({ t, ...l }));
     this.store.appendLines(agent.id, stamped);
     this.hub.send({ type: 'lines', id: agent.id, lines: stamped });
   }
@@ -272,11 +279,11 @@ export abstract class Part {
     this.core.update(agent, patch);
   }
 
-  protected print(agent: Agent, lines: Omit<TermLine, 't'>[]): void {
+  protected print(agent: Agent, lines: TermEntry[]): void {
     this.core.print(agent, lines);
   }
 
-  protected printHelper(agent: Agent, id: string, lines: Omit<TermLine, 't'>[]): void {
+  protected printHelper(agent: Agent, id: string, lines: TermEntry[]): void {
     this.core.printHelper(agent, id, lines);
   }
 

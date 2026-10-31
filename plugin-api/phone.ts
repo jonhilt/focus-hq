@@ -5,3 +5,4 @@ export * from './shared';
 export * from './browser';
 export type { PhoneHost, PhonePlugin } from '../client/src/tricorder/phonePlugins';
 export { h } from '../client/src/ui/dom';
+export { fold, type FoldOptions } from '../client/src/ui/fold';

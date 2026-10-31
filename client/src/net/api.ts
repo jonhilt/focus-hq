@@ -1,6 +1,6 @@
 import { callerOf, FLOW_FROM_HEADER, FLOWS_PARAM } from '../../../shared/flows';
 import type { PersonalEntry } from '../../../shared/personalLog';
-import type { Agent, Autonomy, Board, BotChange, BotStatus, CodingAgent, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
+import type { Agent, Autonomy, Board, BotChange, BotStatus, CodingAgent, ConflictsOutcome, Effort, FrameStatsLine, Issue, IssueDraft, MergeMethod, MessageReply, Preview, PreviewLog, PreviewLogFile, PreviewSet, QaChatReply, QaChatTurn, QaPlaybook, QaReview, Project, ReplayStep, ResumeHow, RoomTheme, Settings, TermLine, TextLine, VoiceStatus, WorkflowScript } from '../../../shared/types';
 import type { LedgerEvent } from '../../../shared/ledger';
 import type { KokoroVoice } from '../../../shared/voice';
 
@@ -102,7 +102,7 @@ export const api = {
   /** An agent's run journal replayed: each fact in words, and where the run was after it. */
   run: (id: string) => call<ReplayStep[]>('GET', `/agents/${id}/run`),
   /** The tail of what a lead's background command (or monitor) has written, read again each call. */
-  backgroundOutput: (leadId: string, taskId: string) => call<Omit<TermLine, 't'>[]>('GET', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/output`),
+  backgroundOutput: (leadId: string, taskId: string) => call<TextLine[]>('GET', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/output`),
   /** Stops it, and tells the lead; `stopped` is false when the lead's session can't be asked. */
   stopBackground: (leadId: string, taskId: string) => call<{ stopped: boolean }>('POST', `/agents/${leadId}/background/${encodeURIComponent(taskId)}/stop`),
   workflowScript: (leadId: string, workflowId: string) => call<WorkflowScript>('GET', `/agents/${leadId}/workflows/${encodeURIComponent(workflowId)}/script`),

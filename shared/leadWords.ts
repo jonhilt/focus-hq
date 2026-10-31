@@ -1,4 +1,5 @@
-import type { GoalArtifact, TermLine } from './types';
+import { entryLines } from './stepText';
+import type { GoalArtifact, TermEntry, TermLine } from './types';
 
 // What a lead said and showed in the turn that's waiting on the captain, from their terminal, for whatever puts it in
 // front of them (a plugin, through plugin-api). Pure, so it's tested (leadWords.test.ts).
@@ -7,7 +8,8 @@ import type { GoalArtifact, TermLine } from './types';
  * What an agent said last, from its terminal: its last run of text lines, past whatever came after (Ops' log
  * of a turn ending, or the tool call a raised hand is for), at most `max` characters of its end, from a whole line.
  */
-export function lastWords(lines: readonly TermLine[], max = 1500): string {
+export function lastWords(entries: readonly TermEntry[], max = 1500): string {
+  const lines = entries.flatMap(entryLines);
   let end = lines.length;
   while (end > 0 && lines[end - 1].kind !== 'text') end--;
   let start = end;

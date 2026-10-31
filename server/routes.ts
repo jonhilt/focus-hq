@@ -8,6 +8,7 @@ import { replay } from './agents/runJournal';
 import { artifactServing, codingAgent, effort, picks, pluginSecretChange, qaShotServing, resumeHow, str } from './apiRequests';
 import { botChange, botGuard } from './bot';
 import { paths } from './config';
+import { sessionImageName } from './sessionImages';
 import { appendFrameStats } from './frameStats';
 import type { Focus } from './focus';
 import type { Store } from './store';
@@ -43,6 +44,14 @@ export function apiRouter(focus: Focus, store: Store, botToken: () => string | u
     const bytes = serving && (await store.readShot(file));
     if (!serving || !bytes) return void res.sendStatus(404);
     res.type(serving.type).set(serving.headers).send(bytes);
+  });
+  // an image a session's tool gave back (server/sessionImages.ts)
+  r.get('/session-images/:file', async (req, res) => {
+    const file = param(req, 'file');
+    const ext = sessionImageName(file);
+    const bytes = ext && (await store.readSessionImage(file));
+    if (!ext || !bytes) return void res.sendStatus(404);
+    res.type(ext).set('Cache-Control', 'max-age=31536000, immutable').send(bytes);
   });
   // what a goal's lead put on their station's screen, sandboxed in an origin of its own (artifactServing)
   r.get('/artifacts/:lead/:file', async (req, res) => {

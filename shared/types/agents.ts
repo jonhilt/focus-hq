@@ -46,11 +46,38 @@ export type TermKind = 'system' | 'text' | 'thinking' | 'tool' | 'output' | 'err
 /** The coding agents a developer can run on: Claude Code, or Codex (both through agent-host). */
 export type CodingAgent = 'claude' | 'codex';
 
-export interface TermLine {
-  t: number;
+/**
+ * One thing in a session's transcript, kept whole as data: views decide how much of it to show (`shared/termText.ts`
+ * for those that only draw text). What the agent did is typed (`SessionStep`); what Ops tells it and says about it are
+ * plain lines of text (`kind` a TermKind), as are lines kept from before steps were typed.
+ */
+export type TermLine = { t: number } & TermEntry;
+
+/** A transcript entry before it's stamped with its time. */
+export type TermEntry = TextLine | SessionStep;
+
+/** A line of text: a notice, a message sent to the session, a command's output. */
+export interface TextLine {
   kind: TermKind;
   text: string;
 }
+
+/** An image a tool gave back: `src` is a data URL as the engine reads it, and Focus's own URL for it once it's saved. */
+export interface SessionImage {
+  src: string;
+}
+
+/**
+ * What the agent did, whole: a reply (its markdown), its thinking ('' when the agent kept it to itself), a tool call
+ * with all of its input (`cwd`: where it ran, so a view can show its paths short), and the call's result, all of it.
+ * `helper`: the subagent whose it is, when it's one's and the session keeps no transcript apart for it.
+ */
+export type SessionStep = { helper?: string } & (
+  | { kind: 'reply'; text: string }
+  | { kind: 'think'; text: string }
+  | { kind: 'call'; id: string; tool: string; input: Record<string, unknown>; cwd: string }
+  | { kind: 'result'; id: string; ok: boolean; text: string; images?: SessionImage[] }
+);
 
 export interface BrowserFrame {
   url: string;

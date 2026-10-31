@@ -1,12 +1,10 @@
-import type { AgentStatus, BrowserFrame, TermLine } from '../../shared/types';
-import { REPLY } from '../../shared/termText';
+import { relPath, todoList } from '../../shared/stepText';
+import type { AgentStatus, BrowserFrame, SessionStep } from '../../shared/types';
 import { truncate } from '../util';
 import { contentBlocks, field } from './transcript';
 
-type Line = Omit<TermLine, 't'>;
-
-export interface Rendered {
-  lines: Line[];
+/** What a tool call has the session busy with. */
+export interface Activity {
   status?: AgentStatus;
   activity?: string;
 }
@@ -20,14 +18,6 @@ export interface ToolCall {
 }
 
 const str = (v: unknown) => (typeof v === 'string' ? v : v === undefined ? '' : JSON.stringify(v));
-
-/** The objects in a list the model sent: its input is only checked against the tool's schema after we've seen it. */
-const records = (v: unknown): Record<string, unknown>[] =>
-  Array.isArray(v) ? v.filter((x): x is Record<string, unknown> => typeof x === 'object' && x !== null) : [];
-
-/** The todos in a TodoWrite call: those with something to do. */
-const todoList = (v: unknown): { content: string; status: unknown }[] =>
-  records(v).flatMap((t) => (typeof t.content === 'string' ? [{ content: t.content, status: t.status }] : []));
 
 const LOCAL_URL = /https?:\/\/(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?[^\s'"`)<>\\]*/g;
 
@@ -65,101 +55,55 @@ export function screenshotFrame(result: Block, call: ToolCall | undefined, lastU
   return { url: lastUrl ?? file ?? call?.name ?? 'screenshot', title: lastUrl ? name : undefined, image, at };
 }
 
-/** Turns Claude Code tool calls into terminal lines that look like Claude Code's own UI. */
-export function renderToolUse(name: string, input: Record<string, unknown>, cwd: string): Rendered {
-  const rel = (p: unknown) => {
-    const s = str(p);
-    return s.startsWith(cwd) ? s.slice(cwd.length).replace(/^[/\\]/, '') || '.' : s;
-  };
-  const head = (label: string, arg: string): Line => ({ kind: 'tool', text: `⏺ ${label}(${truncate(arg, 120)})` });
+/** What a tool call has the session busy with: its status (null to keep the one it has) and its activity line. */
+export function toolActivity(name: string, input: Record<string, unknown>, cwd: string): Activity {
+  const rel = (p: unknown) => relPath(p, cwd);
 
   if (name.startsWith('mcp__browser__')) {
     const action = name.slice('mcp__browser__'.length);
     const arg = str(input.url ?? input.selector ?? input.text ?? input.key ?? input.expression ?? '');
-    return {
-      lines: [head(`Browser.${action}`, arg)],
-      status: 'testing',
-      activity: action === 'open' ? `Testing ${arg} in the browser` : `Testing in the browser (${action})`,
-    };
+    return { status: 'testing', activity: action === 'open' ? `Testing ${arg} in the browser` : `Testing in the browser (${action})` };
   }
 
   switch (name) {
-    case 'Bash': {
-      const cmd = str(input.command);
-      return { lines: [head('Bash', cmd)], status: 'working', activity: `Running ${truncate(cmd.split('\n')[0], 60)}` };
-    }
+    case 'Bash':
+      return { status: 'working', activity: `Running ${truncate(str(input.command).split('\n')[0], 60)}` };
     case 'Read':
-      return { lines: [head('Read', rel(input.file_path))], status: 'working', activity: `Reading ${rel(input.file_path)}` };
-    case 'Write': {
-      const content = str(input.content).split('\n');
-      return {
-        lines: [
-          head('Write', rel(input.file_path)),
-          ...content.slice(0, 4).map((l): Line => ({ kind: 'success', text: `  + ${truncate(l, 140)}` })),
-          ...(content.length > 4 ? [{ kind: 'output' as const, text: `  … +${content.length - 4} lines` }] : []),
-        ],
-        status: 'working',
-        activity: `Writing ${rel(input.file_path)}`,
-      };
-    }
+      return { status: 'working', activity: `Reading ${rel(input.file_path)}` };
+    case 'Write':
+      return { status: 'working', activity: `Writing ${rel(input.file_path)}` };
     case 'Edit':
-    case 'MultiEdit': {
-      const edits = (name === 'Edit' ? [input] : records(input.edits)).slice(0, 2);
-      const lines: Line[] = [head(name === 'Edit' ? 'Update' : 'MultiEdit', rel(input.file_path))];
-      for (const edit of edits) {
-        for (const l of str(edit.old_string).split('\n').slice(0, 3)) lines.push({ kind: 'error', text: `  - ${truncate(l, 140)}` });
-        for (const l of str(edit.new_string).split('\n').slice(0, 3)) lines.push({ kind: 'success', text: `  + ${truncate(l, 140)}` });
-      }
-      return { lines, status: 'working', activity: `Editing ${rel(input.file_path)}` };
-    }
+    case 'MultiEdit':
+      return { status: 'working', activity: `Editing ${rel(input.file_path)}` };
+    case 'apply_patch':
+      return { status: 'working', activity: 'Editing files' };
     case 'Glob':
-      return { lines: [head('Glob', str(input.pattern))], status: 'working', activity: `Looking for ${str(input.pattern)}` };
+      return { status: 'working', activity: `Looking for ${str(input.pattern)}` };
     case 'Grep':
-      return { lines: [head('Search', `"${str(input.pattern)}"`)], status: 'working', activity: `Searching for "${truncate(str(input.pattern), 40)}"` };
+      return { status: 'working', activity: `Searching for "${truncate(str(input.pattern), 40)}"` };
     case 'TodoWrite': {
-      const todos = todoList(input.todos);
-      const current = todos.find((t) => t.status === 'in_progress');
-      return {
-        lines: [
-          { kind: 'tool', text: '⏺ Update Todos' },
-          ...todos.map((t): Line => ({
-            kind: t.status === 'completed' ? 'success' : 'output',
-            text: `  ${t.status === 'completed' ? '☒' : t.status === 'in_progress' ? '◐' : '☐'} ${truncate(t.content, 120)}`,
-          })),
-        ],
-        activity: current ? truncate(current.content, 70) : undefined,
-      };
+      const current = todoList(input.todos).find((t) => t.status === 'in_progress');
+      return { activity: current ? truncate(current.content, 70) : undefined };
     }
     case 'Task':
     case 'Agent':
-      return { lines: [head('Task', str(input.description))], status: 'working', activity: `Delegating: ${truncate(str(input.description), 50)}` };
+      return { status: 'working', activity: `Delegating: ${truncate(str(input.description), 50)}` };
     case 'WebSearch':
-      return { lines: [head('Web Search', str(input.query))], activity: `Searching the web for ${truncate(str(input.query), 40)}` };
+      return { activity: `Searching the web for ${truncate(str(input.query), 40)}` };
     case 'WebFetch':
-      return { lines: [head('Fetch', str(input.url))], activity: `Reading ${truncate(str(input.url), 50)}` };
-    default: {
-      const first = Object.values(input)[0];
-      return { lines: [head(name.replace(/^mcp__/, ''), str(first))], activity: `Using ${name}` };
-    }
+      return { activity: `Reading ${truncate(str(input.url), 50)}` };
+    default:
+      return { activity: `Using ${name}` };
   }
 }
 
-/** Shows the first few lines of a tool result, dimmed, like Claude Code's ⎿ output. */
-export function renderToolResult(block: Block): Line[] {
-  const content = block.content;
-  const text = typeof content === 'string' ? content : contentBlocks(content)
-    .map((c) => (c.type === 'text' ? str(c.text) : c.type === 'image' ? '[screenshot]' : ''))
-    .filter(Boolean)
-    .join('\n');
-  const kind = block.is_error ? 'error' : 'output';
-  const all = text.replace(/\r/g, '').split('\n').filter((l) => l.trim().length > 0);
-  if (all.length === 0) return [{ kind, text: '  ⎿  (no output)' }];
-  const shown = all.slice(0, 4).map((l, i): Line => ({ kind, text: `  ${i === 0 ? '⎿' : ' '}  ${truncate(l, 160)}` }));
-  if (all.length > 4) shown.push({ kind: 'output', text: `     … +${all.length - 4} lines` });
-  return shown;
-}
+/** A tool call as a step: all of its input, and where it ran. */
+export const callStep = (id: string, tool: string, input: Record<string, unknown>, cwd: string): SessionStep => ({ kind: 'call', id, tool, input, cwd });
 
-export function renderText(text: string, kind: TermLine['kind'] = 'text'): Line[] {
-  const lines = text.replace(/\r/g, '').split('\n');
-  return lines.map((l, i) => ({ kind, text: `${i === 0 ? REPLY : '  '}${l}` }));
+/** A tool result as a step: all of its text, and the images it gave back as data URLs (Focus saves them as it prints). */
+export function resultStep(id: string, block: { content?: unknown; is_error?: boolean | null }): SessionStep {
+  const content = block.content;
+  const text = typeof content === 'string' ? content : contentBlocks(content).flatMap((c) => (c.type === 'text' ? [str(c.text)] : [])).join('\n');
+  const images = Array.isArray(content) ? content.flatMap((c) => imageUrl(c) ?? []).map((src) => ({ src })) : [];
+  return { kind: 'result', id, ok: !block.is_error, text, ...(images.length > 0 && { images }) };
 }

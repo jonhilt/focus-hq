@@ -1,7 +1,8 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import type { TermLine } from '../../shared/types';
+import type { TermEntry } from '../../shared/types';
+import { isTextLine } from '../../shared/stepText';
 import { demoPace } from '../demoPace';
 import { demoSinceVerdict } from '../demoGit';
 import { demoOpenPr, demoPush, demoReady } from '../github/demo';
@@ -11,7 +12,7 @@ import type { PackageFacts } from '../packageManager';
 import { randomHex, sleep } from '../util';
 import type { Transcript } from './transcript';
 import type { Drafter, DraftRequest, DraftResult } from './planner';
-import { renderText, renderToolUse } from './render';
+import { callStep, resultStep, toolActivity } from './render';
 import { workflowProgress } from './workflows';
 import type { SliceRecap } from './recap';
 import type { TriageDecision, Triager, TriageRequest } from './triage';
@@ -117,26 +118,25 @@ export class DemoRunner implements AgentRunner {
       if (stopped) throw new Error('stopped');
     };
     const tool = async (name: string, input: Record<string, unknown>, output: string[] = []) => {
-      const r = renderToolUse(name, input, '/work');
-      hooks.lines(r.lines);
+      const r = toolActivity(name, input, '/work');
+      const id = `demo_step_${randomHex(4)}`;
+      hooks.lines([callStep(id, name, input, '/work')]);
       const answered = journalCall(name, input, output.join('\n'));
       // the agent's own task list, as Claude Code's task tools would report it
       if (name === 'TodoWrite') hooks.taskTool?.(name, input, undefined, '');
       if (r.activity || r.status) hooks.activity(r.status ?? null, r.activity ?? '');
       await wait(1.2, 3.2);
       answered();
-      if (output.length) {
-        hooks.lines(output.slice(0, 4).map((text, i) => ({ kind: 'output', text: `  ${i === 0 ? '⎿' : ' '}  ${text}` })));
-      }
+      if (output.length) hooks.lines([resultStep(id, { content: output.join('\n') })]);
     };
     const say = async (text: string) => {
-      hooks.lines(renderText(text));
+      hooks.lines([{ kind: 'reply', text }]);
       journal('assistant', [{ type: 'text', text }]);
       hooks.activity(null, text.split('\n')[0].slice(0, 80));
       await wait(1, 2.5);
     };
     const think = async () => {
-      hooks.lines([{ kind: 'thinking', text: '✻ Thinking…' }]);
+      hooks.lines([{ kind: 'think', text: '' }]);
       journal('assistant', [{ type: 'thinking', thinking: '' }]);
       hooks.activity('working', 'Thinking…');
       await wait(1.5, 3.5);
@@ -459,8 +459,10 @@ export class DemoRunner implements AgentRunner {
       const helperRound = async (round: { folder: string; files: string[]; description: string; ask: string; found: string }[]) => {
         const helpers = round.map((h) => ({ ...h, id: `demo-helper-${h.folder.replace(/\W/g, '-')}-${randomHex(2)}` }));
         // each helper's lines are its own transcript, as the real runner keeps them
-        const helperLines = (id: string, lines: Omit<TermLine, 't'>[]) =>
-          hooks.helperLines ? hooks.helperLines(id, lines) : hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));
+        const helperLines = (id: string, lines: TermEntry[]) =>
+          hooks.helperLines
+            ? hooks.helperLines(id, lines)
+            : hooks.lines(lines.map((l) => (isTextLine(l) ? { ...l, kind: l.kind === 'text' ? 'output' : l.kind, text: `    ${l.text}` } : { ...l, helper: id })));
         for (const h of helpers) {
           hooks.lines([{ kind: 'tool', text: `⏺ Agent(${h.description})` }]);
           hooks.helper?.({ kind: 'started', id: h.id, description: h.description, type: 'Explore' });

@@ -261,17 +261,18 @@ describe('transcriptLines', () => {
     { type: 'assistant', message: { content: [{ type: 'text', text: 'It printed hi' }] } },
   ].map((e) => JSON.stringify(e)).join('\n') + '\n{"type":"assist';
 
-  it('reads what it was asked, the tools it used, what came back and what it said, leaving out its thinking', () => {
-    const text = transcriptLines(jsonl).map((l) => l.text).join('\n');
-    expect(text).toMatch(/^▶ Run the bash command: echo hi/);
-    expect(text).toMatch(/Bash\(echo hi\)/);
-    expect(text).toMatch(/hi/);
-    expect(text).toMatch(/It printed hi/);
-    expect(text).not.toMatch(/hmm/);
+  it('reads what it was asked, what it thought, the tools it used, what came back and what it said', () => {
+    expect(transcriptLines(jsonl)).toEqual([
+      { kind: 'manager', text: '▶ Run the bash command: echo hi' },
+      { kind: 'think', text: 'hmm' },
+      { kind: 'call', id: '', tool: 'Bash', input: { command: 'echo hi' }, cwd: '' },
+      { kind: 'result', id: '', ok: true, text: 'hi' },
+      { kind: 'reply', text: 'It printed hi' },
+    ]);
   });
 
   it('skips a line or a block that isn’t one, and reads the rest', () => {
     const damaged = ['null', '"text"', JSON.stringify({ type: 'assistant', message: { content: [null, 'x', { type: 'text', text: 7 }, { type: 'text', text: 'Still here' }] } })].join('\n');
-    expect(transcriptLines(damaged).map((l) => l.text).join('\n')).toMatch(/Still here/);
+    expect(transcriptLines(damaged)).toEqual([{ kind: 'reply', text: 'Still here' }]);
   });
 });

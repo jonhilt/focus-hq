@@ -82,6 +82,7 @@ export class Store {
   private ledgerLog: LedgerLog | null = null;
   /** QA screenshots by file name, when not persisting (demo). */
   private shots = new Map<string, Buffer>();
+  private sessionImages = new Map<string, Buffer>();
   /** Artifacts' pages and pictures when nothing's saved to disk, by `<lead id>/<file>`. */
   private artifacts = new Map<string, Buffer>();
   private saveTimer: NodeJS.Timeout | null = null;
@@ -258,6 +259,28 @@ export class Store {
     }
     fs.mkdirSync(paths.qaShots, { recursive: true });
     fs.writeFileSync(path.join(paths.qaShots, file), bytes);
+  }
+
+  /**
+   * A session's image (`savingImages`): written once, since its name is its content, and renamed into place, so one cut
+   * off as Focus went down is never taken for saved (and written again the next time it comes).
+   */
+  saveSessionImage(file: string, bytes: Buffer): void {
+    if (!this.persist) {
+      this.sessionImages.set(file, bytes);
+      return;
+    }
+    const full = path.join(paths.sessionImages, file);
+    if (fs.existsSync(full)) return;
+    fs.mkdirSync(paths.sessionImages, { recursive: true });
+    const tmp = `${full}.tmp`;
+    fs.writeFileSync(tmp, bytes);
+    fs.renameSync(tmp, full);
+  }
+
+  async readSessionImage(file: string): Promise<Buffer | undefined> {
+    if (!this.persist) return this.sessionImages.get(file);
+    return fsp.readFile(path.join(paths.sessionImages, file)).catch(() => undefined);
   }
 
   async readShot(file: string): Promise<Buffer | undefined> {

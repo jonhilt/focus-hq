@@ -53,6 +53,8 @@ export const paths = {
   checks: path.join(config.dataDir, 'checks'),
   /** The screenshots that go with QA reports, for the QA station. */
   qaShots: path.join(config.dataDir, 'qa-shots'),
+  /** The images sessions' tool results gave back, named by their content (server/sessionImages.ts). */
+  sessionImages: path.join(config.dataDir, 'session-images'),
   /** What each goal's lead has put on their station's screen, a folder per lead, until the goal closes. */
   artifacts: path.join(config.dataDir, 'artifacts'),
   /** Read-only checkouts of each project's repos at their default branch, for the planner. */

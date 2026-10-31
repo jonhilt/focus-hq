@@ -5,7 +5,7 @@ import { prKey, pullUrl, sameCommit } from '../../../shared/qa';
 import { autoSendBackFor, qaProofFor, qaVideoFor } from '../../../shared/qaRules';
 import { qaChatChange, qaChatTurns, qaSettingsNow } from '../../../shared/qaChat';
 import { qaWhoLine } from '../../../shared/qaPlaybook';
-import type { Agent, FailedCheck, FixFor, Project, QaChatReply, QaPlaybook, QaRecording, QaReport, QaReview, QaScreenshot, TermLine } from '../../../shared/types';
+import type { Agent, FailedCheck, FixFor, Project, QaChatReply, QaPlaybook, QaRecording, QaReport, QaReview, QaScreenshot, TermKind } from '../../../shared/types';
 import { QA_DESK } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { decodeImage, errorMessage, newId, slugify, truncate } from '../../util';
@@ -442,7 +442,7 @@ export class Reviews extends Part {
 
   /** Comments the verdict on the PR: its link, or undefined when GitHub wouldn't take it (said in the reviewer's terminal). */
   private postVerdict(agent: Agent | undefined, repo: string, number: number, body: string): Effect.Effect<string | undefined, never, GitHub> {
-    const say = (line: TermLine['kind'], text: string) => Effect.sync(() => agent && this.print(agent, [{ kind: line, text }]));
+    const say = (line: TermKind, text: string) => Effect.sync(() => agent && this.print(agent, [{ kind: line, text }]));
     if (agent) this.update(agent, { activity: 'Posting the QA report on the PR' });
     return GitHub.use((github) => github.commentOnPullRequest(repo, number, body)).pipe(
       Effect.tap((url) => say('system', `✻ Posted the QA report: ${url || 'done'}`)),

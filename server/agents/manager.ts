@@ -1,7 +1,7 @@
 import type { Layer } from 'effect';
 import { type CaptainAnswer, landed } from '../../shared/captainAnswer';
 import type { Closer, LedgerEntry, ReportCard } from '../../shared/ledger';
-import type { Agent, Autonomy, CodingAgent, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermLine, WorkflowScript } from '../../shared/types';
+import type { Agent, Autonomy, CodingAgent, ConflictsOutcome, Effort, FailedCheck, LeadPr, MergeCheck, MessageReply, PullRequest, QaChatReply, QaPlaybook, QaReview, QueuedGoal, ResumeHow, TermEntry, TextLine, WorkflowScript } from '../../shared/types';
 import type { SessionExtras } from './types';
 import type { Hub } from '../hub';
 import type { FocusPlugin } from '../plugins/contract';
@@ -180,12 +180,12 @@ export class AgentManager {
   }
 
   /** What one of a lead's workflow agents has done so far, from the transcript Claude Code writes as it works. */
-  workflowAgentLines(id: string, workflowId: string, agentId: string): Omit<TermLine, 't'>[] {
+  workflowAgentLines(id: string, workflowId: string, agentId: string): TermEntry[] {
     return workflowAgentLines(this.core.runtimes.get(id), workflowId, agentId);
   }
 
   /** The end of one of a lead's background commands' output, from the file it writes to. */
-  backgroundOutput(id: string, taskId: string): Omit<TermLine, 't'>[] {
+  backgroundOutput(id: string, taskId: string): TextLine[] {
     return backgroundOutputLines(this.core.runtimes.get(id), taskId);
   }
 

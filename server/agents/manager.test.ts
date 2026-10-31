@@ -15,8 +15,9 @@ import { demoWorkspace } from './demoRunner';
 import { focus, leadOpensPrs, restarted, until } from './fakeFocus';
 import { Recordings } from './services';
 import type { AgentManager } from './manager';
-import type { Agent, Issue, PullRequest, QaReport, Snapshot } from '../../shared/types';
+import type { Agent, Issue, PullRequest, QaReport, Snapshot, TermEntry } from '../../shared/types';
 import { AWAY_DESK } from '../../shared/types';
+import { entryLines } from '../../shared/stepText';
 import type { WorkspaceOps } from './types';
 import { keyFallback } from './apiKey';
 import { CARRY_ON_AFTER_LIMIT } from './manager/planLimit';
@@ -30,6 +31,9 @@ vi.hoisted(() => {
   process.env.ANTHROPIC_API_KEY = 'sk-test';
   process.env.FOCUS_USE_API_KEY = 'fallback';
 });
+
+/** What a session's lines read as, a line of text each. */
+const texts = (lines: readonly TermEntry[]) => lines.flatMap(entryLines).map((l) => l.text);
 
 /** A plugin with one brief, worked away from the room, whose pull requests only the captain merges: what its hooks heard. */
 function auditor(agents: AgentManager) {
@@ -405,7 +409,7 @@ describe('AgentManager', () => {
     expect(claude.turns[0].modes).toEqual(['full']);
     expect(store.agent(lead.id).autonomy).toBe('full');
     expect(store.settings.autonomy).toBe('ask');
-    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`✻ The captain set ${lead.name}'s autonomy to Full autonomy`);
+    expect(texts(store.recentLines(lead.id)).at(-1)).toBe(`✻ The captain set ${lead.name}'s autonomy to Full autonomy`);
     // the same mode again changes nothing and says nothing
     const lines = store.recentLines(lead.id).length;
     agents.setAutonomy(lead.id, 'full');
@@ -416,7 +420,7 @@ describe('AgentManager', () => {
     await until(() => store.agent(lead.id).status === 'done');
     // no session running: it's recorded for their next turn, which starts in it
     agents.setAutonomy(lead.id, 'auto');
-    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`✻ The captain set ${lead.name}'s autonomy to Auto mode`);
+    expect(texts(store.recentLines(lead.id)).at(-1)).toBe(`✻ The captain set ${lead.name}'s autonomy to Auto mode`);
     agents.message(lead.id, 'Go ahead');
     await until(() => claude.turns.length === 2);
     expect(claude.turns[1].req.autonomy).toBe('auto');
@@ -434,7 +438,7 @@ describe('AgentManager', () => {
     // their own mode takes hold in their running session
     agents.setAutonomy(id, 'ask');
     expect(claude.turns[2].modes).toEqual(['ask']);
-    expect(store.recentLines(id).at(-1)?.text).toMatch(/autonomy to Raise your hand$/);
+    expect(texts(store.recentLines(id)).at(-1)).toMatch(/autonomy to Raise your hand$/);
   });
 
   it('hires a developer to run on Codex: their sessions say so', async () => {
@@ -443,7 +447,7 @@ describe('AgentManager', () => {
     await until(() => claude.turns.length === 1);
     expect(claude.turns[0].req).toMatchObject({ agent: 'codex' });
     expect(store.agent(id)).toMatchObject({ agent: 'codex' });
-    expect(store.recentLines(id).some((l) => l.text.includes('(Codex, default effort)'))).toBe(true);
+    expect(texts(store.recentLines(id)).some((t) => t.includes('(Codex, default effort)'))).toBe(true);
   });
 
   it('remembers which of a lead’s turns the captain read, until the next one ends', async () => {
@@ -601,7 +605,7 @@ describe('AgentManager', () => {
     agents.message(qa, 'continue');
     await new Promise((r) => setTimeout(r, 50));
     expect(claude.turns).toHaveLength(1);
-    expect(store.recentLines(qa).at(-1)?.text).toBe(`✻ PR #${pr.number} was merged; nothing to review`);
+    expect(texts(store.recentLines(qa)).at(-1)).toBe(`✻ PR #${pr.number} was merged; nothing to review`);
   });
 
   // jonhilt/focus#523: QA's turn failed (out of credit), the captain said "Continue", and QA's pass went nowhere
@@ -966,7 +970,7 @@ describe('AgentManager', () => {
     const goal = store.agent(spun.agent.id);
     expect(goal.lead).toMatchObject({ brief: 'Saved items follow you across devices' });
     expect(store.agent(lead.id).lead!.contacts![0].closed).toMatchObject({ as: 'spun off', goal: goal.id, title: goal.lead!.title });
-    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun one of your loose threads (Sync across devices?) off as a goal of its own');
+    expect(texts(store.recentLines(lead.id)).at(-1)).toContain('spun one of your loose threads (Sync across devices?) off as a goal of its own');
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
 
     const idea = agents.spinOffIdea(lead.id, 'Tidy the store', 'Tidy the store code') as { agent: { id: string } };
@@ -974,7 +978,7 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead!.note!.next).toEqual(['Show it in the header']);
     // and stays off it while the lead's brief still lists it
     expect(store.agent(lead.id).lead!.spunOffIdeas).toEqual(['Tidy the store']);
-    expect(store.recentLines(lead.id).at(-1)?.text).toContain('spun your idea for next (Tidy the store) off');
+    expect(texts(store.recentLines(lead.id)).at(-1)).toContain('spun your idea for next (Tidy the store) off');
     expect(() => agents.spinOffIdea(lead.id, 'Tidy the store', 'Again')).toThrow('isn’t one of the lead’s ideas');
   });
 
@@ -1099,7 +1103,7 @@ describe('AgentManager', () => {
     const started = agents.spinOffContact(lead.id, 'c1', 'Auth off the LAN\n\n(Spun off from “Saved items”)');
     const closed = store.agent(lead.id).lead?.contacts?.[0].closed;
     expect(closed).toMatchObject({ as: 'spun off', goal: started.agent.id, title: 'Auth off the LAN', slice: 1 });
-    expect(store.recentLines(lead.id).at(-1)?.text).toBe(`▶ Star chart: The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”. Leave that thread to the new goal: take it off your brief.`);
+    expect(texts(store.recentLines(lead.id)).at(-1)).toBe(`▶ Star chart: The captain spun one of your loose threads (Auth off the LAN?) off as a goal of its own, “Auth off the LAN”. Leave that thread to the new goal: take it off your brief.`);
     expect(() => agents.spinOffContact(lead.id, 'c1', 'Again')).toThrow('Contact c1 was already spun off.');
     expect(() => agents.spinOffContact(lead.id, 'c9', 'Who?')).toThrow("There's no contact c9. Open contacts: c2 (Dark mode).");
 
@@ -1784,7 +1788,7 @@ describe('AgentManager', () => {
       hooks.workflow!({ kind: 'started', id: 'w1', name: 'review', description: 'Review the change', script });
       expect(store.agent(id).workflows).toMatchObject([{ id: 'w1', name: 'review', status: 'running', plan: [{ title: 'Review' }, { title: 'Verify' }] }]);
       expect(agents.workflowScript(id, 'w1').source).toBe(script);
-      expect(store.recentLines(id).at(-1)?.text).toBe(`✻ Workflow review: its away team beams into ${store.agent(id).name}'s briefing room a phase at a time`);
+      expect(texts(store.recentLines(id)).at(-1)).toBe(`✻ Workflow review: its away team beams into ${store.agent(id).name}'s briefing room a phase at a time`);
       // only about where its files are: nothing on the lead changes
       hooks.workflow!({ kind: 'transcripts', id: 'w1', dir: '/nowhere/subagents/workflows/w1' });
 
@@ -2066,7 +2070,7 @@ describe('AgentManager', () => {
       const started = host.goals.start(project.id, 'Saved items', { from: 'a call' });
       if (!('agent' in started)) throw new Error('the goal should have a station');
       const lead = started.agent;
-      expect(store.recentLines(lead.id).map((l) => l.text)).toContain('▶ Captain, from a call: Saved items');
+      expect(texts(store.recentLines(lead.id))).toContain('▶ Captain, from a call: Saved items');
       await until(() => claude.turns.length === 1);
       claude.turns[0].end({ ok: true, summary: 'Proposed a slice' });
       await until(() => store.agent(lead.id).status === 'done');

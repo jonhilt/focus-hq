@@ -46,7 +46,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.289",
     "@huggingface/transformers": "^3.8.1",
-    "agent-host": "git+https://github.com/jonhilt/agent-host.git",
+    "agent-host": "git+https://github.com/jonhilt/agent-host.git#de02169121adf698fc992b5834557c01797c00ec",
     "croner": "10.0.1",
     "dompurify": "^3.4.16",
     "effect": "4.0.6",

@@ -1,15 +1,15 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('../../plugin-api/client', async () => ({ h: (await import('../../plugin-api/phone')).h, markdownHtml: (text: string) => `<p>${text}</p>` }));
+vi.mock('../../plugin-api/client', async () => ({ h: (await import('../../plugin-api/phone')).h, fold: (await import('../../plugin-api/phone')).fold, markdownHtml: (text: string) => `<p>${text}</p>` }));
 const { collapsedMessage, firstWords } = await import('./collapsedMessage');
 
 // A message told to a lead, folded to one line that opens in place to all of it (collapsedMessage.ts).
 const brief = '## The plan\n\nFirst,   store the items per user.\n\nThen show them on the page.';
 const draw = (open = new Set<string>()) => {
   const el = collapsedMessage({ id: 'a@1', head: 'Told Lt. a · Goal a · 10:00', text: brief, open, part: 'told' });
-  const toggle = el.querySelector<HTMLButtonElement>('[data-part=msg-toggle]');
-  const body = el.querySelector<HTMLElement>('[data-part=msg-body]');
+  const toggle = el.querySelector<HTMLButtonElement>('[data-part=fold-toggle]');
+  const body = el.querySelector<HTMLElement>('[data-part=fold-body]');
   if (!toggle || !body) throw new Error('no toggle or body');
   return { el, toggle, body, open };
 };

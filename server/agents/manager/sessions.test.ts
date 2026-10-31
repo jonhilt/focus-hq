@@ -87,7 +87,7 @@ describe('workflowAgentLines', () => {
     ].map((e) => JSON.stringify(e)).join('\n'));
     const lines = workflowAgentLines(runtime(undefined, new Map([['t1', dir]])), 't1', 'a1');
     expect(lines[0]).toEqual({ kind: 'manager', text: '▶ Review the diff' });
-    expect(lines.map((l) => l.text).join('\n')).toContain('No bugs');
+    expect(lines).toEqual([{ kind: 'manager', text: '▶ Review the diff' }, { kind: 'reply', text: 'No bugs' }]);
   });
 
   it('reads nothing outside the run’s folder, whatever the agent id says', () => {

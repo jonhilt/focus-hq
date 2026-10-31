@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { needsYou } from '../../../shared/tricorder';
-import type { Agent, TermLine } from '../../../shared/types';
+import { isTextLine } from '../../../shared/stepText';
+import type { Agent, TermLine, TextLine } from '../../../shared/types';
 import { focus, until } from '../fakeFocus';
 
 const issue = { number: 1, title: 'Add a dark mode toggle to the header' };
@@ -41,7 +42,7 @@ describe('stopping a background task', () => {
 
 describe('a lead’s proposal to close the goal', () => {
   const attention = (agent: Agent) => needsYou([agent], [], new Map()).map((a) => a.kind);
-  const setAside = (lines: TermLine[]) => lines.filter((l) => l.text.includes('set aside'));
+  const setAside = (lines: TermLine[]) => lines.filter((l): l is TermLine & TextLine => isTextLine(l)).filter((l) => l.text.includes('set aside'));
 
   /** A lead whose first turn proposed closing the goal, and ended: the user is asked to close it. */
   const proposed = async () => {

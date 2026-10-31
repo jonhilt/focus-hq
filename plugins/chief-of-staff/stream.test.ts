@@ -580,14 +580,14 @@ describe('talking to the lead', () => {
     const said = part('talk')?.querySelector('[data-part=told]')?.parentElement;
     expect([...(said?.children ?? [])].map((c) => c.getAttribute('data-from') ?? c.getAttribute('data-part'))).toEqual(['you', 'told', 'told', 'lead']);
     const [cos, qa] = parts('told');
-    const toggle = cos?.querySelector<HTMLButtonElement>('[data-part=msg-toggle]');
+    const toggle = cos?.querySelector<HTMLButtonElement>('[data-part=fold-toggle]');
     expect(toggle?.textContent).toContain('Chief of Staff told Lt. a');
     expect(toggle?.textContent).toContain('Here is the plan for the saved list.');
     expect(qa?.textContent).toContain('QA officer Lt. Okafor told Lt. a');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(cos?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(true);
+    expect(cos?.querySelector<HTMLElement>('[data-part=fold-body]')?.hidden).toBe(true);
     toggle?.click();
-    expect(cos?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
+    expect(cos?.querySelector<HTMLElement>('[data-part=fold-body]')?.hidden).toBe(false);
     expect(cos?.textContent).toContain('Then show them on the page.');
     // the lead answers, and the thread is drawn again with it: what was opened is open still
     fake.threads.a = [...fake.threads.a, { kind: 'you', at: 5, text: 'Ship it' }];
@@ -599,9 +599,9 @@ describe('talking to the lead', () => {
     expect(part('talk')?.textContent).toContain('Ship it');
     const again = parts('told')[0];
     expect(again).not.toBe(cos);
-    expect(again?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(again?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
-    expect(parts('told')[1]?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('false');
+    expect(again?.querySelector('[data-part=fold-toggle]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(again?.querySelector<HTMLElement>('[data-part=fold-body]')?.hidden).toBe(false);
+    expect(parts('told')[1]?.querySelector('[data-part=fold-toggle]')?.getAttribute('aria-expanded')).toBe('false');
   });
 });
 
@@ -676,21 +676,21 @@ describe('the direct line to the chief of staff', () => {
     part('line-berth')?.click();
     await settle();
     const told = part('line-told');
-    const toggle = told?.querySelector<HTMLButtonElement>('[data-part=msg-toggle]');
+    const toggle = told?.querySelector<HTMLButtonElement>('[data-part=fold-toggle]');
     expect(toggle?.textContent).toMatch(/Told Lt\. a · Goal a · \d\d:\d\d/);
     expect(toggle?.textContent).toContain('Mind the footer.');
     expect(toggle?.getAttribute('aria-expanded')).toBe('false');
-    expect(told?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(true);
+    expect(told?.querySelector<HTMLElement>('[data-part=fold-body]')?.hidden).toBe(true);
     toggle?.click();
     expect(toggle?.getAttribute('aria-expanded')).toBe('true');
-    expect(told?.querySelector<HTMLElement>('[data-part=msg-body]')?.textContent).toContain('Check it at 320px wide.');
+    expect(told?.querySelector<HTMLElement>('[data-part=fold-body]')?.textContent).toContain('Check it at 320px wide.');
     // its reply comes in, and the line is drawn again: what was opened is open still
     fake.line = { ...fake.line as object, messages: [...line.messages, { from: 'cos', text: 'Anything else?', at: 5 }] };
     fake.state?.();
     await settle();
     expect(part('line-told')).not.toBe(told);
-    expect(part('line-told')?.querySelector('[data-part=msg-toggle]')?.getAttribute('aria-expanded')).toBe('true');
-    expect(part('line-told')?.querySelector<HTMLElement>('[data-part=msg-body]')?.hidden).toBe(false);
+    expect(part('line-told')?.querySelector('[data-part=fold-toggle]')?.getAttribute('aria-expanded')).toBe('true');
+    expect(part('line-told')?.querySelector<HTMLElement>('[data-part=fold-body]')?.hidden).toBe(false);
   });
 
   it('sends what’s typed on Enter, and says what it’s doing while it thinks', async () => {

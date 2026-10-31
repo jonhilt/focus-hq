@@ -5,7 +5,7 @@ import { Effect, Exit, Fiber, FiberMap } from 'effect';
 import { effectiveAutonomy } from '../../../shared/autonomy';
 import { helperFor } from '../../../shared/crew';
 import { prKey } from '../../../shared/qa';
-import type { Agent, LeadAgent, PermissionRequest, TermLine, WorkflowScript } from '../../../shared/types';
+import type { Agent, LeadAgent, PermissionRequest, TermEntry, TextLine, WorkflowScript } from '../../../shared/types';
 import { GitHub, type GitHubError } from '../../github/service';
 import { newId, truncate } from '../../util';
 import { step, type Target, turnEvent } from '../runMachine';
@@ -544,7 +544,7 @@ const AGENT_ID = /^[A-Za-z0-9_-]{1,64}$/;
  * A lead's workflow agent's transcript, as terminal lines: read from where Claude Code writes it, each time it's asked
  * for, since it grows as the agent works. Empty until there's one to read.
  */
-export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, agentId: string): Omit<TermLine, 't'>[] {
+export function workflowAgentLines(rt: Runtime | undefined, workflowId: string, agentId: string): TermEntry[] {
   const dir = rt?.workflowTranscripts?.get(workflowId);
   if (!dir || !AGENT_ID.test(agentId)) return [];
   try {
@@ -609,7 +609,7 @@ export function workflowScript(rt: Runtime | undefined, workflowId: string): Wor
  * The end of a lead's background command's output, as terminal lines: read from the file it writes to, each time it's
  * asked for, since it grows as the command runs. Empty until there's one to read.
  */
-export function backgroundOutputLines(rt: Runtime | undefined, taskId: string): Omit<TermLine, 't'>[] {
+export function backgroundOutputLines(rt: Runtime | undefined, taskId: string): TextLine[] {
   const file = rt?.backgroundOutputs?.get(taskId);
   if (!file) return [];
   let fd: number | undefined;

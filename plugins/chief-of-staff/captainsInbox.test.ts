@@ -552,7 +552,7 @@ describe('moving work the chief of staff found to another goal, as the captain a
     await until(() => o.claude.turns.length === 3);
     expect(o.claude.turns[2].req.prompt).toContain(`[Chief of Staff] The captain has moved work to your goal from ${o.store.agent(o.id).name}'s goal “Saved items”: the retry build.`);
     expect(o.claude.turns[2].req.prompt).toContain('Retries for failed pushes are built on lindqvist/retries');
-    expect((await o.host.allLines(o.receiver.id)).some((l) => l.text.startsWith('▶ Chief of Staff: The captain has moved work'))).toBe(true);
+    expect((await o.host.allLines(o.receiver.id)).some((l) => l.kind === 'manager' && l.text.startsWith('▶ Chief of Staff: The captain has moved work'))).toBe(true);
     expect(o.handovers()).toMatchObject([{ from: o.id, to: o.receiver.id, toAgent: o.receiver.name, toGoal: 'Pushes retry', goal: 'Saved items', what: 'the retry build' }]);
     // the sender hears it's gone as that ask's answer, together with the rest once they're answered
     await o.inbox.decide(item.id, { answer: { ask: 0, text: 'Shared link first.' } }, 'office');

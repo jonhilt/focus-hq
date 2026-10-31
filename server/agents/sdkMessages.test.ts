@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { SDKMessage, SDKResultMessage } from '@anthropic-ai/claude-agent-sdk';
-import type { BrowserFrame, TermLine } from '../../shared/types';
+import { entryLines } from '../../shared/stepText';
+import type { BrowserFrame, TermEntry } from '../../shared/types';
 import { foregroundTasks, handleMessage, helperActivity, helperBrief, helperEnd, limitNotice, resultText, screenshotActivity, systemNote, turnResult, type RunContext } from './sdkMessages';
 import { BackgroundTracker, type BackgroundEvent } from './backgroundTasks';
 import type { ProbeEvent, RunHooks, WorkflowEvent } from './types';
 
-type Line = Omit<TermLine, 't'>;
+type Line = TermEntry;
 const system = (m: Record<string, unknown>) => ({ type: 'system', ...m }) as unknown as Extract<SDKMessage, { type: 'system' }>;
 const context = (over: Partial<RunContext> = {}): RunContext => ({
   cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), modelled: new Set(), probes: new Set(), commits: new Map(), onKey: false, counted: new Set(), ...over,
@@ -128,15 +129,36 @@ describe('handleMessage', () => {
     const init = system({ subtype: 'init', session_id: 'worker', claude_code_version: '2', model: 'opus', permissionMode: 'auto' });
     handleMessage(init, context(), hooks);
     expect(said.sessions).toEqual(['worker']);
-    expect(said.lines.map((l) => l.text)).toEqual(['✻ Claude Code 2 · opus · auto']);
+    expect(said.lines).toEqual([{ kind: 'system', text: '✻ Claude Code 2 · opus · auto' }]);
   });
 
-  it('shows thinking, and the session’s own text as what they’re doing', () => {
+  it('shows thinking, and the session’s own text, whole, as a reply and as what they’re doing', () => {
     const { said, hooks } = recorder();
-    const msg = { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'thinking' }, { type: 'text', text: '  First line\nSecond  ' }, { type: 'text', text: ' ' }] } } as unknown as SDKMessage;
+    const msg = { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'thinking', thinking: '' }, { type: 'text', text: '  First line\nSecond  ' }, { type: 'text', text: ' ' }] } } as unknown as SDKMessage;
     expect(handleMessage(msg, context(), hooks)).toBeNull();
-    expect(said.lines[0]).toEqual({ kind: 'thinking', text: '✻ Thinking…' });
+    expect(said.lines).toEqual([{ kind: 'think', text: '' }, { kind: 'reply', text: 'First line\nSecond' }]);
+    expect(entryLines(said.lines[0])).toEqual([{ kind: 'thinking', text: '✻ Thinking…' }]);
     expect(said.activity).toEqual([[null, 'Thinking…'], [null, 'First line']]);
+  });
+
+  it('keeps what it thought, when Claude Code shows it', () => {
+    const { said, hooks } = recorder();
+    const msg = { type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'thinking', thinking: '  The store is the slow part.\nCheck it first.  ' }] } } as unknown as SDKMessage;
+    handleMessage(msg, context(), hooks);
+    expect(said.lines).toEqual([{ kind: 'think', text: 'The store is the slow part.\nCheck it first.' }]);
+  });
+
+  it('gives a tool call all of its input, and a result all of its output', () => {
+    const { said, hooks } = recorder();
+    const ctx = context();
+    const output = Array.from({ length: 50 }, (_, i) => `line ${i + 1}`).join('\n');
+    handleMessage({ type: 'assistant', parent_tool_use_id: null, message: { id: 'm1', content: [{ type: 'tool_use', id: 'toolu_1', name: 'Bash', input: { command: 'seq 50', description: 'Count' } }] } } as unknown as SDKMessage, ctx, hooks);
+    handleMessage({ type: 'user', parent_tool_use_id: null, message: { content: [{ type: 'tool_result', tool_use_id: 'toolu_1', content: output }] } } as unknown as SDKMessage, ctx, hooks);
+    expect(said.lines).toEqual([
+      { kind: 'call', id: 'toolu_1', tool: 'Bash', input: { command: 'seq 50', description: 'Count' }, cwd: '/w' },
+      { kind: 'result', id: 'toolu_1', ok: true, text: output },
+    ]);
+    expect(said.activity).toContainEqual(['working', 'Running seq 50']);
   });
 
   it('reports a subagent’s model the first time it says, and its tool call as what it’s busy with', () => {
@@ -235,7 +257,7 @@ describe('a helper’s own helper', () => {
 });
 
 describe('a subagent’s messages', () => {
-  type Line = Omit<TermLine, 't'>;
+  type Line = TermEntry;
   const messages = [
     { type: 'assistant', parent_tool_use_id: null, message: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'Agent', input: { description: 'Map the cart', prompt: 'Find the cart store' } }] } },
     { type: 'system', subtype: 'task_started', task_type: 'local_agent', task_id: 't1', tool_use_id: 'toolu_1', description: 'Map the cart', subagent_type: 'Explore' },
@@ -255,7 +277,7 @@ describe('a subagent’s messages', () => {
     } as unknown as RunHooks;
         const ctx = { cwd: '/w', calls: new Map(), helpers: new Map(), workflows: new Set(), probes: new Set(), commits: new Map(), parents: new Map() };
     for (const m of messages) handleMessage(m, ctx as unknown as RunContext, hooks);
-    return { own: own.map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).map((l) => l.text) };
+    return { entries: own, own: own.flatMap(entryLines).map((l) => l.text), theirs: (theirs.get('toolu_1') ?? []).flatMap(entryLines).map((l) => l.text) };
   };
 
   it('go in a transcript of the helper’s own, starting with what it was asked, and stay out of the session’s', () => {
@@ -268,8 +290,11 @@ describe('a subagent’s messages', () => {
   });
 
   it('go, indented, in the session’s own lines when nobody keeps helpers’ transcripts', () => {
-    const { own } = run(false);
+    const { entries, own } = run(false);
+    expect(entries).toContainEqual({ kind: 'reply', text: 'Looking', helper: 'toolu_1' });
+    expect(entries).toContainEqual({ kind: 'call', id: 'toolu_2', tool: 'Read', input: { file_path: '/w/cart.ts' }, cwd: '/w', helper: 'toolu_1' });
     expect(own).toContain('    ⏺ Looking');
+    expect(own).toContain('    ⏺ Read(cart.ts)');
     expect(own.join('\n')).not.toMatch(/export const cart/);
   });
 });

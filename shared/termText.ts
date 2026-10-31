@@ -1,13 +1,13 @@
-import type { TermLine } from './types';
+import { entryLines, REPLY } from './stepText';
+import type { TermEntry, TextLine } from './types';
 
-/** What the server puts before the first line of each of Claude's replies (`renderText`); the rest are indented two. */
-export const REPLY = '⏺ ';
+export { REPLY };
 
 /**
  * Where a terminal line stands in Claude's replies, which the server sends a line at a time: the start of one, a line
  * carrying the last one on, or (null) neither, like a tool call or its output.
  */
-export function replyPart(line: TermLine): { start: boolean; text: string } | null {
+export function replyPart(line: TextLine): { start: boolean; text: string } | null {
   if (line.kind !== 'text') return null;
   if (line.text.startsWith(REPLY)) return { start: true, text: line.text.slice(REPLY.length) };
   return { start: false, text: line.text.replace(/^ {2}/, '') };
@@ -35,7 +35,8 @@ export function plainMarkdown(text: string): string {
 }
 
 /** The last of Claude's replies in a terminal, as plain text: what a lead last said, to quote it. */
-export function lastReply(lines: readonly TermLine[]): string {
+export function lastReply(entries: readonly TermEntry[]): string {
+  const lines = entries.flatMap(entryLines);
   const start = lines.findLastIndex((l) => replyPart(l)?.start);
   if (start < 0) return '';
   const said: string[] = [];
@@ -48,10 +49,10 @@ export function lastReply(lines: readonly TermLine[]): string {
 }
 
 /** What a session said, which a terminal always shows: Claude's replies and the messages it was sent. */
-export const saysLine = (line: TermLine): boolean => line.kind === 'text' || line.kind === 'manager';
+export const saysLine = (line: TextLine): boolean => line.kind === 'text' || line.kind === 'manager';
 
 /** A message sent to the session (`▶ Captain: …`), as against a manager line that's a notice about it (a question it asked, an approval). */
-export const sentLine = (line: TermLine): boolean => line.kind === 'manager' && line.text.startsWith('▶ ');
+export const sentLine = (line: TextLine): boolean => line.kind === 'manager' && line.text.startsWith('▶ ');
 
 /** A step's line: a tool call or a system line, as the server starts them. */
 const STEP = /^[⏺✻] /;
@@ -60,7 +61,7 @@ const STEP = /^[⏺✻] /;
  * The one line a folded run of what a session did reads as, between what it said: how many steps (or lines, with no
  * tool call among them), how many failed, and the latest step, so a working session still shows what it's on.
  */
-export function foldSummary(lines: readonly TermLine[]): string {
+export function foldSummary(lines: readonly TextLine[]): string {
   const steps = lines.filter((l) => l.kind === 'tool' && l.text.startsWith(REPLY)).length;
   const failed = lines.filter((l) => l.kind === 'error').length;
   // the latest step, or with none among them the latest line, without its marker
@@ -80,14 +81,14 @@ export type TermBlock =
   | { kind: 'sent' | 'notice' | 'line'; text: string }
   | { kind: 'fold'; text: string; failed: boolean };
 
-export function termBlocks(lines: readonly TermLine[]): TermBlock[] {
+export function termBlocks(entries: readonly TermEntry[]): TermBlock[] {
   const blocks: TermBlock[] = [];
-  let fold: TermLine[] | null = null;
+  let fold: TextLine[] | null = null;
   const closeFold = () => {
     if (fold) blocks.push({ kind: 'fold', text: foldSummary(fold), failed: fold.some((l) => l.kind === 'error') });
     fold = null;
   };
-  for (const line of lines) {
+  for (const line of entries.flatMap(entryLines)) {
     const part = replyPart(line);
     const last = blocks.at(-1);
     if (part && (part.start || (!fold && last?.kind === 'reply'))) {

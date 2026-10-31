@@ -4,7 +4,7 @@ import path from 'node:path';
 import { echoTurn, type FakeSession, makeFakeAdapter } from 'agent-host';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
-import type { Settings, TermLine } from '../../shared/types';
+import type { Settings, TermEntry } from '../../shared/types';
 import { paths } from '../config';
 import { BrowserPool } from './browserTool';
 import { DECLINED } from './claudeSession';
@@ -30,7 +30,7 @@ const request = (prompt: string, resumeSessionId?: string): RunRequest => ({ age
 const journal = () => path.join(mkdtempSync(path.join(os.tmpdir(), 'focus-host-')), 'journal.sqlite');
 
 function hooks(approve = true) {
-  const lines: Omit<TermLine, 't'>[] = [];
+  const lines: TermEntry[] = [];
   const asked: string[] = [];
   const h: RunHooks = {
     lines: (ls) => void lines.push(...ls),
@@ -70,7 +70,7 @@ describe('HostRunner', () => {
     const { h, lines } = hooks();
     const outcome = await runner.start(request('fix the bug'), h).done;
     expect(outcome).toMatchObject({ ok: true, summary: 'done: fix the bug', started: true });
-    expect(lines.map((l) => l.text).join('\n')).toContain('done: fix the bug');
+    expect(lines).toContainEqual({ kind: 'reply', text: 'done: fix the bug' });
     const s = await Effect.runPromise(fake.session(1));
     expect(s.options).toMatchObject({ autonomy: 'raise-hand', disallowedTools: ['AskUserQuestion', 'EnterPlanMode'], systemAppend: 'Work the issue.' });
     // the scratch dir's environment and the browser, lent
@@ -396,7 +396,11 @@ describe('HostRunner, a Codex developer', () => {
     // the Codex model, not the Claude one; none of Claude Code's own tools to switch off
     expect(s.options).toMatchObject({ model: 'gpt-5.5-codex', disallowedTools: [] });
     expect(session).toBe(s.agentSessionId);
-    expect(lines.map((l) => l.text)).toEqual(expect.arrayContaining(['⏺ Bash(pnpm test)', '  ⎿  all passed', '✔ Done']));
+    expect(lines).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: 'call', id: 't1', tool: 'Bash', input: { command: 'pnpm test' } }),
+      { kind: 'result', id: 't1', ok: true, text: 'all passed' },
+      { kind: 'success', text: '✔ Done' },
+    ]));
     await runner.shutDown();
   });
 });

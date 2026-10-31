@@ -1,6 +1,6 @@
 // A lead's background commands and monitors, from what its session reports about them. Pure: the runner feeds it
 // Claude Code's messages, the manager keeps the result on the lead and reads their output files.
-import type { BackgroundTask, TermLine } from '../../shared/types';
+import type { BackgroundTask, TextLine } from '../../shared/types';
 import { truncate } from '../util';
 
 /** How long an ended command's probe stays by the lead's chair, so you see how it ended before it goes. */
@@ -101,7 +101,7 @@ export function applyBackgroundEvent(tasks: BackgroundTask[], event: BackgroundE
 }
 
 /** The end of a command's output, as terminal lines. */
-export function outputLines(text: string): Omit<TermLine, 't'>[] {
+export function outputLines(text: string): TextLine[] {
   const tail = text.length > OUTPUT_TAIL ? text.slice(text.indexOf('\n', text.length - OUTPUT_TAIL) + 1) : text;
   return tail.replace(/\r/g, '').split('\n').filter((l, i, all) => l || i < all.length - 1).map((text) => ({ kind: 'output' as const, text }));
 }

@@ -1,7 +1,7 @@
 import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import type { Autonomy as HostAutonomy, ConversationEvent, ConversationSummary } from 'agent-host';
 import { clock } from '../../shared/clock';
-import type { Autonomy, TermLine } from '../../shared/types';
+import type { Autonomy, TermEntry } from '../../shared/types';
 import { fieldsOf } from '../../shared/records';
 import { type AskedQuestion, askedQuestions } from './questions';
 import type { TurnResult } from './sdkMessages';
@@ -90,7 +90,7 @@ export type Reaction =
   /** How full the context window is. */
   | { kind: 'context'; context: { percent: number; tokens: number; max: number } }
   /** Lines for the agent's terminal, and what it's doing, when that changes. */
-  | { kind: 'say'; lines: Omit<TermLine, 't'>[]; activity?: string }
+  | { kind: 'say'; lines: TermEntry[]; activity?: string }
   /** The turn is over. */
   | { kind: 'end'; outcome: RunOutcome }
   /**

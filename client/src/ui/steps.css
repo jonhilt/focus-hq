@@ -1,0 +1,43 @@
+/* A session's steps in Pi's look (steps.ts): each tool call a block with Pi's tool bar along its left edge, green, or
+   red when it failed; its line bold, its peek and detail dimmed; diffs in Pi's green and red. */
+.terminal .step { margin: 0 0 6px; padding: 6px var(--pi-pad) 6px var(--pi-pad); background: var(--pi-tool-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-green) 55%, #000); }
+.terminal .step.failed { background: var(--pi-tool-error-bg); box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-red) 60%, #000); }
+.terminal .step.running { box-shadow: inset 3px 0 color-mix(in srgb, var(--pi-dim) 60%, #000); }
+/* a subagent's step, in a session that keeps no transcript apart for it, sits in under the session's own */
+.terminal .step.sub, .terminal .think.sub { margin-left: 4ch; }
+.terminal .step-head { display: flex; align-items: baseline; gap: 1ch; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: var(--pi-text); font: inherit; text-align: left; }
+.terminal button.step-head { cursor: pointer; }
+.terminal button.step-head:hover .call b { color: #fff; }
+.terminal .step-head .mark { flex: none; color: var(--pi-dim); width: 1ch; }
+.terminal .step-head .call { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.terminal .step-head .call b { color: var(--pi-text); }
+.terminal .step.failed .step-head .call b { color: var(--pi-red); }
+.terminal .step-head .arg { color: var(--pi-text); }
+.terminal .step-head .count { flex: none; color: var(--pi-muted); font-weight: 400; }
+.terminal .step .rows { margin: 4px 0 0 2ch; padding-left: 1.5ch; border-left: 1px solid var(--pi-rule); color: var(--pi-muted); white-space: pre-wrap; word-break: break-word; }
+.terminal .step .rows.peek { cursor: pointer; }
+.terminal .step .fold-peek .more { margin: 2px 0 0 3.5ch; cursor: pointer; }
+.terminal .step .fold-peek .more:hover { color: var(--pi-text); }
+.terminal .step .rows.input { color: var(--pi-text); }
+.terminal .step .rows.after-diff { margin-top: 8px; }
+.terminal .step.failed .rows.output { color: var(--pi-red); }
+.terminal .rows .add { color: var(--pi-green); }
+.terminal .rows .del { color: var(--pi-red); }
+.terminal .rows .dim { color: var(--pi-dim); }
+.terminal .step .shots { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0 0 2ch; }
+.terminal .step .shots img { display: block; max-width: 240px; max-height: 160px; border: 1px solid var(--pi-rule); border-radius: 4px; }
+/* its thinking: Pi's thinking colour, italic, a line that opens to all of it */
+.terminal .think { margin: 0 0 6px; padding: 2px var(--pi-pad); color: var(--pi-thinking); font-style: italic; }
+.terminal .think-head { display: flex; align-items: baseline; gap: 1ch; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.terminal .think-head:hover { color: var(--pi-text); }
+.terminal .think-head .mark { flex: none; color: var(--pi-dim); font-style: normal; }
+.terminal .think-label { flex: none; }
+.terminal .think-hint { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--pi-dim); }
+.terminal .think-body .rows { margin: 4px 0 0 2ch; padding-left: 1.5ch; border-left: 1px solid var(--pi-rule); white-space: pre-wrap; }
+.terminal .step-head:focus-visible, .terminal .think-head:focus-visible { outline: 1px solid var(--pi-blue); outline-offset: 2px; }
+/* a long message sent to the session: Pi's user block, its first lines, opening in place to the rest */
+.terminal .manager.sent .sent-toggle { display: flex; align-items: baseline; gap: 1ch; width: 100%; min-width: 0; padding: 0; border: 0; background: none; color: var(--pi-text); font: inherit; text-align: left; cursor: pointer; white-space: pre-wrap; }
+.terminal .manager.sent .sent-toggle .mark { flex: none; color: var(--pi-dim); }
+.terminal .manager.sent .sent-peek, .terminal .manager.sent .sent-body { white-space: pre-wrap; padding-left: 2ch; }
+.terminal .manager.sent .sent-peek { cursor: pointer; color: var(--pi-muted); }
+.terminal .manager.sent .more { color: var(--pi-dim); margin-top: 2px; }

@@ -4,6 +4,7 @@ import path from 'node:path';
 import { type Adapter, type AgentSession as HostSession, type Answer, type FakeSession, makeFakeAdapter } from 'agent-host';
 import { Effect } from 'effect';
 import { describe, expect, it, vi } from 'vitest';
+import { entryLines } from '../../shared/stepText';
 import type { Settings } from '../../shared/types';
 import { paths } from '../config';
 import { BrowserPool } from './browserTool';
@@ -142,7 +143,7 @@ const sessionOf = (only?: RegExp, except?: RegExp): Subject<Said> => ({
     const asks: ((approved: boolean) => void)[] = [];
 
     const hooks = (): RunHooks => ({
-      lines: (ls) => void (said += ls.filter((l) => l.text.includes('Said something')).length),
+      lines: (ls) => void (said += ls.flatMap(entryLines).filter((l) => l.text.includes('Said something')).length),
       activity: () => undefined,
       browser: () => undefined,
       screenshot: () => undefined,

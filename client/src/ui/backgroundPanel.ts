@@ -1,4 +1,4 @@
-import type { Agent, BackgroundTask, TermLine } from '../../../shared/types';
+import type { Agent, BackgroundTask, TextLine } from '../../../shared/types';
 import { api } from '../net/api';
 import { state } from '../net/state';
 import { runningFor } from '../world/probeSlots';
@@ -58,7 +58,7 @@ export function openBackgroundPanel(ui: Ui, leadId: string, taskId: string): voi
   renderInfo();
 
   let shown = '';
-  const show = (lines: Omit<TermLine, 't'>[]) => {
+  const show = (lines: TextLine[]) => {
     const key = `${lines.length}:${lines.at(-1)?.text ?? ''}`;
     if (key === shown) return;
     const nearBottom = !shown || terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 60;

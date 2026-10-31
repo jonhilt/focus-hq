@@ -9,7 +9,7 @@ import { errorMessage, truncate } from '../util';
 import { agentEnv } from './claudeSession';
 import { type Drafter, type DraftRequest, type DraftResult, draftSchema, plannerPrompt, plannerSystemPrompt, repoFolders } from './planner';
 import type { ChatProject, ShipStatus } from './shipStatus';
-import { renderToolUse } from './render';
+import { toolActivity } from './render';
 import { parseTriage, TRIAGE_SCHEMA, type TriageDecision, type Triager, type TriageRequest, triagePrompt, triageSystemPrompt } from './triage';
 import { checkoutLatest } from './workspace';
 import { crewFile } from './crewFiles';
@@ -126,7 +126,7 @@ export function blockActivity(block: Block, run: Pick<ReadOnlyRun, 'tools' | 'cw
   if (block.type === 'tool_use') {
     const prefix = run.tools ? toolPrefix(run.tools) : undefined;
     if (run.tools && prefix !== undefined && block.name.startsWith(prefix)) return run.tools.activity(block.name.slice(prefix.length));
-    return renderToolUse(block.name, fieldsOf(block.input), run.cwd).activity ?? '';
+    return toolActivity(block.name, fieldsOf(block.input), run.cwd).activity ?? '';
   }
   if (block.type === 'thinking') return 'Thinking…';
   if (block.type === 'text' && block.text.trim()) return truncate(block.text.trim().split('\n')[0], 100);

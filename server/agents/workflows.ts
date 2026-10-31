@@ -4,10 +4,10 @@ import { Option, Schema } from 'effect';
 import type { Workflow, WorkflowAgent, WorkflowPhase, WorkflowResult, WorkflowRollEntry } from '../../shared/types';
 import type { WorkflowEvent } from './types';
 import { truncate } from '../util';
-import { renderText, renderToolResult, renderToolUse } from './render';
-import { contentBlocks, transcriptLines as messagesIn } from './transcript';
+import { callStep, resultStep } from './render';
+import { contentBlocks, field, transcriptLines as messagesIn } from './transcript';
 import { fieldsOf } from '../../shared/records';
-import type { TermLine } from '../../shared/types';
+import type { TermEntry } from '../../shared/types';
 
 /** How long a finished workflow's away team stays in the briefing room, so you see how it went before it goes. */
 export const WORKFLOW_LINGER_MS = 10_000;
@@ -305,12 +305,12 @@ export function workflowAsk(input: Record<string, unknown>): string {
 }
 
 /**
- * A workflow agent's transcript (the agent-<agentId>.jsonl Claude Code writes as it works) as terminal lines, the way
- * a session's own read: what it was asked, then what it said, the tools it used and what came back. What it thought,
- * and Claude Code's own attachments, are left out; so is any line or block that isn't one (a line still being written).
+ * A workflow agent's transcript (the agent-<agentId>.jsonl Claude Code writes as it works) as a session's entries,
+ * the way a session's own read: what it was asked, then what it said and thought, the tools it used and what came back,
+ * all of it. Claude Code's own attachments are left out; so is any line or block that isn't one (a line still being written).
  */
-export function transcriptLines(jsonl: string): Omit<TermLine, 't'>[] {
-  const lines: Omit<TermLine, 't'>[] = [];
+export function transcriptLines(jsonl: string): TermEntry[] {
+  const lines: TermEntry[] = [];
   let asked = false;
   for (const entry of messagesIn(jsonl)) {
     const content = entry.message?.content;
@@ -320,9 +320,10 @@ export function transcriptLines(jsonl: string): Omit<TermLine, 't'>[] {
       continue;
     }
     for (const block of contentBlocks(content)) {
-      if (entry.type === 'assistant' && block.type === 'text' && block.text?.trim()) lines.push(...renderText(block.text.trim()));
-      else if (entry.type === 'assistant' && block.type === 'tool_use' && block.name) lines.push(...renderToolUse(block.name, fieldsOf(block.input), '').lines);
-      else if (entry.type === 'user' && block.type === 'tool_result') lines.push(...renderToolResult({ ...block, type: block.type }));
+      if (entry.type === 'assistant' && block.type === 'text' && block.text?.trim()) lines.push({ kind: 'reply', text: block.text.trim() });
+      else if (entry.type === 'assistant' && block.type === 'thinking') lines.push({ kind: 'think', text: String(field(block, 'thinking') ?? '').trim() });
+      else if (entry.type === 'assistant' && block.type === 'tool_use' && block.name) lines.push(callStep(block.id ?? '', block.name, fieldsOf(block.input), ''));
+      else if (entry.type === 'user' && block.type === 'tool_result') lines.push(resultStep(block.tool_use_id ?? '', block));
     }
   }
   return lines;

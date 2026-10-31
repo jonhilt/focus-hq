@@ -1,5 +1,5 @@
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
-import type { AgentStatus, AgentTask, Autonomy, BrowserFrame, CodingAgent, Effort, Settings, TermLine, Workflow, WorkflowAgent } from '../../shared/types';
+import type { AgentStatus, AgentTask, Autonomy, BrowserFrame, CodingAgent, Effort, Settings, TermEntry, Workflow, WorkflowAgent } from '../../shared/types';
 import type { ZodType } from 'zod';
 import type { ArtifactInput, QuestionInput } from './leadRules';
 import type { LeadTool } from '../plugins/contract';
@@ -48,7 +48,7 @@ export type WorkflowEvent =
 export type WorkflowUsage = NonNullable<Workflow['usage']>;
 
 export interface RunHooks {
-  lines(lines: Omit<TermLine, 't'>[]): void;
+  lines(lines: TermEntry[]): void;
   /** status null = keep the current status. */
   activity(status: AgentStatus | null, activity: string): void;
   browser(frame: BrowserFrame): void;
@@ -69,7 +69,7 @@ export interface RunHooks {
    * A subagent's own lines (`id` as in its HelperEvents): its transcript, kept apart from the session's. Without it they
    * go, indented, in the session's own lines.
    */
-  helperLines?(id: string, lines: Omit<TermLine, 't'>[]): void;
+  helperLines?(id: string, lines: TermEntry[]): void;
   /** A command or monitor the session left running in the background started, or ended, or where its output goes. */
   background?(event: BackgroundEvent): void;
   /** A workflow the session ran started, moved on or finished. */

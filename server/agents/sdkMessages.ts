@@ -1,11 +1,12 @@
 import type { SDKAssistantMessage, SDKMessage, SDKRateLimitEvent, SDKResultMessage, SDKTaskNotificationMessage, SDKTaskProgressMessage, SDKTaskStartedMessage } from '@anthropic-ai/claude-agent-sdk';
 import { clock } from '../../shared/clock';
-import type { TermKind, TermLine } from '../../shared/types';
+import { isTextLine } from '../../shared/stepText';
+import type { TermEntry, TextLine } from '../../shared/types';
 import { truncate } from '../util';
 import { keyFallback, requestUsd } from './apiKey';
 import { limitReached, switchesToKey } from './apiKeyRules';
 import { gitCommit } from './commits';
-import { appUrl, renderText, renderToolResult, renderToolUse, screenshotFrame, type ToolCall } from './render';
+import { appUrl, callStep, resultStep, screenshotFrame, toolActivity, type ToolCall } from './render';
 import { scratchScript } from './scratch';
 import { TASK_TOOLS } from './tasks';
 import { contentBlocks, field, isRecord } from './transcript';
@@ -13,7 +14,7 @@ import { BackgroundTracker } from './backgroundTasks';
 import type { RunHooks, WorkflowUsage } from './types';
 import { type WorkflowPermits, workflowProgress } from './workflows';
 
-type Line = Omit<TermLine, 't'>;
+type Line = TextLine;
 type SystemMessage = Extract<SDKMessage, { type: 'system' }>;
 type UserMessage = Extract<SDKMessage, { type: 'user' }>;
 type ContentBlock = SDKAssistantMessage['message']['content'][number];
@@ -223,20 +224,23 @@ function helperModel(parent: string, model: string | undefined, ctx: RunContext,
   hooks.helperLines?.(parent, [{ kind: 'system', text: `✻ ${model}` }]);
 }
 
-/** The session's own lines, or a subagent's: a transcript of its own, or else indented in the session's (in `kind`, when it says). */
-function say(hooks: RunHooks, parent: string | null, lines: Line[], kind?: TermKind): void {
-  if (parent === null) hooks.lines(lines);
-  else if (hooks.helperLines) hooks.helperLines(parent, lines);
-  else hooks.lines(lines.map((l) => ({ ...l, kind: kind ?? l.kind, text: `    ${l.text}` })));
+/**
+ * The session's own entries, or a subagent's: a transcript of its own, or else in the session's, its lines indented and
+ * its steps marked as the subagent's.
+ */
+function say(hooks: RunHooks, parent: string | null, entries: TermEntry[]): void {
+  if (parent === null) hooks.lines(entries);
+  else if (hooks.helperLines) hooks.helperLines(parent, entries);
+  else hooks.lines(entries.map((e) => (isTextLine(e) ? { ...e, text: `    ${e.text}` } : { ...e, helper: parent })));
 }
 
 function assistantBlock(block: ContentBlock, parent: string | null, ctx: RunContext, hooks: RunHooks): void {
   if (block.type === 'text' && block.text.trim()) {
     const text = block.text.trim();
-    say(hooks, parent, renderText(text), 'output');
+    say(hooks, parent, [{ kind: 'reply', text }]);
     if (parent === null) hooks.activity(null, truncate(text.split('\n')[0], 80));
   } else if (block.type === 'thinking') {
-    say(hooks, parent, [{ kind: 'thinking', text: '✻ Thinking…' }]);
+    say(hooks, parent, [{ kind: 'think', text: (block.thinking ?? '').trim() }]);
     hooks.activity(null, 'Thinking…');
   } else if (block.type === 'tool_use') {
     toolUse(block.id, { name: block.name, input: isRecord(block.input) ? block.input : {} }, parent, ctx, hooks);
@@ -248,8 +252,8 @@ function toolUse(id: string, call: ToolCall, parent: string | null, ctx: RunCont
   // a helper starting a helper of its own: the one it starts is known by this call
   if (parent !== null && (call.name === 'Agent' || call.name === 'Task')) ctx.parents?.set(id, parent);
   ctx.lastUrl = appUrl(call) ?? ctx.lastUrl;
-  const rendered = renderToolUse(call.name, call.input, ctx.cwd);
-  say(hooks, parent, rendered.lines);
+  const rendered = toolActivity(call.name, call.input, ctx.cwd);
+  say(hooks, parent, [callStep(id, call.name, call.input, ctx.cwd)]);
   if (rendered.activity || rendered.status) hooks.activity(rendered.status ?? null, rendered.activity ?? '');
   // a subagent's tool call is what that helper is busy with
   if (parent !== null && rendered.activity) hooks.helper?.({ kind: 'activity', id: parent, activity: rendered.activity });
@@ -295,8 +299,9 @@ function toolResult(block: ToolResultBlock, parent: string | null, structured: u
   ctx.calls.delete(block.tool_use_id);
   watchedResult(ctx, block, hooks);
   // a subagent's results only go in a transcript of its own: indented in the session's, they'd drown it
-  if (parent === null) hooks.lines(renderToolResult(block));
-  else hooks.helperLines?.(parent, renderToolResult(block));
+  const step = resultStep(block.tool_use_id, block);
+  if (parent === null) hooks.lines([step]);
+  else hooks.helperLines?.(parent, [step]);
   // the agent's own task list (a subagent's is its own business)
   if (call && TASK_TOOLS.has(call.name) && parent === null) hooks.taskTool?.(call.name, call.input, structured, resultText(block.content));
   // an image the agent (or a subagent) looked at goes on its laptop screen, like our browser tool's frames

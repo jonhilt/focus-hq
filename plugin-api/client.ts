@@ -10,6 +10,7 @@ export type { ClientPlugin, EngineeringGo, PluginAbout, PluginCost, EngineeringP
 export { goalTags, pluginState } from '../client/src/plugins';
 export type { Ui } from '../client/src/ui/context';
 export { busy, fill, h, timeAgo } from '../client/src/ui/dom';
+export { fold, type FoldOptions } from '../client/src/ui/fold';
 export { confirmDialog } from '../client/src/ui/confirmDialog';
 /**
  * Starting an idea as a goal, or handing it to one under way (the goals list's own control); and telling the user a

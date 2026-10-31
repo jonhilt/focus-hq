@@ -2,7 +2,8 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { Settings, TermLine } from '../../shared/types';
+import { entryLines, isTextLine } from '../../shared/stepText';
+import type { Settings, TermEntry } from '../../shared/types';
 import type { BackgroundEvent } from './backgroundTasks';
 import { BrowserPool } from './browserTool';
 import { HostRunner } from './hostRunner';
@@ -19,7 +20,7 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
   it('runs a developer turn end to end: lines, a background command carried on, a raised hand, a subagent, the session and its cost', async () => {
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'focus-host-live-'));
     const runner = new HostRunner(new BrowserPool(), undefined, path.join(cwd, 'journal.sqlite'));
-    const lines: Omit<TermLine, 't'>[] = [];
+    const lines: TermEntry[] = [];
     const background: BackgroundEvent[] = [];
     const asked: string[] = [];
     let session: string | undefined;
@@ -50,15 +51,15 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
       model: 'haiku',
     };
     const outcome = await runner.start(req, hooks).done;
-    const text = lines.map((l) => l.text).join('\n');
+    const text = lines.flatMap(entryLines).map((l) => l.text).join('\n');
     expect(outcome).toMatchObject({ ok: true, started: true });
     // the background command's result was taken in a turn of Claude Code's own, inside this one Focus turn
     expect(session).toBeTruthy();
     expect(cost).toBeGreaterThan(0);
     expect(asked.some((a) => a.includes('curl'))).toBe(true);
     expect(background.length).toBeGreaterThan(0);
-    // a subagent's lines go, indented, in the session's own
-    expect(lines.some((l) => l.text.startsWith('    '))).toBe(true);
+    // a subagent's steps go, marked as its, in the session's own
+    expect(lines.some((l) => !isTextLine(l) && l.helper !== undefined)).toBe(true);
     expect(text).toContain('BG-OK');
     await runner.shutDown();
   }, 300_000);
@@ -112,7 +113,7 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
     expect(first.summary).toMatch(/teal/i);
     // Ops compacting the conversation: the lead hears their brief again from the SessionStart hook
     const said: string[] = [];
-    const compact = await runner.start(lead('/compact keep the goal', session), { ...hooks, lines: (ls) => void said.push(...ls.map((l) => `${l.kind}: ${l.text}`)) }).done;
+    const compact = await runner.start(lead('/compact keep the goal', session), { ...hooks, lines: (ls) => void said.push(...ls.flatMap(entryLines).map((l) => `${l.kind}: ${l.text}`)) }).done;
     expect(compact).toMatchObject({ ok: true });
     expect(compacted).toBeGreaterThan(0);
     await runner.shutDown();
@@ -122,7 +123,7 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
     const cwd = mkdtempSync(path.join(os.tmpdir(), 'focus-host-qa-live-'));
     writeFileSync(path.join(cwd, 'add.js'), 'export const add = (a, b) => a + b;\n');
     const runner = new HostRunner(new BrowserPool(), undefined, path.join(cwd, 'journal.sqlite'));
-    const lines: Omit<TermLine, 't'>[] = [];
+    const lines: TermEntry[] = [];
     const hooks: RunHooks = {
       lines: (ls) => void lines.push(...ls),
       activity: () => undefined,

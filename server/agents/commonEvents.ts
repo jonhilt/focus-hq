@@ -1,16 +1,17 @@
-import type { ConversationEvent } from 'agent-host';
-import type { TermLine } from '../../shared/types';
+import type { ConversationEvent, OutputPart } from 'agent-host';
+import { isTextLine } from '../../shared/stepText';
+import type { TermEntry, TextLine } from '../../shared/types';
 import { truncate } from '../util';
 import type { BackgroundEvent } from './backgroundTasks';
-import { renderText, renderToolResult, renderToolUse } from './render';
+import { callStep, resultStep, toolActivity } from './render';
 import { helperBrief, helperEnd, type TurnResult } from './sdkMessages';
 import type { RunHooks } from './types';
 
 // A Codex developer's session, rendered from agent-host's common events (a Claude Code one is rendered from Claude
-// Code's own messages, which ride along on the same events: sdkMessages.ts). The lines look as Claude Code's do: Codex's
-// steps are drawn with the same tool lines (its shell as Bash, its patches as updates), its spawned agents as helpers.
+// Code's own messages, which ride along on the same events: sdkMessages.ts). Its steps go under the names Claude Code's
+// do (its shell as Bash), its patches as apply_patch calls with their diffs, its spawned agents as helpers.
 
-type Line = Omit<TermLine, 't'>;
+type Line = TermEntry;
 
 /** What a turn keeps while it renders: Codex's steps in flight, its background commands, and its last answer. */
 export interface CommonContext {
@@ -39,21 +40,6 @@ export function focusTool(name: string, input: unknown): { name: string; input: 
   return { name, input: fields };
 }
 
-/** A Codex patch: each file it changes, with the first lines of its diff. */
-export function patchLines(changes: unknown, cwd: string): Line[] {
-  const list = Array.isArray(changes) ? changes.map(fieldsOf) : [];
-  const rel = (p: string) => (p.startsWith(cwd) ? p.slice(cwd.length).replace(/^[/\\]/, '') : p);
-  return list.slice(0, 3).flatMap((c): Line[] => {
-    const kind = fieldsOf(c.kind).type;
-    const label = kind === 'add' ? 'Write' : kind === 'delete' ? 'Delete' : 'Update';
-    const diff = String(c.diff ?? '').split('\n').filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---) /.test(l));
-    return [
-      { kind: 'tool', text: `⏺ ${label}(${truncate(rel(String(c.path ?? '')), 120)})` },
-      ...diff.slice(0, 6).map((l): Line => ({ kind: l.startsWith('+') ? 'success' : 'error', text: `  ${l[0]} ${truncate(l.slice(1), 140)}` })),
-    ];
-  });
-}
-
 /** What changed in the background set, as Focus's background events: new commands started, missing ones ended. */
 export function backgroundEvents(running: ReadonlyMap<string, string>, tasks: readonly { id: string; description: string }[]): BackgroundEvent[] {
   const now = new Set(tasks.map((t) => t.id));
@@ -65,11 +51,11 @@ export function backgroundEvents(running: ReadonlyMap<string, string>, tasks: re
 
 type Of<T extends ConversationEvent['_tag']> = Extract<ConversationEvent, { _tag: T }>;
 
-/** Lines for the session itself, or for the helper (`helper`) whose they are: its own transcript, else indented. */
-function sayer(hooks: RunHooks, helper: string | null): (lines: Line[]) => void {
-  if (helper === null) return (lines) => hooks.lines(lines);
-  if (hooks.helperLines) return (lines) => hooks.helperLines?.(helper, lines);
-  return (lines) => hooks.lines(lines.map((l) => ({ ...l, text: `    ${l.text}` })));
+/** Entries for the session itself, or for the helper (`helper`) whose they are: its own transcript, else marked as its. */
+function sayer(hooks: RunHooks, helper: string | null): (entries: Line[]) => void {
+  if (helper === null) return (entries) => hooks.lines(entries);
+  if (hooks.helperLines) return (entries) => hooks.helperLines?.(helper, entries);
+  return (entries) => hooks.lines(entries.map((e) => (isTextLine(e) ? { ...e, text: `    ${e.text}` } : { ...e, helper })));
 }
 
 /** Which helper an event came from: none for the session's own. */
@@ -78,7 +64,7 @@ const helperOf = (event: { source: { _tag: 'Main' } | { _tag: 'Subagent'; id: st
 function assistantMessage(event: Of<'AssistantMessage'>, ctx: CommonContext, hooks: RunHooks): void {
   const helper = helperOf(event);
   const text = event.text.trim();
-  sayer(hooks, helper)(renderText(text, 'output'));
+  sayer(hooks, helper)([{ kind: 'reply', text }]);
   if (helper !== null) return;
   ctx.result = { text, isError: false, queued: 0, ...(ctx.result?.structured !== undefined && { structured: ctx.result.structured }) };
   hooks.activity(null, truncate(text.split('\n')[0] ?? '', 80));
@@ -87,23 +73,23 @@ function assistantMessage(event: Of<'AssistantMessage'>, ctx: CommonContext, hoo
 function toolStepStarted(event: Of<'ToolStepStarted'>, ctx: CommonContext, hooks: RunHooks): void {
   const helper = helperOf(event);
   ctx.calls.set(event.toolUseId, event.name);
-  if (event.name === 'apply_patch') {
-    sayer(hooks, helper)(patchLines(fieldsOf(event.input).changes, ctx.cwd));
-    if (helper === null) hooks.activity('working', 'Editing files');
-    return;
-  }
-  const tool = focusTool(event.name, event.input);
-  const rendered = renderToolUse(tool.name, tool.input, ctx.cwd);
-  sayer(hooks, helper)(rendered.lines);
-  if (!rendered.activity) return;
-  if (helper !== null) hooks.helper?.({ kind: 'activity', id: helper, activity: rendered.activity });
-  else hooks.activity(rendered.status ?? null, rendered.activity);
+  const tool = event.name === 'apply_patch' ? { name: 'apply_patch', input: { changes: fieldsOf(event.input).changes } } : focusTool(event.name, event.input);
+  sayer(hooks, helper)([callStep(event.toolUseId, tool.name, tool.input, ctx.cwd)]);
+  const { status, activity } = toolActivity(tool.name, tool.input, ctx.cwd);
+  if (!activity) return;
+  if (helper !== null) hooks.helper?.({ kind: 'activity', id: helper, activity });
+  else hooks.activity(status ?? null, activity);
+}
+
+/** What a step gave back: all of it (`parts`), or its head and tail as a journal from before kept it whole. */
+export function stepContent(output: { head: string; tail: string }, parts: readonly OutputPart[] | undefined): unknown {
+  if (!parts) return output.tail ? `${output.head}\n…\n${output.tail}` : output.head;
+  return parts.map((p) => (p._tag === 'Text' ? { type: 'text', text: p.text } : { type: 'image', source: { type: 'base64', media_type: p.mediaType, data: p.data } }));
 }
 
 function toolStepEnded(event: Of<'ToolStepEnded'>, ctx: CommonContext, hooks: RunHooks): void {
   ctx.calls.delete(event.toolUseId);
-  const { head, tail } = event.output;
-  sayer(hooks, helperOf(event))(renderToolResult({ type: 'tool_result', content: tail ? `${head}\n${tail}` : head, is_error: !event.ok }));
+  sayer(hooks, helperOf(event))([resultStep(event.toolUseId, { content: stepContent(event.output, event.parts), is_error: !event.ok })]);
 }
 
 function subagentStarted(event: Of<'SubagentStarted'>, hooks: RunHooks): void {
@@ -122,7 +108,7 @@ function backgroundChanged(event: Of<'BackgroundChanged'>, ctx: CommonContext, h
 }
 
 /** The turn's last line: done, or how it went wrong. */
-export function turnEndLine(event: Of<'TurnEnded'>): Line {
+export function turnEndLine(event: Of<'TurnEnded'>): TextLine {
   return event.outcome === 'completed' ? { kind: 'success', text: '✔ Done' } : { kind: 'error', text: `✘ ${event.outcome}${event.error ? `: ${truncate(event.error, 200)}` : ''}` };
 }
 
@@ -134,6 +120,8 @@ export function handleCommonEvent(event: ConversationEvent, ctx: CommonContext, 
       return hooks.lines([{ kind: 'system', text: '✻ Codex' }]);
     case 'AssistantMessage':
       return assistantMessage(event, ctx, hooks);
+    case 'Thinking':
+      return sayer(hooks, helperOf(event))([{ kind: 'think', text: event.text.trim() }]);
     case 'StructuredAnswer':
       ctx.result = { text: ctx.result?.text ?? '', isError: false, queued: 0, structured: event.value };
       return;
