@@ -108,6 +108,25 @@ export class GoalPrs extends Part {
   }
 
   /**
+   * The lead's merge_when_passed tool, for when the captain told them to merge: Ops merges one of the goal's open pull
+   * requests once QA passes it, at exactly the commit QA passed, as the captain's own "merge when passed" does.
+   */
+  mergeWhenPassed(agent: Agent, repo: string, number: number): Effect.Effect<string, Refused> {
+    return Effect.gen({ self: this }, function* () {
+      if (!hasLeadWork(agent)) return yield* new Refused({ message: 'There’s no goal under way here' });
+      const where = `${repo}#${number}`;
+      if (!agent.lead.prs.some((p) => p.repo === repo && p.number === number && !p.outcome)) return yield* new Refused({ message: `${where} isn’t one of this goal’s open pull requests` });
+      const review = yield* Effect.try({ try: () => this.core.reviews.requestMerge(repo, number, true, true), catch: (err) => (err instanceof Refused ? err : new Refused({ message: String(err) })) });
+      this.print(agent, [{ kind: 'system', text: `🔀 ${agent.name} asked Ops to merge ${where} once QA passes it` }]);
+      this.hub.toast('info', `🔀 ${agent.name} asked Ops to merge ${where} once QA passes it`, agent.id, agent.projectId);
+      this.boardChanged(agent.projectId);
+      return review.status === 'passed'
+        ? `QA passed ${where}: Ops merges it as it next looks at the board, at the commit QA passed, or sends it back to QA first if you pushed since. You hear when it lands.`
+        : `Ops merges ${where} once QA passes it, at the commit QA passed. A fail drops the request: fix it, and ask again. You hear when it lands.`;
+    });
+  }
+
+  /**
    * A plugin (`by`, its id) raises the lane of a goal's lead's open pull requests to `lane`, saying why: each in a lower
    * lane goes up (docs/merging.md#lanes-how-a-goals-leads-slice-merges), with a ledger line and a comment on it; none
    * comes down. Only `only`, when it's given. What it raised, by repo#number.

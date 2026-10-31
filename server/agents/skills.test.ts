@@ -36,6 +36,17 @@ describe('Focus’s skills', () => {
     expect(shipSlice).toContain('switch --no-track -c');
   });
 
+  it('has /babysit-pr, which merges only through Ops, and only with the captain’s word', () => {
+    expect(loadSkills()).toContain('babysit-pr');
+    const babysit = fs.readFileSync(path.join(SKILLS_DIR, 'babysit-pr', 'SKILL.md'), 'utf8');
+    expect(babysit).toContain('mcp__office__merge_when_passed');
+    expect(babysit).toContain('If the captain told you to merge it');
+    expect(babysit).not.toMatch(/gh pr merge|--approve/);
+    // merge the base, never rebase or force: QA and Ops follow the branch's commits
+    expect(babysit).toContain('git merge origin/<base>');
+    expect(babysit).not.toMatch(/push --force|push -f\b/);
+  });
+
   it('wants a skill named as its folder, saying when to use it', () => {
     expect(skillProblem('ship-slice', skill('ship-slice'), 'f')).toBeUndefined();
     expect(skillProblem('ship-slice', skill('open-pr'), 'f')).toMatch(/its name should be ship-slice/);

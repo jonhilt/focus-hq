@@ -79,6 +79,7 @@ function lent(): OpsTools {
     show: said('show'),
     ask: said('ask'),
     proposeClose: said('proposeClose'),
+    mergeWhenPassed: said('mergeWhenPassed'),
     extra: [sample, { ...sample, name: 'show' }, { ...sample, name: 'Bad Name' }, { ...sample, name: 'dated', input: { when: z.date() } }],
   };
 }
@@ -102,6 +103,7 @@ const GOOD: Record<string, unknown> = {
   show: { id: 'data-flow', title: 'Data flow', html: '<p>hi</p>' },
   ask: { question: 'Which?', options: [{ label: 'A', html: '<p>a</p>', detail: 'The first.' }, { label: 'B', html: '<p>b</p>' }] },
   propose_close: { reason: 'Done.' },
+  merge_when_passed: { repo: 'jonhilt/focus', number: 7 },
   sample: { text: 'hello', tags: [{ name: 'x', weight: 0.5 }], extra: 'dropped' },
 };
 
@@ -111,7 +113,7 @@ describe('the office tools on agent-host', () => {
   it('are Ops\' own in order, then the plugins\' well-named ones, each described with the JSON Schema of its input', async () => {
     const { host } = await servers();
     const listed = await host.list();
-    expect(listed.map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'sample']);
+    expect(listed.map((t) => t.name)).toEqual(['recap', 'show', 'ask', 'propose_close', 'merge_when_passed', 'sample']);
     for (const t of listed) expect(t.description, t.name).not.toBe('');
     expect(listed.find((t) => t.name === 'recap')?.inputSchema).toMatchObject({ type: 'object', required: ['repo', 'number', 'recap'] });
     expect(listed.find((t) => t.name === 'ask')?.inputSchema).toMatchObject({ type: 'object', required: ['question', 'options'] });
@@ -125,7 +127,7 @@ describe('the office tools on agent-host', () => {
   });
 
   it('are all served as office', () => {
-    expect(opsTools(lent()).map((t) => t.server)).toEqual(['office', 'office', 'office', 'office', 'office']);
+    expect(opsTools(lent()).map((t) => t.server)).toEqual(['office', 'office', 'office', 'office', 'office', 'office']);
   });
 
   it('answer in words and pictures, with what zod parsed (defaults in, unknown fields out)', async () => {
@@ -133,7 +135,8 @@ describe('the office tools on agent-host', () => {
     for (const [name, args] of Object.entries(GOOD)) {
       const now = await host.call(name, args);
       expect(now.isError, name).toBeUndefined();
-      if (name !== 'sample') expect(now.content[0].text, name).toMatch(new RegExp(`^${name === 'propose_close' ? 'proposeClose' : name} \\{`));
+      const lentAs: Record<string, string> = { propose_close: 'proposeClose', merge_when_passed: 'mergeWhenPassed' };
+      if (name !== 'sample') expect(now.content[0].text, name).toMatch(new RegExp(`^${lentAs[name] ?? name} \\{`));
     }
     const sample = await host.call('sample', GOOD.sample);
     expect(sample.content).toEqual([

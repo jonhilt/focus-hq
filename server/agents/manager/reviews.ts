@@ -67,11 +67,16 @@ export class Reviews extends Part {
     return review;
   }
 
-  /** Remembers (or, with `on` false, forgets) that the captain wants the PR merged once QA passes it; Ops merges it (focus.ts). */
-  requestMerge(repo: string, number: number, on: boolean): QaReview {
+  /**
+   * Remembers (or, with `on` false, forgets) that the captain wants the PR merged once QA passes it; Ops merges it
+   * (focus.ts), at exactly the commit QA passed. The board asks while QA is testing; a lead the captain told to merge
+   * (`passedToo`) can ask once QA has passed it too, and Ops merges it as it next looks at the board.
+   */
+  requestMerge(repo: string, number: number, on: boolean, passedToo = false): QaReview {
     const review = this.store.reviews.get(prKey(repo, number));
     if (!review) throw new Refused({ message: `QA isn't reviewing ${repo}#${number}` });
-    if (on && review.status !== 'queued' && review.status !== 'testing') throw new Refused({ message: `QA isn't testing ${repo}#${number} right now` });
+    const open = review.status === 'queued' || review.status === 'testing' || (passedToo && review.status === 'passed');
+    if (on && !open) throw new Refused({ message: passedToo ? `QA ${review.status === 'failed' ? 'failed' : "couldn't finish"} ${repo}#${number}: fix it and push, and ask again once QA is testing it` : `QA isn't testing ${repo}#${number} right now` });
     return this.record(prKey(repo, number), { kind: 'merge-requested', on }) ?? review;
   }
 

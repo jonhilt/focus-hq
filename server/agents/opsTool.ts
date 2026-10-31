@@ -127,6 +127,13 @@ export function opsTools(tools: OpsTools): Tool[] {
       "Couldn't propose closing",
       ({ reason }) => tools.proposeClose({ reason }),
     ),
+    opsTool(
+      'merge_when_passed',
+      "Only when the captain has told you to merge one of the goal's open pull requests: Ops merges it once QA passes it, at exactly the commit QA passed, as the captain's own merge when passed does, in whatever lane it's in. A fail drops the request. Never use it on your own judgement: without the captain's word, the lane decides.",
+      Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }) }),
+      "Couldn't ask Ops to merge it",
+      (input) => tools.mergeWhenPassed(input),
+    ),
     ...extraTools(tools.extra ?? []).flatMap((t) => pluginTool(t) ?? []),
   ];
 }

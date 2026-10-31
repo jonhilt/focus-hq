@@ -137,6 +137,8 @@ export interface OpsTools {
   ask(input: QuestionInput): Promise<string>;
   /** The lead thinks the goal is done: the captain closes it, or carries on. */
   proposeClose(input: { reason: string }): Promise<string>;
+  /** Ops merges one of the goal's open pull requests once QA passes it, as the captain told the lead to. Throws, in words, when it's refused. */
+  mergeWhenPassed(input: { repo: string; number: number }): Promise<string>;
   /** Tools the plugins switched on add (plugins/contract.ts `leadTools`), bound to this lead. */
   extra?: ExtraTool[];
 }

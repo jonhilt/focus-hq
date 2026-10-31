@@ -301,6 +301,40 @@ describe('AgentManager', () => {
     expect(store.agent(lead.id).lead!.artifacts?.some((a) => a.id === `system-recap-${listed.number}`)).toBe(true);
   });
 
+  it('merges a lead’s own PR once QA passes it when the lead asks, as the captain told them, and refuses one QA failed', async () => {
+    const seen = new Map<string, string[]>();
+    const { agents, claude, store, project } = focus({ ...demoWorkspace, branchesSeen: async (dir) => seen.get(dir) ?? [] });
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.length === 1);
+    const { folder } = store.agent(lead.id).lead!.repos.find((r) => r.repo === 'demo/webshop-frontend')!;
+    const [listed] = await Effect.runPromise(Effect.gen(function* () {
+      return yield* (yield* GitHub).listPullRequests('demo/webshop-frontend');
+    }).pipe(Effect.provide(demoLayer)));
+    seen.set(demoWorkspace.dir(leadWorktreeId(lead.id, folder)), [listed.branch]);
+    const tools = claude.turns[0].req.tools!;
+    const ask = () => tools.mergeWhenPassed({ repo: listed.repo, number: listed.number });
+    const key = prKey(listed.repo, listed.number);
+    const report: QaReport = { verdict: 'pass', summary: 'Works', checks: [], commands: [], captions: [] };
+    const reviewed = (status: 'passed' | 'failed') =>
+      store.reviewJournal(key, { kind: 'imported', review: { projectId: project.id, repo: listed.repo, number: listed.number, title: listed.title, status, sha: listed.headSha, report, requestedAt: 1, finishedAt: 2 } });
+
+    await expect(ask()).rejects.toThrow(/isn’t one of this goal’s open pull requests/);
+    await agents.boardRefreshed(project.id, [listed]);
+    // ready, so QA has it: Ops merges it once QA passes it
+    await until(() => !!store.reviews.get(key));
+    expect(await ask()).toMatch(/^Ops merges .* once QA passes it, at the commit QA passed/);
+    expect(store.reviews.get(key)?.mergeRequested).toMatchObject({ at: expect.any(Number) as unknown });
+    agents.requestMerge(listed.repo, listed.number, false);
+
+    reviewed('failed');
+    await expect(ask()).rejects.toThrow(/QA failed .*: fix it and push/);
+    expect(store.reviews.get(key)?.mergeRequested).toBeUndefined();
+
+    reviewed('passed');
+    expect(await ask()).toMatch(/^QA passed .*: Ops merges it as it next looks at the board, at the commit QA passed/);
+    expect(store.reviews.get(key)?.mergeRequested).toMatchObject({ at: expect.any(Number) as unknown });
+  });
+
   it('keeps a goal’s pull requests Ops opened before leads opened their own as they were, and moves the goal on when they land', async () => {
     const { agents, claude, store, project } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

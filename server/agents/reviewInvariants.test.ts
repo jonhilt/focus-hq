@@ -73,6 +73,8 @@ interface Kept {
   recorded: number;
   /** The QA station's report card shows the recording that went with the verdict. */
   recordingShown: boolean;
+  /** Ops merges it once QA passes it: the captain asked, or a lead the captain told to. */
+  mergeRequested: boolean;
 }
 
 const reviews: Subject<Kept[]> = {
@@ -101,6 +103,7 @@ const reviews: Subject<Kept[]> = {
         comments: comments.get(pr.number)?.length ?? 0,
         recorded: comments.get(pr.number)?.filter((c) => c.includes('🎬 Recording')).length ?? 0,
         recordingShown: !!store.reviews.get(prKey(pr.repo, pr.number))?.recording,
+        mergeRequested: !!store.reviews.get(prKey(pr.repo, pr.number))?.mergeRequested,
       }));
     const life = (o: Pick<ReturnType<typeof focus>, 'agents' | 'claude' | 'store'>): Running<Kept[]> => {
       const ended = new Set<number>();
@@ -116,6 +119,7 @@ const reviews: Subject<Kept[]> = {
       return {
         actions: () => [
           ...prs.map((pr) => ({ name: `review #${pr.number} asked for`, run: () => project && o.agents.requestReview(project.id, pr.repo, pr.number, pr.title) })),
+          ...prs.map((pr) => ({ name: `merge #${pr.number} asked for once QA passes it`, run: () => o.agents.requestMerge(pr.repo, pr.number, true) })),
           { name: 'QA passes it', run: () => turn().end({ ok: true, summary: '', structured: report('pass') }) },
           { name: 'QA fails it', run: () => turn().end({ ok: true, summary: '', structured: report('fail') }) },
           { name: 'QA ends with no report', run: () => turn().end({ ok: true, summary: 'Done.' }) },
@@ -162,6 +166,18 @@ describe('QA reviews, under Focus’s two rules', () => {
     const said = r.durable();
     r.close?.();
     expect(said).toEqual(expect.arrayContaining([expect.objectContaining({ pr: 7, status: 'passed', recorded: 1, recordingShown: true })]));
+  });
+
+  // docs/qa.md: "Ops remembers the request with the review"
+  it('reaches a merge asked for while QA tests the pull request, kept with its review', async () => {
+    const r = await reviews.start(now);
+    for (const name of ['review #7 asked for', 'merge #7 asked for once QA passes it']) {
+      await Promise.resolve(r.actions().find((a) => a.name === name)?.run()).catch(() => undefined);
+      await r.settle();
+    }
+    const said = r.durable();
+    r.close?.();
+    expect(said).toEqual(expect.arrayContaining([expect.objectContaining({ pr: 7, status: 'testing', mergeRequested: true })]));
   });
 
   it('reaches a review ended without a verdict, for the captain', async () => {

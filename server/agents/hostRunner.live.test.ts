@@ -97,6 +97,7 @@ describe.skipIf(!live)('HostRunner on real Claude Code', () => {
         show: async (input) => (shown.push(input.title), 'Shown on your screen.'),
         ask: async () => 'asked',
         proposeClose: async () => 'proposed',
+        mergeWhenPassed: async () => 'merging',
       },
       brief: { edited: () => undefined, afterCompact: () => (compacted++, 'The goal: paint the shed. Done looks like: it is teal.') },
     });
