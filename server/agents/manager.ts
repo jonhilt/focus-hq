@@ -207,6 +207,11 @@ export class AgentManager {
     return this.core.goalPrs.boardRefreshed(projectId, prs);
   }
 
+  /** Why the merge gate holds a goal's pull request, if it does: its waypoint is stacked on one that hasn't landed. */
+  landingHold(repo: string, number: number): string | undefined {
+    return this.core.goalPrs.landingHold(repo, number);
+  }
+
   leadPrs(projectId: string): Pick<LeadPr, 'repo' | 'number' | 'lane'>[] {
     return this.core.goalPrs.open(projectId);
   }

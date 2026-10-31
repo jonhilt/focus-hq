@@ -1482,7 +1482,7 @@ describe('AgentManager', () => {
     expect(leads()[1].req.prompt).toMatch(/^\[Ops\] Slice 1 has landed: .*\n\nGo on$/s);
   });
 
-  it('lands an earlier waypoint on its own while the lead works ahead on the next one, named on it', async () => {
+  it('lands an earlier waypoint on its own while the lead works ahead on the next one, named on it and held until it lands', async () => {
     const { agents, claude, store, project, github } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
     await until(() => claude.turns.some((t) => t.req.agentId === lead.id));
@@ -1494,7 +1494,10 @@ describe('AgentManager', () => {
     const { number, url } = await Effect.runPromise(github.createPullRequest(repo.repo, { head: 'focus/saved-items-next', base: first[0].branch, title: 'Saved items, next', body: 'On the first.' }));
     await agents.boardRefreshed(project.id, [...first, { ...first[0], number, url, title: 'Saved items, next', branch: 'focus/saved-items-next', baseBranch: first[0].branch }]);
     const tools = claude.turns.find((t) => t.req.agentId === lead.id)!.req.tools!;
-    expect(await tools.waypoint({ prs: [{ repo: repo.repo, number }], on: 1 })).toBe(`Waypoint 2, on waypoint 1: ${repo.repo}#${number}.`);
+    expect(await tools.waypoint({ prs: [{ repo: repo.repo, number }], on: 1 })).toBe(`Waypoint 2, on waypoint 1: ${repo.repo}#${number}. Base it on the waypoint below's branch: ${repo.repo}#${number} on \`${first[0].branch}\`.`);
+    // the merge gate holds it until the waypoint it's on has landed
+    expect(agents.landingHold(repo.repo, number)).toBe('it waits on waypoint 1, which its waypoint is stacked on, to land first');
+    expect(agents.landingHold(first[0].repo, first[0].number)).toBeUndefined();
     expect(store.agent(lead.id).lead).toMatchObject({ slice: 2, waypoints: [expect.objectContaining({ slice: 1 }), expect.objectContaining({ slice: 2, on: 1 })] });
 
     for (const pr of first) agents.prClosed(pr.repo, pr.number, true);
@@ -1503,6 +1506,7 @@ describe('AgentManager', () => {
     expect(after.prs.map((p) => p.number)).toEqual([number]);
     expect(after.landed?.map((p) => p.slice)).toEqual(first.map(() => 1));
     expect(after.waypoints?.find((w) => w.slice === 1)?.landedAt).toBeDefined();
+    expect(agents.landingHold(repo.repo, number)).toBeUndefined();
     expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed: /)]);
   });
 

@@ -12,6 +12,7 @@ import { diffFiles, type RecapInput, recapLane, recapMarkdown, recapPage, recapP
 import { backedMap, MAX_FILES, primitivesToRead, SOURCE } from '../recapImports';
 import { type Renderer, Workspace } from '../services';
 import { shippedWaypoint } from '../waypoints';
+import { basesSaid, landingHold } from '../stackRules';
 import { landing, named, type WaypointInput, waypointFor } from '../waypointRules';
 import { Part, Refused } from './core';
 
@@ -24,6 +25,12 @@ export class GoalPrs extends Part {
   /** The lead whose open pull request this is, if any. */
   ownerOf(repo: string, number: number): Agent | undefined {
     return [...this.store.agents.values()].find((a) => a.task === 'lead' && a.lead?.prs.some((p) => p.repo === repo && p.number === number && !p.outcome));
+  }
+
+  /** Why the merge gate holds a goal's pull request, if it does: its waypoint is stacked on one that hasn't landed (`landingHold`). */
+  landingHold(repo: string, number: number): string | undefined {
+    const lead = this.ownerOf(repo, number);
+    return lead?.lead && landingHold(lead.lead, { repo, number });
   }
 
   /** The leads' pull requests still open, for Ops to notice when they're merged or closed on GitHub. */
@@ -85,10 +92,11 @@ export class GoalPrs extends Part {
       if (!hasLeadWork(lead)) return yield* new Refused({ message: 'There’s no goal under way here' });
       const next = named(lead.lead, input, Date.now());
       if (next.kind === 'refused') return yield* new Refused({ message: next.why });
-      this.update(lead, { lead: { ...lead.lead, ...next.work } });
+      const work = { ...lead.lead, ...next.work };
+      this.update(lead, { lead: work });
       this.print(lead, [{ kind: 'system', text: `✻ ${next.said}` }]);
       this.boardChanged(lead.projectId);
-      return next.said;
+      return `${next.said}${basesSaid(work, next.waypoint)}`;
     });
   }
 
