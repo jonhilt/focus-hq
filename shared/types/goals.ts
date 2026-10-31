@@ -201,6 +201,14 @@ export interface LeadPr {
   recap?: { title: string; summary: string; recap: SliceRecap };
   /** The GitHub reviews on it the lead has heard (their ids), so each reaches them once (`unheardReviews`). */
   heardReviews?: string[];
+  /**
+   * Where Ops last knew a stacked waypoint's branch to sit (server/agents/stackRules.ts, `restackPlan`): the branch below
+   * it, and that branch's head as it was cut or last moved onto it ('' when unknown), which is where its own commits start.
+   * `stuck`, a move onto the branch below at `lower` that conflicted (or couldn't tell where its commits start) while it
+   * was at `head`: not tried again until either moves. `moving`, its head as Ops set out to move it, until it's heard
+   * how that went: a move a restart cut off is told to the lead once it's found done.
+   */
+  stackedOn?: { branch: string; sha: string; stuck?: { lower: string; head: string }; moving?: string };
 }
 
 /**

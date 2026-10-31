@@ -8,7 +8,7 @@ import type { CommandRun } from './qaProofRules';
 import type { EditedRecording } from './recorder';
 import type { PackageFacts } from '../packageManager';
 import type { MergeHeads, MergeTrial } from '../../shared/mergeCheckRules';
-import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, RunHooks, RunRequest, WorkspaceOps } from './types';
+import type { AgentRunner, AgentSession, BaseMerge, BranchState, ChecksRun, Restack, RunHooks, RunRequest, WorkspaceOps } from './types';
 
 // What the agent manager needs from the outside world, as Effect services: git on the agents' checkouts, Claude Code
 // sessions, and the operations officer's triage. Each wraps the Promise-based implementation it always had (the live
@@ -56,6 +56,7 @@ export class Workspace extends Context.Service<Workspace, {
   pull(dir: string, branch: string): Effect.Effect<void, GitFailed>;
   checkoutPullRequest(repo: string, id: string, number: number): Effect.Effect<string, GitFailed>;
   mergeBase(repo: string, branch: string, baseBranch: string): Effect.Effect<BaseMerge, GitFailed>;
+  restack(repo: string, branch: string, onto: string, upstream: string): Effect.Effect<Restack, GitFailed>;
   missingRemoteCommits(dir: string, branch: string): Effect.Effect<boolean, GitFailed>;
   /** A worktree on `branch` as it was left (a closed goal's), from Ops' clone or else GitHub, never reset. */
   reopen(repo: string, agentId: string, branch: string, aboard: (agentId: string) => boolean): Effect.Effect<string, GitFailed>;
@@ -95,6 +96,7 @@ export class Workspace extends Context.Service<Workspace, {
       pull: (dir, branch) => git(`fetch ${branch}`, () => ops.pull(dir, branch)),
       checkoutPullRequest: (repo, id, number) => git(`check out PR #${number}`, () => ops.checkoutPullRequest(repo, id, number)),
       mergeBase: (repo, branch, baseBranch) => git(`merge ${baseBranch} into ${branch}`, () => ops.mergeBase(repo, branch, baseBranch)),
+      restack: (repo, branch, onto, upstream) => git(`move ${branch} onto ${onto}`, () => ops.restack(repo, branch, onto, upstream)),
       missingRemoteCommits: (dir, branch) => git(`compare with origin's ${branch}`, () => ops.missingRemoteCommits(dir, branch)),
       reopen: (repo, agentId, branch, aboard) => git(`check out ${branch} again`, () => ops.reopen(repo, agentId, branch, aboard)),
       snapshot: (dir, message) => git('commit a WIP snapshot', () => ops.snapshot(dir, message)),

@@ -23,6 +23,7 @@ import { Seating } from './manager/seating';
 import { AgentSessions, backgroundOutputLines, workflowAgentLines, workflowScript } from './manager/sessions';
 import { Checkouts } from './manager/checkouts';
 import { GoalPrs } from './manager/goalPrs';
+import { Stacks } from './manager/stacks';
 import { Triages } from './manager/triages';
 import { Core, type ManagerServices } from './manager/core';
 
@@ -31,7 +32,7 @@ import { Core, type ManagerServices } from './manager/core';
  * agents, for the routes and its loops.
  *
  * Each concern is a part of its own in `manager/` (seating, sessions, delivery, conflicts, leads, slices, goal tools,
- * comms, reviews, triages, the ledger, merges, the plan's usage limit), sharing the `Core` (`manager/core.ts`): the store and hub, the one
+ * comms, reviews, triages, the ledger, merges, the plan's usage limit, stacked waypoints), sharing the `Core` (`manager/core.ts`): the store and hub, the one
  * runtime, and each agent's fiber (`runs`), so they never run twice at once and sending them home interrupts it (and
  * with it their Claude Code session). The public methods below each hand over to their part.
  */
@@ -53,6 +54,7 @@ export class AgentManager {
     this.core.sessions = new AgentSessions(this.core);
     this.core.checkouts = new Checkouts(this.core);
     this.core.goalPrs = new GoalPrs(this.core);
+    this.core.stacks = new Stacks(this.core);
     this.core.triages = new Triages(this.core);
   }
 
@@ -202,9 +204,13 @@ export class AgentManager {
     return this.core.comms.setAutonomy(id, autonomy);
   }
 
-  /** A project's board refreshed: its goals claim the pull requests their leads opened, and those ready go to QA. */
-  boardRefreshed(projectId: string, prs: readonly PullRequest[]): Promise<void> {
-    return this.core.goalPrs.boardRefreshed(projectId, prs);
+  /**
+   * A project's board refreshed: its goals claim the pull requests their leads opened, those ready go to QA, and their
+   * stacked waypoints move onto the branches below them.
+   */
+  async boardRefreshed(projectId: string, prs: readonly PullRequest[]): Promise<void> {
+    await this.core.goalPrs.boardRefreshed(projectId, prs);
+    await this.core.stacks.boardRefreshed(projectId, prs);
   }
 
   /** Why the merge gate holds a goal's pull request, if it does: its waypoint is stacked on one that hasn't landed. */

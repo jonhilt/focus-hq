@@ -275,6 +275,8 @@ const make = Effect.gen(function* () {
 
     editPullRequestBody: (repo, number, body) => gh(['pr', 'edit', String(number), '-R', repo, '--body-file', '-'], body).pipe(Effect.asVoid),
 
+    editPullRequestBase: (repo, number, base) => gh(['pr', 'edit', String(number), '-R', repo, '--base', base]).pipe(Effect.asVoid),
+
     pullRequestComments: (repo, number) =>
       ghJson(RawPrComments, ['pr', 'view', String(number), '-R', repo, '--json', 'comments']).pipe(Effect.map((raw) => raw.comments.map((c) => c.body))),
 

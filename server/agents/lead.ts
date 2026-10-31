@@ -281,6 +281,35 @@ export function landedNote(waypoint: number, prs: LeadPr[]): string {
   ].join(' ');
 }
 
+type Stacked = { repo: string; number: number; branch: string };
+
+/**
+ * What the lead hears when Ops moved one of their stacked pull requests onto the branch below it (it got a push, or
+ * landed): how to bring their checkout along, replaying what they hadn't pushed onto the moved branch.
+ */
+export function restackedNote(pr: Stacked, onto: string, folder: string, from: string): string {
+  return [
+    `Ops moved ${pr.repo}#${pr.number} onto \`${onto}\`, which it's based on now, so ./${folder} is behind GitHub.`,
+    `To bring your checkout along, run \`git -C ./${folder} fetch origin && git -C ./${folder} rebase --onto origin/${pr.branch} ${from} ${pr.branch}\`: it keeps commits you haven't pushed. Don't pull it with a merge.`,
+  ].join(' ');
+}
+
+/** What the lead hears when Ops' move of one of their stacked pull requests onto the branch below it clashed: how to do it themselves. */
+export function restackConflictsNote(pr: Stacked, onto: string, upstream: string, folder: string, files: readonly string[]): string {
+  return [
+    `Ops couldn't move ${pr.repo}#${pr.number} onto \`${onto}\`, the branch below it: its commits clash with it in ${files.join(', ')}, so nothing was pushed.`,
+    `Move it yourself: on \`${pr.branch}\` in ./${folder}, run \`git fetch origin && git rebase --onto origin/${onto} ${upstream}\`, settle the conflicts, then \`git push --force-with-lease\`. It can't land until it's on \`${onto}\`.`,
+  ].join(' ');
+}
+
+/** What the lead hears when one of their stacked pull requests needs moving onto the branch below it, and Ops can't tell where its own commits start. */
+export function restackUnknownNote(pr: Stacked, onto: string, folder: string): string {
+  return [
+    `${pr.repo}#${pr.number} needs moving onto \`${onto}\`, the branch below it, and Ops can't tell where its own commits start.`,
+    `Move it yourself: on \`${pr.branch}\` in ./${folder}, run \`git fetch origin && git rebase --onto origin/${onto} <the commit before your first>\`, then \`git push --force-with-lease\`. It can't land until it's on \`${onto}\`.`,
+  ].join(' ');
+}
+
 /**
  * What the lead hears when their repos had to be checked out again: a move to a new slice (or a reopening) that failed
  * part way left them with none. They're on fresh code, so commits that hadn't shipped stayed behind on the old branch.

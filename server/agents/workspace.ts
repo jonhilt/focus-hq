@@ -13,11 +13,14 @@ import { checkCommands, rangeDiffUnchanged, type SinceVerdict } from './retestRu
 import type { CommandRun } from './qaProofRules';
 import { reflogBranches } from './prRules';
 import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
+import { restack } from './restack';
+import { inScratchWorktree } from './scratchWorktree';
 import { heldMessage, parseWorktrees, retryLockRace, trashName } from './worktrees';
 import { claimBranch, orphanedWorkspaces } from './worktreeRules';
 import { installSkills } from './skills';
 
-const lock = new KeyedLock();
+/** One git operation at a time on each repo's clone of Ops' (`~/.focus/repos`). */
+export const lock = new KeyedLock();
 /** One run of the checks at a time in each repo's checks folder. */
 const checksLock = new KeyedLock();
 
@@ -29,7 +32,7 @@ export function mirrorDir(repo: string): string {
 }
 
 /** Clones the repository into data/repos the first time it's needed. Call inside the repo's lock. */
-async function ensureMirror(repo: string): Promise<void> {
+export async function ensureMirror(repo: string): Promise<void> {
   const mirror = mirrorDir(repo);
   if (fs.existsSync(path.join(mirror, '.git'))) return;
   fs.mkdirSync(paths.mirrors, { recursive: true });
@@ -137,7 +140,7 @@ export async function reopenWorktree(repo: string, agentId: string, branch: stri
   return dir;
 }
 
-async function removeDir(mirror: string, dir: string): Promise<void> {
+export async function removeDir(mirror: string, dir: string): Promise<void> {
   await git(mirror, ['worktree', 'remove', '--force', dir]).catch(() => removeFolder(dir));
 }
 
@@ -517,16 +520,8 @@ export async function pullBranch(dir: string, branch: string): Promise<void> {
  * help, or every conflicted file has a rule in the repo's `.gitattributes` (`MergeRule`), and its typecheck passes.
  * Otherwise nothing is pushed. The push isn't forced, so it fails if someone pushed to the branch meanwhile.
  */
-export async function mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge> {
-  const mirror = mirrorDir(repo);
-  const dir = path.join(paths.merges, `${repo.replace('/', '__')}-${randomBytes(4).toString('hex')}`);
-  await lock.with(repo, async () => {
-    await ensureMirror(repo);
-    await retryLockRace(() => git(mirror, ['fetch', 'origin', '--prune'], 10 * 60_000), () => sleep(750));
-    fs.mkdirSync(paths.merges, { recursive: true });
-    await git(mirror, ['worktree', 'add', '--detach', dir, `origin/${branch}`]);
-  });
-  try {
+export function mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge> {
+  return inScratchWorktree(repo, branch, async (dir) => {
     const before = await head(dir);
     let auto: string[] = [];
     try {
@@ -551,9 +546,7 @@ export async function mergeBase(repo: string, branch: string, baseBranch: string
     }
     await git(dir, ['push', 'origin', `HEAD:refs/heads/${branch}`], 5 * 60_000);
     return { kind: 'merged', sha: after, from: before, ...(auto.length ? { auto } : {}) };
-  } finally {
-    await lock.with(repo, () => removeDir(mirror, dir));
-  }
+  });
 }
 
 /** Settles a conflicted file in `dir` by its rule (see `MergeRule`), and stages it. */
@@ -607,6 +600,7 @@ export const liveWorkspace: WorkspaceOps = {
   pull: pullBranch,
   checkoutPullRequest: checkoutPullRequest,
   mergeBase: mergeBase,
+  restack: (repo, branch, onto, upstream) => restack(repo, branch, onto, upstream),
   missingRemoteCommits: missingRemoteCommits,
   reopen: reopenWorktree,
   snapshot: snapshot,

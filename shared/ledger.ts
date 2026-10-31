@@ -56,6 +56,11 @@ export type LedgerEntry =
   | (PrRef & { kind: 'conflicts'; resolved: 'office' | 'auto' | 'agent' | 'up-to-date'; files?: string[]; broke?: string })
   | (PrRef & { kind: 'checks-sent-back'; checks: string[] })
   /**
+   * Ops moved a goal's stacked pull request onto the branch below it (`onto`) as that one got a push or landed
+   * (server/agents/manager/stacks.ts), or, with `files`, couldn't: they clashed, and nothing was pushed.
+   */
+  | (PrRef & { kind: 'restacked'; onto: string; files?: string[] })
+  /**
    * Ops' merge check before a merge (docs/merging.md): the PR's head merged onto its base, checked. `failed` is
    * the command that failed, the files that conflicted, or why it couldn't run; `overridden` is the captain merging
    * past it on purpose. `base` and `head` are the commits it checked.

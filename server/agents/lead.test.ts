@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { leadFor, leadId, plannerFor, qaFor, qaOfficerFor } from '../../shared/crew';
 import type { Agent, LeadAgent, LeadWork } from '../../shared/types';
-import { answerInChat, pageErrorsNote, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, fixingNote, fixPushedNote, fixHandedBackNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, sliceSiblings, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, landedNote, leadSystemAppend, moveQueued, reopenedNote, reopenedWork, reposBackNote, qaVerdictNote, sliceBranch, sliceLanded, workspaceNote } from './lead';
+import { answerInChat, pageErrorsNote, BRIEF_LIMIT, freshSessionPrompt, goalBrief, conflictsResolvedNote, fixingNote, fixPushedNote, fixHandedBackNote, applyHelperEvent, backgroundChange, backgroundStop, helperChange, taskChange, workflowChange, COMPACT_INSTRUCTIONS, compactInstructions, goalOf, goalReviewerId, sliceSiblings, everyPr, fileGoal, GOAL_LOG, goalEffort, goalRecord, goalTitle, landedNote, leadSystemAppend, moveQueued, reopenedNote, reopenedWork, reposBackNote, qaVerdictNote, restackConflictsNote, restackedNote, restackUnknownNote, sliceBranch, sliceLanded, workspaceNote } from './lead';
 import { answerQuestion, askQuestion, QUESTION_LIMITS } from './leadRules';
 
 const work: LeadWork = {
@@ -437,6 +437,30 @@ describe('the lead’s context', () => {
     expect(keep).toContain('Your brief, ./brief.md, as it stands:\n\n# Saved items\n\n## Done looks like\n\nWorks anywhere');
     expect(keep).toContain('As the captain first put it:\n> Let shoppers save items for later');
     expect(COMPACT_INSTRUCTIONS).toMatch(/keep the task, what you have done and decided and why, and what is left/);
+  });
+});
+
+describe('a stacked waypoint moved onto the branch below it', () => {
+  const pr = { repo: 'acme/web', number: 12, branch: 'focus/wp2' };
+
+  it('tells the lead how to bring their checkout along, keeping what they haven’t pushed', () => {
+    const note = restackedNote(pr, 'main', 'web', 'abc123');
+    expect(note).toMatch(/^Ops moved acme\/web#12 onto `main`, which it's based on now, so \.\/web is behind GitHub\./);
+    expect(note).toContain('`git -C ./web fetch origin && git -C ./web rebase --onto origin/focus/wp2 abc123 focus/wp2`');
+    expect(note).toContain("Don't pull it with a merge");
+  });
+
+  it('tells the lead the files that clashed, that nothing was pushed, and how to move it themselves', () => {
+    const note = restackConflictsNote(pr, 'focus/wp1', 'def456', 'web', ['src/a.ts', 'src/b.ts']);
+    expect(note).toMatch(/^Ops couldn't move acme\/web#12 onto `focus\/wp1`, the branch below it: its commits clash with it in src\/a\.ts, src\/b\.ts, so nothing was pushed\./);
+    expect(note).toContain('`git fetch origin && git rebase --onto origin/focus/wp1 def456`');
+    expect(note).toContain('`git push --force-with-lease`');
+  });
+
+  it('tells the lead when Ops can’t tell where its own commits start', () => {
+    const note = restackUnknownNote(pr, 'main', 'web');
+    expect(note).toMatch(/^acme\/web#12 needs moving onto `main`, the branch below it, and Ops can't tell where its own commits start\./);
+    expect(note).toContain("It can't land until it's on `main`.");
   });
 });
 

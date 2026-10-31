@@ -338,6 +338,13 @@ export const demoLayer = Layer.sync(GitHub, () => {
         }),
       ),
 
+    editPullRequestBase: (name, number, base) =>
+      pr(name, number).pipe(
+        Effect.map((p) => {
+          p.baseBranch = base;
+        }),
+      ),
+
     closePullRequest: (name, number, comment) =>
       Effect.gen(function* () {
         const p = yield* pr(name, number);

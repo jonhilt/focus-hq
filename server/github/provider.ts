@@ -68,6 +68,8 @@ export interface GitHubProvider {
   commentOnPullRequest(repo: string, number: number, body: string): Promise<string>;
   /** Replaces a pull request's description. */
   editPullRequestBody(repo: string, number: number, body: string): Promise<void>;
+  /** Points a pull request at another base branch (a stacked one's, once the branch below it moves or lands). */
+  editPullRequestBase(repo: string, number: number, base: string): Promise<void>;
   /** What a pull request's comments say, oldest first. */
   pullRequestComments(repo: string, number: number): Promise<string[]>;
   /** A review's comments on lines of code (`reviewId` as `PrReview.id` has it), in order. */

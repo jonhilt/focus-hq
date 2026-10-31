@@ -211,6 +211,15 @@ export type BaseMerge =
   | { kind: 'up-to-date' }
   | { kind: 'conflicts'; files: string[]; broke?: string };
 
+/**
+ * Ops' move of a stacked pull request's branch onto the branch below it (`git rebase --onto`): pushed, already on it,
+ * or left for an agent: `files` are the paths that conflicted, and nothing was pushed.
+ */
+export type Restack =
+  | { kind: 'restacked'; sha: string; from: string }
+  | { kind: 'up-to-date' }
+  | { kind: 'conflicts'; files: string[] };
+
 export interface WorkspaceOps {
   /**
    * A worktree on `branch`, starting from the remote branch `startPoint`. If a workspace of an agent who isn't
@@ -239,6 +248,11 @@ export interface WorkspaceOps {
   pull(dir: string, branch: string): Promise<void>;
   /** Merges origin's `baseBranch` into origin's `branch` on Ops' side, and pushes it if git needed no help. */
   mergeBase(repo: string, branch: string, baseBranch: string): Promise<BaseMerge>;
+  /**
+   * Moves origin's `branch` onto origin's `onto` in a scratch worktree, replaying only its commits after `upstream` (the
+   * commit the branch below was at when it was last cut or moved), and force-pushes it, leased to where it was.
+   */
+  restack(repo: string, branch: string, onto: string, upstream: string): Promise<Restack>;
   /** Whether origin's `branch` has commits `dir`'s HEAD doesn't. */
   missingRemoteCommits(dir: string, branch: string): Promise<boolean>;
   /** A worktree on `branch` as it was left, nothing reset: Ops' own branch (brought up to GitHub's), else GitHub's. */

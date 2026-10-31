@@ -1510,6 +1510,35 @@ describe('AgentManager', () => {
     expect(store.run(lead.id).notes).toEqual([expect.stringMatching(/^\[Ops\] Slice 1 has landed: /)]);
   });
 
+  it('moves a stacked waypoint onto the base branch once the one below lands, points its pull request there, and tells the lead once', async () => {
+    const { agents, claude, store, project, github } = focus();
+    const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };
+    await until(() => claude.turns.some((t) => t.req.agentId === lead.id));
+    const first = (await leadOpensPrs({ agents, store, github }, lead.id, 'Saved items, first waypoint')).map((p) => ({ ...p, headSha: `head-${p.number}` }));
+    const repo = store.agent(lead.id).lead!.repos[0];
+    demoSawBranch(demoWorkspace.dir(leadWorktreeId(lead.id, repo.folder)), 'focus/saved-items-next');
+    const { number, url } = await Effect.runPromise(github.createPullRequest(repo.repo, { head: 'focus/saved-items-next', base: first[0].branch, title: 'Saved items, next', body: 'On the first.' }));
+    const next: PullRequest = { ...first[0], number, url, title: 'Saved items, next', branch: 'focus/saved-items-next', baseBranch: first[0].branch, headSha: 'head-next' };
+    await agents.boardRefreshed(project.id, [...first, next]);
+    await claude.turns.find((t) => t.req.agentId === lead.id)!.req.tools!.waypoint({ prs: [{ repo: repo.repo, number }], on: 1 });
+    // the board refreshes: Ops keeps where it sits, and moves nothing
+    await agents.boardRefreshed(project.id, [...first, next]);
+    expect(store.agent(lead.id).lead!.prs.find((p) => p.number === number)?.stackedOn).toEqual({ branch: first[0].branch, sha: 'head-' + first[0].number });
+
+    for (const pr of first) agents.prClosed(pr.repo, pr.number, true);
+    expect(agents.landingHold(repo.repo, number)).toBe(`Ops is moving it onto \`${repo.baseBranch}\` first`);
+    for (let i = 0; i < 2; i++) await agents.boardRefreshed(project.id, [next]);
+    expect(store.agent(lead.id).lead!.prs.find((p) => p.number === number)).toMatchObject({ sha: 'demo-restacked', stackedOn: { branch: repo.baseBranch, sha: '' } });
+    expect((await Effect.runPromise(github.getPullRequest(repo.repo, number))).baseBranch).toBe(repo.baseBranch);
+    expect(agents.landingHold(repo.repo, number)).toBeUndefined();
+    expect(store.ledger.filter((e) => e.kind === 'restacked')).toEqual([expect.objectContaining({ repo: repo.repo, pr: number, onto: repo.baseBranch })]);
+    expect(store.run(lead.id).notes).toEqual([
+      expect.stringMatching(/^\[Ops\] Slice 1 has landed: /),
+      expect.stringContaining(`[Ops] Ops moved ${repo.repo}#${number} onto \`${repo.baseBranch}\``),
+    ]);
+    expect(store.run(lead.id).notes[1]).toContain(`rebase --onto origin/focus/saved-items-next demo-head focus/saved-items-next`);
+  });
+
   it('hands a lead mid-turn their notes with the captain’s message into the turn, ahead of it', async () => {
     const { agents, claude, store, project, github } = focus();
     const { agent: lead } = agents.startGoal(project.id, 'Saved items') as { agent: { id: string } };

@@ -835,6 +835,11 @@ export const demoWorkspace: WorkspaceOps = {
     await sleep(600);
     return { kind: 'conflicts', files: ['src/header.ts'] };
   },
+  // the demo's stacks move on cleanly
+  restack: async () => {
+    await sleep(600);
+    return { kind: 'restacked', sha: 'demo-restacked', from: 'demo-head' };
+  },
   missingRemoteCommits: async () => false,
   reopen: async (_repo, agentId) => `/demo/${agentId}`,
   snapshot: async () => false,

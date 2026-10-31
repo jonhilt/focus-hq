@@ -163,6 +163,41 @@ export const WORKSPACE_CONTRACT: Expectation[] = [
       expect(await w.originHead('focus/clash')).toBe(before);
     },
   },
+  {
+    name: 'restacking a waypoint after the one below was squash-merged replays only its own commits: no conflict, then up to date',
+    run: async (w) => {
+      // waypoint 1 changes a file twice; waypoint 2, cut from it, changes it again
+      const dir = await w.checkout('a1', 'focus/wp1');
+      await w.commit(dir, 'a.ts', 'one');
+      await w.commit(dir, 'a.ts', 'two');
+      await w.ops.push(dir, 'focus/wp1');
+      const below = (await w.originHead('focus/wp1')) ?? '';
+      await w.commit(dir, 'a.ts', 'three');
+      await w.ops.push(dir, 'focus/wp2');
+      const from = await w.originHead('focus/wp2');
+      // waypoint 1 lands squashed into one commit, and GitHub deletes its branch
+      await w.land('a.ts', 'two');
+      await w.deleteOnOrigin('focus/wp1');
+      expect(await w.ops.restack(w.repo, 'focus/wp2', 'main', below)).toEqual({ kind: 'restacked', from, sha: await w.originHead('focus/wp2') });
+      expect(await w.ops.mergeBase(w.repo, 'focus/wp2', 'main')).toEqual({ kind: 'up-to-date' });
+      expect(await w.ops.restack(w.repo, 'focus/wp2', 'main', below)).toEqual({ kind: 'up-to-date' });
+    },
+  },
+  {
+    name: 'restacking onto a change that clashes with the waypoint’s own reports the files, and pushes nothing',
+    run: async (w) => {
+      const dir = await w.checkout('a1', 'focus/wp1');
+      await w.commit(dir, 'a.ts', 'one');
+      await w.ops.push(dir, 'focus/wp1');
+      const below = (await w.originHead('focus/wp1')) ?? '';
+      await w.commit(dir, 'a.ts', 'mine');
+      await w.ops.push(dir, 'focus/wp2');
+      await w.land('a.ts', 'theirs');
+      const before = await w.originHead('focus/wp2');
+      expect(await w.ops.restack(w.repo, 'focus/wp2', 'main', below)).toEqual({ kind: 'conflicts', files: ['a.ts'] });
+      expect(await w.originHead('focus/wp2')).toBe(before);
+    },
+  },
 ];
 
 /**

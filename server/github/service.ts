@@ -31,6 +31,8 @@ export class GitHub extends Context.Service<GitHub, {
   commentOnPullRequest(repo: string, number: number, body: string): Op<string>;
   /** Replaces a pull request's description. */
   editPullRequestBody(repo: string, number: number, body: string): Op<void>;
+  /** Points a pull request at another base branch (a stacked one's, once the branch below it moves or lands). */
+  editPullRequestBase(repo: string, number: number, base: string): Op<void>;
   /** What a pull request's comments say, oldest first. */
   pullRequestComments(repo: string, number: number): Op<string[]>;
   /** A review's comments on lines of code (`reviewId` as `PrReview.id` has it), in order. */
@@ -64,6 +66,7 @@ export function toProvider(layer: Layer.Layer<GitHub>): GitHubProvider {
     getPullRequest: (repo, number) => call((gh) => gh.getPullRequest(repo, number)),
     commentOnPullRequest: (repo, number, body) => call((gh) => gh.commentOnPullRequest(repo, number, body)),
     editPullRequestBody: (repo, number, body) => call((gh) => gh.editPullRequestBody(repo, number, body)),
+    editPullRequestBase: (repo, number, base) => call((gh) => gh.editPullRequestBase(repo, number, base)),
     pullRequestComments: (repo, number) => call((gh) => gh.pullRequestComments(repo, number)),
     reviewComments: (repo, reviewId) => call((gh) => gh.reviewComments(repo, reviewId)),
     uploadQaEvidence: (repo, path, bytes) => call((gh) => gh.uploadQaEvidence(repo, path, bytes)),

@@ -75,6 +75,12 @@ describe('ledgerRow', () => {
     expect(ledgerRow(raised)).toMatchObject({ group: 'merged', tag: 'Lane', tone: 'warn', title: 'focus #236 · raised from ship to ask by the chief of staff', detail: 'It changes a card. · Engineering deck', pr: { repo: REPO, pr: 236 }, goal: GOAL });
   });
 
+  it('says when Ops moved a stacked pull request onto the branch below it, or couldn’t, among the conflicts', () => {
+    const moved = (files?: string[]) => ev({ kind: 'restacked', repo: REPO, pr: 237, goal: GOAL, onto: 'main', ...(files && { files }) }, 6);
+    expect(ledgerRow(moved())).toMatchObject({ group: 'conflicts', tag: 'Restacked', tone: 'info', title: 'focus #237 · moved onto main', detail: GOAL, pr: { repo: REPO, pr: 237 } });
+    expect(ledgerRow(moved(['src/a.ts']))).toMatchObject({ tone: 'warn', title: 'focus #237 · couldn’t be moved onto main: src/a.ts clashed' });
+  });
+
   it('says what the chief of staff made of a ship’s lane, kept, raised or unread', () => {
     const read = (to: string, failed?: string) => ev({ kind: 'cos-lane', agent: 'Cmdr. Vale', goal: GOAL, prs: [{ repo: REPO, pr: 236, sha: 'abc' }], from: 'ship', to, why: 'Safe.', model: 'haiku', version: 'lane-v1', failed }, 6);
     expect(ledgerRow(read('ship'))).toMatchObject({ group: 'sessions', tag: 'Lane', tone: 'info', title: 'Kept Cmdr. Vale’s ship in ship', detail: 'Safe. · Engineering deck', pr: { repo: REPO, pr: 236 } });

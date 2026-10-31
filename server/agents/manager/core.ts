@@ -24,6 +24,7 @@ import type { Seating } from './seating';
 import type { AgentSessions } from './sessions';
 import type { Checkouts } from './checkouts';
 import type { GoalPrs } from './goalPrs';
+import type { Stacks } from './stacks';
 import type { Triages } from './triages';
 
 /** What the manager's work needs: GitHub, the agents' checkouts, Claude Code sessions and the operations officer. */
@@ -115,6 +116,7 @@ export class Core {
   leads!: Leads;
   checkouts!: Checkouts;
   goalPrs!: GoalPrs;
+  stacks!: Stacks;
   goalTools!: GoalTools;
   comms!: Comms;
   reviews!: Reviews;

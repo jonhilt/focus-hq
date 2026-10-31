@@ -28,6 +28,9 @@ export function wakeFor(note: Pick<LeadNote, 'about' | 'inTurn'>, project: { aut
     case 'pr-review':
       // a review on GitHub is someone's word on the work: it waits for the captain to say what to do about it
       return undefined;
+    case 'restacked':
+      // the lead brings their checkout along as their next turn starts, whoever starts it
+      return undefined;
     case 'other':
       return undefined;
   }

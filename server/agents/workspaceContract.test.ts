@@ -110,4 +110,6 @@ holdsToWorkspaceContract('the demo workspace', demoWorld, {
   'someone else’s commits on origin’s branch are noticed, and a pull brings them in': 'nobody else ever pushes to a branch',
   'merging the base: up to date when it hasn’t moved, merged and pushed when it has': 'Ops’ merge always conflicts, so there’s an agent to watch resolving it',
   'merging the base reports the files that conflict, and pushes nothing': 'Ops’ merge always conflicts in src/header.ts, whatever changed',
+  'restacking a waypoint after the one below was squash-merged replays only its own commits: no conflict, then up to date': 'Ops’ restack always goes through, to a made-up commit',
+  'restacking onto a change that clashes with the waypoint’s own reports the files, and pushes nothing': 'Ops’ restack always goes through, whatever changed',
 });

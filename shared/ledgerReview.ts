@@ -43,6 +43,7 @@ export function groupOf(e: LedgerEvent): ReviewGroup {
     case 'lane-raised':
       return 'merged';
     case 'conflicts':
+    case 'restacked':
       return 'conflicts';
     // an alert (raised to the user directly) shows from the start, beside the goals it's about
     case 'goal-closed':
@@ -198,9 +199,11 @@ function scoreRow(e: Of<'qa-score'>): RowParts {
   return { tag: 'Scored', tone: e.passed ? 'ok' : e.score > 0 ? 'warn' : 'bad', title: `${short(e.repo)} #${e.pr} · QA's report graded ${e.label} (${e.score})`, detail: [e.why, e.goal].filter(Boolean).join(' · '), pr: e, goal: e.goal };
 }
 
-/** A line about a goal itself: it closing, its threads, its intent, a PR its lead opened. */
-function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'pr' | 'pr-ready' | 'cos-handover'>): RowParts {
+/** A line about a goal itself: it closing, its threads, its intent, a PR its lead opened, or Ops moved along its stack. */
+function goalRow(e: Of<'goal-closed' | 'thread-decided' | 'thread-proposals' | 'intent' | 'pr' | 'pr-ready' | 'cos-handover' | 'restacked'>): RowParts {
   switch (e.kind) {
+    case 'restacked':
+      return { tag: 'Restacked', tone: e.files ? 'warn' : 'info', title: `${short(e.repo)} #${e.pr} · ${e.files ? `couldn’t be moved onto ${e.onto}: ${e.files.join(', ')} clashed` : `moved onto ${e.onto}`}`, detail: e.goal, pr: e, goal: e.goal };
     case 'cos-handover':
       return { tag: 'Moved', tone: 'info', title: `Moved ${e.what} from ${e.agent}’s goal to ${e.started ? 'a new goal' : `${e.toAgent}’s`}`, detail: [e.goal, e.toGoal].filter(Boolean).join(' → '), goal: e.goal };
     case 'pr-ready':

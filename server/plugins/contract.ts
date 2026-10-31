@@ -125,6 +125,8 @@ export type LeadNews =
   | { kind: 'slice-landed'; slice: number }
   /** Someone reviewed one of their pull requests on GitHub (`author`, the review's `state`): what they said and their comments on the code. */
   | { kind: 'pr-review'; repo: string; number: number; state: PrReview['state']; author: string }
+  /** Ops moved one of their stacked pull requests onto the branch below it, or (`stuck`) couldn't, and asks them to. */
+  | { kind: 'restacked'; repo: string; number: number; stuck?: true }
   /** Anything else: Ops merged a base into their pull request, the star chart, a restart Ops finished something for. */
   | { kind: 'other' };
 
