@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import type { HookCallback } from '@anthropic-ai/claude-agent-sdk';
-import { pushDenial } from './pushGuardRules';
+import { mergeDenial, pushDenial } from './pushGuardRules';
 import { shellCommands } from './shell';
 import { SCRATCH_RM, SCRATCH_VAR, scratchRmDenial } from './scratchRules';
 
@@ -42,8 +42,8 @@ export function openScratch(agentId: string, dcgFile: string, env: NodeJS.Proces
     env: { [SCRATCH_VAR]: dir, ...(!env.DCG_CONFIG && { DCG_CONFIG: dcgFile }) },
     hook: (input) => {
       const command = input.hook_event_name === 'PreToolUse' ? (input.tool_input as { command?: unknown } | undefined)?.command : undefined;
-      // the push guard's too: a command that would skip the git hooks it rests on
-      const reason = typeof command === 'string' ? (scratchRmDenial(command, dir, fs.realpathSync.native) ?? pushDenial(command)) : null;
+      // the push guard's too: a command that would skip the git hooks it rests on, or merge or approve a pull request
+      const reason = typeof command === 'string' ? (scratchRmDenial(command, dir, fs.realpathSync.native) ?? pushDenial(command) ?? mergeDenial(command)) : null;
       return Promise.resolve(reason ? { hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason } } : {});
     },
     close: () => {

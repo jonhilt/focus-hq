@@ -75,6 +75,9 @@ describe('openScratch', () => {
       s.hook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command }, tool_use_id: 't', session_id: 's', transcript_path: '', cwd: '' }, 't', { signal: new AbortController().signal });
     expect(await pre('rm -rf "$FOCUS_SCRATCH/x"')).toEqual({});
     expect(await pre('rm -rf "$FOCUS_SCRATCH/../x"')).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } });
+    // and the guard on merging: only Ops or the user merges a pull request
+    expect(await pre('gh pr merge 12 --squash')).toMatchObject({ hookSpecificOutput: { permissionDecision: 'deny' } });
+    expect(await pre('gh pr ready 12')).toEqual({});
 
     s.close();
     expect(fs.existsSync(s.dir)).toBe(false);
