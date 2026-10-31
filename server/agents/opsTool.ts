@@ -97,7 +97,8 @@ export function opsTools(tools: OpsTools): Tool[] {
   return [
     opsTool(
       'recap',
-      'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it), which the captain reviews it by before the diff: the primitives (the system\'s building blocks) it touches, each composed (used as it is: wiring, call sites), extended (its behaviour or contract changed) or added (a new one), and how they connect. Ops refuses one that leaves a file the pull request changes under none of its primitives\' paths (paths start with the repo\'s folder), then puts it in the pull request\'s description and on your station\'s screen. It also picks the lane the pull request merges in once QA passes it: ship merges it by itself, show merges it and tells the captain, ask waits for the captain; never lower than its rollup allows. With no recap, a pull request is in ask. Send it again to replace it.',
+      'Put a system recap on one of the goal\'s open pull requests (one you opened with gh, once Ops is following it): the primitives it touches and how, which the captain reads before the diff, and the lane it merges in once QA passes it (ship, show or ask; without a recap it\'s ask). /recap has how to write one and pick its lane. Ops refuses one that leaves a changed file under none of its primitives\' paths, or a lane below its rollup, saying what to fix, then puts it in the pull request\'s description and on your station\'s screen. Send it again to replace it.',
+
       Schema.Struct({ repo: Described(say.repo), number: Schema.Int.annotate({ description: say.number }), recap: RecapSchema }),
       "Couldn't put the recap on it",
       (input) => tools.recap(input),

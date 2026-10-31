@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
+import { laneFloor } from '../../shared/mergeLaneRules';
 import { installSkills, loadSkills, SKILLS_DIR, skillProblem, SkillFileError } from './skills';
 
 const dirs: string[] = [];
@@ -45,6 +46,15 @@ describe('Focus’s skills', () => {
     // merge the base, never rebase or force: QA and Ops follow the branch's commits
     expect(babysit).toContain('git merge origin/<base>');
     expect(babysit).not.toMatch(/push --force|push -f\b/);
+  });
+
+  it('has /recap, whose lane floors are the ones Ops holds a recap to', () => {
+    expect(loadSkills()).toContain('recap');
+    const recap = fs.readFileSync(path.join(SKILLS_DIR, 'recap', 'SKILL.md'), 'utf8');
+    expect(recap).toContain('mcp__office__recap');
+    expect(recap).toContain('git -C <folder> diff --name-only origin/<base>...HEAD');
+    const floors = (['composes', 'extends', 'adds'] as const).map((rollup) => `${rollup} → ${laneFloor(rollup)}`).join(', ');
+    expect(recap).toContain(floors);
   });
 
   it('wants a skill named as its folder, saying when to use it', () => {
