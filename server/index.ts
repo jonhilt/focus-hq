@@ -12,6 +12,7 @@ import { githubRepo } from './github/repo';
 import { transcriptFolders, transcriptReader } from './agents/transcript';
 import { HOST_CLAUDE_DIR, HostRunner } from './agents/hostRunner';
 import { CrewFileError, readCrew } from './agents/crewFiles';
+import { readSkills, SkillFileError } from './agents/skills';
 import { DemoDrafter, DemoRunner, DemoTriager, demoTranscripts, demoWorkspace } from './agents/demoRunner';
 import { AgentManager } from './agents/manager';
 import { QaChat, Recordings, Renderer, Sessions, Triage, Workspace } from './agents/services';
@@ -125,8 +126,9 @@ function liveParts(store: Store, browsers: BrowserPool): ShipParts {
 }
 
 async function main() {
-  // a crew file that's wrong stops Focus here, saying which and where, before any agent is told half of it
+  // a crew or skill file that's wrong stops Focus here, saying which and where, before any agent is told half of it
   readCrew();
+  readSkills();
   // the demo rolls the same ids each run
   seedShip(config);
   const store = new Store(!config.demo);
@@ -361,8 +363,8 @@ function shutDownOnSignals(focus: Focus, store: Store, browsers: BrowserPool, pr
 }
 
 main().catch((err: unknown) => {
-  // another running Focus on the same data folder is expected, and a crew file that's wrong says where: no stack trace to bury either
-  if (err instanceof StateLockedError || err instanceof CrewFileError) console.error(err.message);
+  // another running Focus on the same data folder is expected, and a crew or skill file that's wrong says where: no stack trace to bury either
+  if (err instanceof StateLockedError || err instanceof CrewFileError || err instanceof SkillFileError) console.error(err.message);
   else console.error(err);
   process.exit(1);
 });

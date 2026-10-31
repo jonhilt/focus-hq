@@ -219,6 +219,8 @@ export interface WorkspaceOps {
    */
   install(dir: string): Promise<string | undefined>;
   dir(agentId: string): string;
+  /** Copies Focus's skills into a lead's workspace, for Claude Code to find there. Missing where there are no real workspaces. */
+  installSkills?(dir: string): void;
   hasUncommittedChanges(dir: string): Promise<boolean>;
   commitsAhead(dir: string, baseBranch: string): Promise<number>;
   /** The commit checked out in `dir`. */

@@ -13,6 +13,7 @@ import { reflogBranches } from './prRules';
 import type { BaseMerge, BranchState, ChecksRun, WorkspaceOps } from './types';
 import { heldMessage, parseWorktrees, retryLockRace, trashName } from './worktrees';
 import { claimBranch, orphanedWorkspaces } from './worktreeRules';
+import { installSkills } from './skills';
 
 const lock = new KeyedLock();
 /** One run of the checks at a time in each repo's checks folder. */
@@ -589,6 +590,7 @@ export const liveWorkspace: WorkspaceOps = {
   remove: removeWorktree,
   install: (dir) => installDependencies(dir),
   dir: workspaceDir,
+  installSkills,
   hasUncommittedChanges: hasUncommittedChanges,
   commitsAhead: commitsAhead,
   head: head,

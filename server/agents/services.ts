@@ -44,6 +44,8 @@ export class Workspace extends Context.Service<Workspace, {
   /** Installs a checkout's dependencies. Never fails: what went wrong is a note for the agent working there. */
   install(dir: string): Effect.Effect<string | undefined>;
   dir(agentId: string): string;
+  /** Copies Focus's skills into a lead's workspace. Never fails: a lead without them still works, only without the help. */
+  installSkills(dir: string): Effect.Effect<void>;
   hasUncommittedChanges(dir: string): Effect.Effect<boolean, GitFailed>;
   commitsAhead(dir: string, baseBranch: string): Effect.Effect<number, GitFailed>;
   head(dir: string): Effect.Effect<string, GitFailed>;
@@ -82,6 +84,8 @@ export class Workspace extends Context.Service<Workspace, {
       remove: (repo, agentId) => Effect.ignore(git('remove a checkout', () => ops.remove(repo, agentId))),
       install: (dir) => Effect.promise(() => ops.install(dir)),
       dir: (agentId) => ops.dir(agentId),
+      installSkills: (dir) =>
+        Effect.try(() => ops.installSkills?.(dir)).pipe(Effect.catch((err) => Effect.sync(() => console.warn(`Couldn't copy Focus's skills into ${dir}: ${errorMessage(err)}`)))),
       hasUncommittedChanges: (dir) => git('look for uncommitted changes', () => ops.hasUncommittedChanges(dir)),
       commitsAhead: (dir, baseBranch) => git('count new commits', () => ops.commitsAhead(dir, baseBranch)),
       head: (dir) => git('read the checked-out commit', () => ops.head(dir)),

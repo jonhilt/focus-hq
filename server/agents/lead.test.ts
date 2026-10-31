@@ -65,7 +65,7 @@ describe('slices', () => {
 });
 
 describe('what the lead writes and hears', () => {
-  it('works across every repo, opens its own pull requests with gh, ready when they’re ready, and never pushes a base branch', () => {
+  it('works across every repo, and ships its own pull requests with the /ship-slice skill', () => {
     const prompt = leadSystemAppend({ name: 'Lt. Okafor' }, 'Shop', {});
     expect(prompt).toMatch(/^# You are Lt\. Okafor, a lead on Shop/);
     expect(prompt).not.toContain('team station');
@@ -73,9 +73,9 @@ describe('what the lead writes and hears', () => {
     expect(prompt).toMatch(/Don't write a spec or plan the whole route/);
     expect(prompt).toMatch(/Keep pull requests reviewable: small enough to review and merge cleanly/);
     expect(prompt).not.toContain('mcp__office__ship');
-    expect(prompt).toMatch(/push your branches and open pull requests yourself with gh/);
-    expect(prompt).toMatch(/`gh pr create --draft`.*`gh pr ready`/);
-    expect(prompt).toMatch(/Never push a base branch, or a branch whose pull request has merged/);
+    expect(prompt).toMatch(/as pull requests yourself, in whichever repos it touches, with the \/ship-slice skill/);
+    // the how-to is the skill's, read when it's used, not the prompt's every turn
+    expect(prompt).not.toContain('gh pr create');
     expect(prompt).toContain('mcp__office__recap');
     expect(prompt).toMatch(/Hand independent work, and broad exploration, to subagents with the Agent tool, and keep their conclusions/);
     expect(prompt).toMatch(/Keep the goal's brief in \.\/brief\.md, at the root of your workspace beside the repos/);

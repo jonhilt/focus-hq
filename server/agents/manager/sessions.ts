@@ -368,6 +368,8 @@ export class AgentSessions extends Part {
         else rt.compactFailed = lead.sessionId;
       }
       if (lead) yield* this.core.goalTools.readBrief(lead.id);
+      // each turn, so the workspace holds Focus's skills as they are now
+      if (lead) yield* Workspace.use((w) => w.installSkills(w.dir(lead.id)));
       if (lead) prompt = [yield* this.core.checkouts.beforeTurn(lead), this.core.goalTools.briefMoved(lead.id), prompt].filter(Boolean).join('\n\n');
       if (lead) this.core.goalPrs.turnStarts(lead.id);
       // before marking them busy: the QA officer's instructions may need GitHub, and that can fail
